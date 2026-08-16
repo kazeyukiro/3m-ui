@@ -66,8 +66,11 @@ const ConfigPage: React.FC = () => {
   };
 
   const handleValidate = async () => {
-    try { const res = await validateConfigYAML(yaml); message[res.valid ? 'success' : 'error'](res.valid ? t('config.valid') : t('config.invalid') + (res.error ? `: ${res.error}` : '')); }
-    catch (e: any) { message.error(e.message || t('common.error')); }
+    try {
+      const res = await validateConfigYAML(yaml);
+      if (res.valid) message.success(t('config.validateSuccess'));
+      else message.error(res.error || t('config.validateFailed'));
+    } catch (e: any) { message.error(e.message || t('common.error')); }
   };
 
   const columns = [
@@ -75,22 +78,24 @@ const ConfigPage: React.FC = () => {
     { title: t('config.proxyType'), dataIndex: 'type', key: 'type' },
     { title: t('config.proxyServer'), dataIndex: 'server', key: 'server' },
     { title: t('config.proxyPort'), dataIndex: 'port', key: 'port' },
-    { title: t('common.actions'), key: 'actions', render: (_: any, record: ProxyEntry, index: number) => (
-      <Space>
-        <Button icon={<EditOutlined />} onClick={() => { setEditingIndex(index); form.setFieldsValue(record); setModalOpen(true); }} />
-        <Popconfirm title={t('config.deleteConfirm')} onConfirm={() => onDelete(index)}><Button icon={<DeleteOutlined />} danger /></Popconfirm>
-      </Space>
-    )},
+    {
+      title: t('common.actions'), key: 'actions',
+      render: (_: any, record: ProxyEntry, index: number) => (
+        <Space>
+          <Button icon={<EditOutlined />} onClick={() => { setEditingIndex(index); form.setFieldsValue(record); setModalOpen(true); }} />
+          <Popconfirm title={t('config.deleteConfirm')} onConfirm={() => onDelete(index)}><Button icon={<DeleteOutlined />} danger /></Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
     <div>
       <h2>{t('config.title')}</h2>
-      <p style={{ color: 'rgba(0,0,0,0.45)' }}>{t('config.subtitle')}</p>
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <TabPane tab={t('config.visual')} key="visual">
           <Card title={t('config.proxies')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingIndex(null); form.resetFields(); setModalOpen(true); }}>{t('config.addProxy')}</Button>}>
-            <Table dataSource={proxies} columns={columns} rowKey="name" loading={loading} pagination={false} />
+            <Table dataSource={proxies} columns={columns} rowKey="name" loading={loading} pagination={false} scroll={{ x: 640 }} size="middle" />
           </Card>
           <Card style={{ marginTop: 16 }} title={t('config.yamlPreview')}>
             <Editor height={300} language="yaml" value={yaml} onChange={(v) => setYaml(v || '')} theme={isDark ? 'vs-dark' : 'light'} options={{ readOnly: false, minimap: { enabled: false } }} />
