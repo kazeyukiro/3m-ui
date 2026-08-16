@@ -8,12 +8,12 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/router"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
+	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
 	"github.com/kazeyukiro/3m-ui/backend/internal/traffic"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
 
-// Container is the application composition root.
 type Container struct {
 	DB               *gorm.DB
 	Config           *config.Config
@@ -26,9 +26,9 @@ type Container struct {
 	TrafficScheduler *traffic.Scheduler
 	System           *system.Service
 	ConfigEngine     *dbconfig.ConfigEngine
+	TelegramBot      *telegram.Bot
 }
 
-// NewContainer constructs services and starts the traffic collection loop.
 func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	mihomoSvc := mihomo.NewService(cfg)
 	nodeSvc := node.NewService(db, cfg.Mihomo.Config, mihomoSvc)
@@ -44,7 +44,11 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	collector := traffic.NewCollectorFromDefaults(db, trafficSvc, userTraffic)
 	enforcer := traffic.NewEnforcer(db, nodeSvc)
 	scheduler := traffic.NewScheduler(collector, enforcer, 0)
+	scheduler.SetNotifier(telegram.NewNotifier(db))
 	scheduler.Start()
+
+	tgBot := telegram.NewBot(db, mihomoSvc)
+	tgBot.Start()
 
 	return &Container{
 		DB:               db,
@@ -58,10 +62,10 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 		TrafficScheduler: scheduler,
 		System:           systemSvc,
 		ConfigEngine:     dbconfig.NewConfigEngine(db),
+		TelegramBot:      tgBot,
 	}
 }
 
-// RouterDeps builds the dependency bag consumed by the HTTP layer.
 func (c *Container) RouterDeps() router.Deps {
 	return router.Deps{
 		DB:               c.DB,
