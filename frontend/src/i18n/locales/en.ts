@@ -1,6 +1,4 @@
-import type { TranslationKeys } from '../types';
-
-const en: TranslationKeys = {
+export default {
   nav: {
     dashboard: 'Dashboard', listeners: 'Nodes', users: 'Users',
     core: 'Core', logs: 'Logs', config: 'Config', settings: 'Settings', logout: 'Logout',
@@ -82,5 +80,3 @@ const en: TranslationKeys = {
     about: 'About 3M-UI', version: 'Version',
   },
 };
-
-export default en;
