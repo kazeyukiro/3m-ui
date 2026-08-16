@@ -15,6 +15,8 @@ import Logs from './pages/Logs';
 import ConfigPage from './pages/Config';
 import Settings from './pages/Settings';
 import TrafficPage from './pages/Traffic';
+import ClusterPage from './pages/Cluster';
+import RoutingPage from './pages/Routing';
 
 const ThemedApp: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDark);
@@ -33,6 +35,8 @@ const ThemedApp: React.FC = () => {
                     <Route path="/listeners" element={<Listeners />} />
                     <Route path="/users" element={<Users />} />
                     <Route path="/traffic" element={<TrafficPage />} />
+                    <Route path="/cluster" element={<ClusterPage />} />
+                    <Route path="/routing" element={<RoutingPage />} />
                     <Route path="/core" element={<Core />} />
                     <Route path="/logs" element={<Logs />} />
                     <Route path="/config" element={<ConfigPage />} />
