@@ -33,6 +33,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	// retained as a backward-compatible alias.
 	rg.POST("/:id/nodes", h.BindListeners)
 	rg.GET("/:id/nodes", h.GetListeners)
+	rg.POST("/:id/reset-traffic", h.ResetTraffic)
 }
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -163,6 +164,19 @@ func (h *Handler) GetListeners(c *gin.Context) {
 		out = append(out, nodeDTO{n.ID, n.Name, n.Protocol, n.Port, n.BindAddress, n.Enabled, n.TLS, n.UDP, n.Status})
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) ResetTraffic(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	u, err := h.svc.ResetTraffic(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
 }
 
 // Keep models import referenced for future DTO extensions and schema compatibility.
