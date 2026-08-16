@@ -2,7 +2,7 @@ import React from 'react';
 import { Layout, Menu } from 'antd';
 import {
   DashboardOutlined, NodeIndexOutlined, UserOutlined, SettingOutlined,
-  CodeOutlined, FileTextOutlined, ApiOutlined, LogoutOutlined,
+  CodeOutlined, FileTextOutlined, ApiOutlined, LogoutOutlined, LineChartOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -20,6 +20,7 @@ export function useSidebarMenuItems(onNavigate?: () => void) {
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
     { key: '/listeners', icon: <NodeIndexOutlined />, label: t('nav.listeners') },
     { key: '/users', icon: <UserOutlined />, label: t('nav.users') },
+    { key: '/traffic', icon: <LineChartOutlined />, label: t('nav.traffic') },
     { key: '/core', icon: <ApiOutlined />, label: t('nav.core') },
     { key: '/logs', icon: <FileTextOutlined />, label: t('nav.logs') },
     { key: '/config', icon: <CodeOutlined />, label: t('nav.config') },
