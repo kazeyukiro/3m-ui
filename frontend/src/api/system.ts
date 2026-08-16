@@ -39,3 +39,24 @@ export interface LogResponse {
 }
 
 export const fetchLogs = () => client.get<LogResponse[]>('/mihomo/logs').then(r => r.data);
+
+export const downloadBackup = async () => {
+  const res = await client.get('/system/backup', { responseType: 'blob' });
+  const blob = new Blob([res.data], { type: 'application/zip' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `3m-ui-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+export const restoreDatabase = (file: File) => {
+  const fd = new FormData();
+  fd.append('database', file);
+  return client.post('/system/backup/restore-db', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const openApiUrl = '/api/v1/openapi.yaml';

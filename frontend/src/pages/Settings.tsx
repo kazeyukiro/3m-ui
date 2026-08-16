@@ -1,9 +1,10 @@
 import React from 'react';
-import { Card, Button, Space, Typography, Tag } from 'antd';
+import { Card, Button, Space, Typography, Tag, message, Upload } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { useThemeStore, ThemeMode } from '../stores/themeStore';
-import { LockOutlined, GlobalOutlined, BgColorsOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { LockOutlined, GlobalOutlined, BgColorsOutlined, InfoCircleOutlined, CloudDownloadOutlined, CloudUploadOutlined, ApiOutlined } from '@ant-design/icons';
+import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
 
 const { Title, Text } = Typography;
 
@@ -33,6 +34,39 @@ const Settings: React.FC = () => {
         <Text type="secondary">{t('settings.passwordDescription')}</Text>
         <div style={{ marginTop: 12 }}>
           <Button type="primary" onClick={() => navigate('/change-password')}>{t('settings.changePassword')}</Button>
+        </div>
+      </Card>
+
+      <Card title={<><CloudDownloadOutlined /> {t('settings.backup')}</>} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.backupHint')}</Text>
+        <div style={{ marginTop: 12 }}>
+          <Space wrap>
+            <Button icon={<CloudDownloadOutlined />} onClick={async () => {
+              try { await downloadBackup(); message.success(t('settings.backupDone')); }
+              catch (e: any) { message.error(e.message || t('common.error')); }
+            }}>{t('settings.downloadBackup')}</Button>
+            <Upload
+              accept=".db,application/octet-stream"
+              showUploadList={false}
+              beforeUpload={async (file) => {
+                try {
+                  await restoreDatabase(file as File);
+                  message.success(t('settings.restoreDone'));
+                } catch (e: any) {
+                  message.error(e.message || t('common.error'));
+                }
+                return false;
+              }}
+            >
+              <Button icon={<CloudUploadOutlined />}>{t('settings.restoreDb')}</Button>
+            </Upload>
+          </Space>
+        </div>
+      </Card>
+      <Card title={<><ApiOutlined /> {t('settings.apiDocs')}</>} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.apiDocsHint')}</Text>
+        <div style={{ marginTop: 12 }}>
+          <Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">{t('settings.openOpenAPI')}</Button>
         </div>
       </Card>
       <Card title={<><InfoCircleOutlined /> {t('settings.about')}</>}>
