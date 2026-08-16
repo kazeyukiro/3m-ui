@@ -14,6 +14,7 @@ import Core from './pages/Core';
 import Logs from './pages/Logs';
 import ConfigPage from './pages/Config';
 import Settings from './pages/Settings';
+import TrafficPage from './pages/Traffic';
 
 const ThemedApp: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDark);
@@ -31,6 +32,7 @@ const ThemedApp: React.FC = () => {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/listeners" element={<Listeners />} />
                     <Route path="/users" element={<Users />} />
+                    <Route path="/traffic" element={<TrafficPage />} />
                     <Route path="/core" element={<Core />} />
                     <Route path="/logs" element={<Logs />} />
                     <Route path="/config" element={<ConfigPage />} />
