@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 	"github.com/kazeyukiro/3m-ui/backend/internal/traffic"
@@ -37,6 +38,9 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 
 	apiV1 := r.Group("/api/v1")
 	{
+		apiV1.GET("/openapi.yaml", func(c *gin.Context) {
+			c.Data(http.StatusOK, "application/yaml; charset=utf-8", docs.OpenAPI)
+		})
 		auth.NewHandler(db, cfg).RegisterRoutes(apiV1.Group("/auth"))
 
 		apiV1.GET("/health", func(c *gin.Context) {
@@ -50,7 +54,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 
 		registerDashboardRoute(apiV1, d)
 
-		system.NewHandler(d.systemService()).RegisterRoutes(apiV1.Group("/system"))
+		system.NewHandler(d.systemService()).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
 		registerMihomoRoutes(apiV1, d)
 
 		user.NewHandler(d.userService()).RegisterRoutes(apiV1.Group("/users"))
