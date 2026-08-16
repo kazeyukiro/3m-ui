@@ -1,17 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
 import {
-  fetchUsers,
-  createUser,
-  updateUser,
-  deleteUser,
-  fetchUserNodes,
-  bindUserNodes,
-  ProxyUser,
+  Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
+  InputNumber, DatePicker, Progress, Tooltip,
+} from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import {
+  fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic,
+  fetchUserNodes, bindUserNodes, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { useI18n } from '../i18n';
+
+const formatBytes = (n?: number) => {
+  const bytes = n || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let v = bytes / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(2)} ${units[i]}`;
+};
 
 const Users: React.FC = () => {
   const { t } = useI18n();
@@ -21,7 +33,6 @@ const Users: React.FC = () => {
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
 
-  // Bind nodes modal
   const [bindOpen, setBindOpen] = useState(false);
   const [bindUser, setBindUser] = useState<ProxyUser | null>(null);
   const [allNodes, setAllNodes] = useState<Listener[]>([]);
@@ -31,8 +42,7 @@ const Users: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetchUsers();
-      setData(res);
+      setData(await fetchUsers());
     } catch (e: any) {
       message.error(e.message || t('common.error'));
     } finally {
@@ -46,11 +56,23 @@ const Users: React.FC = () => {
 
   const onSubmit = async (values: any) => {
     try {
+      const trafficGB = values.traffic_limit_gb;
+      const payload: Record<string, unknown> = {
+        username: values.username,
+        enabled: !!values.enabled,
+        traffic_limit: trafficGB && trafficGB > 0 ? Math.round(Number(trafficGB) * 1024 * 1024 * 1024) : 0,
+      };
+      if (values.password) payload.password = values.password;
+      if (values.expire_time) {
+        payload.expire_time = values.expire_time.toISOString();
+      } else if (editing) {
+        payload.expire_time = '0001-01-01T00:00:00Z';
+      }
       if (editing) {
-        await updateUser(editing.id, values);
+        await updateUser(editing.id, payload);
         message.success(t('users.updated'));
       } else {
-        await createUser(values);
+        await createUser(payload);
         message.success(t('users.created'));
       }
       setModalOpen(false);
@@ -70,6 +92,36 @@ const Users: React.FC = () => {
     } catch (e: any) {
       message.error(e.message || t('common.error'));
     }
+  };
+
+  const onResetTraffic = async (id: number) => {
+    try {
+      await resetUserTraffic(id);
+      message.success(t('users.trafficReset'));
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
+  const openEdit = (record: ProxyUser) => {
+    setEditing(record);
+    const limitGB =
+      record.traffic_limit && record.traffic_limit > 0
+        ? Number((record.traffic_limit / (1024 * 1024 * 1024)).toFixed(3))
+        : undefined;
+    const exp =
+      record.expire_time && !record.expire_time.startsWith('0001')
+        ? dayjs(record.expire_time)
+        : undefined;
+    form.setFieldsValue({
+      username: record.username,
+      enabled: record.enabled,
+      traffic_limit_gb: limitGB,
+      expire_time: exp,
+      password: undefined,
+    });
+    setModalOpen(true);
   };
 
   const openBind = async (record: ProxyUser) => {
@@ -106,35 +158,63 @@ const Users: React.FC = () => {
   };
 
   const columns = [
-    { title: t('users.username'), dataIndex: 'username', key: 'username' },
+    { title: t('users.username'), dataIndex: 'username', key: 'username', width: 120 },
+    {
+      title: t('users.traffic'),
+      key: 'traffic',
+      width: 180,
+      render: (_: any, r: ProxyUser) => {
+        const used = r.traffic_used || 0;
+        const limit = r.traffic_limit || 0;
+        const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+        return (
+          <div>
+            <div style={{ fontSize: 12 }}>
+              {formatBytes(used)}
+              {limit > 0 ? ` / ${formatBytes(limit)}` : ` / ${t('users.unlimited')}`}
+            </div>
+            {limit > 0 && <Progress percent={pct} size="small" status={pct >= 100 ? 'exception' : 'active'} />}
+          </div>
+        );
+      },
+    },
+    {
+      title: t('users.expire'),
+      dataIndex: 'expire_time',
+      key: 'expire',
+      width: 120,
+      render: (v: string) => {
+        if (!v || v.startsWith('0001')) return t('users.neverExpire');
+        return dayjs(v).format('YYYY-MM-DD');
+      },
+    },
     {
       title: t('common.status'),
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (v: boolean) => (v ? t('common.enabled') : t('common.disabled')),
+      key: 'status',
+      width: 140,
+      render: (_: any, r: ProxyUser) => (
+        <Space size={4} wrap>
+          {r.online ? <Tag color="success">{t('users.online')}</Tag> : <Tag>{t('users.offline')}</Tag>}
+          {r.blocked ? <Tag color="error">{t('users.blocked')}</Tag> : null}
+          {!r.enabled ? <Tag color="default">{t('common.disabled')}</Tag> : null}
+        </Space>
+      ),
     },
     {
       title: t('common.actions'),
       key: 'actions',
+      width: 220,
       render: (_: any, record: ProxyUser) => (
         <Space wrap size={4}>
-          <Button
-            size="small"
-            icon={<LinkOutlined />}
-            onClick={() => openBind(record)}
-            title={t('users.bindNodes')}
-          >
+          <Button size="small" icon={<LinkOutlined />} onClick={() => openBind(record)}>
             {t('users.bind')}
           </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditing(record);
-              form.setFieldsValue(record);
-              setModalOpen(true);
-            }}
-          />
+          <Tooltip title={t('users.resetTraffic')}>
+            <Popconfirm title={t('users.resetTrafficConfirm')} onConfirm={() => onResetTraffic(record.id)}>
+              <Button size="small" icon={<ClearOutlined />} />
+            </Popconfirm>
+          </Tooltip>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
             <Button size="small" icon={<DeleteOutlined />} danger />
           </Popconfirm>
@@ -154,6 +234,7 @@ const Users: React.FC = () => {
             onClick={() => {
               setEditing(null);
               form.resetFields();
+              form.setFieldsValue({ enabled: true });
               setModalOpen(true);
             }}
           >
@@ -161,14 +242,7 @@ const Users: React.FC = () => {
           </Button>
         }
       >
-        <Table
-          scroll={{ x: 520 }}
-          size="middle"
-          dataSource={data}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-        />
+        <Table scroll={{ x: 780 }} size="middle" dataSource={data} columns={columns} rowKey="id" loading={loading} />
       </Card>
 
       <Modal
@@ -186,12 +260,18 @@ const Users: React.FC = () => {
           <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
+          <Form.Item name="password" label={t('users.password')} rules={[{ required: !editing }]}>
+            <Input.Password placeholder={editing ? t('users.passwordKeep') : ''} />
+          </Form.Item>
           <Form.Item
-            name="password"
-            label={t('users.password')}
-            rules={[{ required: !editing }]}
+            name="traffic_limit_gb"
+            label={t('users.trafficLimitGB')}
+            tooltip={t('users.trafficLimitHint')}
           >
-            <Input.Password placeholder={editing ? t('common.empty') : ''} />
+            <InputNumber min={0} step={1} style={{ width: '100%' }} placeholder="0 = unlimited" />
+          </Form.Item>
+          <Form.Item name="expire_time" label={t('users.expire')} tooltip={t('users.expireHint')}>
+            <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="enabled" label={t('users.enabled')} valuePropName="checked" initialValue={true}>
             <Switch />
@@ -212,7 +292,7 @@ const Users: React.FC = () => {
         destroyOnClose
         width={560}
       >
-        <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)' }}>{t('users.bindHint')}</p>
+        <p style={{ marginBottom: 12, opacity: 0.65 }}>{t('users.bindHint')}</p>
         <Select
           mode="multiple"
           style={{ width: '100%' }}
@@ -225,15 +305,6 @@ const Users: React.FC = () => {
             value: n.id,
             label: `${n.name} (${n.protocol}:${n.port})`,
           }))}
-          optionRender={(option) => {
-            const node = allNodes.find((n) => n.id === option.value);
-            return (
-              <Space>
-                <span>{option.label}</span>
-                {node && !node.enabled && <Tag>{t('common.disabled')}</Tag>}
-              </Space>
-            );
-          }}
         />
       </Modal>
     </div>
