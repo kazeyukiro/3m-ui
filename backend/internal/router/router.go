@@ -5,10 +5,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
+	"github.com/kazeyukiro/3m-ui/backend/internal/cluster"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
+	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
 	"github.com/kazeyukiro/3m-ui/backend/internal/traffic"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
@@ -58,6 +60,8 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		registerMihomoRoutes(apiV1, d)
 
 		user.NewHandler(d.userService()).RegisterRoutes(apiV1.Group("/users"))
+		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
+		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))
 
 		nodeHandler := node.NewHandler(d.nodeService(), d.userService(), db)
 		nodeHandler.RegisterRoutes(apiV1.Group("/nodes"))
