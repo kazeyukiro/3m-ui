@@ -224,6 +224,8 @@ export default {
   users: {
     title: '用户管理', create: '创建用户', edit: '编辑用户', username: '用户名', password: '密码',
     enabled: '启用状态', deleteConfirm: '确定要删除此用户吗？', created: '创建成功', updated: '更新成功', deleted: '删除成功',
+    bind: '绑定节点', bindNodes: '绑定节点', bindHint: '选择该用户可使用的入站节点。凭证会在生成 Mihomo 配置时自动注入到对应 Listener。',
+    selectNodes: '选择节点', bindSuccess: '节点绑定已更新',
   },
   settings: {
     title: '系统设置', subtitle: '偏好与账户', language: '界面语言', theme: '主题外观',
