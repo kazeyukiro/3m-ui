@@ -36,6 +36,8 @@ const KCP_TUN_PROTOCOLS = new Set(['shadowsocks']);
 const XHTTP_PROTOCOLS = new Set(['vless']);
 const MKCP_PROTOCOLS = new Set(['vmess']);
 const MEKYA_PROTOCOLS = new Set(['vmess']);
+/** Protocols that support allow-insecure (plain TLS offload behind nginx/caddy). */
+const ALLOW_INSECURE_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'anytls']);
 
 export function protocolSupportsUDP(protocol: string): boolean {
   return UDP_PROTOCOLS.has(protocol);
@@ -468,7 +470,7 @@ export function formValuesToConfig(
     set('client-auth-type', values['client-auth-type']);
     set('client-auth-cert', values['client-auth-cert']);
     set('ech-key', values['ech-key']);
-    if (values['allow-insecure'] === true) cfg['allow-insecure'] = true;
+    if (ALLOW_INSECURE_PROTOCOLS.has(protocol) && values['allow-insecure'] === true) cfg['allow-insecure'] = true;
   }
 
   // simple-obfs
@@ -953,7 +955,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="ech-key" label={t('listeners.echKey')}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          {(protocol === 'vless' || protocol === 'vmess' || protocol === 'trojan' || protocol === 'anytls') && (
+          {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
             <Form.Item
               name="allow-insecure"
               label={t('listeners.allowInsecure')}
