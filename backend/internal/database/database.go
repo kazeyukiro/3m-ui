@@ -13,7 +13,6 @@ import (
 var GlobalDB *gorm.DB
 
 func InitDB(dbPath string) (*gorm.DB, error) {
-	// Create directory of database path if not exists
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
@@ -27,7 +26,6 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to sqlite database: %w", err)
 	}
 
-	// AutoMigrate all models
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.Listener{},
@@ -37,6 +35,8 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		&models.Config{},
 		&models.ProxyUser{},
 		&models.TrafficRecord{},
+		&models.PanelSetting{},
+		&models.RemoteServer{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run database auto-migration: %w", err)
