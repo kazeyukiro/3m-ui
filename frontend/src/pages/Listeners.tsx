@@ -136,18 +136,20 @@ const Listeners: React.FC = () => {
   };
 
   const columns = [
-    { title: t('listeners.name'), dataIndex: 'name', key: 'name' },
+    { title: t('listeners.name'), dataIndex: 'name', key: 'name', ellipsis: true, width: 140 },
     {
       title: t('listeners.protocol'),
       dataIndex: 'protocol',
       key: 'protocol',
+      width: 110,
       render: (p: string) => <Tag>{p}</Tag>,
     },
-    { title: t('listeners.port'), dataIndex: 'port', key: 'port' },
+    { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 90 },
     {
       title: t('listeners.status'),
       dataIndex: 'enabled',
       key: 'enabled',
+      width: 100,
       render: (v: boolean) => (
         <Tag color={v ? 'success' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag>
       ),
@@ -155,17 +157,19 @@ const Listeners: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'actions',
+      fixed: 'right' as const,
+      width: 180,
       render: (_: any, record: Listener) => (
-        <Space>
+        <Space size={4} wrap>
           <Tooltip title={t('listeners.copyURI')}>
-            <Button icon={<QrcodeOutlined />} onClick={() => showURIs(record.id)} />
+            <Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(record.id)} />
           </Tooltip>
           <Tooltip title={t('common.refresh')}>
-            <Button icon={<ReloadOutlined />} onClick={() => onReload(record.id)} />
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(record.id)} />
           </Tooltip>
-          <Button icon={<EditOutlined />} onClick={() => openEdit(record)} />
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
-            <Button icon={<DeleteOutlined />} danger />
+            <Button size="small" icon={<DeleteOutlined />} danger />
           </Popconfirm>
         </Space>
       ),
@@ -182,7 +186,7 @@ const Listeners: React.FC = () => {
           </Button>
         }
       >
-        <Table dataSource={data} columns={columns} rowKey="id" loading={loading} />
+        <Table dataSource={data} columns={columns} rowKey="id" loading={loading} scroll={{ x: 720 }} size="middle" />
       </Card>
 
       <Modal
@@ -194,7 +198,7 @@ const Listeners: React.FC = () => {
           form.resetFields();
         }}
         onOk={() => form.submit()}
-        width={720}
+        width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 720}
         destroyOnClose
         styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
       >
