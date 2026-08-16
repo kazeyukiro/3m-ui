@@ -15,13 +15,10 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
 
-// SetupRouter builds the Gin engine from config only (tests / legacy).
 func SetupRouter(cfg *config.Config) *gin.Engine {
 	return SetupRouterWithDeps(Deps{Config: cfg})
 }
 
-// SetupRouterWithDeps builds the Gin engine using explicit dependencies.
-// Route paths and response JSON remain unchanged for API compatibility.
 func SetupRouterWithDeps(d Deps) *gin.Engine {
 	cfg := d.Config
 	if cfg == nil {
@@ -73,6 +70,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		)
 
 		registerConfigRoutes(apiV1, d, cfg)
+		registerRoutingRoutes(apiV1, db)
 	}
 
 	return r
