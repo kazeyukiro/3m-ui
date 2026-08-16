@@ -1,0 +1,101 @@
+package telegram
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+type Handler struct {
+	db *gorm.DB
+}
+
+func NewHandler(db *gorm.DB) *Handler {
+	return &Handler{db: db}
+}
+
+func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	rg.GET("/settings", h.GetSettings)
+	rg.PUT("/settings", h.PutSettings)
+	rg.POST("/test", h.Test)
+}
+
+func (h *Handler) GetSettings(c *gin.Context) {
+	s, err := LoadSettings(h.db)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	out := s
+	if out.BotToken != "" {
+		out.BotToken = maskToken(out.BotToken)
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+type putSettingsBody struct {
+	Enabled           bool     `json:"enabled"`
+	BotToken          string   `json:"bot_token"`
+	ChatIDs           []string `json:"chat_ids"`
+	NotifyOnBlock     bool     `json:"notify_on_block"`
+	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
+	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
+	NotifyDailyDigest bool     `json:"notify_daily_digest"`
+	KeepToken         bool     `json:"keep_token"`
+}
+
+func (h *Handler) PutSettings(c *gin.Context) {
+	var body putSettingsBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	current, _ := LoadSettings(h.db)
+	s := Settings{
+		Enabled:           body.Enabled,
+		BotToken:          strings.TrimSpace(body.BotToken),
+		ChatIDs:           body.ChatIDs,
+		NotifyOnBlock:     body.NotifyOnBlock,
+		NotifyOnUnblock:   body.NotifyOnUnblock,
+		NotifyOnExpiry:    body.NotifyOnExpiry,
+		NotifyDailyDigest: body.NotifyDailyDigest,
+	}
+	if body.KeepToken || s.BotToken == "" || strings.Contains(s.BotToken, "…") || strings.Contains(s.BotToken, "...") {
+		s.BotToken = current.BotToken
+	}
+	if err := SaveSettings(h.db, s); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	out := s
+	if out.BotToken != "" {
+		out.BotToken = maskToken(out.BotToken)
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) Test(c *gin.Context) {
+	client, _, err := NewClientFromDB(h.db)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if client == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "telegram is disabled or incomplete (token + chat ids required)"})
+		return
+	}
+	if err := client.SendText("🔔 <b>3m-ui</b> Telegram test message — connection OK."); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func maskToken(token string) string {
+	if len(token) <= 10 {
+		return "********"
+	}
+	return token[:6] + "…" + token[len(token)-4:]
+}
