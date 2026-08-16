@@ -84,11 +84,26 @@ func (s *Service) Update(l *models.Listener) error {
 }
 
 func (s *Service) Delete(id uint) error {
+	var previous models.Listener
+	if err := s.db.First(&previous, id).Error; err != nil {
+		return fmt.Errorf("failed to load node %d: %w", id, err)
+	}
+
+	// Soft-delete join bindings first so credential regeneration stays consistent.
+	if err := s.db.Where("listener_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
+		return fmt.Errorf("failed to delete node bindings: %w", err)
+	}
 	if err := s.db.Delete(&models.Listener{}, id).Error; err != nil {
 		return fmt.Errorf("failed to delete node: %w", err)
 	}
 
-	return s.RegenerateConfig()
+	if err := s.RegenerateConfig(); err != nil {
+		// Best-effort restore so a config write failure does not leave a half-deleted node.
+		_ = s.db.Unscoped().Model(&models.Listener{}).Where("id = ?", id).Update("deleted_at", nil).Error
+		_ = s.db.Unscoped().Model(&models.ListenerUser{}).Where("listener_id = ?", id).Update("deleted_at", nil).Error
+		return fmt.Errorf("failed to regenerate config after delete: %w", err)
+	}
+	return nil
 }
 
 // RegenerateConfig regenerates the complete Mihomo configuration through the
