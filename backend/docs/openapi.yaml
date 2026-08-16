@@ -1,0 +1,176 @@
+openapi: 3.0.3
+info:
+  title: 3m-ui API
+  version: "1.0"
+  description: |
+    REST API for the 3m-ui Mihomo management panel.
+    Authenticated endpoints require `Authorization: Bearer <jwt>`.
+servers:
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: JWT session
+  /users:
+    get:
+      summary: List proxy users
+      responses:
+        "200":
+          description: SafeUser array
+    post:
+      summary: Create proxy user
+      responses:
+        "201":
+          description: Created user
+  /users/{id}:
+    put:
+      summary: Update proxy user (traffic_limit, expire_time, enabled, password)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated user
+    delete:
+      summary: Delete proxy user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+  /users/{id}/nodes:
+    get:
+      summary: List nodes bound to user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Node list
+    post:
+      summary: Replace node bindings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listener_ids:
+                  type: array
+                  items: { type: integer }
+      responses:
+        "200":
+          description: Bindings updated
+  /users/{id}/reset-traffic:
+    post:
+      summary: Reset traffic counters for a proxy user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Counters cleared
+  /nodes:
+    get:
+      summary: List listeners
+      responses:
+        "200":
+          description: Listener list
+    post:
+      summary: Create listener
+      responses:
+        "201":
+          description: Created
+  /nodes/{id}:
+    put:
+      summary: Update listener
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete listener
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+  /traffic/status:
+    get:
+      summary: Global traffic snapshot
+      responses:
+        "200":
+          description: Rates and totals
+  /traffic/users:
+    get:
+      summary: Per-user traffic
+      responses:
+        "200":
+          description: UserTraffic array
+  /traffic/connections:
+    get:
+      summary: Active connections
+      responses:
+        "200":
+          description: Connection list
+  /system/status:
+    get:
+      summary: Host metrics
+      responses:
+        "200":
+          description: CPU/mem/disk
+  /system/backup:
+    get:
+      summary: Download zip backup (SQLite + Mihomo config)
+      responses:
+        "200":
+          description: application/zip
+  /system/backup/restore-db:
+    post:
+      summary: Restore SQLite database from multipart field `database`
+      responses:
+        "200":
+          description: Restored (restart recommended)
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
