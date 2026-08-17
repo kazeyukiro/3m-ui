@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -24,28 +25,19 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		return "", fmt.Errorf("config engine database is not initialized")
 	}
 	baseBytes, err := yaml.Marshal(GetDefaultTemplate())
-	if err != nil {
-		return "", err
-	}
+	if err != nil { return "", err }
 	var merged map[string]interface{}
-	if err := yaml.Unmarshal(baseBytes, &merged); err != nil {
-		return "", err
-	}
+	if err := yaml.Unmarshal(baseBytes, &merged); err != nil { return "", err }
 	var customFragments []models.Config
-	if err := ce.db.Where("enabled = ?", true).Find(&customFragments).Error; err != nil {
-		return "", fmt.Errorf("load custom config fragments: %w", err)
-	}
+	if err := ce.db.Where("enabled = ?", true).Find(&customFragments).Error; err != nil { return "", fmt.Errorf("load custom config fragments: %w", err) }
 	for _, fragment := range customFragments {
 		var fragMap map[string]interface{}
-		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil {
-			return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err)
-		}
+		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil { return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err) }
 		for k, v := range fragMap { merged[k] = v }
 	}
 	var listeners []models.Listener
-	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
-		return "", fmt.Errorf("load enabled listeners: %w", err)
-	}
+	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil { return "", fmt.Errorf("load enabled listeners: %w", err) }
+	if err := validateListenerEndpoints(listeners); err != nil { return "", err }
 	credentials := make(map[uint][]Credential)
 	if CredentialProvider != nil {
 		credentials, err = CredentialProvider()
@@ -59,6 +51,68 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 	return string(finalBytes), nil
 }
 
+func validateListenerEndpoints(listeners []models.Listener) error {
+	for i := range listeners {
+		if err := validateListenerEndpoint(&listeners[i]); err != nil { return err }
+		for j := i + 1; j < len(listeners); j++ {
+			if !portsOverlap(listeners[i].Port, listeners[j].Port) { continue }
+			a := firstListenerAddress(listeners[i])
+			b := firstListenerAddress(listeners[j])
+			if listenerAddressesConflict(a, b) {
+				return fmt.Errorf("listeners %q and %q have conflicting bind address/port ranges (%s:%s and %s:%s)", listeners[i].Name, listeners[j].Name, a, listeners[i].Port, b, listeners[j].Port)
+			}
+		}
+	}
+	return nil
+}
+
+func validateListenerEndpoint(l *models.Listener) error {
+	address := firstListenerAddress(*l)
+	if net.ParseIP(address) == nil { return fmt.Errorf("listener %q has invalid bind address %q", l.Name, address) }
+	if !isValidPortString(l.Port) { return fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port) }
+	return nil
+}
+
+func firstListenerAddress(l models.Listener) string {
+	if v := strings.TrimSpace(l.BindAddress); v != "" { return v }
+	if v := strings.TrimSpace(l.Listen); v != "" { return v }
+	return "0.0.0.0"
+}
+
+func portsOverlap(a, b string) bool {
+	for _, ar := range parsePortRanges(a) {
+		for _, br := range parsePortRanges(b) {
+			if ar[0] <= br[1] && br[0] <= ar[1] { return true }
+		}
+	}
+	return false
+}
+
+func parsePortRanges(raw string) [][2]int {
+	var out [][2]int
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" { continue }
+		if strings.Contains(part, "-") {
+			p := strings.SplitN(part, "-", 2)
+			a, ea := strconv.Atoi(strings.TrimSpace(p[0])); b, eb := strconv.Atoi(strings.TrimSpace(p[1]))
+			if ea == nil && eb == nil { out = append(out, [2]int{a, b}) }
+			continue
+		}
+		if p, err := strconv.Atoi(part); err == nil { out = append(out, [2]int{p, p}) }
+	}
+	return out
+}
+
+func listenerAddressesConflict(a, b string) bool {
+	ia, ib := net.ParseIP(a), net.ParseIP(b)
+	if ia == nil || ib == nil { return false }
+	if ia.Equal(ib) { return true }
+	if ia.To4() != nil && ib.To4() != nil { return ia.IsUnspecified() || ib.IsUnspecified() }
+	if ia.To4() == nil && ib.To4() == nil { return ia.IsUnspecified() || ib.IsUnspecified() }
+	return false
+}
+
 func generateListeners(listeners []models.Listener, creds map[uint][]Credential) ([]map[string]interface{}, error) {
 	result := make([]map[string]interface{}, 0, len(listeners))
 	for _, l := range listeners {
@@ -67,14 +121,13 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		if protocol == "" { protocol = strings.ToLower(strings.TrimSpace(l.Type)) }
 		if !IsMihomoListenerProtocol(protocol) { return nil, fmt.Errorf("unsupported Mihomo listener protocol %q", protocol) }
 		if !isValidPortString(l.Port) { return nil, fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port) }
-		listen := strings.TrimSpace(l.BindAddress)
-		if listen == "" { listen = strings.TrimSpace(l.Listen) }
-		if listen == "" { listen = "0.0.0.0" }
+		listen := firstListenerAddress(l)
 		var portVal interface{} = strings.TrimSpace(l.Port)
 		if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil { portVal = p }
 		m := map[string]interface{}{"name": l.Name, "type": protocol, "port": portVal, "listen": listen}
 		configMap, err := decodeListenerConfig(l.Config)
 		if err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }
+		if err := ValidateListenerConfig(protocol, l.Config); err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }
 		if l.Proxy != "" { m["proxy"] = l.Proxy }
 		if l.Rule != "" { m["rule"] = l.Rule }
 		if l.RoutingMark > 0 { m["routing-mark"] = l.RoutingMark }
@@ -84,7 +137,7 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		copyServerTLSFields(m, configMap)
 		listenerCreds, hasCredentialState := creds[l.ID]
 		if l.TLS {
-			if !listenerSupportsTLS(protocol) { return nil, fmt.Errorf("listener %q: TLS is not supported for protocol %q", l.Name, protocol) }
+			if !ListenerSupportsTLS(protocol) { return nil, fmt.Errorf("listener %q: TLS is not supported for protocol %q", l.Name, protocol) }
 			m["tls"] = true
 		} else { delete(m, "tls") }
 
@@ -108,31 +161,18 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { m["users"] = value }
 		case "trojan":
 			users := make([]map[string]interface{}, 0, len(listenerCreds))
-			for _, cred := range listenerCreds {
-				if cred.Password == "" { continue }
-				u := map[string]interface{}{"password": cred.Password}
-				if cred.Username != "" { u["username"] = cred.Username }
-				users = append(users, u)
-			}
+			for _, cred := range listenerCreds { if cred.Password != "" { u := map[string]interface{}{"password": cred.Password}; if cred.Username != "" { u["username"] = cred.Username }; users = append(users, u) } }
 			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { m["users"] = value }
 		case "hysteria2", "anytls", "mieru":
 			users := make(map[string]string)
 			for _, cred := range listenerCreds { if cred.Username != "" && cred.Password != "" { users[cred.Username] = cred.Password } }
 			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { m["users"] = value }
 		case "tuic":
-			if value, ok := configMap["token"]; ok && !hasCredentialState { m["token"] = value } else {
-				users := make(map[string]string)
-				for _, cred := range listenerCreds { if cred.UUID != "" && cred.Password != "" { users[cred.UUID] = cred.Password } }
-				if len(users) > 0 { m["users"] = users }
-			}
+			if value, ok := configMap["token"]; ok && !hasCredentialState { m["token"] = value } else { users := make(map[string]string); for _, cred := range listenerCreds { if cred.UUID != "" && cred.Password != "" { users[cred.UUID] = cred.Password } }; if len(users) > 0 { m["users"] = users } }
 		case "shadowquic", "trusttunnel":
 			users := make([]map[string]interface{}, 0, len(listenerCreds))
 			for _, cred := range listenerCreds { if cred.Username != "" && cred.Password != "" { users = append(users, map[string]interface{}{"username": cred.Username, "password": cred.Password}) } }
-			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState {
-				normalized, err := normalizeListenerUserList(value)
-				if err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }
-				if normalized != nil { m["users"] = normalized }
-			}
+			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { normalized, err := normalizeListenerUserList(value); if err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }; if normalized != nil { m["users"] = normalized } }
 		case "sudoku":
 		}
 		if hasCredentialState && len(listenerCreds) == 0 {
@@ -148,11 +188,7 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 func isValidPortString(s string) bool {
 	s = strings.TrimSpace(s); if s == "" { return false }
 	if strings.Contains(s, ",") { for _, p := range strings.Split(s, ",") { if !isValidPortString(strings.TrimSpace(p)) { return false } }; return true }
-	if strings.Contains(s, "-") {
-		parts := strings.SplitN(s, "-", 2); if len(parts) != 2 { return false }
-		start, err1 := strconv.Atoi(strings.TrimSpace(parts[0])); end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-		return err1 == nil && err2 == nil && start >= 1 && end <= 65535 && start <= end
-	}
+	if strings.Contains(s, "-") { parts := strings.SplitN(s, "-", 2); if len(parts) != 2 { return false }; start, err1 := strconv.Atoi(strings.TrimSpace(parts[0])); end, err2 := strconv.Atoi(strings.TrimSpace(parts[1])); return err1 == nil && err2 == nil && start >= 1 && end <= 65535 && start <= end }
 	port, err := strconv.Atoi(s); return err == nil && port >= 1 && port <= 65535
 }
 
@@ -178,20 +214,13 @@ func decodeListenerConfig(raw string) (map[string]interface{}, error) {
 
 func listenerFieldIsManaged(key string) bool {
 	switch key {
-	case "users", "username", "password", "uuid", "flow", "alterId", "tls", "servername", "sni", "skip-cert-verify", "name-cert-verify", "fingerprint", "client-fingerprint", "reality-opts", "shadow-tls-opts", "restls-opts", "jls-opts", "ws-opts", "grpc-opts", "h2-opts", "http-opts", "mkcp-opts", "certificate", "private-key", "private_key":
-		return true
+	case "users", "username", "password", "uuid", "flow", "alterId", "tls", "servername", "sni", "skip-cert-verify", "name-cert-verify", "fingerprint", "client-fingerprint", "reality-opts", "shadow-tls-opts", "restls-opts", "jls-opts", "ws-opts", "grpc-opts", "h2-opts", "http-opts", "mkcp-opts", "certificate", "private-key", "private_key": return true
 	default: return false
 	}
 }
 
-func copyServerTLSFields(dst, src map[string]interface{}) {
-	if value, ok := src["certificate"]; ok { dst["certificate"] = value }
-	if value, ok := src["private-key"]; ok { dst["private-key"] = value } else if value, ok := src["private_key"]; ok { dst["private-key"] = value }
-}
+func copyServerTLSFields(dst, src map[string]interface{}) { if value, ok := src["certificate"]; ok { dst["certificate"] = value }; if value, ok := src["private-key"]; ok { dst["private-key"] = value } else if value, ok := src["private_key"]; ok { dst["private-key"] = value } }
 func copyOption(dst, src map[string]interface{}, key string) { if value, ok := src[key]; ok { dst[key] = value } }
-func listenerHasUDPOption(protocol string) bool {
-	switch protocol { case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel": return true; default: return false }
-}
-func listenerSupportsTLS(protocol string) bool {
-	switch protocol { case "vmess", "vless", "trojan", "anytls", "mieru", "trusttunnel": return true; default: return false }
-}
+func listenerHasUDPOption(protocol string) bool { switch protocol { case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel": return true; default: return false } }
+func listenerSupportsTLS(protocol string) bool { switch protocol { case "vmess", "vless", "trojan", "anytls", "mieru", "trusttunnel": return true; default: return false } }
+func ListenerSupportsTLS(protocol string) bool { return listenerSupportsTLS(strings.ToLower(strings.TrimSpace(protocol))) }
