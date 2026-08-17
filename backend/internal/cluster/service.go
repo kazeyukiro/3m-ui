@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,7 +110,6 @@ func (s *Service) Delete(id uint) error {
 	return s.db.Delete(&models.RemoteServer{}, id).Error
 }
 
-// HealthCheck probes the remote panel health endpoint.
 func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 	var row models.RemoteServer
 	if err := s.db.First(&row, id).Error; err != nil {
@@ -147,4 +147,35 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 	row.APITokenSet = row.APIToken != ""
 	row.APIToken = ""
 	return &row, nil
+}
+
+func (s *Service) FetchRemoteNodes(id uint) (json.RawMessage, error) {
+	var row models.RemoteServer
+	if err := s.db.First(&row, id).Error; err != nil {
+		return nil, err
+	}
+	if !row.Enabled {
+		return nil, fmt.Errorf("remote server is disabled")
+	}
+	url := strings.TrimRight(row.BaseURL, "/") + "/api/v1/nodes"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if row.APIToken != "" {
+		req.Header.Set("Authorization", "Bearer "+row.APIToken)
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return json.RawMessage(body), nil
 }
