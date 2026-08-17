@@ -12,16 +12,32 @@ import (
 	"gorm.io/gorm"
 )
 
+// ConfigRegenerator is the single path used to rewrite Mihomo YAML after
+// listener/credential changes. Prefer *listener.Service so ApplyConfig +
+// validation stay consistent across the panel.
+type ConfigRegenerator interface {
+	RegenerateConfig() error
+}
+
 type Service struct {
 	db         *gorm.DB
 	configPath string
 	mihomo     *mihomo.Service
+	regen      ConfigRegenerator
 }
 
-// NewService constructs a node/listener service.
-// Optional mihomoSvc is used for hot-reload after config regeneration.
+// NewService constructs a node service. Optional mihomoSvc is retained for
+// legacy hot-reload when no shared regenerator is wired.
 func NewService(db *gorm.DB, configPath string, mihomoSvc *mihomo.Service) *Service {
 	return &Service{db: db, configPath: configPath, mihomo: mihomoSvc}
+}
+
+// SetRegenerator wires the shared listener config path so traffic enforcement
+// and credential hooks use the same ApplyConfig pipeline as HTTP CRUD.
+func (s *Service) SetRegenerator(r ConfigRegenerator) {
+	if s != nil {
+		s.regen = r
+	}
 }
 
 func (s *Service) Create(l *models.Listener) error {
@@ -89,7 +105,6 @@ func (s *Service) Delete(id uint) error {
 		return fmt.Errorf("failed to load node %d: %w", id, err)
 	}
 
-	// Soft-delete join bindings first so credential regeneration stays consistent.
 	if err := s.db.Where("listener_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
 		return fmt.Errorf("failed to delete node bindings: %w", err)
 	}
@@ -98,7 +113,6 @@ func (s *Service) Delete(id uint) error {
 	}
 
 	if err := s.RegenerateConfig(); err != nil {
-		// Best-effort restore so a config write failure does not leave a half-deleted node.
 		_ = s.db.Unscoped().Model(&models.Listener{}).Where("id = ?", id).Update("deleted_at", nil).Error
 		_ = s.db.Unscoped().Model(&models.ListenerUser{}).Where("listener_id = ?", id).Update("deleted_at", nil).Error
 		return fmt.Errorf("failed to regenerate config after delete: %w", err)
@@ -106,10 +120,16 @@ func (s *Service) Delete(id uint) error {
 	return nil
 }
 
-// RegenerateConfig regenerates the complete Mihomo configuration through the
-// Config Engine. Node services never write a partial listeners-only YAML file.
+// RegenerateConfig regenerates the complete Mihomo configuration.
+// When a shared regenerator (listener.Service) is wired, it is the only path.
 func (s *Service) RegenerateConfig() error {
-	if s == nil || s.db == nil {
+	if s == nil {
+		return fmt.Errorf("node service is not initialized")
+	}
+	if s.regen != nil {
+		return s.regen.RegenerateConfig()
+	}
+	if s.db == nil {
 		return fmt.Errorf("node service is not initialized")
 	}
 	engine := mihomoConfig.NewConfigEngine(s.db)
@@ -127,7 +147,13 @@ func (s *Service) RegenerateConfig() error {
 	if err := os.Chmod(s.configPath, 0600); err != nil {
 		return fmt.Errorf("failed to secure config file: %w", err)
 	}
-
+	if s.mihomo != nil {
+		if err := s.mihomo.ApplyConfig(yamlContent); err != nil {
+			log.Printf("node: mihomo ApplyConfig: %v", err)
+			return err
+		}
+		return nil
+	}
 	tmpl := mihomoConfig.GetDefaultTemplate()
 	controllerURL := "http://" + tmpl.ExternalController
 	if err := mihomo.NewExternalControllerAPI(controllerURL, tmpl.Secret).ReloadConfig(map[string]interface{}{
@@ -135,7 +161,6 @@ func (s *Service) RegenerateConfig() error {
 	}); err != nil {
 		log.Printf("node: mihomo hot reload skipped (core unreachable): %v", err)
 	}
-
 	return nil
 }
 
