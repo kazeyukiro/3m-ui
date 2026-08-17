@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'agent/**']
   pull_request:
     branches: [main]
 
@@ -26,7 +26,8 @@ jobs:
         run: go test ./...
       - name: Telegram race/security tests
         run: go test -race ./internal/telegram -run 'Test(Concurrent|UpdateOffset|HTMLSplit|SplitTelegramHTML|ParseUpdates|SetCommands)'
-
+      - name: Go build
+        run: go build ./...
   frontend:
     runs-on: ubuntu-latest
     defaults:
