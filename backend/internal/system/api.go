@@ -9,30 +9,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Handler serves system HTTP endpoints using an injected Service.
 type Handler struct {
 	svc       *Service
 	dbPath    string
 	mihomoCfg string
 }
 
-// NewHandler constructs a system HTTP handler.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// WithBackupPaths enables database/config export endpoints.
 func (h *Handler) WithBackupPaths(dbPath, mihomoConfig string) *Handler {
 	h.dbPath = dbPath
 	h.mihomoCfg = mihomoConfig
 	return h
 }
 
-// RegisterRoutes registers system stats routes under the provided group.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/status", h.GetSystemStatus)
 	rg.GET("/backup", h.ExportBackup)
 	rg.POST("/backup/restore-db", h.RestoreDatabase)
+	rg.POST("/templates/reverse-proxy", h.ReverseProxy)
+	rg.POST("/templates/acme", h.ACME)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
@@ -75,4 +73,39 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 		"message": "database restored; restart the panel process to reopen SQLite connections",
 		"path":    filepath.Base(h.dbPath),
 	})
+}
+
+func (h *Handler) ReverseProxy(c *gin.Context) {
+	var req struct {
+		Kind     string `json:"kind"`
+		Domain   string `json:"domain"`
+		Upstream string `json:"upstream"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := ReverseProxyTemplate(req.Kind, req.Domain, req.Upstream)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"config": out})
+}
+
+func (h *Handler) ACME(c *gin.Context) {
+	var req struct {
+		Domain  string `json:"domain"`
+		Email   string `json:"email"`
+		Webroot string `json:"webroot"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Domain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"command": ACMECommand(req.Domain, req.Email, req.Webroot)})
 }
