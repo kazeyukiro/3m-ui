@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Button, Space, Typography, Tag, message, Upload, Form, Input, Switch, Select } from 'antd';
+import { Card, Button, Space, Typography, Tag, message, Upload, Form, Input, Switch, Select, InputNumber } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { useThemeStore } from '../stores/themeStore';
@@ -19,8 +19,13 @@ const Settings: React.FC = () => {
   const [tplOut, setTplOut] = useState('');
   const [acmeForm] = Form.useForm();
   const [acmeCmd, setAcmeCmd] = useState('');
+  const [resetDay, setResetDay] = useState<number>(0);
 
   useEffect(() => {
+    client.get('/panel-settings').then((r) => {
+      const day = Number(r.data?.traffic_reset_day || 0);
+      if (!Number.isNaN(day)) setResetDay(day);
+    }).catch(() => {});
     fetchTelegramSettings().then((s: TelegramSettings) => {
       tgForm.setFieldsValue({
         ...s,
@@ -110,7 +115,7 @@ const Settings: React.FC = () => {
         </Form>
         {acmeCmd && (
           <div style={{ marginTop: 12 }}>
-            <Text type="secondary">{t('settings.acmeHint') || 'Run on the server (reference only; does not execute remotely):'}</Text>
+            <Text type="secondary">{t('settings.acmeHint') || 'Run on the server (reference only):'}</Text>
             <Input.TextArea style={{ marginTop: 8 }} rows={3} value={acmeCmd} readOnly />
             <Button style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(acmeCmd); message.success(t('common.copied') || 'Copied'); }}>{t('common.copy') || 'Copy'}</Button>
           </div>
@@ -127,6 +132,18 @@ const Settings: React.FC = () => {
           <Button type="primary" htmlType="submit">{t('settings.generateTemplate')}</Button>
         </Form>
         {tplOut && <Input.TextArea style={{ marginTop: 12 }} rows={12} value={tplOut} readOnly />}
+      </Card>
+      <Card title={t('settings.trafficReset') || 'Monthly traffic reset'} style={{ marginBottom: 16 }}>
+        <Space wrap>
+          <span>{t('settings.trafficResetDay') || 'Reset day of month (0 = off)'}</span>
+          <InputNumber min={0} max={31} value={resetDay} onChange={(v) => setResetDay(Number(v || 0))} />
+          <Button type="primary" onClick={async () => {
+            try {
+              await client.put('/panel-settings', { traffic_reset_day: String(resetDay) });
+              message.success(t('common.saved') || 'Saved');
+            } catch (e: any) { message.error(e.message || t('common.error')); }
+          }}>{t('common.save')}</Button>
+        </Space>
       </Card>
       <Card title={<><InfoCircleOutlined /> {t('settings.about')}</>}>
         <Space direction="vertical"><Text strong>3M-UI</Text><Text type="secondary">{t('app.title')}</Text><Tag color="blue">v1.0.0</Tag></Space>
