@@ -8,6 +8,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/cluster"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
+	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
@@ -60,9 +61,17 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
 		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))
 
-		nodeHandler := node.NewHandler(d.nodeService(), d.userService(), db)
-		nodeHandler.RegisterRoutes(apiV1.Group("/nodes"))
-		nodeHandler.RegisterRoutes(apiV1.Group("/listeners"))
+		// Prefer listener.Handler: includes templates, versions, batch, clone.
+		// Static paths (/templates, /batch) are registered before /:id.
+		if d.listenerService() != nil {
+			lh := listener.NewHandler(d.listenerService())
+			lh.RegisterRoutes(apiV1.Group("/nodes"))
+			lh.RegisterRoutes(apiV1.Group("/listeners"))
+		} else {
+			nodeHandler := node.NewHandler(d.nodeService(), d.userService(), db)
+			nodeHandler.RegisterRoutes(apiV1.Group("/nodes"))
+			nodeHandler.RegisterRoutes(apiV1.Group("/listeners"))
+		}
 
 		traffic.RegisterRoutes(
 			apiV1.Group("/traffic"),

@@ -75,6 +75,7 @@ func (c *Container) RouterDeps() router.Deps {
 		TrafficCollector: c.TrafficCollector,
 		User:             c.User,
 		Node:             c.Node,
+		Listener:         c.Listener,
 		System:           c.System,
 	}
 }
