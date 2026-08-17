@@ -69,8 +69,6 @@ func (n *Notifier) CheckAndNotify() {
 		}
 	}
 
-	// The scheduler runs every few seconds, so the digest does not depend on
-	// hitting exactly 00:00. The first check after midnight sends it once.
 	if settings.NotifyDailyDigest {
 		today := now.Format("2006-01-02")
 		if digestAlreadySent != today && now.Hour() == 0 {
@@ -110,15 +108,6 @@ func blockReason(u models.ProxyUser) string {
 	if !u.ExpireTime.IsZero() && !u.ExpireTime.After(now) { return "expired" }
 	if u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit { return "traffic_limit" }
 	return "blocked"
-}
-
-func formatBytes(n int64) string {
-	if n < 1024 { return fmt.Sprintf("%d B", n) }
-	units := []string{"KB", "MB", "GB", "TB"}
-	v := float64(n) / 1024
-	i := 0
-	for v >= 1024 && i < len(units)-1 { v /= 1024; i++ }
-	return fmt.Sprintf("%.2f %s", v, units[i])
 }
 
 func escapeHTML(s string) string {
