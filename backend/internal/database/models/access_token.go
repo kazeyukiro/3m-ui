@@ -1,15 +1,10 @@
 package models
 
-import (
-	"time"
+import "time"
 
-	"gorm.io/gorm"
-)
-
-// AccessToken grants a client access to one Listener's generated node
-// configuration. Listener is the single source of truth for client exports.
+// AccessToken grants a client access to one Listener's generated node configuration.
 type AccessToken struct {
-	gorm.Model
+	BaseModel
 	Name       string     `gorm:"not null" json:"name"`
 	Token      string     `gorm:"uniqueIndex;not null" json:"-"`
 	Enabled    bool       `gorm:"default:true" json:"enabled"`

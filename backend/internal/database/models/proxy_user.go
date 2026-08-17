@@ -1,15 +1,11 @@
 package models
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
+import "time"
 
 // ProxyUser is a user account used to authenticate against Mihomo server nodes.
 // It is deliberately separate from User, which represents a 3m-ui administrator.
 type ProxyUser struct {
-	gorm.Model
+	BaseModel
 
 	Username string `gorm:"size:100;not null;uniqueIndex" json:"username"`
 	// PasswordEncrypted contains an AES-GCM encrypted password. It is never serialized to API responses.
@@ -23,6 +19,4 @@ type ProxyUser struct {
 	Online            bool      `gorm:"not null;default:false" json:"online"`
 	ExpireTime        time.Time `json:"expire_time"`
 	Enabled           bool      `gorm:"not null;default:true" json:"enabled"`
-	// TelegramID links a proxy user to one Telegram account for self-service commands.
-	TelegramID        *int64    `gorm:"uniqueIndex" json:"telegram_id"`
 }

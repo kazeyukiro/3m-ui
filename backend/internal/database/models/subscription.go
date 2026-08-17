@@ -1,15 +1,11 @@
 package models
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
+import "time"
 
 type Subscription struct {
-	gorm.Model
+	BaseModel
 	UserID     uint       `gorm:"not null;index" json:"user_id"`
 	Token      string     `gorm:"uniqueIndex;not null" json:"token"`
-	Format     string     `gorm:"not null" json:"format"` // e.g., "clash", "sing-box"
+	Format     string     `gorm:"not null" json:"format"`
 	ExpireTime *time.Time `json:"expire_time"`
 }

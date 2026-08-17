@@ -1,16 +1,10 @@
 package models
 
-import (
-	"time"
+import "time"
 
-	"gorm.io/gorm"
-)
-
-// RemoteServer registers an external 3m-ui / Mihomo host managed from this
-// panel. Multi-node is metadata + health check first; full remote config
-// push is a later phase (agent/token based).
+// RemoteServer registers an external 3m-ui / Mihomo host managed from this panel.
 type RemoteServer struct {
-	gorm.Model
+	BaseModel
 
 	Name        string     `gorm:"size:100;not null" json:"name"`
 	BaseURL     string     `gorm:"size:512;not null" json:"base_url"`
