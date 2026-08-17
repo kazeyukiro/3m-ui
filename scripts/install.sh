@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-REPO="dzx941/3m-ui"
+REPO="kazeyukiro/3m-ui"
 BASE="/usr/local/lib/3m-ui"
 APP_BIN="$BASE/3m-ui-bin"
 VERSION_FILE="$BASE/VERSION"
