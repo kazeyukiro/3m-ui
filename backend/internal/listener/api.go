@@ -11,7 +11,7 @@ type Handler struct{svc *Service}
 func NewHandler(svc *Service)*Handler{return &Handler{svc:svc}}
 func(h *Handler)RegisterRoutes(rg *gin.RouterGroup){
 	rg.GET("",h.ListListeners);rg.POST("",h.CreateListener)
-	rg.GET("/templates",h.ListTemplates);rg.POST("/templates",h.CreateTemplate);rg.DELETE("/templates/:id",h.DeleteTemplate)
+	rg.GET("/templates",h.ListTemplates);rg.POST("/templates",h.CreateTemplate);rg.GET("/templates/:id",h.GetTemplate);rg.DELETE("/templates/:id",h.DeleteTemplate);rg.POST("/templates/:id/instantiate",h.InstantiateTemplate)
 	rg.POST("/batch/enabled",h.BatchEnabled)
 	rg.GET("/:id",h.GetListener);rg.PUT("/:id",h.UpdateListener);rg.DELETE("/:id",h.DeleteListener);rg.POST("/:id/reload",h.ReloadListener);rg.POST("/:id/clone",h.CloneListener);rg.GET("/:id/versions",h.ListVersions);rg.GET("/:id/versions/:version/diff",h.DiffVersion);rg.POST("/:id/versions/:version/rollback",h.RollbackVersion)
 }
@@ -28,5 +28,7 @@ func(h *Handler)DiffVersion(c *gin.Context){id,ok:=parseID(c,"id");if !ok{return
 func(h *Handler)RollbackVersion(c *gin.Context){id,ok:=parseID(c,"id");if !ok{return};v,err:=strconv.Atoi(c.Param("version"));if err!=nil||v<1{c.JSON(400,gin.H{"error":"invalid version"});return};if err:=h.svc.RollbackVersion(id,v);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};c.JSON(200,gin.H{"status":"ok"})}
 func(h *Handler)BatchEnabled(c *gin.Context){var req struct{IDs []uint `json:"ids"`;Enabled bool `json:"enabled"`};if err:=c.ShouldBindJSON(&req);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};if err:=h.svc.BatchSetEnabled(req.IDs,req.Enabled);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};c.JSON(200,gin.H{"status":"ok"})}
 func(h *Handler)ListTemplates(c *gin.Context){t,err:=h.svc.ListTemplates();if err!=nil{c.JSON(500,gin.H{"error":err.Error()});return};c.JSON(200,t)}
+func(h *Handler)GetTemplate(c *gin.Context){id,ok:=parseID(c,"id");if !ok{return};t,err:=h.svc.GetTemplate(id);if err!=nil{c.JSON(404,gin.H{"error":err.Error()});return};c.JSON(200,t)}
 func(h *Handler)CreateTemplate(c *gin.Context){var t models.ListenerTemplate;if err:=c.ShouldBindJSON(&t);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};if err:=h.svc.CreateTemplate(&t);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};c.JSON(201,t)}
 func(h *Handler)DeleteTemplate(c *gin.Context){id,ok:=parseID(c,"id");if !ok{return};if err:=h.svc.DeleteTemplate(id);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};c.JSON(200,gin.H{"status":"ok"})}
+func(h *Handler)InstantiateTemplate(c *gin.Context){id,ok:=parseID(c,"id");if !ok{return};var req struct{Name string `json:"name"`;Port string `json:"port"`};if err:=c.ShouldBindJSON(&req);err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};l,err:=h.svc.InstantiateTemplate(id,req.Name,req.Port);if err!=nil{c.JSON(400,gin.H{"error":err.Error()});return};c.JSON(201,l)}
