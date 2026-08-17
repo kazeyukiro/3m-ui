@@ -20,15 +20,10 @@ type Service struct {
 	credentialsChanged func() error
 }
 
-// NewService constructs a user service bound to the given database.
 func NewService(db *gorm.DB) *Service {
 	return &Service{db: db}
 }
 
-// SetCredentialsChangedHandler registers the callback used to apply changes
-// to proxy credentials/bindings to the generated Mihomo configuration.
-// Keeping this callback optional makes the service easy to unit-test while
-// ensuring the production composition root can hot-reload credentials.
 func (s *Service) SetCredentialsChangedHandler(fn func() error) {
 	s.credentialsChanged = fn
 }
@@ -45,17 +40,23 @@ type CreateInput struct {
 	Password     string     `json:"password"`
 	UUID         string     `json:"uuid"`
 	TrafficLimit int64      `json:"traffic_limit"`
+	IPLimit      int        `json:"ip_limit"`
+	Remark       string     `json:"remark"`
 	ExpireTime   *time.Time `json:"expire_time"`
 	Enabled      *bool      `json:"enabled"`
 }
+
 type UpdateInput struct {
 	Username     string     `json:"username"`
 	Password     string     `json:"password"`
 	UUID         string     `json:"uuid"`
 	TrafficLimit *int64     `json:"traffic_limit"`
+	IPLimit      *int       `json:"ip_limit"`
+	Remark       *string    `json:"remark"`
 	ExpireTime   *time.Time `json:"expire_time"`
 	Enabled      *bool      `json:"enabled"`
 }
+
 type Credential struct{ Username, Password, UUID string }
 
 func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
@@ -91,7 +92,16 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 	if err != nil {
 		return nil, err
 	}
-	u := &models.ProxyUser{Username: username, PasswordEncrypted: encrypted, UUID: uuid, TrafficLimit: in.TrafficLimit, ExpireTime: expire, Enabled: enabled}
+	u := &models.ProxyUser{
+		Username:          username,
+		PasswordEncrypted: encrypted,
+		UUID:              uuid,
+		TrafficLimit:      in.TrafficLimit,
+		IPLimit:           max0(in.IPLimit),
+		Remark:            strings.TrimSpace(in.Remark),
+		ExpireTime:        expire,
+		Enabled:           enabled,
+	}
 	if err := s.db.Create(u).Error; err != nil {
 		return nil, fmt.Errorf("create proxy user: %w", err)
 	}
@@ -100,6 +110,7 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 	}
 	return u, nil
 }
+
 func (s *Service) GetAll() ([]models.ProxyUser, error) {
 	var users []models.ProxyUser
 	if err := s.db.Order("id desc").Find(&users).Error; err != nil {
@@ -107,6 +118,7 @@ func (s *Service) GetAll() ([]models.ProxyUser, error) {
 	}
 	return users, nil
 }
+
 func (s *Service) GetByID(id uint) (*models.ProxyUser, error) {
 	var u models.ProxyUser
 	if err := s.db.First(&u, id).Error; err != nil {
@@ -114,6 +126,7 @@ func (s *Service) GetByID(id uint) (*models.ProxyUser, error) {
 	}
 	return &u, nil
 }
+
 func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	u, err := s.GetByID(id)
 	if err != nil {
@@ -134,6 +147,12 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	if in.TrafficLimit != nil {
 		u.TrafficLimit = *in.TrafficLimit
 	}
+	if in.IPLimit != nil {
+		u.IPLimit = max0(*in.IPLimit)
+	}
+	if in.Remark != nil {
+		u.Remark = strings.TrimSpace(*in.Remark)
+	}
 	if in.ExpireTime != nil {
 		u.ExpireTime = in.ExpireTime.UTC()
 	}
@@ -148,6 +167,7 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	}
 	return u, nil
 }
+
 func (s *Service) Delete(id uint) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("proxy_user_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
@@ -162,6 +182,7 @@ func (s *Service) Delete(id uint) error {
 	}
 	return nil
 }
+
 func (s *Service) BindListeners(userID uint, listenerIDs []uint) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		var user models.ProxyUser
@@ -218,11 +239,13 @@ func (s *Service) BindListeners(userID uint, listenerIDs []uint) error {
 	}
 	return nil
 }
+
 func (s *Service) GetListeners(userID uint) ([]models.Listener, error) {
 	var listeners []models.Listener
 	err := s.db.Model(&models.Listener{}).Joins("JOIN listener_users ON listener_users.listener_id = listeners.id AND listener_users.deleted_at IS NULL").Where("listener_users.proxy_user_id = ?", userID).Order("listeners.id").Find(&listeners).Error
 	return listeners, err
 }
+
 func IsCredentialActive(u models.ProxyUser) bool {
 	now := time.Now()
 	if !u.Enabled {
@@ -243,10 +266,6 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 	if err := s.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
 		return nil, err
 	}
-
-	// A listener with explicit ProxyUser bindings must use those bindings as
-	// the source of truth. In particular, an inactive/expired bound user must
-	// not cause the listener's legacy/generated credentials to remain usable.
 	var rows []struct {
 		ListenerID  uint
 		ProxyUserID uint
@@ -261,7 +280,6 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 	for _, row := range rows {
 		boundUsers[row.ListenerID] = append(boundUsers[row.ListenerID], row.ProxyUserID)
 	}
-
 	for _, listener := range listeners {
 		if ids, hasBindings := boundUsers[listener.ID]; hasBindings {
 			for _, userID := range ids {
@@ -287,10 +305,6 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 			}
 			continue
 		}
-
-		// Backward-compatible fallback for listeners that have never been bound
-		// to a ProxyUser. This is also where EnsureListenerCredentials keeps
-		// legacy standalone listeners exportable.
 		before := listener.Config
 		if err := credentials.EnsureListenerCredentials(&listener); err != nil {
 			return nil, fmt.Errorf("prepare listener %q credentials: %w", listener.Name, err)
@@ -337,6 +351,7 @@ func credentialsFromListenerConfig(protocol, raw string) []Credential {
 	}
 	return result
 }
+
 func safeMask(s string) string {
 	if len(s) <= 8 {
 		return "********"
@@ -357,13 +372,32 @@ type SafeUser struct {
 	ExpireTime    time.Time  `json:"expire_time"`
 	Enabled       bool       `json:"enabled"`
 	Blocked       bool       `json:"blocked"`
+	IPLimit       int        `json:"ip_limit"`
+	Remark        string     `json:"remark"`
 }
 
 func ToSafeUser(u *models.ProxyUser) SafeUser {
-	return SafeUser{ID: u.ID, Username: u.Username, UUIDMasked: safeMask(u.UUID), TrafficLimit: u.TrafficLimit, TrafficUsed: u.TrafficUsed, UploadBytes: u.UploadBytes, DownloadBytes: u.DownloadBytes, LastSeen: u.LastSeen, Online: u.Online, ExpireTime: u.ExpireTime, Enabled: u.Enabled, Blocked: !IsCredentialActive(*u)}
+	return SafeUser{
+		ID:            u.ID,
+		Username:      u.Username,
+		UUIDMasked:    safeMask(u.UUID),
+		TrafficLimit:  u.TrafficLimit,
+		TrafficUsed:   u.TrafficUsed,
+		UploadBytes:   u.UploadBytes,
+		DownloadBytes: u.DownloadBytes,
+		LastSeen:      u.LastSeen,
+		Online:        u.Online,
+		ExpireTime:    u.ExpireTime,
+		Enabled:       u.Enabled,
+		Blocked:       !IsCredentialActive(*u),
+		IPLimit:       u.IPLimit,
+		Remark:        u.Remark,
+	}
 }
+
 func encryptPassword(plain string) (string, error)   { return security.Encrypt(plain) }
 func decryptPassword(encoded string) (string, error) { return security.Decrypt(encoded) }
+
 func newUUID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -373,10 +407,18 @@ func newUUID() (string, error) {
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }
+
 func randomToken(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func max0(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
 }
