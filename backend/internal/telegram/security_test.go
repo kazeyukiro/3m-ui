@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 
 func testDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:telegram-test?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))), &gorm.Config{})
 	if err != nil { t.Fatal(err) }
 	if err := db.AutoMigrate(&models.PanelSetting{}, &models.ProxyUser{}); err != nil { t.Fatal(err) }
 	return db
@@ -51,9 +52,7 @@ func TestBindUserRejectsExistingTelegramBinding(t *testing.T) {
 func TestBindUserRejectsAlreadyBoundClient(t *testing.T) {
 	db := testDB(t)
 	id := int64(111)
-	first := models.ProxyUser{Username: "first", UUID: "u1"}
 	second := models.ProxyUser{Username: "second", UUID: "u2", TelegramID: &id}
-	if err := db.Create(&first).Error; err != nil { t.Fatal(err) }
 	if err := db.Create(&second).Error; err != nil { t.Fatal(err) }
 	b := NewBot(db, nil, nil)
 	got := b.bindUser("second", "222")
