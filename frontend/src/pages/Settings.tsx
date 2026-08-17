@@ -17,6 +17,8 @@ const Settings: React.FC = () => {
   const [tgForm] = Form.useForm();
   const [tplForm] = Form.useForm();
   const [tplOut, setTplOut] = useState('');
+  const [acmeForm] = Form.useForm();
+  const [acmeCmd, setAcmeCmd] = useState('');
 
   useEffect(() => {
     fetchTelegramSettings().then((s: TelegramSettings) => {
@@ -92,6 +94,27 @@ const Settings: React.FC = () => {
             <Button onClick={async () => { try { await testTelegram(); message.success(t('settings.telegramTestOk')); } catch (e: any) { message.error(e.message || t('common.error')); } }}>{t('settings.telegramTest')}</Button>
           </Space>
         </Form>
+      </Card>
+      <Card title={t('settings.certWizard') || 'SSL / ACME'} style={{ marginBottom: 16 }}>
+        <Form form={acmeForm} layout="vertical" initialValues={{ webroot: '/var/www/acme' }} onFinish={async (values) => {
+          try {
+            const r = await client.post('/system/templates/acme', values);
+            setAcmeCmd(r.data.command || '');
+            message.success(t('settings.acmeGenerated') || 'Command generated');
+          } catch (e: any) { message.error(e.message || t('common.error')); }
+        }}>
+          <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]}><Input placeholder="panel.example.com" /></Form.Item>
+          <Form.Item name="email" label={t('settings.email') || 'Email'}><Input placeholder="admin@example.com" /></Form.Item>
+          <Form.Item name="webroot" label={t('settings.webroot') || 'Webroot'}><Input /></Form.Item>
+          <Button type="primary" htmlType="submit">{t('settings.generateAcme') || 'Generate certbot command'}</Button>
+        </Form>
+        {acmeCmd && (
+          <div style={{ marginTop: 12 }}>
+            <Text type="secondary">{t('settings.acmeHint') || 'Run on the server (reference only; does not execute remotely):'}</Text>
+            <Input.TextArea style={{ marginTop: 8 }} rows={3} value={acmeCmd} readOnly />
+            <Button style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(acmeCmd); message.success(t('common.copied') || 'Copied'); }}>{t('common.copy') || 'Copy'}</Button>
+          </div>
+        )}
       </Card>
       <Card title={t('settings.templates')} style={{ marginBottom: 16 }}>
         <Form form={tplForm} layout="vertical" initialValues={{ kind: 'nginx', upstream: '127.0.0.1:8080' }} onFinish={async (values) => {
