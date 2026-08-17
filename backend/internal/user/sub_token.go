@@ -3,12 +3,15 @@ package user
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
 )
 
+// EnsureSubToken returns a stable public subscription token for the user,
+// creating one if missing (3x-ui client subscription parity).
 func (s *Service) EnsureSubToken(id uint) (string, error) {
 	var u models.ProxyUser
 	if err := s.db.First(&u, id).Error; err != nil {
@@ -17,33 +20,53 @@ func (s *Service) EnsureSubToken(id uint) (string, error) {
 	if strings.TrimSpace(u.SubToken) != "" {
 		return u.SubToken, nil
 	}
-	token, err := randomHex(16)
-	if err != nil {
-		return "", err
+	for i := 0; i < 5; i++ {
+		token, err := randomHex(16)
+		if err != nil {
+			return "", err
+		}
+		var n int64
+		if err := s.db.Model(&models.ProxyUser{}).Where("sub_token = ?", token).Count(&n).Error; err != nil {
+			return "", err
+		}
+		if n > 0 {
+			continue
+		}
+		if err := s.db.Model(&u).Update("sub_token", token).Error; err != nil {
+			return "", err
+		}
+		return token, nil
 	}
-	u.SubToken = token
-	if err := s.db.Model(&u).Update("sub_token", token).Error; err != nil {
-		return "", err
-	}
-	return token, nil
+	return "", fmt.Errorf("failed to allocate unique sub token")
 }
 
+// RotateSubToken issues a new subscription token (invalidates old URL).
 func (s *Service) RotateSubToken(id uint) (string, error) {
 	var u models.ProxyUser
 	if err := s.db.First(&u, id).Error; err != nil {
 		return "", err
 	}
-	token, err := randomHex(16)
-	if err != nil {
-		return "", err
+	for i := 0; i < 5; i++ {
+		token, err := randomHex(16)
+		if err != nil {
+			return "", err
+		}
+		var n int64
+		if err := s.db.Model(&models.ProxyUser{}).Where("sub_token = ? AND id <> ?", token, id).Count(&n).Error; err != nil {
+			return "", err
+		}
+		if n > 0 {
+			continue
+		}
+		if err := s.db.Model(&u).Update("sub_token", token).Error; err != nil {
+			return "", err
+		}
+		return token, nil
 	}
-	u.SubToken = token
-	if err := s.db.Model(&u).Update("sub_token", token).Error; err != nil {
-		return "", err
-	}
-	return token, nil
+	return "", fmt.Errorf("failed to allocate unique sub token")
 }
 
+// FindBySubToken looks up a user by public subscription token.
 func (s *Service) FindBySubToken(token string) (*models.ProxyUser, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {

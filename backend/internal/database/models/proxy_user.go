@@ -24,5 +24,6 @@ type ProxyUser struct {
 	// Remark is an admin-facing note (not used for auth).
 	Remark string `gorm:"size:255" json:"remark"`
 	// SubToken is the public subscription credential (3x-ui style client sub).
-	SubToken string `gorm:"size:64;uniqueIndex" json:"sub_token,omitempty"`
+	// Indexed (not unique): empty values on legacy rows would clash under UNIQUE.
+	SubToken string `gorm:"size:64;index" json:"sub_token,omitempty"`
 }
