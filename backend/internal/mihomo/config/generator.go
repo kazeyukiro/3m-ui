@@ -53,7 +53,6 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 
 	credentials := make(map[uint][]Credential)
 	if CredentialProvider != nil {
-		var err error
 		credentials, err = CredentialProvider()
 		if err != nil {
 			return "", fmt.Errorf("load listener credentials: %w", err)
@@ -98,9 +97,6 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			listen = "0.0.0.0"
 		}
 
-		// Official Mihomo examples use numeric port for single ports and
-		// string form for ranges/lists (ports syntax). Prefer int when possible
-		// so generated YAML matches the documented schema.
 		var portVal interface{} = strings.TrimSpace(l.Port)
 		if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil {
 			portVal = p
@@ -142,7 +138,16 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		}
 
 		copyServerTLSFields(m, configMap)
-		listenerCreds := creds[l.ID]
+		listenerCreds, hasCredentialState := creds[l.ID]
+
+		if l.TLS {
+			if !listenerSupportsTLS(protocol) {
+				return nil, fmt.Errorf("listener %q: TLS is not supported for protocol %q", l.Name, protocol)
+			}
+			m["tls"] = true
+		} else {
+			delete(m, "tls")
+		}
 
 		switch protocol {
 		case "shadowsocks":
@@ -180,7 +185,7 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			}
 			if len(users) > 0 {
 				m["users"] = users
-			} else if value, ok := configMap["users"]; ok {
+			} else if value, ok := configMap["users"]; ok && !hasCredentialState {
 				m["users"] = value
 			}
 
@@ -198,7 +203,7 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			}
 			if len(users) > 0 {
 				m["users"] = users
-			} else if value, ok := configMap["users"]; ok {
+			} else if value, ok := configMap["users"]; ok && !hasCredentialState {
 				m["users"] = value
 			}
 
@@ -211,12 +216,12 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			}
 			if len(users) > 0 {
 				m["users"] = users
-			} else if value, ok := configMap["users"]; ok {
+			} else if value, ok := configMap["users"]; ok && !hasCredentialState {
 				m["users"] = value
 			}
 
 		case "tuic":
-			if value, ok := configMap["token"]; ok {
+			if value, ok := configMap["token"]; ok && !hasCredentialState {
 				m["token"] = value
 			} else {
 				users := make(map[string]string)
@@ -227,8 +232,6 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 				}
 				if len(users) > 0 {
 					m["users"] = users
-				} else if value, ok := configMap["users"]; ok {
-					m["users"] = value
 				}
 			}
 
@@ -244,7 +247,7 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			}
 			if len(users) > 0 {
 				m["users"] = users
-			} else if value, ok := configMap["users"]; ok {
+			} else if value, ok := configMap["users"]; ok && !hasCredentialState {
 				normalized, err := normalizeListenerUserList(value)
 				if err != nil {
 					return nil, fmt.Errorf("listener %q: %w", l.Name, err)
@@ -254,7 +257,22 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 				}
 			}
 
-		case "sudoku", "hysteria2-realm":
+		case "sudoku":
+		case "mieru":
+		case "hysteria2-realm":
+		}
+
+		// If a listener has explicit ProxyUser bindings, an empty credential
+		// state is authoritative. Never fall back to credentials stored in the
+		// listener JSON, otherwise disabled/expired users could remain usable.
+		if hasCredentialState && len(listenerCreds) == 0 {
+			delete(m, "users")
+			if protocol == "shadowsocks" {
+				delete(m, "password")
+			}
+			if protocol == "tuic" {
+				delete(m, "token")
+			}
 		}
 
 		result = append(result, m)
@@ -378,6 +396,15 @@ func copyOption(dst, src map[string]interface{}, key string) {
 func listenerHasUDPOption(protocol string) bool {
 	switch protocol {
 	case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel":
+		return true
+	default:
+		return false
+	}
+}
+
+func listenerSupportsTLS(protocol string) bool {
+	switch protocol {
+	case "vmess", "vless", "trojan", "anytls", "mieru", "trusttunnel":
 		return true
 	default:
 		return false
