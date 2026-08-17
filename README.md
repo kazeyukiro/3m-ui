@@ -4,9 +4,9 @@
   <strong>English</strong> · <a href="#中文">中文</a>
 </p>
 
-3M-UI is a lightweight web management console for <a href="https://github.com/MetaCubeX/mihomo">Mihomo Core</a>. It focuses on VPS node management, listener configuration, proxy-user credentials, traffic usage, client subscriptions, and Telegram operations.
+3M-UI is a lightweight web management console for <a href="https://github.com/MetaCubeX/mihomo">Mihomo Core</a>. It focuses on VPS node management, listener configuration, proxy-user credentials, traffic usage, client subscriptions, configuration lifecycle management, and Telegram operations.
 
-3M-UI 是一个轻量、现代的 Mihomo Core Web 管理面板，主要用于 VPS 节点管理、Listener 入站配置、代理用户凭据、流量统计、客户端订阅以及 Telegram 管理与通知。
+3M-UI 是一个轻量、现代的 Mihomo Core Web 管理面板，主要用于 VPS 节点管理、Listener 入站配置、代理用户凭据、流量统计、客户端订阅、配置生命周期管理以及 Telegram 管理与通知。
 
 ---
 
@@ -20,6 +20,10 @@
 - JWT-based panel authentication
 - Client URI and subscription generation
 - Credential-aware Mihomo configuration generation
+- Configuration preview and validation before activation
+- Safe configuration apply with automatic `.bak` backup
+- Configuration rollback through the Mihomo service layer
+- Subscription token enable/disable, expiry and lifecycle management
 
 ### Telegram / Telegram 机器人
 
@@ -37,8 +41,11 @@ Telegram 不只是通知渠道，内置 Bot 同时支持通知、查询和交互
 - Telegram ID → proxy-user binding
 - User self-service usage and node links
 - Admin views for users, online users, listeners, traffic ranking, blocked users and low-quota users
-- Admin `/restart` for Mihomo
+- Admin `/restart` for Mihomo through the Mihomo service only
 - Admin client creation wizard with listener selection, generated password and binding
+- Callback permissions are re-checked before privileged actions
+- Wizard state prevents duplicate client-creation flows
+- Telegram update offset is persisted across bot restarts
 
 ### Bot Commands / Bot 命令
 
@@ -56,10 +63,31 @@ Telegram 不只是通知渠道，内置 Bot 同时支持通知、查询和交互
 | `/online` | Online clients | 在线客户端 | Admin |
 | `/listeners` | Listener list | 入站列表 | Admin |
 | `/traffic` | Traffic ranking | 流量排行 | Admin |
+| `/cancel` | Cancel current wizard | 取消当前向导 | All |
+
+普通用户不能通过 `/usage <other-user>` 查询其他客户端；`/inbound` 和 `/restart` 严格要求管理员权限。
+
+Regular users cannot use `/usage <other-user>` to inspect another client; `/inbound` and `/restart` require administrator privileges.
 
 The Bot also exposes the same major functions through inline keyboards.
 
 Bot 还提供 Inline Keyboard，可直接点击完成主要查询和管理操作。
+
+---
+
+## 🛡️ P0 Reliability / P0 可靠性
+
+The P0 baseline is designed around one rule: **Web UI, Telegram and future API clients must all use the same service layer and never bypass Mihomo lifecycle controls.**
+
+P0 基线遵循一个原则：**Web UI、Telegram 以及未来的 API/CLI 都必须经过统一 Service Layer，不能绕过 Mihomo 生命周期管理。**
+
+- **Subscription / 订阅** — secure listener-bound tokens, expiry checks, Mihomo YAML and optional subconverter formats
+- **Client management / 客户端管理** — credentials, traffic limits, expiry, online state and Telegram binding
+- **Config preview / 配置预览** — validate a candidate without touching the live configuration
+- **Config apply / 配置应用** — validate, back up the current configuration, activate, and restore on failure
+- **Config rollback / 配置回滚** — restore the previous `.bak` configuration through `Mihomo Service`
+- **Mihomo Service / 核心服务** — start, stop, restart, status, logs and guarded configuration activation
+- **Telegram / Telegram** — bilingual notification/admin workflow with permission re-checks and persisted update offset
 
 ---
 
@@ -72,18 +100,18 @@ Bot 还提供 Inline Keyboard，可直接点击完成主要查询和管理操作
                │ HTTP / REST
 ┌──────────────▼───────────────┐
 │ Gin + GORM + JWT             │
-└───────┬───────────┬─────────┘
-        │           │
-        │           └──────────────┐
-        ▼                          ▼
-┌──────────────┐          ┌────────────────┐
-│ SQLite       │          │ Telegram Bot   │
-└──────────────┘          └────────────────┘
-        │
-        ▼
-┌────────────────┐
-│ Mihomo Core    │
-└────────────────┘
+└──────────────┬───────────────┘
+               │ Unified Service Layer
+       ┌───────┼──────────┬────────────┐
+       ▼       ▼          ▼            ▼
+   Clients  Telegram  Config Engine  Mihomo Service
+       │       │          │            │
+       └───────┴──────────┴────────────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │ Mihomo Core  │
+                 └──────────────┘
 ```
 
 ---
@@ -163,6 +191,29 @@ Available notification switches / 可用通知开关：
 
 ---
 
+## 🔗 Subscription / 订阅
+
+Create a listener-bound access token from the panel. The token is the credential for the public subscription endpoint:
+
+```text
+/api/v1/client/sub/<token>
+```
+
+Optional targets include:
+
+```text
+?target=mihomo
+?target=clash
+?target=sing-box
+?target=shadowrocket
+```
+
+Subscription tokens can be disabled, expired or deleted without changing the underlying listener configuration.
+
+订阅 Token 可以单独禁用、设置到期时间或删除，不会直接修改底层 Listener 配置。
+
+---
+
 ## 🔐 Telegram Setup / Telegram 配置
 
 1. Create a Bot with Telegram's BotFather and copy the Bot Token.
@@ -185,6 +236,41 @@ For self-service commands, bind a proxy user to the user's Telegram ID. Administ
 
 ---
 
+## 🧩 Configuration Lifecycle / 配置生命周期
+
+Recommended production workflow / 推荐生产流程：
+
+```text
+Edit / 编辑
+   ↓
+Preview / 预览
+   ↓
+Validate / 校验
+   ↓
+Apply / 应用
+   ↓
+Backup current config / 备份旧配置
+   ↓
+Restart or start Mihomo / 重启或启动核心
+   ↓
+Health check / 健康检查
+   ↓
+Success → keep / 成功 → 保留
+Failure → rollback / 失败 → 回滚
+```
+
+API endpoints / API：
+
+| Method | Endpoint | Description / 说明 |
+|---|---|---|
+| POST | `/api/v1/config/preview` | Validate candidate without applying / 仅预览校验 |
+| POST | `/api/v1/config/validate` | Validate YAML / 校验 YAML |
+| POST | `/api/v1/config/apply` | Generate, validate and safely activate / 安全生成、校验并应用 |
+| POST | `/api/v1/config/rollback` | Restore previous `.bak` / 恢复上一份配置 |
+| GET | `/api/v1/config/download` | Download generated YAML / 下载配置 |
+
+---
+
 ## 🛡️ Security / 安全建议
 
 1. The initial administrator credentials remain `admin` / `admin`. Do not change the initialization logic. Change the password after first login if your deployment requires it.
@@ -194,6 +280,7 @@ For self-service commands, bind a proxy user to the user's Telegram ID. Administ
 5. Keep the Mihomo binary in an approved system path.
 6. Set `public_url` correctly when using a reverse proxy.
 7. Never publish your Telegram Bot Token in issues, screenshots or public repositories.
+8. Subscription tokens are bearer credentials; treat them like passwords and revoke them when exposed.
 
 1. 初始管理员账号仍为 `admin` / `admin`，不会修改初始化密码逻辑。生产部署建议首次登录后修改密码。
 2. 生产环境使用 HTTPS，建议通过 Nginx 或 Caddy 反向代理。
@@ -202,6 +289,7 @@ For self-service commands, bind a proxy user to the user's Telegram ID. Administ
 5. Mihomo 二进制文件放置在受信任的系统路径。
 6. 使用反向代理时正确设置 `public_url`。
 7. 不要在 Issue、截图或公开仓库中泄露 Telegram Bot Token。
+8. 订阅 Token 属于 Bearer 凭据，泄露后应立即禁用或删除。
 
 ---
 
@@ -217,8 +305,13 @@ For self-service commands, bind a proxy user to the user's Telegram ID. Administ
 | POST | `/api/v1/nodes` | Yes | Create listener / 创建入站 |
 | GET | `/api/v1/nodes/:id/uri` | Yes | Export node URI / 导出节点 URI |
 | GET | `/api/v1/client/sub/:token` | Token | Client subscription / 客户端订阅 |
+| GET | `/api/v1/telegram/settings` | Yes | Telegram settings / Telegram 设置 |
+| POST | `/api/v1/telegram/test` | Yes | Test Telegram / 测试 Telegram |
 | POST | `/api/v1/mihomo/start` | Yes | Start Mihomo / 启动核心 |
 | POST | `/api/v1/mihomo/stop` | Yes | Stop Mihomo / 停止核心 |
+| POST | `/api/v1/mihomo/restart` | Yes | Restart Mihomo / 重启核心 |
+| POST | `/api/v1/config/apply` | Yes | Safe config activation / 安全应用配置 |
+| POST | `/api/v1/config/rollback` | Yes | Restore previous config / 回滚配置 |
 
 ---
 
