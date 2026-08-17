@@ -47,23 +47,14 @@ const Settings: React.FC = () => {
       </Card>
       <Card title={<><LockOutlined /> {t('settings.passwordTitle')}</>} style={{ marginBottom: 16 }}>
         <Text type="secondary">{t('settings.passwordDescription')}</Text>
-        <div style={{ marginTop: 12 }}>
-          <Button type="primary" onClick={() => navigate('/change-password')}>{t('settings.changePassword')}</Button>
-        </div>
+        <div style={{ marginTop: 12 }}><Button type="primary" onClick={() => navigate('/change-password')}>{t('settings.changePassword')}</Button></div>
       </Card>
       <Card title={<><CloudDownloadOutlined /> {t('settings.backup')}</>} style={{ marginBottom: 16 }}>
         <Text type="secondary">{t('settings.backupHint')}</Text>
         <div style={{ marginTop: 12 }}>
           <Space wrap>
-            <Button icon={<CloudDownloadOutlined />} onClick={async () => {
-              try { await downloadBackup(); message.success(t('settings.backupDone')); }
-              catch (e: any) { message.error(e.message || t('common.error')); }
-            }}>{t('settings.downloadBackup')}</Button>
-            <Upload showUploadList={false} beforeUpload={async (file) => {
-              try { await restoreDatabase(file as File); message.success(t('settings.restoreDone')); }
-              catch (e: any) { message.error(e.message || t('common.error')); }
-              return false;
-            }}>
+            <Button icon={<CloudDownloadOutlined />} onClick={async () => { try { await downloadBackup(); message.success(t('settings.backupDone')); } catch (e: any) { message.error(e.message || t('common.error')); } }}>{t('settings.downloadBackup')}</Button>
+            <Upload showUploadList={false} beforeUpload={async (file) => { try { await restoreDatabase(file as File); message.success(t('settings.restoreDone')); } catch (e: any) { message.error(e.message || t('common.error')); } return false; }}>
               <Button icon={<CloudUploadOutlined />}>{t('settings.restoreDb')}</Button>
             </Upload>
           </Space>
@@ -71,9 +62,7 @@ const Settings: React.FC = () => {
       </Card>
       <Card title={<><ApiOutlined /> {t('settings.apiDocs')}</>} style={{ marginBottom: 16 }}>
         <Text type="secondary">{t('settings.apiDocsHint')}</Text>
-        <div style={{ marginTop: 12 }}>
-          <Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">{t('settings.openOpenAPI')}</Button>
-        </div>
+        <div style={{ marginTop: 12 }}><Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">{t('settings.openOpenAPI')}</Button></div>
       </Card>
       <Card title={t('settings.telegram')} style={{ marginBottom: 16 }}>
         <Form form={tgForm} layout="vertical" onFinish={async (values) => {
@@ -85,12 +74,11 @@ const Settings: React.FC = () => {
               notify_on_block: !!values.notify_on_block,
               notify_on_unblock: !!values.notify_on_unblock,
               notify_on_expiry: !!values.notify_on_expiry,
+              notify_daily_digest: !!values.notify_daily_digest,
               keep_token: !values.bot_token || String(values.bot_token).includes('…'),
             });
             message.success(t('settings.telegramSaved'));
-          } catch (e: any) {
-            message.error(e.message || t('common.error'));
-          }
+          } catch (e: any) { message.error(e.message || t('common.error')); }
         }}>
           <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="bot_token" label={t('settings.botToken')}><Input.Password /></Form.Item>
@@ -98,29 +86,19 @@ const Settings: React.FC = () => {
           <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_unblock" label={t('settings.notifyUnblock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_expiry" label={t('settings.notifyExpiry')} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="notify_daily_digest" label={t('settings.notifyDailyDigest')} valuePropName="checked"><Switch /></Form.Item>
           <Space>
             <Button type="primary" htmlType="submit">{t('common.save')}</Button>
-            <Button onClick={async () => {
-              try { await testTelegram(); message.success(t('settings.telegramTestOk')); }
-              catch (e: any) { message.error(e.message || t('common.error')); }
-            }}>{t('settings.telegramTest')}</Button>
+            <Button onClick={async () => { try { await testTelegram(); message.success(t('settings.telegramTestOk')); } catch (e: any) { message.error(e.message || t('common.error')); } }}>{t('settings.telegramTest')}</Button>
           </Space>
         </Form>
       </Card>
       <Card title={t('settings.templates')} style={{ marginBottom: 16 }}>
-        <Form form={tplForm} layout="vertical" initialValues={{ kind: 'nginx', upstream: '127.0.0.1:8080' }}
-          onFinish={async (values) => {
-            try {
-              const r = await client.post('/system/templates/reverse-proxy', values);
-              setTplOut(r.data.config || '');
-              message.success(t('settings.templateGenerated'));
-            } catch (e: any) {
-              message.error(e.message || t('common.error'));
-            }
-          }}>
-          <Form.Item name="kind" label={t('settings.proxyKind')}>
-            <Select options={[{ value: 'nginx', label: 'Nginx' }, { value: 'caddy', label: 'Caddy' }]} />
-          </Form.Item>
+        <Form form={tplForm} layout="vertical" initialValues={{ kind: 'nginx', upstream: '127.0.0.1:8080' }} onFinish={async (values) => {
+          try { const r = await client.post('/system/templates/reverse-proxy', values); setTplOut(r.data.config || ''); message.success(t('settings.templateGenerated')); }
+          catch (e: any) { message.error(e.message || t('common.error')); }
+        }}>
+          <Form.Item name="kind" label={t('settings.proxyKind')}><Select options={[{ value: 'nginx', label: 'Nginx' }, { value: 'caddy', label: 'Caddy' }]} /></Form.Item>
           <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]}><Input placeholder="panel.example.com" /></Form.Item>
           <Form.Item name="upstream" label={t('settings.upstream')}><Input /></Form.Item>
           <Button type="primary" htmlType="submit">{t('settings.generateTemplate')}</Button>
@@ -128,11 +106,7 @@ const Settings: React.FC = () => {
         {tplOut && <Input.TextArea style={{ marginTop: 12 }} rows={12} value={tplOut} readOnly />}
       </Card>
       <Card title={<><InfoCircleOutlined /> {t('settings.about')}</>}>
-        <Space direction="vertical">
-          <Text strong>3M-UI</Text>
-          <Text type="secondary">{t('app.title')}</Text>
-          <Tag color="blue">v1.0.0</Tag>
-        </Space>
+        <Space direction="vertical"><Text strong>3M-UI</Text><Text type="secondary">{t('app.title')}</Text><Tag color="blue">v1.0.0</Tag></Space>
       </Card>
     </div>
   );
