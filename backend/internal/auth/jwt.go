@@ -11,10 +11,10 @@ import (
 
 // JWTClaims represents the authenticated administrator identity.
 type JWTClaims struct {
-	UserID         uint   `json:"user_id"`
-	Username       string `json:"username"`
-	Role           string `json:"role"`
-	SessionVersion uint
+	UserID         uint      `json:"user_id"`
+	Username       string    `json:"username"`
+	Role           string    `json:"role"`
+	SessionVersion uint      `json:"session_version"`
 	ExpiresAt      time.Time `json:"expires_at"`
 }
 
@@ -51,7 +51,7 @@ func ParseToken(secret, tokenString string) (*JWTClaims, error) {
 		return []byte(secret), nil
 	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
-		return nil, fmt.Errorf("invalid or expired token")
+		return nil, errors.New("invalid or expired token")
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
@@ -84,9 +84,9 @@ func ParseToken(secret, tokenString string) (*JWTClaims, error) {
 
 // TokenFromRequest extracts the Bearer token from the Authorization header.
 func TokenFromRequest(authHeader string) string {
-const prefix = "Bearer "
-if strings.HasPrefix(authHeader, prefix) {
-return strings.TrimSpace(authHeader[len(prefix):])
-}
-return ""
+	const prefix = "Bearer "
+	if strings.HasPrefix(authHeader, prefix) {
+		return strings.TrimSpace(authHeader[len(prefix):])
+	}
+	return ""
 }
