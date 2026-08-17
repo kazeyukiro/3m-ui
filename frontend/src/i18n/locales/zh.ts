@@ -86,6 +86,11 @@ export default {
   },
   config: {
     title: '配置引擎', subtitle: '可视化管理 Mihomo 配置',
+    visual: '可视化配置', yaml: 'YAML 配置', proxies: '代理配置', yamlPreview: 'YAML 预览',
+    addProxy: '添加代理', editProxy: '编辑代理', deleteProxy: '删除代理', deleteConfirm: '确定要删除此代理吗？',
+    generateSuccess: '配置生成成功', validateSuccess: '配置验证通过', validateFailed: '配置验证失败',
+    proxyName: '代理名称', proxyType: '代理类型', proxyServer: '代理服务器', proxyPort: '代理端口',
+    proxyPassword: '代理密码', proxyUUID: '代理 UUID',
   },
   users: {
     title: '用户管理', create: '创建用户', edit: '编辑用户', username: '用户名', password: '密码',
