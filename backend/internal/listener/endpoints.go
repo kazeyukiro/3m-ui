@@ -4,9 +4,10 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
 
-// portRanges parses a comma-separated list of ports/ranges into inclusive ranges.
 func portRanges(value string) ([][2]int, bool) {
 	var out [][2]int
 	for _, raw := range strings.Split(value, ",") {
@@ -24,7 +25,8 @@ func portRanges(value string) ([][2]int, bool) {
 
 func portsOverlap(a, b string) bool {
 	ra, oka := portRanges(a); rb, okb := portRanges(b); if !oka || !okb { return false }
-	for _, x := range ra { for _, y := range rb { if x[0] <= y[1] && y[0] <= x[1] { return true } } }
+	for _, x := range ra { for _, y := range rb { if x[0] <= y[1] && y[0] <= x[1] { return true } }
+	}
 	return false
 }
 
