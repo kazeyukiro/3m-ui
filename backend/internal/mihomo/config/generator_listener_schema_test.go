@@ -4,13 +4,12 @@ import (
 	"testing"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"gorm.io/gorm"
 )
 
 func TestGenerateListenersUsesNativeSchema(t *testing.T) {
 	listeners := []models.Listener{
-		{Model: gorm.Model{ID: 1}, Name: "ss", Protocol: "shadowsocks", Port: "443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"cipher":"aes-256-gcm"}`},
-		{Model: gorm.Model{ID: 2}, Name: "vless", Protocol: "vless", Port: "8443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"flow":"xtls-rprx-vision","certificate":"cert","private-key":"key","reality-config":{"private-key":"secret"}}`},
+		{BaseModel: models.BaseModel{ID: 1}, Name: "ss", Protocol: "shadowsocks", Port: "443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"cipher":"aes-256-gcm"}`},
+		{BaseModel: models.BaseModel{ID: 2}, Name: "vless", Protocol: "vless", Port: "8443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"flow":"xtls-rprx-vision","certificate":"cert","private-key":"key","reality-config":{"private-key":"secret"}}`},
 	}
 	creds := map[uint][]Credential{
 		1: {{Username: "alice", Password: "ss-pass"}},
@@ -40,7 +39,7 @@ func TestGenerateShadowQUICNormalizesObjectUsers(t *testing.T) {
 	listeners := []models.Listener{{
 		Name:        "shadowquic",
 		Protocol:    "shadowquic",
-		Port: "8443",
+		Port:        "8443",
 		BindAddress: "0.0.0.0",
 		Enabled:     true,
 		Config:      `{"users":{"alice":"secret","bob":"secret2"}}`,
@@ -63,10 +62,10 @@ func TestGenerateShadowQUICNormalizesObjectUsers(t *testing.T) {
 
 func TestGenerateShadowQUICUsesCredentialsAsList(t *testing.T) {
 	listeners := []models.Listener{{
-		Model:       gorm.Model{ID: 1},
+		BaseModel:   models.BaseModel{ID: 1},
 		Name:        "shadowquic",
 		Protocol:    "shadowquic",
-		Port: "8443",
+		Port:        "8443",
 		BindAddress: "0.0.0.0",
 		Enabled:     true,
 	}}
