@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider } from 'antd';
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Steps } from 'antd';
 import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined } from '@ant-design/icons';
 import {
-  fetchListeners, createListener, updateListener, deleteListener, reloadListener, exportNodeURI, Listener,
+  fetchListeners, createListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
 } from '../api/nodes';
 import {
   listListenerTemplates, createListenerTemplate, deleteListenerTemplate, instantiateListenerTemplate,
@@ -45,6 +45,7 @@ const Listeners: React.FC = () => {
   const [diffText, setDiffText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const protocol = Form.useWatch('protocol', form);
+  const [wizardStep, setWizardStep] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -57,12 +58,16 @@ const Listeners: React.FC = () => {
   useEffect(() => { load(); loadTemplates(); }, []);
 
   const openCreate = () => {
-    setEditing(null); form.resetFields();
-    form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false });
+    setEditing(null);
+    setWizardStep(0);
+    form.resetFields();
+    form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless' });
     setModalOpen(true);
   };
   const openEdit = (record: Listener) => {
-    setEditing(record); form.resetFields();
+    setEditing(record);
+    setWizardStep(0);
+    form.resetFields();
     form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, ...configToFormValues(record.config) });
     setModalOpen(true);
   };
@@ -74,7 +79,7 @@ const Listeners: React.FC = () => {
       const payload: Partial<Listener> = { name: values.name, protocol: proto, port: String(values.port), bind_address: values.bind_address || '0.0.0.0', enabled: !!values.enabled, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config) };
       if (editing) { await updateListener(editing.id, payload); message.success(t('listeners.updated')); }
       else { await createListener(payload); message.success(t('listeners.created')); }
-      setModalOpen(false); setEditing(null); form.resetFields(); await load();
+      setModalOpen(false); setEditing(null); setWizardStep(0); form.resetFields(); await load();
     } catch (e: any) { message.error(e.message); }
   };
   const onDelete = async (id: number) => { try { await deleteListener(id); message.success(t('listeners.deleted')); await load(); } catch (e: any) { message.error(e.message); } };
@@ -120,13 +125,13 @@ const Listeners: React.FC = () => {
     { title: t('listeners.status'), dataIndex: 'enabled', key: 'enabled', width: 100, render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
     { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 300, render: (_: any, record: Listener) => (
       <Space size={4} wrap>
-        <Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(record.id)} /></Tooltip>
+        <Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(normalizeId(record))} /></Tooltip>
         <Tooltip title={t('listeners.clone')}><Button size="small" icon={<BranchesOutlined />} onClick={() => openClone(record)} /></Tooltip>
         <Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<SaveOutlined />} onClick={() => openSaveTemplate(record)} /></Tooltip>
         <Tooltip title={t('listeners.versions')}><Button size="small" icon={<HistoryOutlined />} onClick={() => openVersions(record)} /></Tooltip>
-        <Tooltip title={t('common.refresh')}><Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(record.id)} /></Tooltip>
+        <Tooltip title={t('common.refresh')}><Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(normalizeId(record))} /></Tooltip>
         <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
-        <Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(record.id)}><Button size="small" icon={<DeleteOutlined />} danger /></Popconfirm>
+        <Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<DeleteOutlined />} danger /></Popconfirm>
       </Space>
     ) },
   ];
@@ -160,15 +165,100 @@ const Listeners: React.FC = () => {
       },
     ]} />
 
-    <Modal open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 720} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
+    <Modal
+      open={modalOpen}
+      title={editing ? t('listeners.edit') : (t('listeners.createWizard') || t('listeners.create'))}
+      onCancel={() => { setModalOpen(false); setEditing(null); setWizardStep(0); form.resetFields(); }}
+      width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 760}
+      destroyOnClose
+      styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+      footer={
+        editing ? (
+          <Space>
+            <Button onClick={() => { setModalOpen(false); setEditing(null); form.resetFields(); }}>{t('common.cancel')}</Button>
+            <Button type="primary" onClick={() => form.submit()}>{t('common.save')}</Button>
+          </Space>
+        ) : (
+          <Space>
+            <Button onClick={() => { setModalOpen(false); setWizardStep(0); form.resetFields(); }}>{t('common.cancel')}</Button>
+            {wizardStep > 0 && (
+              <Button onClick={() => setWizardStep((s) => Math.max(0, s - 1))}>{t('common.prev') || 'Previous'}</Button>
+            )}
+            {wizardStep < 2 ? (
+              <Button type="primary" onClick={async () => {
+                try {
+                  if (wizardStep === 0) {
+                    await form.validateFields(['name', 'protocol', 'port', 'bind_address']);
+                  }
+                  setWizardStep((s) => s + 1);
+                } catch { /* validation failed */ }
+              }}>{t('common.next') || 'Next'}</Button>
+            ) : (
+              <Button type="primary" onClick={() => form.submit()}>{t('listeners.create')}</Button>
+            )}
+          </Space>
+        )
+      }
+    >
+      {!editing && (
+        <Steps
+          size="small"
+          current={wizardStep}
+          style={{ marginBottom: 20 }}
+          items={[
+            { title: t('listeners.wizardBasic') || 'Basic' },
+            { title: t('listeners.wizardConfig') || 'Config' },
+            { title: t('listeners.wizardReview') || 'Review' },
+          ]}
+        />
+      )}
       <Form form={form} layout="vertical" onFinish={onSubmit}>
-        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={() => { const keep = form.getFieldsValue(['name', 'protocol', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); form.setFieldsValue(keep); }} /></Form.Item>
-        <Form.Item name="port" label={t('listeners.port')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item>
-        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0"><Input /></Form.Item>
-        <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
-        {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
-        <ListenerConfigFields protocol={protocol} />
+        {(editing || wizardStep === 0) && (
+          <>
+            <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
+            <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}>
+              <Select
+                options={PROTOCOLS.map(p => ({ value: p, label: p }))}
+                onChange={() => {
+                  const keep = form.getFieldsValue(['name', 'protocol', 'port', 'bind_address', 'enabled', 'udp']);
+                  form.resetFields();
+                  form.setFieldsValue(keep);
+                }}
+              />
+            </Form.Item>
+            <Form.Item name="port" label={t('listeners.port')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item>
+            <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0"><Input /></Form.Item>
+            <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+            {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
+          </>
+        )}
+        {(editing || wizardStep === 1) && (
+          <div>
+            {!editing && wizardStep === 1 && (
+              <p style={{ color: 'rgba(0,0,0,0.45)', marginBottom: 12 }}>
+                {t('listeners.wizardConfigHint') || 'Configure protocol-specific fields (TLS / Reality / users, etc.).'}
+              </p>
+            )}
+            <ListenerConfigFields protocol={protocol} />
+          </div>
+        )}
+        {!editing && wizardStep === 2 && (
+          <Descriptions column={1} size="small" bordered>
+            <Descriptions.Item label={t('listeners.name')}>{form.getFieldValue('name') || '-'}</Descriptions.Item>
+            <Descriptions.Item label={t('listeners.protocol')}><Tag>{form.getFieldValue('protocol') || '-'}</Tag></Descriptions.Item>
+            <Descriptions.Item label={t('listeners.port')}>{form.getFieldValue('port') || '-'}</Descriptions.Item>
+            <Descriptions.Item label={t('listeners.bindAddress')}>{form.getFieldValue('bind_address') || '0.0.0.0'}</Descriptions.Item>
+            <Descriptions.Item label={t('listeners.status')}>{form.getFieldValue('enabled') ? t('common.enabled') : t('common.disabled')}</Descriptions.Item>
+            {protocolSupportsUDP(protocol) && (
+              <Descriptions.Item label={t('listeners.udp')}>{form.getFieldValue('udp') ? 'UDP' : '-'}</Descriptions.Item>
+            )}
+            <Descriptions.Item label={t('listeners.wizardConfig') || 'Config'}>
+              <pre style={{ margin: 0, maxHeight: 200, overflow: 'auto', fontSize: 12 }}>
+                {JSON.stringify(formValuesToConfig(form.getFieldValue('protocol') || protocol, form.getFieldsValue(), null), null, 2)}
+              </pre>
+            </Descriptions.Item>
+          </Descriptions>
+        )}
       </Form>
     </Modal>
 
