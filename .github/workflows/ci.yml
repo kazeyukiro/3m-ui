@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'agent/**']
   pull_request:
     branches: [main]
 
@@ -24,6 +24,8 @@ jobs:
         run: go vet ./...
       - name: Go tests
         run: go test ./...
+      - name: Go build
+        run: go build ./...
 
   frontend:
     runs-on: ubuntu-latest
