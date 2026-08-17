@@ -73,11 +73,28 @@ func (b *Bot) loop() {
 			}
 			continue
 		}
-		if tgClient == nil || !settings.Enabled {
-			if !sleepOrStop(b.stopCh, 15*time.Second) {
+		if !settings.Enabled {
+			if !sleepOrStop(b.stopCh, 20*time.Second) {
 				return
 			}
 			continue
+		}
+		if strings.TrimSpace(settings.BotToken) == "" {
+			log.Printf("telegram: enabled but bot token is empty — set token in panel Settings")
+			if !sleepOrStop(b.stopCh, 20*time.Second) {
+				return
+			}
+			continue
+		}
+		if len(settings.ChatIDs) == 0 {
+			log.Printf("telegram: enabled but chat allowlist is empty — add Chat ID(s) in panel Settings")
+			if !sleepOrStop(b.stopCh, 20*time.Second) {
+				return
+			}
+			continue
+		}
+		if tgClient == nil {
+			tgClient = NewClient(settings.BotToken, settings.ChatIDs)
 		}
 
 		if !b.webhookCleared {
@@ -161,17 +178,35 @@ func normalizeChatID(id string) string {
 }
 
 func buildAllowedChats(ids []string) map[string]struct{} {
-	allowed := make(map[string]struct{}, len(ids)*2)
+	allowed := make(map[string]struct{}, len(ids)*4)
+	add := func(v string) {
+		v = normalizeChatID(v)
+		if v == "" {
+			return
+		}
+		allowed[v] = struct{}{}
+	}
 	for _, id := range ids {
 		n := normalizeChatID(id)
 		if n == "" {
 			continue
 		}
-		allowed[n] = struct{}{}
+		add(n)
 		if strings.HasPrefix(n, "-") {
-			allowed[strings.TrimPrefix(n, "-")] = struct{}{}
+			add(strings.TrimPrefix(n, "-"))
 		} else if _, err := strconv.ParseInt(n, 10, 64); err == nil {
-			allowed["-"+n] = struct{}{}
+			add("-" + n)
+		}
+		if strings.HasPrefix(n, "-100") {
+			body := strings.TrimPrefix(n, "-100")
+			add(body)
+			add("-" + body)
+		} else if !strings.HasPrefix(n, "-") {
+			if _, err := strconv.ParseInt(n, 10, 64); err == nil {
+				add("-100" + n)
+			}
+		} else if strings.HasPrefix(n, "-") && !strings.HasPrefix(n, "-100") {
+			add("-100" + strings.TrimPrefix(n, "-"))
 		}
 	}
 	return allowed
