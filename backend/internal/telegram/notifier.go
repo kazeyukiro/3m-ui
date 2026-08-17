@@ -12,15 +12,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// Notifier watches credential state transitions and optionally sends a daily
-// usage digest. The first observation only establishes the baseline so a
-// restart does not spam alerts for users that were already blocked.
 type Notifier struct {
 	db *gorm.DB
-
-	mu             sync.Mutex
-	initialized    bool
-	lastBlocked    map[uint]bool
+	mu sync.Mutex
+	initialized bool
+	lastBlocked map[uint]bool
 	lastDigestDate string
 }
 
@@ -29,19 +25,13 @@ func NewNotifier(db *gorm.DB) *Notifier {
 }
 
 func (n *Notifier) CheckAndNotify() {
-	if n == nil || n.db == nil {
-		return
-	}
+	if n == nil || n.db == nil { return }
 	client, settings, err := NewClientFromDB(n.db)
-	if err != nil || client == nil {
-		return
-	}
+	if err != nil || client == nil { return }
 
 	var users []models.ProxyUser
-	if err := n.db.Find(&users).Error; err != nil {
-		return
-	}
-
+	if err := n.db.Find(&users).Error; err != nil { return }
+	now := time.Now()
 	current := make(map[uint]bool, len(users))
 	blockedNow := make([]models.ProxyUser, 0)
 	for _, u := range users {
@@ -60,49 +50,31 @@ func (n *Notifier) CheckAndNotify() {
 	n.mu.Unlock()
 
 	if !firstRun {
-		var messages []string
 		for _, u := range blockedNow {
-			if prev[u.ID] {
-				continue
-			}
+			if prev[u.ID] { continue }
 			reason := blockReason(u)
-			if reason == "expired" && !settings.NotifyOnExpiry {
-				continue
-			}
-			if reason != "expired" && !settings.NotifyOnBlock {
-				continue
-			}
-			messages = append(messages, fmt.Sprintf(
-				"⛔ <b>用户已被阻止</b>\n用户：<code>%s</code>\n原因：%s\n时间：%s",
-				escapeHTML(u.Username), reasonText(reason), time.Now().Format("2006-01-02 15:04:05"),
-			))
+			if reason == "expired" && !settings.NotifyOnExpiry { continue }
+			if reason != "expired" && !settings.NotifyOnBlock { continue }
+			msg := fmt.Sprintf("⛔ <b>用户已被阻止 / User blocked</b>\n用户 / User：<code>%s</code>\n原因 / Reason：%s\n时间 / Time：%s", escapeHTML(u.Username), reasonText(reason), now.Format("2006-01-02 15:04:05"))
+			if err := client.SendText(msg); err != nil { log.Printf("telegram: block notification failed: %v", err) }
 		}
 		if settings.NotifyOnUnblock {
 			for id := range prev {
-				if current[id] {
-					continue
-				}
+				if current[id] { continue }
 				var u models.ProxyUser
-				if err := n.db.First(&u, id).Error; err != nil {
-					continue
-				}
-				messages = append(messages, fmt.Sprintf(
-					"✅ <b>用户已恢复</b>\n用户：<code>%s</code>\n时间：%s",
-					escapeHTML(u.Username), time.Now().Format("2006-01-02 15:04:05"),
-				))
-			}
-		}
-		for _, msg := range messages {
-			if err := client.SendText(msg); err != nil {
-				log.Printf("telegram: notify failed: %v", err)
+				if err := n.db.First(&u, id).Error; err != nil { continue }
+				msg := fmt.Sprintf("✅ <b>用户已恢复 / User restored</b>\n用户 / User：<code>%s</code>\n时间 / Time：%s", escapeHTML(u.Username), now.Format("2006-01-02 15:04:05"))
+				if err := client.SendText(msg); err != nil { log.Printf("telegram: unblock notification failed: %v", err) }
 			}
 		}
 	}
 
+	// The scheduler runs every few seconds, so the digest does not depend on
+	// hitting exactly 00:00. The first check after midnight sends it once.
 	if settings.NotifyDailyDigest {
-		today := time.Now().Format("2006-01-02")
-		if digestAlreadySent != today && time.Now().Hour() == 0 {
-			if err := client.SendText(dailyDigest(users)); err != nil {
+		today := now.Format("2006-01-02")
+		if digestAlreadySent != today && now.Hour() == 0 {
+			if err := client.SendText(dailyDigest(users, now)); err != nil {
 				log.Printf("telegram: daily digest failed: %v", err)
 			} else {
 				n.mu.Lock()
@@ -113,56 +85,39 @@ func (n *Notifier) CheckAndNotify() {
 	}
 }
 
-func dailyDigest(users []models.ProxyUser) string {
+func dailyDigest(users []models.ProxyUser, now time.Time) string {
 	var total, used, blocked int64
 	for _, u := range users {
 		total++
 		used += u.TrafficUsed
-		if !user.IsCredentialActive(u) {
-			blocked++
-		}
+		if !user.IsCredentialActive(u) { blocked++ }
 	}
-	return fmt.Sprintf("📊 <b>3m-ui 每日摘要</b>\n用户数：%d\n已阻止：%d\n累计流量：%s\n时间：%s", total, blocked, formatBytes(used), time.Now().Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("📊 <b>3m-ui 每日摘要 / Daily Summary</b>\n用户数 / Users：%d\n已阻止 / Blocked：%d\n累计流量 / Traffic：%s\n时间 / Time：%s", total, blocked, formatBytes(used), now.Format("2006-01-02 15:04:05"))
 }
 
 func reasonText(reason string) string {
 	switch reason {
-	case "disabled":
-		return "用户已禁用"
-	case "expired":
-		return "已过期"
-	case "traffic_limit":
-		return "流量已用尽"
-	default:
-		return "凭据不可用"
+	case "disabled": return "用户已禁用 / Disabled"
+	case "expired": return "已过期 / Expired"
+	case "traffic_limit": return "流量已用尽 / Traffic limit reached"
+	default: return "凭据不可用 / Credentials unavailable"
 	}
 }
 
 func blockReason(u models.ProxyUser) string {
 	now := time.Now()
-	if !u.Enabled {
-		return "disabled"
-	}
-	if !u.ExpireTime.IsZero() && !u.ExpireTime.After(now) {
-		return "expired"
-	}
-	if u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit {
-		return "traffic_limit"
-	}
+	if !u.Enabled { return "disabled" }
+	if !u.ExpireTime.IsZero() && !u.ExpireTime.After(now) { return "expired" }
+	if u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit { return "traffic_limit" }
 	return "blocked"
 }
 
 func formatBytes(n int64) string {
-	if n < 1024 {
-		return fmt.Sprintf("%d B", n)
-	}
+	if n < 1024 { return fmt.Sprintf("%d B", n) }
 	units := []string{"KB", "MB", "GB", "TB"}
 	v := float64(n) / 1024
 	i := 0
-	for v >= 1024 && i < len(units)-1 {
-		v /= 1024
-		i++
-	}
+	for v >= 1024 && i < len(units)-1 { v /= 1024; i++ }
 	return fmt.Sprintf("%.2f %s", v, units[i])
 }
 
