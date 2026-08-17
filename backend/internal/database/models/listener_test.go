@@ -6,7 +6,7 @@ import (
 )
 
 func TestListenerJSONUsesLowercaseID(t *testing.T) {
-	listener := Listener{ID: 42, Name: "test-listener"}
+	listener := Listener{BaseModel: BaseModel{ID: 42}, Name: "test-listener"}
 
 	data, err := json.Marshal(listener)
 	if err != nil {
