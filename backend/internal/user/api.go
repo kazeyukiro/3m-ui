@@ -10,17 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// Handler serves user HTTP endpoints using an injected Service.
 type Handler struct {
 	svc *Service
 }
 
-// NewHandler constructs a user HTTP handler.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// RegisterRoutes registers user routes on the provided group.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.List)
 	rg.POST("", h.Create)
@@ -29,11 +26,11 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.DELETE("/:id", h.Delete)
 	rg.POST("/:id/listeners", h.BindListeners)
 	rg.GET("/:id/listeners", h.GetListeners)
-	// /nodes is the public naming used by the server-node UI; /listeners is
-	// retained as a backward-compatible alias.
 	rg.POST("/:id/nodes", h.BindListeners)
 	rg.GET("/:id/nodes", h.GetListeners)
 	rg.POST("/:id/reset-traffic", h.ResetTraffic)
+	rg.GET("/:id/subscription", h.GetSubscription)
+	rg.POST("/:id/subscription/rotate", h.RotateSubscription)
 }
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -179,5 +176,48 @@ func (h *Handler) ResetTraffic(c *gin.Context) {
 	c.JSON(http.StatusOK, ToSafeUser(u))
 }
 
-// Keep models import referenced for future DTO extensions and schema compatibility.
 var _ = models.Listener{}
+
+func (h *Handler) GetSubscription(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	token, err := h.svc.EnsureSubToken(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
+		scheme = xf
+	}
+	base := scheme + "://" + c.Request.Host
+	url := base + "/api/v1/client/sub/" + token
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": url})
+}
+
+func (h *Handler) RotateSubscription(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	token, err := h.svc.RotateSubToken(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
+		scheme = xf
+	}
+	base := scheme + "://" + c.Request.Host
+	url := base + "/api/v1/client/sub/" + token
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": url})
+}
