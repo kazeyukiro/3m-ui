@@ -30,6 +30,37 @@ func (c *Client) Enabled() bool {
 	return c != nil && c.Token != "" && len(c.ChatIDs) > 0
 }
 
+// Validate calls Telegram getMe to verify the bot token is usable.
+func (c *Client) Validate() error {
+	if c == nil || strings.TrimSpace(c.Token) == "" {
+		return fmt.Errorf("telegram bot token is empty")
+	}
+	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Token)
+	resp, err := c.HTTPClient.Get(endpoint)
+	if err != nil {
+		return fmt.Errorf("telegram getMe: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("telegram getMe HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	var parsed struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return fmt.Errorf("telegram getMe decode: %w", err)
+	}
+	if !parsed.OK {
+		if parsed.Description != "" {
+			return fmt.Errorf("telegram getMe: %s", parsed.Description)
+		}
+		return fmt.Errorf("telegram getMe not ok")
+	}
+	return nil
+}
+
 type sendMessageRequest struct {
 	ChatID    string `json:"chat_id"`
 	Text      string `json:"text"`
