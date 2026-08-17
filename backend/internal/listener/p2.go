@@ -1,0 +1,105 @@
+package listener
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+)
+
+// SaveVersion records an immutable listener snapshot. It is intentionally small
+// and stores the model JSON so old versions remain readable after schema growth.
+func (s *Service) SaveVersion(listenerID uint, reason string) error {
+	l, err := s.GetByID(listenerID)
+	if err != nil { return err }
+	var count int64
+	if err := s.db.Model(&models.ListenerVersion{}).Where("listener_id = ?", listenerID).Count(&count).Error; err != nil { return err }
+	data, err := json.Marshal(l)
+	if err != nil { return fmt.Errorf("marshal listener snapshot: %w", err) }
+	v := &models.ListenerVersion{ListenerID: listenerID, Version: int(count) + 1, Reason: reason, Snapshot: string(data)}
+	return s.db.Create(v).Error
+}
+
+func (s *Service) ListVersions(listenerID uint) ([]models.ListenerVersion, error) {
+	var versions []models.ListenerVersion
+	err := s.db.Where("listener_id = ?", listenerID).Order("version desc").Find(&versions).Error
+	return versions, err
+}
+
+func (s *Service) RollbackVersion(listenerID uint, version int) error {
+	s.mu.Lock(); defer s.mu.Unlock()
+	var v models.ListenerVersion
+	if err := s.db.Where("listener_id = ? AND version = ?", listenerID, version).First(&v).Error; err != nil { return fmt.Errorf("listener version not found: %w", err) }
+	var target models.Listener
+	if err := json.Unmarshal([]byte(v.Snapshot), &target); err != nil { return fmt.Errorf("invalid listener snapshot: %w", err) }
+	target.ID = listenerID
+	if err := ValidateModel(&target); err != nil { return fmt.Errorf("rollback validation failed: %w", err) }
+	if err := s.ensureEndpointAvailable(&target); err != nil { return err }
+	var previous models.Listener
+	if err := s.db.First(&previous, listenerID).Error; err != nil { return err }
+	if err := s.db.Save(&target).Error; err != nil { return err }
+	if err := s.regenerateConfigLocked(); err != nil {
+		_ = s.db.Save(&previous)
+		return err
+	}
+	return nil
+}
+
+func (s *Service) Clone(id uint, name string, port string) (*models.Listener, error) {
+	s.mu.Lock(); defer s.mu.Unlock()
+	var src models.Listener
+	if err := s.db.First(&src, id).Error; err != nil { return nil, err }
+	name = strings.TrimSpace(name)
+	if name == "" { return nil, fmt.Errorf("listener name is required") }
+	src.ID = 0; src.CreatedAt = src.CreatedAt.Add(-src.CreatedAt.Sub(src.CreatedAt)); src.UpdatedAt = src.UpdatedAt.Add(-src.UpdatedAt.Sub(src.UpdatedAt)); src.DeletedAt = src.DeletedAt
+	src.Name = name
+	if strings.TrimSpace(port) != "" { src.Port = strings.TrimSpace(port) }
+	if err := ValidateModel(&src); err != nil { return nil, err }
+	if err := s.ensureEndpointAvailable(&src); err != nil { return nil, err }
+	if err := s.db.Create(&src).Error; err != nil { return nil, err }
+	if err := s.regenerateConfigLocked(); err != nil { _ = s.db.Delete(&src); return nil, err }
+	return &src, nil
+}
+
+func (s *Service) BatchSetEnabled(ids []uint, enabled bool) error {
+	s.mu.Lock(); defer s.mu.Unlock()
+	if len(ids) == 0 { return fmt.Errorf("no listener ids supplied") }
+	var previous []models.Listener
+	if err := s.db.Where("id IN ?", ids).Find(&previous).Error; err != nil { return err }
+	if len(previous) != len(ids) { return fmt.Errorf("one or more listeners were not found") }
+	if err := s.db.Model(&models.Listener{}).Where("id IN ?", ids).Update("enabled", enabled).Error; err != nil { return err }
+	if err := s.regenerateConfigLocked(); err != nil {
+		for i := range previous { _ = s.db.Save(&previous[i]) }
+		_ = s.regenerateConfigLocked()
+		return err
+	}
+	return nil
+}
+
+func (s *Service) DiffVersion(listenerID uint, version int) (string, error) {
+	var v models.ListenerVersion
+	if err := s.db.Where("listener_id = ? AND version = ?", listenerID, version).First(&v).Error; err != nil { return "", err }
+	current, err := s.GetByID(listenerID)
+	if err != nil { return "", err }
+	cur, _ := json.MarshalIndent(current, "", "  ")
+	old := []byte(v.Snapshot)
+	return fmt.Sprintf("--- version/%d\n+++ current\n- %s\n+ %s", version, strings.TrimSpace(string(old)), strings.TrimSpace(string(cur))), nil
+}
+
+func (s *Service) CreateTemplate(t *models.ListenerTemplate) error {
+	if strings.TrimSpace(t.Name) == "" { return fmt.Errorf("template name is required") }
+	if strings.TrimSpace(t.Protocol) == "" { return fmt.Errorf("template protocol is required") }
+	// Validate the template as a Listener config without accepting runtime fields.
+	probe := &models.Listener{Name: t.Name, Protocol: t.Protocol, Port: "1", Config: t.Config}
+	if err := ValidateModel(probe); err != nil { return err }
+	return s.db.Create(t).Error
+}
+
+func (s *Service) ListTemplates() ([]models.ListenerTemplate, error) {
+	var out []models.ListenerTemplate
+	err := s.db.Order("name asc").Find(&out).Error
+	return out, err
+}
+
+func (s *Service) DeleteTemplate(id uint) error { return s.db.Delete(&models.ListenerTemplate{}, id).Error }
