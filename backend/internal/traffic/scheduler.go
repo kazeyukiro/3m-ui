@@ -59,6 +59,9 @@ func (s *Scheduler) tick() {
 		log.Printf("traffic: collection skipped: %v", err)
 		return
 	}
+	if s.collector != nil {
+		s.collector.EnforceIPLimits()
+	}
 	if s.enforcer == nil {
 		return
 	}
