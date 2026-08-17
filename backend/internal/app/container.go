@@ -31,8 +31,9 @@ type Container struct {
 
 func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	mihomoSvc := mihomo.NewService(cfg)
-	nodeSvc := node.NewService(db, cfg.Mihomo.Config, mihomoSvc)
 	listenerSvc := listener.NewService(db, cfg.Mihomo.Config, mihomoSvc)
+	nodeSvc := node.NewService(db, cfg.Mihomo.Config, mihomoSvc)
+	nodeSvc.SetRegenerator(listenerSvc)
 	userSvc := user.NewService(db)
 	systemSvc := system.NewService()
 	userSvc.SetCredentialsChangedHandler(func() error {

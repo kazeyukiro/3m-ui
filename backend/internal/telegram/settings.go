@@ -20,6 +20,30 @@ type Settings struct {
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
 }
 
+// normalizeChatIDList accepts values like "123", "-100123", "123,456" or multiline.
+func normalizeChatIDList(ids []string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(ids))
+	for _, raw := range ids {
+		for _, part := range strings.FieldsFunc(raw, func(r rune) bool {
+			return r == ',' || r == ';' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+		}) {
+			part = strings.TrimSpace(part)
+			part = strings.TrimPrefix(part, "+")
+			part = strings.TrimPrefix(part, "@")
+			if part == "" {
+				continue
+			}
+			if _, ok := seen[part]; ok {
+				continue
+			}
+			seen[part] = struct{}{}
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
 func DefaultSettings() Settings {
 	return Settings{
 		NotifyOnBlock:   true,
@@ -46,27 +70,13 @@ func LoadSettings(db *gorm.DB) (Settings, error) {
 	if err := json.Unmarshal([]byte(row.Value), &s); err != nil {
 		return DefaultSettings(), err
 	}
-	clean := make([]string, 0, len(s.ChatIDs))
-	for _, id := range s.ChatIDs {
-		id = strings.TrimSpace(id)
-		if id != "" {
-			clean = append(clean, id)
-		}
-	}
-	s.ChatIDs = clean
+	s.ChatIDs = normalizeChatIDList(s.ChatIDs)
 	s.BotToken = strings.TrimSpace(s.BotToken)
 	return s, nil
 }
 
 func SaveSettings(db *gorm.DB, s Settings) error {
-	clean := make([]string, 0, len(s.ChatIDs))
-	for _, id := range s.ChatIDs {
-		id = strings.TrimSpace(id)
-		if id != "" {
-			clean = append(clean, id)
-		}
-	}
-	s.ChatIDs = clean
+	s.ChatIDs = normalizeChatIDList(s.ChatIDs)
 	s.BotToken = strings.TrimSpace(s.BotToken)
 	raw, err := json.Marshal(s)
 	if err != nil {
