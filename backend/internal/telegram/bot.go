@@ -18,14 +18,14 @@ import (
 )
 
 type Bot struct {
-	db     *gorm.DB
-	mihomo *mihomo.Service
-	users  *user.Service
-	mu     sync.Mutex
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+	db       *gorm.DB
+	mihomo   *mihomo.Service
+	users    *user.Service
+	mu       sync.Mutex
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
 	wizardMu sync.Mutex
-	wizards map[string]*addClientWizard
+	wizards  map[string]*addClientWizard
 }
 
 type addClientWizard struct { ListenerID uint }
@@ -83,8 +83,15 @@ func (b *Bot) loop() {
 
 type tgUpdate struct {
 	UpdateID int64 `json:"update_id"`
-	Message *struct { Text string `json:"text"`; Chat struct { ID int64 `json:"id"` } `json:"chat"` } `json:"message"`
-	CallbackQuery *struct { ID string `json:"id"`; Data string `json:"data"`; Message struct { Chat struct { ID int64 `json:"id"` } `json:"chat"` } `json:"message"` } `json:"callback_query"`
+	Message *struct {
+		Text string `json:"text"`
+		Chat struct { ID int64 `json:"id"` } `json:"chat"`
+	} `json:"message"`
+	CallbackQuery *struct {
+		ID string `json:"id"`
+		Data string `json:"data"`
+		Message struct { Chat struct { ID int64 `json:"id"` } `json:"chat"` } `json:"message"`
+	} `json:"callback_query"`
 }
 
 func getUpdates(httpClient *http.Client, token string, offset int64, timeoutSec int) ([]tgUpdate, int64, error) {
