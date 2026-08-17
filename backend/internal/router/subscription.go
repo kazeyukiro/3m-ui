@@ -42,18 +42,18 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 			return
 		}
 
-		// raw=true is used internally by subconverter as well as by callers
-		// that explicitly request the canonical Mihomo YAML.
 		target := strings.ToLower(strings.TrimSpace(c.Query("target")))
-		if c.Query("raw") == "true" || target == "" || target == "mihomo" {
+		if target == "" {
+			target = detectSubTarget(c.GetHeader("User-Agent"))
+		}
+		if c.Query("raw") == "true" || target == "" || target == "mihomo" || target == "clash" || target == "meta" {
 			c.Header("Cache-Control", "no-store")
+			c.Header("Profile-Update-Interval", "24")
+			c.Header("Content-Disposition", "attachment; filename=3m-ui.yaml")
 			c.Data(http.StatusOK, "text/yaml; charset=utf-8", raw)
 			return
 		}
 
-		// Other client formats are delegated to a local subconverter. The
-		// canonical raw endpoint remains available even when subconverter is
-		// not installed.
 		converted, err := converter.CallSubconverterWithRequest(cfg, c.Param("token"), target, raw)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
@@ -62,4 +62,23 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 		c.Header("Cache-Control", "no-store")
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", converted)
 	})
+}
+
+// detectSubTarget maps common client User-Agents to subscription formats.
+func detectSubTarget(ua string) string {
+	u := strings.ToLower(ua)
+	switch {
+	case strings.Contains(u, "clash") || strings.Contains(u, "mihomo") || strings.Contains(u, "stash") || strings.Contains(u, "meta"):
+		return "mihomo"
+	case strings.Contains(u, "surge"):
+		return "surge"
+	case strings.Contains(u, "quantumult"):
+		return "quanx"
+	case strings.Contains(u, "loon"):
+		return "loon"
+	case strings.Contains(u, "shadowrocket"):
+		return "mihomo"
+	default:
+		return "mihomo"
+	}
 }
