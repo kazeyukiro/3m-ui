@@ -43,9 +43,11 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 		if ts := d.trafficService(); ts != nil {
 			trafficSnapshot = ts.Current()
 		}
-		var onlineUsers int64
+		var onlineUsers, userTotal, userEnabled int64
 		if db != nil {
 			db.Model(&models.ProxyUser{}).Where("online = ?", true).Count(&onlineUsers)
+			db.Model(&models.ProxyUser{}).Count(&userTotal)
+			db.Model(&models.ProxyUser{}).Where("enabled = ?", true).Count(&userEnabled)
 		}
 		activeConnections := trafficSnapshot.Connections
 		if col := d.trafficCollector(); col != nil {
@@ -59,6 +61,11 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 				"total":    listenerTotal,
 				"enabled":  listenerEnabled,
 				"disabled": listenerDisabled,
+			},
+			"users": gin.H{
+				"total":   userTotal,
+				"enabled": userEnabled,
+				"online":  onlineUsers,
 			},
 			"traffic": gin.H{
 				"uploadRate":        trafficSnapshot.UploadRate,
