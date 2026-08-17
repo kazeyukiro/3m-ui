@@ -53,6 +53,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		RegisterAccessTokenRoutes(apiV1, d)
 
 		registerDashboardRoute(apiV1, d)
+		registerPanelSettingsRoutes(apiV1, d)
 
 		system.NewHandler(d.systemService()).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
 		registerMihomoRoutes(apiV1, d)
@@ -61,12 +62,9 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
 		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))
 
-		// Prefer listener.Handler: includes templates, versions, batch, clone.
-		// Static paths (/templates, /batch) are registered before /:id.
 		if d.listenerService() != nil {
-			lh := listener.NewHandler(d.listenerService())
-			lh.RegisterRoutes(apiV1.Group("/nodes"))
-			lh.RegisterRoutes(apiV1.Group("/listeners"))
+			listener.NewHandler(d.listenerService()).RegisterRoutes(apiV1.Group("/nodes"))
+			listener.NewHandler(d.listenerService()).RegisterRoutes(apiV1.Group("/listeners"))
 		} else {
 			nodeHandler := node.NewHandler(d.nodeService(), d.userService(), db)
 			nodeHandler.RegisterRoutes(apiV1.Group("/nodes"))
