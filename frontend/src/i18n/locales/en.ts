@@ -91,6 +91,11 @@ export default {
   },
   config: {
     title: 'Config Engine', subtitle: 'Visual Mihomo configuration',
+    visual: 'Visual Config', yaml: 'YAML Config', proxies: 'Proxy Configuration', yamlPreview: 'YAML Preview',
+    addProxy: 'Add Proxy', editProxy: 'Edit Proxy', deleteProxy: 'Delete Proxy', deleteConfirm: 'Delete this proxy?',
+    generateSuccess: 'Configuration generated successfully', validateSuccess: 'Configuration is valid', validateFailed: 'Configuration validation failed',
+    proxyName: 'Proxy Name', proxyType: 'Proxy Type', proxyServer: 'Proxy Server', proxyPort: 'Proxy Port',
+    proxyPassword: 'Proxy Password', proxyUUID: 'Proxy UUID',
   },
   users: {
     title: 'User Management', create: 'Create User', edit: 'Edit User', username: 'Username',
