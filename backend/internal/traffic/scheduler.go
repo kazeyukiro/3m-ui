@@ -61,6 +61,9 @@ func (s *Scheduler) tick() {
 	}
 	if s.collector != nil {
 		s.collector.EnforceIPLimits()
+		if s.collector.db != nil {
+			MaybeResetMonthlyTraffic(s.collector.db)
+		}
 	}
 	if s.enforcer == nil {
 		return
