@@ -17,17 +17,12 @@ type ProxyUser struct {
 	UUID              string `gorm:"size:64;not null;uniqueIndex" json:"-"`
 	TrafficLimit      int64  `gorm:"not null;default:0" json:"traffic_limit"`
 	TrafficUsed       int64  `gorm:"not null;default:0" json:"traffic_used"`
-	// UploadBytes/DownloadBytes are cumulative counters split by direction.
-	// TrafficUsed (above) remains the single source of truth for quota
-	// enforcement and equals UploadBytes+DownloadBytes over time.
-	UploadBytes   int64 `gorm:"not null;default:0" json:"upload_bytes"`
-	DownloadBytes int64 `gorm:"not null;default:0" json:"download_bytes"`
-	// LastSeen is updated whenever the traffic collector observes an active
-	// Mihomo connection attributable to this user. Nil means never seen.
-	LastSeen *time.Time `json:"last_seen"`
-	// Online reflects whether the user had at least one active connection
-	// during the most recent traffic collection tick.
-	Online     bool      `gorm:"not null;default:false" json:"online"`
-	ExpireTime time.Time `json:"expire_time"`
-	Enabled    bool      `gorm:"not null;default:true" json:"enabled"`
+	UploadBytes       int64  `gorm:"not null;default:0" json:"upload_bytes"`
+	DownloadBytes     int64  `gorm:"not null;default:0" json:"download_bytes"`
+	LastSeen          *time.Time `json:"last_seen"`
+	Online            bool      `gorm:"not null;default:false" json:"online"`
+	ExpireTime        time.Time `json:"expire_time"`
+	Enabled           bool      `gorm:"not null;default:true" json:"enabled"`
+	// TelegramID links a proxy user to one Telegram account for self-service commands.
+	TelegramID        *int64    `gorm:"uniqueIndex" json:"telegram_id"`
 }
