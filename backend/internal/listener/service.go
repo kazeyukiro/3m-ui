@@ -32,6 +32,7 @@ func (s *Service) Create(l *models.Listener) error {
 		_ = s.db.Delete(&models.Listener{}, l.ID).Error
 		return err
 	}
+	if err := s.SaveVersion(l.ID, "create"); err != nil { return fmt.Errorf("listener created but history save failed: %w", err) }
 	return nil
 }
 
@@ -54,6 +55,7 @@ func (s *Service) Update(l *models.Listener) error {
 	var previous models.Listener
 	if err := s.db.First(&previous, l.ID).Error; err != nil { return fmt.Errorf("failed to load previous listener: %w", err) }
 	if err := s.ensureEndpointAvailable(l); err != nil { return err }
+	if err := s.SaveVersion(previous.ID, "before-update"); err != nil { return fmt.Errorf("save listener history: %w", err) }
 	if err := s.db.Save(l).Error; err != nil { return fmt.Errorf("failed to update listener: %w", err) }
 	if err := s.regenerateConfigLocked(); err != nil {
 		if rollbackErr := s.db.Save(&previous).Error; rollbackErr != nil { return fmt.Errorf("%v; rollback listener failed: %w", err, rollbackErr) }
@@ -70,9 +72,8 @@ func (s *Service) Delete(id uint) error {
 	if err := s.db.First(&previous, id).Error; err != nil { return fmt.Errorf("failed to fetch listener before delete: %w", err) }
 	var linked int64
 	if err := s.db.Model(&models.ListenerUser{}).Where("listener_id = ?", id).Count(&linked).Error; err != nil { return fmt.Errorf("failed to check listener clients: %w", err) }
-	if linked > 0 {
-		return fmt.Errorf("listener %q has %d linked client(s); unbind clients before deleting the listener", previous.Name, linked)
-	}
+	if linked > 0 { return fmt.Errorf("listener %q has %d linked client(s); unbind clients before deleting the listener", previous.Name, linked) }
+	if err := s.SaveVersion(id, "before-delete"); err != nil { return fmt.Errorf("save listener history: %w", err) }
 	if err := s.db.Delete(&models.Listener{}, id).Error; err != nil { return fmt.Errorf("failed to delete listener: %w", err) }
 	if err := s.regenerateConfigLocked(); err != nil {
 		if rollbackErr := s.db.Unscoped().Save(&previous).Error; rollbackErr != nil { return fmt.Errorf("%v; rollback deleted listener failed: %w", err, rollbackErr) }
@@ -94,11 +95,7 @@ func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
 	return nil
 }
 
-func (s *Service) RegenerateConfig() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.regenerateConfigLocked()
-}
+func (s *Service) RegenerateConfig() error { s.mu.Lock(); defer s.mu.Unlock(); return s.regenerateConfigLocked() }
 
 func (s *Service) regenerateConfigLocked() error {
 	if s == nil || s.db == nil { return fmt.Errorf("listener service not initialized") }
@@ -110,8 +107,7 @@ func (s *Service) regenerateConfigLocked() error {
 	if err := os.MkdirAll(dir, 0750); err != nil { return fmt.Errorf("create config directory: %w", err) }
 	tmp, err := os.CreateTemp(dir, ".config.yaml.tmp-*")
 	if err != nil { return fmt.Errorf("create temporary config: %w", err) }
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	tmpName := tmp.Name(); defer os.Remove(tmpName)
 	if err := tmp.Chmod(0600); err != nil { _ = tmp.Close(); return err }
 	if _, err := tmp.WriteString(yamlContent); err != nil { _ = tmp.Close(); return err }
 	if err := tmp.Sync(); err != nil { _ = tmp.Close(); return err }
