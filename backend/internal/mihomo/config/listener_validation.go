@@ -33,17 +33,40 @@ func ValidateListenerConfig(protocol, raw string) error {
 		"proxy": {}, "rule": {}, "enabled": {}, "status": {}, "tls": {}, "udp": {},
 		"routing-mark": {},
 	}
-	for key := range values {
-		if _, blocked := reserved[key]; blocked {
-			return fmt.Errorf("listener configuration field %q is managed by 3m-ui", key)
+	return validateListenerObject(schema, values, "", reserved)
+}
+
+func validateListenerObject(schema ListenerSchema, values map[string]interface{}, prefix string, reserved map[string]struct{}) error {
+	for key, value := range values {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
 		}
-		if _, allowed := schema.Fields[key]; allowed {
-			continue
+		if prefix == "" {
+			if _, blocked := reserved[key]; blocked {
+				return fmt.Errorf("listener configuration field %q is managed by 3m-ui", key)
+			}
+			if _, allowed := schema.Fields[key]; !allowed {
+				if _, isParent := schema.NestedFields[key]; !isParent {
+					return fmt.Errorf("field %q is not supported for listener protocol %q", key, schema.Protocol)
+				}
+			}
+		} else {
+			parent := schema.NestedFields[prefix]
+			if _, allowed := parent[key]; !allowed {
+				return fmt.Errorf("field %q is not supported for listener protocol %q", path, schema.Protocol)
+			}
 		}
-		if _, allowed := schema.NestedFields[key]; allowed {
-			continue
+
+		if _, hasChildren := schema.NestedFields[path]; hasChildren {
+			child, ok := value.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("field %q must be a JSON object", path)
+			}
+			if err := validateListenerObject(schema, child, path, reserved); err != nil {
+				return err
+			}
 		}
-		return fmt.Errorf("field %q is not supported for listener protocol %q", key, protocol)
 	}
 	return nil
 }
