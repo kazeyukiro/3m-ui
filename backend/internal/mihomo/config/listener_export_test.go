@@ -5,19 +5,18 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
-	"gorm.io/gorm"
 )
 
 func TestGenerateListenersForExportNormalizesShadowQUICUsers(t *testing.T) {
 	listeners, err := config.GenerateListenersForExport([]models.Listener{
 		{
-			Model:       gorm.Model{ID: 1},
+			BaseModel:   models.BaseModel{ID: 1},
 			Name:        "shadowquic-test",
 			Type:        "shadowquic",
 			Protocol:    "shadowquic",
 			Listen:      "0.0.0.0",
 			BindAddress: "0.0.0.0",
-			Port: "443",
+			Port:        "443",
 			Enabled:     true,
 			Config:      `{"users":{"client":"secret"}}`,
 		},
