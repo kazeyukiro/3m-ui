@@ -24,6 +24,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.DELETE("/:id", h.Delete)
 	rg.POST("/:id/health", h.Health)
 	rg.GET("/:id/nodes", h.RemoteNodes)
+	rg.POST("/:id/nodes", h.RemoteCreateNode)
+	rg.PUT("/:id/nodes/:nodeId", h.RemoteUpdateNode)
+	rg.DELETE("/:id/nodes/:nodeId", h.RemoteDeleteNode)
 }
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -124,4 +127,71 @@ func (h *Handler) RemoteNodes(c *gin.Context) {
 		return
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteCreateNode(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	body, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	status, raw, err := h.svc.ProxyRemote(id, http.MethodPost, "/api/v1/nodes", body)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(status, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteUpdateNode(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	nodeID := c.Param("nodeId")
+	body, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	status, raw, err := h.svc.ProxyRemote(id, http.MethodPut, "/api/v1/nodes/"+nodeID, body)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(status, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteDeleteNode(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	nodeID := c.Param("nodeId")
+	status, raw, err := h.svc.ProxyRemote(id, http.MethodDelete, "/api/v1/nodes/"+nodeID, nil)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	if len(raw) == 0 {
+		c.JSON(status, gin.H{"status": "ok"})
+		return
+	}
+	c.Data(status, "application/json; charset=utf-8", raw)
 }
