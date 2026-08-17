@@ -38,12 +38,23 @@ const Dashboard: React.FC = () => {
   };
 
   const sys = data?.system || {};
+  const users = data?.users || {};
 
   return (
     <div>
       <h2>{t('dashboard.title')}</h2>
       <p style={{ color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.subtitle')}</p>
       <Row gutter={[16, 16]}>
+        <Col xs={24} md={12} lg={8}>
+          <Card title={t('dashboard.users') || 'Users'}>
+            <Statistic title={t('dashboard.onlineUsers') || 'Online'} value={users.online ?? data?.onlineUsers ?? 0} />
+            <div style={{ marginTop: 8, color: 'rgba(0,0,0,0.45)', fontSize: 13 }}>
+              {(t('dashboard.totalUsers') || 'Total') + ': '}{users.total ?? 0}
+              {' · '}
+              {(t('dashboard.enabledUsers') || 'Enabled') + ': '}{users.enabled ?? 0}
+            </div>
+          </Card>
+        </Col>
         <Col xs={24} md={12} lg={8}>
           <Card title={t('dashboard.status')}>
             <Space direction="vertical" style={{ width: '100%' }}>
