@@ -1,3 +1,4 @@
+import client from '../api/client';
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, HeartOutlined } from '@ant-design/icons';
@@ -8,6 +9,17 @@ import { useI18n } from '../i18n';
 
 const ClusterPage: React.FC = () => {
   const { t } = useI18n();
+  const [remoteNodes, setRemoteNodes] = useState<any[] | null>(null);
+  const loadRemoteNodes = async (id: number) => {
+    try {
+      const r = await client.get(`/cluster/${id}/nodes`);
+      setRemoteNodes(Array.isArray(r.data) ? r.data : []);
+      message.success(t('cluster.nodesLoaded') || 'Loaded remote nodes');
+    } catch (e: any) {
+      message.error(e.message || 'failed');
+    }
+  };
+
   const [data, setData] = useState<RemoteServer[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -55,6 +67,7 @@ const ClusterPage: React.FC = () => {
             try { await healthClusterNode(r.id); message.success(t('cluster.healthDone')); load(); }
             catch (e: any) { message.error(e.message || t('common.error')); }
           }}>{t('cluster.health')}</Button>
+          <Button size="small" onClick={() => loadRemoteNodes(r.id)}>{t('cluster.remoteNodes') || 'Nodes'}</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue({ ...r, api_token: undefined }); setOpen(true); }} />
           <Popconfirm title={t('common.confirmDelete')} onConfirm={async () => {
             try { await deleteClusterNode(r.id); message.success(t('cluster.deleted')); load(); }
@@ -80,6 +93,9 @@ const ClusterPage: React.FC = () => {
           <Form.Item name="remark" label={t('cluster.remark')}><Input /></Form.Item>
           <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
         </Form>
+      </Modal>
+      <Modal open={!!remoteNodes} onCancel={() => setRemoteNodes(null)} footer={null} title={t('cluster.remoteNodes') || 'Remote nodes'} width={720}>
+        <pre style={{ maxHeight: 400, overflow: 'auto', fontSize: 12 }}>{JSON.stringify(remoteNodes, null, 2)}</pre>
       </Modal>
     </div>
   );
