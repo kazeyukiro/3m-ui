@@ -18,25 +18,15 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := gorm.Open(sqlite.New(sqlite.Config{
-		DriverName: sqliteDriverName,
-		DSN:        dbPath,
-	}), &gorm.Config{})
+	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: dbPath}), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sqlite database: %w", err)
 	}
 
 	err = db.AutoMigrate(
-		&models.User{},
-		&models.Listener{},
-		&models.ListenerUser{},
-		&models.Subscription{},
-		&models.AccessToken{},
-		&models.Config{},
-		&models.ProxyUser{},
-		&models.TrafficRecord{},
-		&models.PanelSetting{},
-		&models.RemoteServer{},
+		&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
+		&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
+		&models.ProxyUser{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run database auto-migration: %w", err)
