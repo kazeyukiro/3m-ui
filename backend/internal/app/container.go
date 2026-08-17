@@ -15,18 +15,18 @@ import (
 )
 
 type Container struct {
-	DB *gorm.DB
-	Config *config.Config
-	Mihomo *mihomo.Service
-	Listener *listener.Service
-	Node *node.Service
-	User *user.Service
-	Traffic *traffic.Service
+	DB               *gorm.DB
+	Config           *config.Config
+	Mihomo           *mihomo.Service
+	Listener         *listener.Service
+	Node             *node.Service
+	User             *user.Service
+	Traffic          *traffic.Service
 	TrafficCollector *traffic.Collector
 	TrafficScheduler *traffic.Scheduler
-	System *system.Service
-	ConfigEngine *dbconfig.ConfigEngine
-	TelegramBot *telegram.Bot
+	System           *system.Service
+	ConfigEngine     *dbconfig.ConfigEngine
+	TelegramBot      *telegram.Bot
 }
 
 func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
@@ -35,7 +35,9 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	listenerSvc := listener.NewService(db, cfg.Mihomo.Config, mihomoSvc)
 	userSvc := user.NewService(db)
 	systemSvc := system.NewService()
-	userSvc.SetCredentialsChangedHandler(func() error { return nodeSvc.RegenerateConfig() })
+	userSvc.SetCredentialsChangedHandler(func() error {
+		return nodeSvc.RegenerateConfig()
+	})
 
 	trafficSvc := traffic.NewService()
 	userTraffic := traffic.NewUserService(db)
@@ -45,12 +47,34 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	scheduler.SetNotifier(telegram.NewNotifier(db))
 	scheduler.Start()
 
-	tgBot := telegram.NewBot(db, mihomoSvc, userSvc)
+	tgBot := telegram.NewBot(db, mihomoSvc)
 	tgBot.Start()
 
-	return &Container{DB: db, Config: cfg, Mihomo: mihomoSvc, Listener: listenerSvc, Node: nodeSvc, User: userSvc, Traffic: trafficSvc, TrafficCollector: collector, TrafficScheduler: scheduler, System: systemSvc, ConfigEngine: dbconfig.NewConfigEngine(db), TelegramBot: tgBot}
+	return &Container{
+		DB:               db,
+		Config:           cfg,
+		Mihomo:           mihomoSvc,
+		Listener:         listenerSvc,
+		Node:             nodeSvc,
+		User:             userSvc,
+		Traffic:          trafficSvc,
+		TrafficCollector: collector,
+		TrafficScheduler: scheduler,
+		System:           systemSvc,
+		ConfigEngine:     dbconfig.NewConfigEngine(db),
+		TelegramBot:      tgBot,
+	}
 }
 
 func (c *Container) RouterDeps() router.Deps {
-	return router.Deps{DB: c.DB, Config: c.Config, Mihomo: c.Mihomo, Traffic: c.Traffic, TrafficCollector: c.TrafficCollector, User: c.User, Node: c.Node, System: c.System}
+	return router.Deps{
+		DB:               c.DB,
+		Config:           c.Config,
+		Mihomo:           c.Mihomo,
+		Traffic:          c.Traffic,
+		TrafficCollector: c.TrafficCollector,
+		User:             c.User,
+		Node:             c.Node,
+		System:           c.System,
+	}
 }
