@@ -1,182 +1,177 @@
 package telegram
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
 
-func (b *Bot) handleCommand(text string) string {
-	text = strings.TrimSpace(text)
-	parts := strings.Fields(text)
-	if len(parts) == 0 {
-		return helpText()
+func (b *Bot) isAdmin(chatID string, s Settings) bool {
+	chatID = strings.TrimSpace(chatID)
+	for _, id := range s.ChatIDs { if strings.TrimSpace(id) == chatID { return true } }
+	return false
+}
+
+func (b *Bot) linkedUser(chatID string) (*models.ProxyUser, error) {
+	id, err := strconv.ParseInt(chatID, 10, 64); if err != nil { return nil, err }
+	var u models.ProxyUser
+	if err := b.db.Where("telegram_id = ?", id).First(&u).Error; err != nil { return nil, err }
+	return &u, nil
+}
+
+func menu(admin bool) *InlineKeyboardMarkup {
+	rows := [][]InlineButton{{{Text:"📊 我的用量", CallbackData:"user:usage"},{Text:"🔗 我的链接", CallbackData:"user:links"}}}
+	if admin {
+		rows = [][]InlineButton{
+			{{Text:"📊 服务器用量", CallbackData:"admin:status"},{Text:"📈 流量排行", CallbackData:"admin:traffic"}},
+			{{Text:"👥 客户端", CallbackData:"admin:users"},{Text:"🟢 在线客户端", CallbackData:"admin:online"}},
+			{{Text:"📡 入站", CallbackData:"admin:inbounds"},{Text:"⚠️ 即将耗尽", CallbackData:"admin:low"}},
+			{{Text:"🔄 重置流量", CallbackData:"admin:reset"},{Text:"➕ 添加客户端", CallbackData:"admin:add"}},
+			{{Text:"💾 数据库备份", CallbackData:"admin:backup"},{Text:"🚫 封禁状态", CallbackData:"admin:blocked"}},
+		}
+	} else {
+		rows = append(rows, []InlineButton{{Text:"📱 我的 ID", CallbackData:"user:id"}})
 	}
-	cmd := strings.ToLower(parts[0])
-	if i := strings.IndexByte(cmd, '@'); i >= 0 {
-		cmd = cmd[:i]
-	}
+	return &InlineKeyboardMarkup{InlineKeyboard: rows}
+}
+
+func (b *Bot) handleCommand(chatID, text string) (string, *InlineKeyboardMarkup) {
+	parts := strings.Fields(strings.TrimSpace(text))
+	if len(parts) == 0 { return b.help(chatID), menu(b.isAdmin(chatID, mustSettings(b.db))) }
+	cmd := strings.ToLower(parts[0]); if i := strings.IndexByte(cmd, '@'); i >= 0 { cmd = cmd[:i] }
+	s := mustSettings(b.db); admin := b.isAdmin(chatID, s)
 	switch cmd {
-	case "/start", "/help":
-		return helpText()
-	case "/status":
-		return b.cmdStatus()
-	case "/users":
-		return b.cmdUsers()
+	case "/start": return b.help(chatID), menu(admin)
+	case "/help": return b.help(chatID), menu(admin)
+	case "/status": return b.cmdStatus(), nil
+	case "/id": return fmt.Sprintf("你的 Telegram ID：<code>%s</code>", escapeHTML(chatID)), nil
+	case "/usage":
+		if admin && len(parts) > 1 { return b.usageSearch(strings.Join(parts[1:], " ")), nil }
+		return b.usageForChat(chatID), nil
+	case "/inbound":
+		if !admin { return "这个命令只对管理员开放。", nil }
+		if len(parts) < 2 { return "用法：<code>/inbound &lt;remark&gt;</code>", nil }
+		return b.inbound(strings.Join(parts[1:], " ")), nil
+	case "/restart":
+		if !admin { return "这个命令只对管理员开放。", nil }
+		if b.mihomo == nil { return "Mihomo 服务未初始化。", nil }
+		if err := b.mihomo.RestartMihomo(); err != nil { return "重启失败：" + escapeHTML(err.Error()), nil }
+		return "✅ Mihomo 已重启。", nil
+	case "/users", "/clients":
+		if !admin { return "这个命令只对管理员开放。", nil }; return b.cmdUsers(), nil
 	case "/online":
-		return b.cmdOnline()
+		if !admin { return b.usageForChat(chatID), nil }; return b.cmdOnline(), nil
 	case "/listeners", "/nodes":
-		return b.cmdListeners()
+		if !admin { return "这个命令只对管理员开放。", nil }; return b.cmdListeners(), nil
 	case "/traffic":
-		return b.cmdTraffic()
-	default:
-		return "未知指令。发送 /help 查看可用命令。"
+		if !admin { return "这个命令只对管理员开放。", nil }; return b.cmdTraffic(), nil
+	case "/bind":
+		if !admin || len(parts) < 3 { return "用法：<code>/bind &lt;用户名&gt; &lt;Telegram ID&gt;</code>", nil }
+		return b.bindUser(parts[1], parts[2]), nil
+	default: return "未知指令。发送 /help 查看菜单。", menu(admin)
 	}
 }
 
-func helpText() string {
-	return strings.TrimSpace(`
-🤖 <b>3m-ui Bot</b>
-/status — 核心与面板概览
-/users — 代理用户列表（含封禁）
-/online — 当前在线用户
-/listeners — 入站节点列表
-/traffic — 流量快照
-/help — 本帮助
-`)
+func mustSettings(db interface{ }) Settings { s, _ := LoadSettings(db.(*gormDBCompat).db); return s }
+type gormDBCompat struct { db *gorm.DB }
+
+func (b *Bot) help(chatID string) string {
+	s, _ := LoadSettings(b.db); admin := b.isAdmin(chatID, s)
+	if admin { return "🤖 <b>3m-ui</b>\n\n/start、/help：打开菜单\n/status：查看状态\n/id：查看 Telegram ID\n/usage &lt;关键词&gt;：查询客户端\n/inbound &lt;remark&gt;：查看入站\n/restart：重启 Mihomo\n/bind &lt;用户名&gt; &lt;Telegram ID&gt;：绑定客户端" }
+	return "🤖 <b>3m-ui</b>\n\n/status：查看服务状态\n/id：查看 Telegram ID\n/usage：查看自己的用量\n使用下面的按钮即可查看个人信息。"
 }
 
 func (b *Bot) cmdStatus() string {
-	running := false
-	version := "-"
-	pid := 0
-	if b.mihomo != nil {
-		st, err := b.mihomo.GetStatus()
-		if err == nil && st != nil {
-			running = st.Running
-			version = st.Version
-			pid = st.PID
-		}
-	}
-	var userCount, blocked, online, listeners int64
-	if b.db != nil {
-		_ = b.db.Model(&models.ProxyUser{}).Count(&userCount).Error
-		var users []models.ProxyUser
-		_ = b.db.Find(&users).Error
-		for _, u := range users {
-			if !user.IsCredentialActive(u) {
-				blocked++
-			}
-			if u.Online {
-				online++
-			}
-		}
-		_ = b.db.Model(&models.Listener{}).Count(&listeners).Error
-	}
-	core := "stopped"
-	if running {
-		core = "running"
-	}
-	return fmt.Sprintf(
-		"📊 <b>Status</b>\ncore: <code>%s</code>\nversion: <code>%s</code>\npid: <code>%d</code>\nusers: %d (online %d, blocked %d)\nlisteners: %d",
-		core, escapeHTML(version), pid, userCount, online, blocked, listeners,
-	)
+	running, version := false, "-"; pid := 0
+	if b.mihomo != nil { if st, err := b.mihomo.GetStatus(); err == nil && st != nil { running, version, pid = st.Running, st.Version, st.PID } }
+	var users, listeners, online int64
+	b.db.Model(&models.ProxyUser{}).Count(&users); b.db.Model(&models.Listener{}).Count(&listeners); b.db.Model(&models.ProxyUser{}).Where("online = ?", true).Count(&online)
+	state := "🔴 已停止"; if running { state = "🟢 运行中" }
+	return fmt.Sprintf("📊 <b>服务状态</b>\nMihomo：%s\n版本：<code>%s</code>\nPID：<code>%d</code>\n客户端：%d（在线 %d）\n入站：%d", state, escapeHTML(version), pid, users, online, listeners)
 }
 
-func (b *Bot) cmdUsers() string {
+func (b *Bot) usageForChat(chatID string) string {
+	u, err := b.linkedUser(chatID); if err != nil { return "还没有绑定 3m-ui 客户端。请把你的 Telegram ID 发给管理员绑定。" }
+	return formatUserUsage(*u)
+}
+
+func (b *Bot) usageSearch(q string) string {
 	var users []models.ProxyUser
-	if err := b.db.Order("id asc").Limit(40).Find(&users).Error; err != nil {
-		return "读取用户失败: " + escapeHTML(err.Error())
-	}
-	if len(users) == 0 {
-		return "暂无代理用户。"
-	}
-	var bld strings.Builder
-	bld.WriteString("👥 <b>Users</b>\n")
-	for _, u := range users {
-		flag := "✅"
-		if !user.IsCredentialActive(u) {
-			flag = "⛔"
-		} else if u.Online {
-			flag = "🟢"
-		}
-		used := formatBytes(u.TrafficUsed)
-		limit := "∞"
-		if u.TrafficLimit > 0 {
-			limit = formatBytes(u.TrafficLimit)
-		}
-		bld.WriteString(fmt.Sprintf("%s <code>%s</code> %s/%s\n", flag, escapeHTML(u.Username), used, limit))
-	}
-	return bld.String()
+	like := "%" + q + "%"
+	if err := b.db.Where("username LIKE ? OR CAST(id AS TEXT) = ? OR CAST(telegram_id AS TEXT) = ?", like, q, q).Limit(10).Find(&users).Error; err != nil { return "查询失败：" + escapeHTML(err.Error()) }
+	if len(users) == 0 { return "没有找到客户端。" }
+	var out strings.Builder; for _, u := range users { out.WriteString(formatUserUsage(u)); out.WriteString("\n") }; return strings.TrimSpace(out.String())
 }
 
-func (b *Bot) cmdOnline() string {
-	var users []models.ProxyUser
-	if err := b.db.Where("online = ?", true).Order("id asc").Find(&users).Error; err != nil {
-		return "读取在线用户失败: " + escapeHTML(err.Error())
-	}
-	if len(users) == 0 {
-		return "当前无在线用户。"
-	}
-	var bld strings.Builder
-	bld.WriteString("🟢 <b>Online</b>\n")
-	for _, u := range users {
-		bld.WriteString(fmt.Sprintf("• <code>%s</code>\n", escapeHTML(u.Username)))
-	}
-	return bld.String()
+func formatUserUsage(u models.ProxyUser) string {
+	limit := "不限"; if u.TrafficLimit > 0 { limit = formatBytes(u.TrafficLimit) }
+	status := "正常"; if !user.IsCredentialActive(u) { status = "已停用/过期" }
+	expire := "永不过期"; if !u.ExpireTime.IsZero() { expire = u.ExpireTime.Local().Format("2006-01-02 15:04") }
+	return fmt.Sprintf("👤 <b>%s</b>\n已用：%s / %s\n上传：%s\n下载：%s\n到期：%s\n状态：%s", escapeHTML(u.Username), formatBytes(u.TrafficUsed), limit, formatBytes(u.UploadBytes), formatBytes(u.DownloadBytes), expire, status)
 }
 
-func (b *Bot) cmdListeners() string {
-	var list []models.Listener
-	if err := b.db.Order("id asc").Limit(40).Find(&list).Error; err != nil {
-		return "读取节点失败: " + escapeHTML(err.Error())
-	}
-	if len(list) == 0 {
-		return "暂无节点。"
-	}
-	var bld strings.Builder
-	bld.WriteString("📡 <b>Listeners</b>\n")
-	for _, n := range list {
-		en := "off"
-		if n.Enabled {
-			en = "on"
-		}
-		bld.WriteString(fmt.Sprintf("• <code>%s</code> %s:%s [%s]\n", escapeHTML(n.Name), n.Protocol, n.Port, en))
-	}
-	return bld.String()
+func (b *Bot) inbound(name string) string {
+	var n models.Listener; if err := b.db.Where("name = ?", name).First(&n).Error; err != nil { if err := b.db.Where("name LIKE ?", "%"+name+"%").First(&n).Error; err != nil { return "没有找到这个入站。" } }
+	return fmt.Sprintf("📡 <b>%s</b>\n协议：<code>%s</code>\n地址：<code>%s</code>\n端口：<code>%s</code>\nTLS：%t\nUDP：%t\n状态：%t", escapeHTML(n.Name), escapeHTML(n.Protocol), escapeHTML(n.BindAddress), escapeHTML(n.Port), n.TLS, n.UDP, n.Enabled)
 }
 
-func (b *Bot) cmdTraffic() string {
-	var users []models.ProxyUser
-	_ = b.db.Order("traffic_used desc").Limit(15).Find(&users).Error
-	var total int64
-	for _, u := range users {
-		total += u.TrafficUsed
-	}
-	var bld strings.Builder
-	bld.WriteString(fmt.Sprintf("📈 <b>Traffic</b> (top users)\napprox listed used sum: %s\n", formatBytes(total)))
-	for _, u := range users {
-		bld.WriteString(fmt.Sprintf("• <code>%s</code> ↑%s ↓%s\n",
-			escapeHTML(u.Username), formatBytes(u.UploadBytes), formatBytes(u.DownloadBytes)))
-	}
-	if len(users) == 0 {
-		bld.WriteString("暂无数据。")
-	}
-	return bld.String()
+func (b *Bot) bindUser(username, chatID string) string {
+	id, err := strconv.ParseInt(chatID, 10, 64); if err != nil { return "Telegram ID 无效。" }
+	var u models.ProxyUser; if err := b.db.Where("username = ?", username).First(&u).Error; err != nil { return "没有找到这个客户端。" }
+	if err := b.db.Model(&u).Update("telegram_id", id).Error; err != nil { return "绑定失败：" + escapeHTML(err.Error()) }
+	return fmt.Sprintf("✅ 已将 <code>%s</code> 绑定到 Telegram ID <code>%d</code>。", escapeHTML(username), id)
 }
 
-func formatBytes(n int64) string {
-	if n < 1024 {
-		return fmt.Sprintf("%d B", n)
+func (b *Bot) cmdUsers() string { var users []models.ProxyUser; if err:=b.db.Order("id asc").Limit(40).Find(&users).Error; err!=nil{return "读取客户端失败。"}; if len(users)==0{return "暂无客户端。"}; var out strings.Builder; out.WriteString("👥 <b>客户端</b>\n"); for _,u:=range users { out.WriteString(fmt.Sprintf("%s <code>%s</code> %s/%s\n", map[bool]string{true:"🟢",false:"⛔"}[user.IsCredentialActive(u)],escapeHTML(u.Username),formatBytes(u.TrafficUsed),quota(u))) }; return out.String() }
+func quota(u models.ProxyUser) string { if u.TrafficLimit<=0{return "∞"};return formatBytes(u.TrafficLimit) }
+func (b *Bot) cmdOnline() string { var users []models.ProxyUser; b.db.Where("online = ?",true).Order("id asc").Limit(40).Find(&users); if len(users)==0{return "当前没有在线客户端。"}; var out strings.Builder; out.WriteString("🟢 <b>在线客户端</b>\n");for _,u:=range users{out.WriteString("• <code>"+escapeHTML(u.Username)+"</code>\n")};return out.String() }
+func (b *Bot) cmdListeners() string { var list []models.Listener;b.db.Order("id asc").Limit(40).Find(&list);if len(list)==0{return "暂无入站。"};var out strings.Builder;out.WriteString("📡 <b>入站</b>\n");for _,n:=range list{state:="🔴";if n.Enabled{state="🟢"};out.WriteString(fmt.Sprintf("%s <code>%s</code> %s:%s\n",state,escapeHTML(n.Name),escapeHTML(n.BindAddress),escapeHTML(n.Port)))};return out.String() }
+func (b *Bot) cmdTraffic() string { var users []models.ProxyUser;b.db.Order("traffic_used desc").Limit(15).Find(&users);var out strings.Builder;out.WriteString("📈 <b>流量排行</b>\n");for i,u:=range users{out.WriteString(fmt.Sprintf("%d. <code>%s</code> %s\n",i+1,escapeHTML(u.Username),formatBytes(u.TrafficUsed)))};if len(users)==0{out.WriteString("暂无数据。")};return out.String() }
+
+func (b *Bot) handleCallback(c *Client, s Settings, chatID, callbackID, data string) error {
+	_ = c.AnswerCallback(callbackID, "")
+	admin := b.isAdmin(chatID,s)
+	switch data {
+	case "user:usage": return c.SendTo(chatID,b.usageForChat(chatID),nil)
+	case "user:id": return c.SendTo(chatID,fmt.Sprintf("你的 Telegram ID：<code>%s</code>",escapeHTML(chatID)),nil)
+	case "user:links": return c.SendTo(chatID,b.userLinks(chatID),nil)
+	case "admin:status": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.cmdStatus(),nil)
+	case "admin:traffic": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.cmdTraffic(),nil)
+	case "admin:users": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.cmdUsers(),nil)
+	case "admin:online": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.cmdOnline(),nil)
+	case "admin:inbounds": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.cmdListeners(),nil)
+	case "admin:blocked": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.blockedUsers(),nil)
+	case "admin:low": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,b.lowUsers(),nil)
+	case "admin:reset": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,"请在面板中选择具体客户端后重置流量，避免误清空全部用户。",nil)
+	case "admin:add": if !admin{return c.SendTo(chatID,"无权限。",nil)};return c.SendTo(chatID,"选择要绑定新客户端的入站：",b.inboundKeyboard())
+	default:
+		if strings.HasPrefix(data,"add:listener:") && admin { id,_:=strconv.ParseUint(strings.TrimPrefix(data,"add:listener:"),10,32);b.wizardMu.Lock();b.wizards[chatID]=&addClientWizard{ListenerID:uint(id)};b.wizardMu.Unlock();return c.SendTo(chatID,"请输入客户端用户名：",nil) }
 	}
-	units := []string{"KB", "MB", "GB", "TB"}
-	v := float64(n) / 1024
-	i := 0
-	for v >= 1024 && i < len(units)-1 {
-		v /= 1024
-		i++
-	}
-	return fmt.Sprintf("%.2f %s", v, units[i])
+	return nil
 }
+
+func (b *Bot) inboundKeyboard() *InlineKeyboardMarkup { var list []models.Listener;b.db.Where("enabled = ?",true).Order("id").Limit(30).Find(&list);rows:=make([][]InlineButton,0,len(list));for _,n:=range list{rows=append(rows,[]InlineButton{{Text:n.Name,CallbackData:"add:listener:"+strconv.FormatUint(uint64(n.ID),10)}})};return &InlineKeyboardMarkup{InlineKeyboard:rows} }
+
+func (b *Bot) handleWizardMessage(chatID,text string) bool {
+	b.wizardMu.Lock(); w:=b.wizards[chatID]; b.wizardMu.Unlock();if w==nil{return false};name:=strings.TrimSpace(text);if strings.HasPrefix(name,"/"){return false};if len(name)<1||len(name)>100{return true}
+	passwordBytes:=make([]byte,12);if _,err:=rand.Read(passwordBytes);err!=nil{return true};password:=hex.EncodeToString(passwordBytes)
+	if b.users==nil{return true};u,err:=b.users.Create(user.CreateInput{Username:name,Password:password});if err!=nil{log.Printf("telegram: create client: %v",err);return true};if err:=b.users.BindListeners(u.ID,[]uint{w.ListenerID});err!=nil{log.Printf("telegram: bind client: %v",err);return true};b.wizardMu.Lock();delete(b.wizards,chatID);b.wizardMu.Unlock()
+	return b.sendWizardResult(chatID,u,name,password)
+}
+
+func (b *Bot) sendWizardResult(chatID string,u *models.ProxyUser,name,password string) bool { var n models.Listener;if err:=b.db.First(&n,u.ID).Error;err==nil{};var links string;var listeners []models.Listener;b.db.Model(&models.Listener{}).Joins("JOIN listener_users ON listener_users.listener_id = listeners.id AND listener_users.deleted_at IS NULL").Where("listener_users.proxy_user_id = ?",u.ID).Find(&listeners);host:="";if config.GlobalConfig!=nil{if x:=config.GlobalConfig.Server.PublicURL; x!=""{if p,e:=url.Parse(x);e==nil{host=p.Hostname()}}};creds:=[]user.Credential{{Username:name,Password:password,UUID:u.UUID}};for _,l:=range listeners{uris,e:=node.ClientURIsWithCredentials(l,host,creds);if e==nil{links+=strings.Join(uris,"\n")+"\n"}};msg:=fmt.Sprintf("✅ <b>客户端已创建</b>\n用户名：<code>%s</code>\n密码：<code>%s</code>\nUUID：<code>%s</code>\n%s",escapeHTML(name),escapeHTML(password),escapeHTML(u.UUID),escapeHTML(strings.TrimSpace(links)));return b.sendDirect(chatID,msg)}
+func (b *Bot) sendDirect(chatID,text string) bool { c,s,e:=NewClientFromDB(b.db);if e!=nil||c==nil{return true};if e:=c.SendTo(chatID,text,nil);e!=nil{log.Printf("telegram: wizard reply: %v",e)};return true }
+func (b *Bot) userLinks(chatID string) string {u,e:=b.linkedUser(chatID);if e!=nil{return "还没有绑定客户端。"};var ls []models.Listener;b.db.Model(&models.Listener{}).Joins("JOIN listener_users ON listener_users.listener_id=listeners.id AND listener_users.deleted_at IS NULL").Where("listener_users.proxy_user_id=?",u.ID).Find(&ls);host:="";if config.GlobalConfig!=nil{if x:=config.GlobalConfig.Server.PublicURL;x!=""{if p,e:=url.Parse(x);e==nil{host=p.Hostname()}}};by,err:=b.users.ActiveCredentialsByListener();if err!=nil{return "读取链接失败。"};var out strings.Builder;for _,l:=range ls{uris,err:=node.ClientURIsWithCredentials(l,host,by[l.ID]);if err==nil{for _,x:=range uris{out.WriteString("<code>"+escapeHTML(x)+"</code>\n")}}};if out.Len()==0{return "当前没有可用链接。"};return "🔗 <b>我的链接</b>\n"+out.String()}
+func (b *Bot) blockedUsers() string {var us []models.ProxyUser;b.db.Find(&us);var out strings.Builder;for _,u:=range us{if !user.IsCredentialActive(u){out.WriteString("• <code>"+escapeHTML(u.Username)+"</code> — "+reasonText(blockReason(u))+"\n")}};if out.Len()==0{return "当前没有被阻止的客户端。"};return "🚫 <b>封禁状态</b>\n"+out.String()}
+func (b *Bot) lowUsers() string {var us []models.ProxyUser;b.db.Where("traffic_limit > 0 AND traffic_used * 100 >= traffic_limit * 80").Order("traffic_used DESC").Limit(20).Find(&us);if len(us)==0{return "没有达到 80% 用量的客户端。"};var out strings.Builder;for _,u:=range us{out.WriteString(fmt.Sprintf("⚠️ <code>%s</code> %s/%s\n",escapeHTML(u.Username),formatBytes(u.TrafficUsed),formatBytes(u.TrafficLimit)))};return out.String()}
+
+func formatBytes(n int64) string { if n<1024{return fmt.Sprintf("%d B",n)};units:=[]string{"KB","MB","GB","TB"};v:=float64(n)/1024;i:=0;for v>=1024&&i<len(units)-1{v/=1024;i++};return fmt.Sprintf("%.2f %s",v,units[i]) }
