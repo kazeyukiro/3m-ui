@@ -12,19 +12,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// Notifier watches blocked-user transitions and pushes Telegram alerts.
+// Notifier watches credential state transitions and optionally sends a daily
+// usage digest. The first observation only establishes the baseline so a
+// restart does not spam alerts for users that were already blocked.
 type Notifier struct {
 	db *gorm.DB
 
-	mu          sync.Mutex
-	lastBlocked map[uint]bool
+	mu             sync.Mutex
+	initialized    bool
+	lastBlocked    map[uint]bool
+	lastDigestDate string
 }
 
 func NewNotifier(db *gorm.DB) *Notifier {
 	return &Notifier{db: db, lastBlocked: map[uint]bool{}}
 }
 
-// CheckAndNotify compares current blocked set with the previous tick.
 func (n *Notifier) CheckAndNotify() {
 	if n == nil || n.db == nil {
 		return
@@ -50,46 +53,88 @@ func (n *Notifier) CheckAndNotify() {
 
 	n.mu.Lock()
 	prev := n.lastBlocked
+	firstRun := !n.initialized
+	n.initialized = true
 	n.lastBlocked = current
+	digestAlreadySent := n.lastDigestDate
 	n.mu.Unlock()
 
-	var messages []string
-	for _, u := range blockedNow {
-		if prev[u.ID] {
-			continue
-		}
-		reason := blockReason(u)
-		if reason == "expired" && !settings.NotifyOnExpiry {
-			continue
-		}
-		if reason != "expired" && !settings.NotifyOnBlock {
-			continue
-		}
-		messages = append(messages, fmt.Sprintf(
-			"⛔ <b>User blocked</b>\nuser: <code>%s</code>\nreason: %s\ntime: %s",
-			escapeHTML(u.Username), reason, time.Now().UTC().Format(time.RFC3339),
-		))
-	}
-	if settings.NotifyOnUnblock {
-		for id := range prev {
-			if current[id] {
+	if !firstRun {
+		var messages []string
+		for _, u := range blockedNow {
+			if prev[u.ID] {
 				continue
 			}
-			var u models.ProxyUser
-			if err := n.db.First(&u, id).Error; err != nil {
+			reason := blockReason(u)
+			if reason == "expired" && !settings.NotifyOnExpiry {
+				continue
+			}
+			if reason != "expired" && !settings.NotifyOnBlock {
 				continue
 			}
 			messages = append(messages, fmt.Sprintf(
-				"✅ <b>User unblocked</b>\nuser: <code>%s</code>\ntime: %s",
-				escapeHTML(u.Username), time.Now().UTC().Format(time.RFC3339),
+				"⛔ <b>用户已被阻止</b>\n用户：<code>%s</code>\n原因：%s\n时间：%s",
+				escapeHTML(u.Username), reasonText(reason), time.Now().Format("2006-01-02 15:04:05"),
 			))
+		}
+		if settings.NotifyOnUnblock {
+			for id := range prev {
+				if current[id] {
+					continue
+				}
+				var u models.ProxyUser
+				if err := n.db.First(&u, id).Error; err != nil {
+					continue
+				}
+				messages = append(messages, fmt.Sprintf(
+					"✅ <b>用户已恢复</b>\n用户：<code>%s</code>\n时间：%s",
+					escapeHTML(u.Username), time.Now().Format("2006-01-02 15:04:05"),
+				))
+			}
+		}
+		for _, msg := range messages {
+			if err := client.SendText(msg); err != nil {
+				log.Printf("telegram: notify failed: %v", err)
+			}
 		}
 	}
 
-	for _, msg := range messages {
-		if err := client.SendText(msg); err != nil {
-			log.Printf("telegram: notify failed: %v", err)
+	if settings.NotifyDailyDigest {
+		today := time.Now().Format("2006-01-02")
+		if digestAlreadySent != today && time.Now().Hour() == 0 {
+			if err := client.SendText(dailyDigest(users)); err != nil {
+				log.Printf("telegram: daily digest failed: %v", err)
+			} else {
+				n.mu.Lock()
+				n.lastDigestDate = today
+				n.mu.Unlock()
+			}
 		}
+	}
+}
+
+func dailyDigest(users []models.ProxyUser) string {
+	var total, used, blocked int64
+	for _, u := range users {
+		total++
+		used += u.TrafficUsed
+		if !user.IsCredentialActive(u) {
+			blocked++
+		}
+	}
+	return fmt.Sprintf("📊 <b>3m-ui 每日摘要</b>\n用户数：%d\n已阻止：%d\n累计流量：%s\n时间：%s", total, blocked, formatBytes(used), time.Now().Format("2006-01-02 15:04:05"))
+}
+
+func reasonText(reason string) string {
+	switch reason {
+	case "disabled":
+		return "用户已禁用"
+	case "expired":
+		return "已过期"
+	case "traffic_limit":
+		return "流量已用尽"
+	default:
+		return "凭据不可用"
 	}
 }
 
@@ -107,7 +152,21 @@ func blockReason(u models.ProxyUser) string {
 	return "blocked"
 }
 
+func formatBytes(n int64) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	v := float64(n) / 1024
+	i := 0
+	for v >= 1024 && i < len(units)-1 {
+		v /= 1024
+		i++
+	}
+	return fmt.Sprintf("%.2f %s", v, units[i])
+}
+
 func escapeHTML(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\"", "&quot;")
 	return r.Replace(s)
 }
