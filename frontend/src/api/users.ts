@@ -16,6 +16,7 @@ export interface ProxyUser {
   blocked?: boolean;
   ip_limit?: number;
   remark?: string;
+  sub_token?: string;
   created_at?: string;
 }
 
@@ -44,3 +45,8 @@ export const fetchUserNodes = (userId: number) =>
   client.get<BoundNode[]>(`/users/${userId}/nodes`).then((r) => r.data);
 export const bindUserNodes = (userId: number, listenerIds: number[]) =>
   client.post(`/users/${userId}/nodes`, { listener_ids: listenerIds }).then((r) => r.data);
+
+export const fetchUserSubscription = (id: number) =>
+  client.get<{ token: string; url: string }>(`/users/${id}/subscription`).then((r) => r.data);
+export const rotateUserSubscription = (id: number) =>
+  client.post<{ token: string; url: string }>(`/users/${id}/subscription/rotate`).then((r) => r.data);
