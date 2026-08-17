@@ -9,34 +9,55 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
 
-// RegisterPublicSubscriptionRoutes mounts token-authenticated subscription
-// endpoints before the administrator auth middleware. Possession of the
-// high-entropy access token is the credential for these endpoints.
 func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	api.GET("/client/sub/:token", func(c *gin.Context) {
 		if db == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database is not configured"})
 			return
 		}
+		tok := strings.TrimSpace(c.Param("token"))
+		if tok == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+			return
+		}
+		if strings.EqualFold(c.Query("format"), "info") {
+			writeSubInfo(c, db, tok)
+			return
+		}
 
-		var token models.AccessToken
-		if err := db.Where("token = ? AND enabled = ?", c.Param("token"), true).First(&token).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		var raw []byte
+		var err error
+
+		var access models.AccessToken
+		if err = db.Where("token = ? AND enabled = ?", tok, true).First(&access).Error; err == nil {
+			if access.ExpireAt != nil && !access.ExpireAt.After(time.Now()) {
+				c.JSON(http.StatusGone, gin.H{"error": "subscription expired"})
 				return
 			}
+			raw, err = converter.GenerateRawConfig(db, access, c.Request)
+		} else if err == gorm.ErrRecordNotFound {
+			var pu models.ProxyUser
+			if err = db.Where("sub_token = ?", tok).First(&pu).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+					return
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load subscription"})
+				return
+			}
+			if !user.IsCredentialActive(pu) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "user is not active"})
+				return
+			}
+			raw, err = converter.GenerateUserRawConfig(db, pu, c.Request)
+		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load subscription"})
 			return
 		}
-		if token.ExpireAt != nil && !token.ExpireAt.After(time.Now()) {
-			c.JSON(http.StatusGone, gin.H{"error": "subscription expired"})
-			return
-		}
-
-		raw, err := converter.GenerateRawConfig(db, token, c.Request)
 		if err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
@@ -54,7 +75,7 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 			return
 		}
 
-		converted, err := converter.CallSubconverterWithRequest(cfg, c.Param("token"), target, raw)
+		converted, err := converter.CallSubconverterWithRequest(cfg, tok, target, raw)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
@@ -64,7 +85,40 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 	})
 }
 
-// detectSubTarget maps common client User-Agents to subscription formats.
+func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
+	var pu models.ProxyUser
+	if err := db.Where("sub_token = ?", tok).First(&pu).Error; err == nil {
+		expire := ""
+		if !pu.ExpireTime.IsZero() {
+			expire = pu.ExpireTime.UTC().Format(time.RFC3339)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"username":       pu.Username,
+			"enabled":        pu.Enabled,
+			"blocked":        !user.IsCredentialActive(pu),
+			"online":         pu.Online,
+			"traffic_used":   pu.TrafficUsed,
+			"traffic_limit":  pu.TrafficLimit,
+			"upload_bytes":   pu.UploadBytes,
+			"download_bytes": pu.DownloadBytes,
+			"expire_time":    expire,
+			"ip_limit":       pu.IPLimit,
+		})
+		return
+	}
+	var access models.AccessToken
+	if err := db.Where("token = ?", tok).First(&access).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"name":        access.Name,
+		"enabled":     access.Enabled,
+		"listener_id": access.ListenerID,
+		"expire_at":   access.ExpireAt,
+	})
+}
+
 func detectSubTarget(ua string) string {
 	u := strings.ToLower(ua)
 	switch {
