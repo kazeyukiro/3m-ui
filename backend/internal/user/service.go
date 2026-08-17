@@ -92,6 +92,7 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 	if err != nil {
 		return nil, err
 	}
+	subTok, _ := randomHex(16)
 	u := &models.ProxyUser{
 		Username:          username,
 		PasswordEncrypted: encrypted,
@@ -101,6 +102,7 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		Remark:            strings.TrimSpace(in.Remark),
 		ExpireTime:        expire,
 		Enabled:           enabled,
+		SubToken:          subTok,
 	}
 	if err := s.db.Create(u).Error; err != nil {
 		return nil, fmt.Errorf("create proxy user: %w", err)
@@ -374,6 +376,7 @@ type SafeUser struct {
 	Blocked       bool       `json:"blocked"`
 	IPLimit       int        `json:"ip_limit"`
 	Remark        string     `json:"remark"`
+	SubToken      string     `json:"sub_token"`
 }
 
 func ToSafeUser(u *models.ProxyUser) SafeUser {
@@ -392,6 +395,7 @@ func ToSafeUser(u *models.ProxyUser) SafeUser {
 		Blocked:       !IsCredentialActive(*u),
 		IPLimit:       u.IPLimit,
 		Remark:        u.Remark,
+		SubToken:      u.SubToken,
 	}
 }
 
