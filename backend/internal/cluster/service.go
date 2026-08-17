@@ -179,3 +179,45 @@ func (s *Service) FetchRemoteNodes(id uint) (json.RawMessage, error) {
 	}
 	return json.RawMessage(body), nil
 }
+
+func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, []byte, error) {
+	var row models.RemoteServer
+	if err := s.db.First(&row, id).Error; err != nil {
+		return 0, nil, err
+	}
+	if !row.Enabled {
+		return 0, nil, fmt.Errorf("remote server is disabled")
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return 0, nil, fmt.Errorf("path is required")
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	url := strings.TrimRight(row.BaseURL, "/") + path
+	var rdr io.Reader
+	if len(body) > 0 {
+		rdr = strings.NewReader(string(body))
+	}
+	req, err := http.NewRequest(method, url, rdr)
+	if err != nil {
+		return 0, nil, err
+	}
+	if row.APIToken != "" {
+		req.Header.Set("Authorization", "Bearer "+row.APIToken)
+	}
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return resp.StatusCode, nil, err
+	}
+	return resp.StatusCode, raw, nil
+}
