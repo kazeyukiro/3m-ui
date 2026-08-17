@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
 	rg.POST("/:id/health", h.Health)
+	rg.GET("/:id/nodes", h.RemoteNodes)
 }
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -106,4 +107,21 @@ func (h *Handler) Health(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, row)
+}
+
+func (h *Handler) RemoteNodes(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	raw, err := h.svc.FetchRemoteNodes(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
 }
