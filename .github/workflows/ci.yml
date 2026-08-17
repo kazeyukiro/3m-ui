@@ -24,9 +24,10 @@ jobs:
         run: go vet ./...
       - name: Go tests
         run: go test ./...
+      - name: Telegram race/security tests
+        run: go test -race ./internal/telegram -run 'Test(Concurrent|UpdateOffset|HTMLSplit|SplitTelegramHTML|ParseUpdates|SetCommands)'
       - name: Go build
         run: go build ./...
-
   frontend:
     runs-on: ubuntu-latest
     defaults:
