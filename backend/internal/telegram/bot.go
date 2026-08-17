@@ -13,19 +13,25 @@ import (
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
+	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
 
 type Bot struct {
 	db     *gorm.DB
 	mihomo *mihomo.Service
+	users  *user.Service
 	mu     sync.Mutex
 	stopCh chan struct{}
 	wg     sync.WaitGroup
+	wizardMu sync.Mutex
+	wizards map[string]*addClientWizard
 }
 
-func NewBot(db *gorm.DB, mihomoSvc *mihomo.Service) *Bot {
-	return &Bot{db: db, mihomo: mihomoSvc, stopCh: make(chan struct{})}
+type addClientWizard struct { ListenerID uint }
+
+func NewBot(db *gorm.DB, mihomoSvc *mihomo.Service, userSvc *user.Service) *Bot {
+	return &Bot{db: db, mihomo: mihomoSvc, users: userSvc, stopCh: make(chan struct{}), wizards: make(map[string]*addClientWizard)}
 }
 
 func (b *Bot) Start() {
@@ -68,6 +74,7 @@ func (b *Bot) loop() {
 			}
 			if u.Message == nil || strings.TrimSpace(u.Message.Text) == "" { continue }
 			chatID := strconv.FormatInt(u.Message.Chat.ID, 10)
+			if b.handleWizardMessage(chatID, u.Message.Text) { continue }
 			reply, markup := b.handleCommand(chatID, u.Message.Text)
 			if err := tgClient.SendTo(chatID, reply, markup); err != nil { log.Printf("telegram: reply: %v", err) }
 		}
@@ -86,8 +93,7 @@ func getUpdates(httpClient *http.Client, token string, offset int64, timeoutSec 
 	q.Set("allowed_updates", `["message","callback_query"]`)
 	if offset > 0 { q.Set("offset", strconv.FormatInt(offset, 10)) }
 	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?%s", token, q.Encode())
-	resp, err := httpClient.Get(endpoint)
-	if err != nil { return nil, offset, err }
+	resp, err := httpClient.Get(endpoint); if err != nil { return nil, offset, err }
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); if err != nil { return nil, offset, err }
 	if resp.StatusCode >= 300 { return nil, offset, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw))) }
