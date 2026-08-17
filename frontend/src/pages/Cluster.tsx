@@ -10,13 +10,47 @@ import { useI18n } from '../i18n';
 const ClusterPage: React.FC = () => {
   const { t } = useI18n();
   const [remoteNodes, setRemoteNodes] = useState<any[] | null>(null);
+  const [remoteServerId, setRemoteServerId] = useState<number | null>(null);
+  const [remoteForm] = Form.useForm();
+
   const loadRemoteNodes = async (id: number) => {
     try {
       const r = await client.get(`/cluster/${id}/nodes`);
       setRemoteNodes(Array.isArray(r.data) ? r.data : []);
+      setRemoteServerId(id);
       message.success(t('cluster.nodesLoaded') || 'Loaded remote nodes');
     } catch (e: any) {
       message.error(e.message || 'failed');
+    }
+  };
+
+  const createRemoteNode = async (values: any) => {
+    if (!remoteServerId) return;
+    try {
+      await client.post(`/cluster/${remoteServerId}/nodes`, {
+        name: values.name,
+        protocol: values.protocol,
+        port: String(values.port),
+        bind_address: values.bind_address || '0.0.0.0',
+        enabled: true,
+        config: values.config || '{}',
+      });
+      message.success(t('cluster.remoteCreated') || 'Remote node created');
+      remoteForm.resetFields();
+      await loadRemoteNodes(remoteServerId);
+    } catch (e: any) {
+      message.error(e.response?.data?.error || e.message || 'failed');
+    }
+  };
+
+  const deleteRemoteNode = async (nodeId: number) => {
+    if (!remoteServerId) return;
+    try {
+      await client.delete(`/cluster/${remoteServerId}/nodes/${nodeId}`);
+      message.success(t('cluster.remoteDeleted') || 'Remote node deleted');
+      await loadRemoteNodes(remoteServerId);
+    } catch (e: any) {
+      message.error(e.response?.data?.error || e.message || 'failed');
     }
   };
 
@@ -94,8 +128,37 @@ const ClusterPage: React.FC = () => {
           <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
         </Form>
       </Modal>
-      <Modal open={!!remoteNodes} onCancel={() => setRemoteNodes(null)} footer={null} title={t('cluster.remoteNodes') || 'Remote nodes'} width={720}>
-        <pre style={{ maxHeight: 400, overflow: 'auto', fontSize: 12 }}>{JSON.stringify(remoteNodes, null, 2)}</pre>
+      <Modal open={!!remoteNodes} onCancel={() => { setRemoteNodes(null); setRemoteServerId(null); }} footer={null} title={t('cluster.remoteNodes') || 'Remote nodes'} width={800}>
+        <Form form={remoteForm} layout="inline" onFinish={createRemoteNode} style={{ marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="name" /></Form.Item>
+          <Form.Item name="protocol" initialValue="vless" rules={[{ required: true }]}>
+            <Input placeholder="protocol" style={{ width: 100 }} />
+          </Form.Item>
+          <Form.Item name="port" rules={[{ required: true }]}><Input placeholder="port" style={{ width: 90 }} /></Form.Item>
+          <Form.Item name="bind_address" initialValue="0.0.0.0"><Input placeholder="bind" style={{ width: 110 }} /></Form.Item>
+          <Button type="primary" htmlType="submit">{t('cluster.remoteCreate') || 'Create'}</Button>
+        </Form>
+        <Table
+          size="small"
+          rowKey={(r: any) => r.id || r.ID}
+          dataSource={remoteNodes || []}
+          pagination={{ pageSize: 8 }}
+          columns={[
+            { title: 'ID', dataIndex: 'id', width: 60, render: (_: any, r: any) => r.id ?? r.ID },
+            { title: 'Name', dataIndex: 'name' },
+            { title: 'Protocol', dataIndex: 'protocol', width: 100 },
+            { title: 'Port', dataIndex: 'port', width: 80 },
+            {
+              title: t('common.actions'),
+              width: 100,
+              render: (_: any, r: any) => (
+                <Popconfirm title={t('common.confirmDelete')} onConfirm={() => deleteRemoteNode(r.id ?? r.ID)}>
+                  <Button size="small" danger>{t('common.delete')}</Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
       </Modal>
     </div>
   );
