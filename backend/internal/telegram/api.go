@@ -50,7 +50,7 @@ func (h *Handler) Test(c *gin.Context) {
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	if client == nil { c.JSON(http.StatusBadRequest, gin.H{"error": "Telegram is disabled or incomplete (token + chat IDs required)"}); return }
 	if err := client.Validate(); err != nil { c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()}); return }
-	if err := client.SendText("🔔 <b>3m-ui</b> Telegram test message — connection OK."); err != nil { c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()}); return }
+	if err := client.SendText("🔔 <b>3m-ui</b> Telegram 测试消息 / test message — 连接正常 / connection OK."); err != nil { c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()}); return }
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
