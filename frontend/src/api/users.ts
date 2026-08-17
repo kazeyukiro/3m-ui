@@ -14,6 +14,8 @@ export interface ProxyUser {
   online?: boolean;
   expire_time?: string;
   blocked?: boolean;
+  ip_limit?: number;
+  remark?: string;
   created_at?: string;
 }
 
