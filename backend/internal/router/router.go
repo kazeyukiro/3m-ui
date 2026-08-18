@@ -36,6 +36,10 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	r := gin.Default()
 	r.Use(CORSMiddleware(cfg.Security.CORSOrigins))
 
+	// Keep legacy subscription URLs available for existing clients while the
+	// canonical API endpoint remains under /api/v1/client/sub/:token.
+	RegisterLegacySubscriptionRoutes(r, db, cfg)
+
 	apiV1 := r.Group("/api/v1")
 	{
 		apiV1.GET("/openapi.yaml", func(c *gin.Context) {
