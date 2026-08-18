@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
@@ -139,6 +140,10 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 	publicURL := ""
 	if config.GlobalConfig != nil {
 		publicURL = strings.TrimSpace(config.GlobalConfig.Server.PublicURL)
+	}
+	// m-ui style Access Profile (panel settings) overrides when set
+	if ap := protocol.LoadAccessProfile(h.db); ap.PublicHost != "" {
+		publicURL = ap.PublicHost
 	}
 	host := c.GetHeader("X-Forwarded-Host")
 	if host != "" && !h.isTrustedHost(host) {
