@@ -11,6 +11,8 @@ import {
 } from '../api/listeners';
 import { useI18n } from '../i18n';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
+import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
+import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
 
 const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
 
@@ -68,7 +70,16 @@ const Listeners: React.FC = () => {
   const openEdit = (record: Listener) => {
     setEditing(record);
     form.resetFields();
-    form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, ...configToFormValues(record.config) });
+    form.setFieldsValue({
+      name: record.name, protocol: record.protocol, port: record.port,
+      bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp,
+      public_host: (record as any).public_host || '',
+      public_port: (record as any).public_port || '',
+      access_sni: (record as any).access_sni || '',
+      client_fingerprint: (record as any).client_fingerprint || 'chrome',
+      access_alpn: (record as any).access_alpn || '',
+      ...configToFormValues(record.config),
+    });
     setModalOpen(true);
   };
   const onSubmit = async (rawValues?: any) => {
@@ -84,7 +95,15 @@ const Listeners: React.FC = () => {
         return;
       }
       const previous = editing ? parseConfig(editing.config) : null;
-      const config = formValuesToConfig(proto, values, previous);
+      const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
+      let config: Record<string, any>;
+      if (useCapabilityForm && cap) {
+        config = { ...capabilityFormToConfig(proto, values, cap), ...formValuesToConfig(proto, values, previous) };
+        // capability form takes precedence for layer-driven keys
+        config = { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) };
+      } else {
+        config = formValuesToConfig(proto, values, previous);
+      }
       const payload: Partial<Listener> = {
         name: String(values.name).trim(),
         protocol: proto,
@@ -93,6 +112,11 @@ const Listeners: React.FC = () => {
         enabled: values.enabled !== false,
         udp: protocolSupportsUDP(proto) ? !!values.udp : false,
         config: JSON.stringify(config),
+        public_host: values.public_host || '',
+        public_port: values.public_port || '',
+        access_sni: values.access_sni || '',
+        client_fingerprint: values.client_fingerprint || '',
+        access_alpn: values.access_alpn || '',
       };
       if (editing) {
         await updateListener(normalizeId(editing), payload);
@@ -253,7 +277,22 @@ const Listeners: React.FC = () => {
             <Switch />
           </Form.Item>
         )}
-        <ListenerConfigFields protocol={protocol} />
+        <Divider titlePlacement="start" plain>Access Profile</Divider>
+        <Form.Item name="public_host" label="Public Host" tooltip="Per-node host for share links (overrides global Access Profile)">
+          <Input placeholder="example.com" />
+        </Form.Item>
+        <Form.Item name="public_port" label="Public Port"><Input placeholder="443" /></Form.Item>
+        <Form.Item name="access_sni" label="SNI"><Input /></Form.Item>
+        <Form.Item name="client_fingerprint" label="Client Fingerprint" initialValue="chrome">
+          <Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} />
+        </Form.Item>
+        <Form.Item name="access_alpn" label="ALPN"><Input placeholder="h2,http/1.1" /></Form.Item>
+
+        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? (
+          <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} />
+        ) : (
+          <ListenerConfigFields protocol={protocol} />
+        )}
       </Form>
     </Modal>
 
