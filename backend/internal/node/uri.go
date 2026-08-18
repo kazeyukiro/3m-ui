@@ -15,16 +15,17 @@ import (
 // ClientURIs exports client share links from the same Listener schema used by
 // Mihomo config generation. Server-only fields are never copied blindly.
 func ClientURIs(listener models.Listener, host string) ([]string, error) {
-	host = normalizeExportHost(host, listener.BindAddress, listener.Listen)
+	host = strings.TrimSpace(host)
 	if host == "" {
-		return nil, fmt.Errorf("cannot determine public host for listener")
+		host = normalizeExportHost("", listener.BindAddress, listener.Listen)
+	}
+	if host == "" {
+		return nil, fmt.Errorf("cannot determine public host for listener; set server.public_url in config or access the panel via a public hostname")
 	}
 	cfg, err := decodeURIConfig(listener.Config)
 	if err != nil {
 		return nil, err
 	}
-	// Listener-level flags are authoritative even when they are not duplicated
-	// in the JSON config. URI generation must match the actual listener.
 	cfg["_listener-tls"] = listener.TLS
 	cfg["_listener-udp"] = listener.UDP
 	port := strings.TrimSpace(listener.Port)
@@ -73,23 +74,6 @@ func decodeURIConfig(raw string) (map[string]interface{}, error) {
 		return map[string]interface{}{}, nil
 	}
 	return cfg, nil
-}
-
-func normalizeExportHost(requestHost, bind, listen string) string {
-	for _, raw := range []string{requestHost, bind, listen} {
-		h := strings.TrimSpace(raw)
-		if h == "" || h == "0.0.0.0" || h == "::" || h == "*" || h == "127.0.0.1" || h == "::1" {
-			continue
-		}
-		if host, _, err := net.SplitHostPort(h); err == nil {
-			return strings.Trim(host, "[]")
-		}
-		if u, err := url.Parse("//" + h); err == nil && u.Hostname() != "" {
-			return u.Hostname()
-		}
-		return strings.Trim(h, "[]")
-	}
-	return ""
 }
 
 func userMap(cfg map[string]interface{}) map[string]interface{} {
