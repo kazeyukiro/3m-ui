@@ -162,6 +162,20 @@ function setIfPresent(cfg: Record<string, any>, path: string, value: any): void 
   setConfigPath(cfg, path, value);
 }
 
+function serializeFields(
+  cfg: Record<string, any>,
+  fields: FieldCapability[] | undefined,
+  values: Record<string, any>,
+  skip: (path: string) => boolean,
+): void {
+  for (const field of fields || []) {
+    const path = field.path;
+    if (!path || skip(path)) continue;
+    const value = firstValue(values, path);
+    if (value !== undefined && value !== null && value !== '') setConfigPath(cfg, path, value);
+  }
+}
+
 /** Map capability-driven form values into Mihomo listener config JSON keys. */
 export function capabilityFormToConfig(
   protocol: string,
@@ -171,21 +185,15 @@ export function capabilityFormToConfig(
   const cfg: Record<string, any> = {};
   const set = (k: string, v: any) => setIfPresent(cfg, k, v);
 
-  // Transport exclusivity. Capability paths may be nested by Ant Design.
   const transport = firstValue(values, 'transport_layer') || 'raw';
   if (transport === 'ws') set('ws-path', firstValue(values, 'ws-path', 'ws_path'));
   if (transport === 'grpc') set('grpc-service-name', firstValue(values, 'grpc-service-name', 'grpc_service_name'));
   if (transport === 'xhttp') {
-    const path = firstValue(values, 'xhttp_path', 'xhttp-config.path');
-    const host = firstValue(values, 'xhttp_host', 'xhttp-config.host');
-    const mode = firstValue(values, 'xhttp_mode', 'xhttp-config.mode');
-    setIfPresent(cfg, 'xhttp-config.path', path);
-    setIfPresent(cfg, 'xhttp-config.host', host);
-    setIfPresent(cfg, 'xhttp-config.mode', mode);
+    setIfPresent(cfg, 'xhttp-config.path', firstValue(values, 'xhttp_path', 'xhttp-config.path'));
+    setIfPresent(cfg, 'xhttp-config.host', firstValue(values, 'xhttp_host', 'xhttp-config.host'));
+    setIfPresent(cfg, 'xhttp-config.mode', firstValue(values, 'xhttp_mode', 'xhttp-config.mode'));
   }
 
-  // Security exclusivity. Reality fields work whether the capability manifest
-  // exposes flat names or Mihomo-style nested paths.
   const security = firstValue(values, 'security_layer') || 'none';
   if (security === 'reality') {
     setIfPresent(cfg, 'reality-config.dest', firstValue(values, 'reality_dest', 'reality-config.dest'));
@@ -199,20 +207,28 @@ export function capabilityFormToConfig(
     if (firstValue(values, 'allow-insecure') === true) cfg['allow-insecure'] = true;
   }
 
-  // Only serialize fields declared by the capability manifest. Previously this
-  // loop copied every Form value, including legacy UI-only aliases such as
-  // reality_enabled, reality_dest, shadow_tls_enabled, etc. Those keys are not
-  // Mihomo config keys and caused valid configurations to be rejected by the
-  // backend schema when an existing listener was edited.
-  for (const field of capability?.fields || []) {
-    const path = field.path;
-    if (!path || path === 'transport_layer' || path === 'security_layer') continue;
-    if (path === 'ws-path' || path === 'grpc-service-name' || path.startsWith('xhttp-config.')) continue;
-    if (path === 'reality-config' || path.startsWith('reality-config.')) continue;
-    if (path === 'certificate' || path === 'private-key' || path === 'private_key' || path === 'allow-insecure') continue;
-    const value = firstValue(values, path);
-    if (value !== undefined && value !== null && value !== '') setConfigPath(cfg, path, value);
-  }
+  const skipTransportSecurity = (path: string) => (
+    path === 'transport_layer' || path === 'security_layer'
+    || path === 'ws-path' || path === 'grpc-service-name'
+    || path.startsWith('xhttp-config.') || path === 'xhttp-config'
+    || path === 'reality-config' || path.startsWith('reality-config.')
+    || path === 'certificate' || path === 'private-key' || path === 'private_key'
+    || path === 'allow-insecure'
+  );
+
+  // Serialize fields from the selected transport/security components as well as
+  // protocol-level fields. Previously only capability.fields were serialized,
+  // so any component-specific option displayed by the UI could silently vanish
+  // when saving (for example TLS client-auth or a transport-specific option).
+  const selectedTransport = capability?.components?.find(
+    (c) => c.group === 'transport' && c.kind === transport,
+  );
+  const selectedSecurity = capability?.components?.find(
+    (c) => c.group === 'security' && c.kind === security,
+  );
+  serializeFields(cfg, selectedTransport?.fields, values, skipTransportSecurity);
+  serializeFields(cfg, selectedSecurity?.fields, values, skipTransportSecurity);
+  serializeFields(cfg, capability?.fields, values, skipTransportSecurity);
 
   // VLESS flow may be represented by the legacy visual form even when the
   // capability manifest does not expose it yet.
