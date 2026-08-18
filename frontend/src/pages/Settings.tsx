@@ -80,8 +80,8 @@ const Settings: React.FC = () => {
         <div style={{ marginTop: 12 }}><Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">{t('settings.openOpenAPI')}</Button></div>
       </Card>
       
-      <Card title={t('settings.accessProfile') || 'Access Profile'} style={{ marginBottom: 16 }}>
-        <Text type="secondary">{t('settings.accessProfileHint') || 'Public host / SNI / fingerprint used when exporting share links (m-ui style).'}</Text>
+      <Card title={t('settings.accessProfile')} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.accessProfileHint')}</Text>
         <Form form={accessForm} layout="vertical" style={{ marginTop: 12 }} onFinish={async (values) => {
           try {
             await client.put('/panel-settings', {
@@ -91,16 +91,16 @@ const Settings: React.FC = () => {
               'access_profile.client_fingerprint': values.client_fingerprint || 'chrome',
               'access_profile.alpn': values.alpn || '',
             });
-            message.success(t('common.saved') || t('common.success'));
+            message.success(t('common.saved'));
           } catch (e: any) { message.error(e.message || t('common.error')); }
         }}>
-          <Form.Item name="public_host" label={t('settings.publicHost') || 'Public Host'}><Input placeholder="example.com" /></Form.Item>
-          <Form.Item name="public_port" label={t('settings.publicPort') || 'Public Port'}><Input placeholder="443" /></Form.Item>
-          <Form.Item name="sni" label="SNI"><Input placeholder="www.example.com" /></Form.Item>
-          <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint') || 'Client Fingerprint'}>
+          <Form.Item name="public_host" label={t('settings.publicHost')}><Input placeholder="example.com" /></Form.Item>
+          <Form.Item name="public_port" label={t('settings.publicPort')}><Input placeholder="443" /></Form.Item>
+          <Form.Item name="sni" label={t('listeners.sni')}><Input placeholder="www.example.com" /></Form.Item>
+          <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')}>
             <Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} />
           </Form.Item>
-          <Form.Item name="alpn" label="ALPN" tooltip="comma-separated"><Input placeholder="h2,http/1.1" /></Form.Item>
+          <Form.Item name="alpn" label={t('listeners.alpn')} tooltip={t('settings.alpnHint')}><Input placeholder="h2,http/1.1" /></Form.Item>
           <Button type="primary" htmlType="submit">{t('common.save')}</Button>
         </Form>
       </Card>
@@ -134,24 +134,24 @@ const Settings: React.FC = () => {
           </Space>
         </Form>
       </Card>
-      <Card title={t('settings.certWizard') || 'SSL / ACME'} style={{ marginBottom: 16 }}>
+      <Card title={t('settings.certWizard')} style={{ marginBottom: 16 }}>
         <Form form={acmeForm} layout="vertical" initialValues={{ webroot: '/var/www/acme' }} onFinish={async (values) => {
           try {
             const r = await client.post('/system/templates/acme', values);
             setAcmeCmd(r.data.command || '');
-            message.success(t('settings.acmeGenerated') || 'Command generated');
+            message.success(t('settings.acmeGenerated'));
           } catch (e: any) { message.error(e.message || t('common.error')); }
         }}>
           <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]}><Input placeholder="panel.example.com" /></Form.Item>
-          <Form.Item name="email" label={t('settings.email') || 'Email'}><Input placeholder="admin@example.com" /></Form.Item>
-          <Form.Item name="webroot" label={t('settings.webroot') || 'Webroot'}><Input /></Form.Item>
-          <Button type="primary" htmlType="submit">{t('settings.generateAcme') || 'Generate certbot command'}</Button>
+          <Form.Item name="email" label={t('settings.email')}><Input placeholder="admin@example.com" /></Form.Item>
+          <Form.Item name="webroot" label={t('settings.webroot')}><Input /></Form.Item>
+          <Button type="primary" htmlType="submit">{t('settings.generateAcme')}</Button>
         </Form>
         {acmeCmd && (
           <div style={{ marginTop: 12 }}>
-            <Text type="secondary">{t('settings.acmeHint') || 'Run on the server (reference only):'}</Text>
+            <Text type="secondary">{t('settings.acmeHint')}</Text>
             <Input.TextArea style={{ marginTop: 8 }} rows={3} value={acmeCmd} readOnly />
-            <Button style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(acmeCmd); message.success(t('common.copied') || 'Copied'); }}>{t('common.copy') || 'Copy'}</Button>
+            <Button style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(acmeCmd); message.success(t('common.copied')); }}>{t('common.copy')}</Button>
           </div>
         )}
       </Card>
@@ -167,14 +167,14 @@ const Settings: React.FC = () => {
         </Form>
         {tplOut && <Input.TextArea style={{ marginTop: 12 }} rows={12} value={tplOut} readOnly />}
       </Card>
-      <Card title={t('settings.trafficReset') || 'Monthly traffic reset'} style={{ marginBottom: 16 }}>
+      <Card title={t('settings.trafficReset')} style={{ marginBottom: 16 }}>
         <Space wrap>
-          <span>{t('settings.trafficResetDay') || 'Reset day of month (0 = off)'}</span>
+          <span>{t('settings.trafficResetDay')}</span>
           <InputNumber min={0} max={31} value={resetDay} onChange={(v) => setResetDay(Number(v || 0))} />
           <Button type="primary" onClick={async () => {
             try {
               await client.put('/panel-settings', { traffic_reset_day: String(resetDay) });
-              message.success(t('common.saved') || 'Saved');
+              message.success(t('common.saved'));
             } catch (e: any) { message.error(e.message || t('common.error')); }
           }}>{t('common.save')}</Button>
         </Space>
