@@ -99,6 +99,11 @@ func (s *Service) Delete(id uint) error {
 	if err := s.SaveVersion(id, "before-delete"); err != nil {
 		return fmt.Errorf("save listener history: %w", err)
 	}
+
+	var bindings []models.ListenerUser
+	if err := s.db.Where("listener_id = ?", id).Find(&bindings).Error; err != nil {
+		return fmt.Errorf("failed to fetch listener bindings: %w", err)
+	}
 	if err := s.db.Where("listener_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
 		return fmt.Errorf("failed to delete listener bindings: %w", err)
 	}
@@ -108,6 +113,11 @@ func (s *Service) Delete(id uint) error {
 	if err := s.regenerateConfigLocked(); err != nil {
 		if rollbackErr := s.db.Unscoped().Save(&previous).Error; rollbackErr != nil {
 			return fmt.Errorf("%v; rollback deleted listener failed: %w", err, rollbackErr)
+		}
+		if len(bindings) > 0 {
+			if restoreErr := s.db.Unscoped().Save(&bindings).Error; restoreErr != nil {
+				return fmt.Errorf("%v; rollback listener bindings failed: %w", err, restoreErr)
+			}
 		}
 		_ = s.regenerateConfigLocked()
 		return err
