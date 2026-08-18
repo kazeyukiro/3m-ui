@@ -1,118 +1,17 @@
-name: Release
+name: Release (legacy)
 
+# Deprecated: releases are now split by frontend edition.
+# Use release-ant.yml, release-mui.yml, release-mantine.yml or release-shadcn.yml.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-release:
+  notice:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.x'
-
-      - name: Download Go dependencies
-        working-directory: backend
-        run: go mod tidy
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          npm install
-          npm run build
-
-      - name: Embed frontend assets
-        run: |
-          rm -rf backend/cmd/server/web/dist
-          mkdir -p backend/cmd/server/web
-          cp -r frontend/dist backend/cmd/server/web/dist
-
-      - name: Install CGO cross compilers
-        run: |
-          sudo apt-get update
-          sudo apt-get remove -y gcc-multilib || true
-          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
-
-      - name: Build Linux binaries
-        working-directory: backend
-        run: |
-          set -eu
-          mkdir -p ../dist
-
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            VERSION="${GITHUB_REF_NAME}"
-          else
-            VERSION="manual-${GITHUB_RUN_NUMBER}"
-          fi
-
-          GIT_COMMIT="$(git rev-parse --short HEAD)"
-          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          LDFLAGS="-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME}"
-
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o ../dist/3m-ui-linux-amd64 ./cmd/server
-          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -trimpath -ldflags "$LDFLAGS" -o ../dist/3m-ui-linux-arm64 ./cmd/server
-          CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 CC=arm-linux-gnueabihf-gcc go build -trimpath -ldflags "$LDFLAGS" -o ../dist/3m-ui-linux-armv7 ./cmd/server
-
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags sqlite_modernc -trimpath -ldflags "$LDFLAGS" -o ../dist/3m-ui-linux-amd64-static ./cmd/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags sqlite_modernc -trimpath -ldflags "$LDFLAGS" -o ../dist/3m-ui-linux-arm64-static ./cmd/server
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -tags sqlite_modernc -trimpath -ldflags "$LDFLAGS" -o ../dist/3m-ui-linux-armv7-static ./cmd/server
-
-      - name: Verify binaries
-        run: |
-          set -eu
-          ls -lh dist
-          file dist/3m-ui-linux-*
-
-          chmod 0755 dist/3m-ui-linux-amd64 dist/3m-ui-linux-amd64-static
-          dist/3m-ui-linux-amd64 --version >/dev/null
-          dist/3m-ui-linux-amd64-static --version >/dev/null
-
-          file dist/3m-ui-linux-arm64 | grep -E 'ARM aarch64|ARM64|AArch64'
-          file dist/3m-ui-linux-arm64-static | grep -E 'ARM aarch64|ARM64|AArch64'
-          file dist/3m-ui-linux-armv7 | grep -E 'ARM|EABI5'
-          file dist/3m-ui-linux-armv7-static | grep -E 'ARM|EABI5'
-
-      - name: Validate deployment scripts
-        run: |
-          set -eu
-          for script in scripts/install.sh scripts/update.sh scripts/uninstall.sh scripts/3m-ui.sh scripts/3m-ui; do
-            sh -n "$script"
-          done
-
-      - name: Add deployment scripts
-        run: |
-          cp scripts/install.sh scripts/update.sh scripts/uninstall.sh scripts/3m-ui.sh scripts/3m-ui dist/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.run_number) }}
-          name: ${{ github.ref_type == 'tag' && github.ref_name || format('Manual build {0}', github.run_number) }}
-          files: |
-            dist/3m-ui-linux-amd64
-            dist/3m-ui-linux-arm64
-            dist/3m-ui-linux-armv7
-            dist/3m-ui-linux-amd64-static
-            dist/3m-ui-linux-arm64-static
-            dist/3m-ui-linux-armv7-static
-            dist/install.sh
-            dist/update.sh
-            dist/uninstall.sh
-            dist/3m-ui.sh
-            dist/3m-ui
+      - run: |
+          echo 'This workflow is deprecated.'
+          echo 'Use one of the edition-specific release workflows instead.'
