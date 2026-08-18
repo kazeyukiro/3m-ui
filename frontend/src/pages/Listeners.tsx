@@ -15,6 +15,7 @@ import CapabilityFormFields, { capabilityFormToConfig } from '../components/Capa
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
 
 const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
+const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const parseConfig = (raw?: string) => { try { return raw ? JSON.parse(raw) : {}; } catch { return {}; } };
 const firstNonEmpty = (...values: any[]) => values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
 
@@ -52,32 +53,14 @@ const Listeners: React.FC = () => {
   const loadTemplates = async () => { setTemplateLoading(true); try { setTemplates(await listListenerTemplates()); } catch (e: any) { message.error(e.message); } finally { setTemplateLoading(false); } };
   useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
 
-  const openCreate = () => {
-    setEditing(null); form.resetFields();
-    form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', flow: 'xtls-rprx-vision' });
-    setModalOpen(true);
-  };
-  const openEdit = (record: Listener) => {
-    setEditing(record); form.resetFields();
-    form.setFieldsValue({
-      name: record.name, protocol: record.protocol, port: record.port,
-      bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp,
-      public_host: (record as any).public_host || '', public_port: (record as any).public_port || '',
-      access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome',
-      access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config),
-    });
-    setModalOpen(true);
-  };
+  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openEdit = (record: Listener) => { setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
     try {
       const values = { ...(form.getFieldsValue(true) || {}), ...(rawValues || {}) };
       const proto = String(values.protocol || '').trim();
       if (!proto) { message.error(t('listeners.selectProtocolFirst')); return; }
       if (!values.name || !String(values.port || '').trim()) { message.error(t('listeners.portHint')); return; }
-
-      // Reality fields are conditionally mounted. Do not trust AntD's required
-      // state for these fields; normalize both the visual aliases and any
-      // capability-path values and validate the actual values being serialized.
       if (REALITY_PROTOCOLS.has(proto) && firstNonEmpty(values.security_layer) === 'reality') {
         const dest = firstNonEmpty(values.reality_dest, values['reality-config']?.dest, values['reality-config.dest']);
         const privateKey = firstNonEmpty(values.reality_private_key, values['reality-config']?.['private-key'], values['reality-config.private-key']);
@@ -92,21 +75,11 @@ const Listeners: React.FC = () => {
         values.reality_dest = dest;
         values.reality_private_key = privateKey;
       }
-
       const previous = editing ? parseConfig(editing.config) : null;
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
-      let config: Record<string, any>;
-      if (useCapabilityForm && cap) config = { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) };
-      else config = formValuesToConfig(proto, values, previous);
-      const payload: Partial<Listener> = {
-        name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(),
-        bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false,
-        udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config),
-        public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '',
-        client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '',
-      };
-      if (editing) { await updateListener(normalizeId(editing), payload); message.success(t('listeners.updated')); }
-      else { await createListener(payload); message.success(t('listeners.created')); }
+      const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
+      const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '' };
+      if (editing) { await updateListener(normalizeId(editing), payload); message.success(t('listeners.updated')); } else { await createListener(payload); message.success(t('listeners.created')); }
       setModalOpen(false); setEditing(null); form.resetFields(); await load();
     } catch (e: any) { message.error(e.message); }
   };
@@ -125,9 +98,45 @@ const Listeners: React.FC = () => {
   const doRollback = async (version: number) => { if (!versionListener) return; try { await rollbackListenerVersion(normalizeId(versionListener), version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(normalizeId(versionListener))); await load(); } catch (e: any) { message.error(e.message); } };
   const deleteTemplate = async (id: number) => { try { await deleteListenerTemplate(id); message.success(t('listeners.templateDeleted')); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
 
-  // The remainder of this component (table/modal JSX) is unchanged.
-  return null;
+  const columns = [
+    { title: t('listeners.name'), dataIndex: 'name', key: 'name', ellipsis: true, width: 150 },
+    { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', width: 110, render: (p: string) => <Tag>{p}</Tag> },
+    { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 100 },
+    { title: t('listeners.status'), dataIndex: 'enabled', key: 'enabled', width: 100, render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
+    { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 300, render: (_: any, record: Listener) => <Space size={4} wrap><Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(normalizeId(record))} /></Tooltip><Tooltip title={t('listeners.clone')}><Button size="small" icon={<BranchesOutlined />} onClick={() => openClone(record)} /></Tooltip><Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<SaveOutlined />} onClick={() => openSaveTemplate(record)} /></Tooltip><Tooltip title={t('listeners.versions')}><Button size="small" icon={<HistoryOutlined />} onClick={() => openVersions(record)} /></Tooltip><Tooltip title={t('common.refresh')}><Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(normalizeId(record))} /></Tooltip><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} /><Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<DeleteOutlined />} danger /></Popconfirm></Space> },
+  ];
+  const templateColumns = [
+    { title: t('listeners.templateName'), dataIndex: 'name', key: 'name' },
+    { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', render: (p: string) => <Tag>{p}</Tag> },
+    { title: t('listeners.createdAt'), dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
+    { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
+  ];
+  return <div>
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}><Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={data} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" /></Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
+    <Modal open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 720} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
+      <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
+        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
+        <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" /></Form.Item>
+        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0"><Input /></Form.Item>
+        <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
+        <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
+        <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint')}><Input placeholder="example.com" /></Form.Item>
+        <Form.Item name="public_port" label={t('settings.publicPort')}><Input placeholder="443" /></Form.Item>
+        <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
+        <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome"><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
+        <Form.Item name="access_alpn" label={t('listeners.alpn')}><Input placeholder="h2,http/1.1" /></Form.Item>
+        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} />}
+      </Form>
+    </Modal>
+    <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
+    <Modal open={templateModal} title={t('listeners.saveTemplate')} onCancel={() => setTemplateModal(false)} onOk={() => templateForm.submit()}><Form form={templateForm} layout="vertical" onFinish={saveTemplate}><Form.Item name="name" label={t('listeners.templateName')} rules={[{ required: true }]}><Input /></Form.Item><Descriptions column={1} size="small"><Descriptions.Item label={t('listeners.protocol')}>{templateSource?.protocol}</Descriptions.Item></Descriptions></Form></Modal>
+    <Modal open={instantiateModal} title={t('listeners.instantiate')} onCancel={() => setInstantiateModal(false)} onOk={() => instantiateForm.submit()}><Form form={instantiateForm} layout="vertical" onFinish={doInstantiate}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
+    <Modal open={versionsModal} title={`${t('listeners.versions')} — ${versionListener?.name || ''}`} onCancel={() => setVersionsModal(false)} footer={null} width={800}><Table dataSource={versions} rowKey="id" pagination={false} columns={[{ title: t('listeners.version'), dataIndex: 'version', width: 100 }, { title: t('listeners.reason'), dataIndex: 'reason', render: (v: string) => v || '-' }, { title: t('listeners.createdAt'), dataIndex: 'created_at', render: (v: string) => new Date(v).toLocaleString() }, { title: t('common.actions'), render: (_: any, v: ListenerVersion) => <Space><Button size="small" icon={<DiffOutlined />} onClick={() => showDiff(v.version)}>{t('listeners.diff')}</Button><Popconfirm title={t('listeners.rollbackConfirm')} onConfirm={() => doRollback(v.version)}><Button size="small" type="primary">{t('listeners.rollback')}</Button></Popconfirm></Space> }]} /></Modal>
+    <Modal open={diffModal} title={t('listeners.diff')} onCancel={() => setDiffModal(false)} footer={null} width={900}><pre style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{diffText || t('common.empty')}</pre></Modal>
+    <Modal open={uriModal} title={t('listeners.urisTitle')} onCancel={() => setUriModal(false)} footer={null}><Space direction="vertical" style={{ width: '100%' }}>{uris.map((uri, i) => <Card key={i} size="small"><Space style={{ width: '100%' }}><Input value={uri} readOnly /><Button icon={<CopyOutlined />} onClick={() => { navigator.clipboard.writeText(uri); message.success(t('common.copy')); }} /></Space></Card>)}</Space></Modal>
+  </div>;
 };
 
-const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 export default Listeners;
