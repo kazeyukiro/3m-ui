@@ -161,7 +161,25 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"name": listener.Name, "protocol": listener.Protocol, "uris": uris})
+	if uris == nil {
+		uris = []string{}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"name":     listener.Name,
+		"protocol": listener.Protocol,
+		"uris":     uris,
+		"hint":     emptyURIHint(len(uris), len(credentials)),
+	})
+}
+
+func emptyURIHint(uriCount, credCount int) string {
+	if uriCount > 0 {
+		return ""
+	}
+	if credCount == 0 {
+		return "no active users bound to this listener; bind users in User Management"
+	}
+	return "could not build share links for this protocol/config"
 }
 
 func (h *Handler) UpdateNode(c *gin.Context) {
