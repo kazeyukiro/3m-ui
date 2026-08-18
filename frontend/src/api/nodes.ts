@@ -54,5 +54,23 @@ export const reloadListener = (id: number) => {
 export const exportNodeURI = (id: number) => {
   const nid = normalizeId(id);
   if (!nid) return Promise.reject(new Error('invalid node id'));
-  return client.get<{ name: string; protocol: string; uris: string[] }>(`/nodes/${nid}/uri`).then((r) => r.data);
+  return client.get<{ name: string; protocol: string; uris: string[]; hint?: string }>(`/nodes/${nid}/uri`).then((r) => r.data);
+};
+
+export type ClientAccess = {
+  id: number;
+  name: string;
+  token: string;
+  listener_id: number;
+  mihomo_link?: string;
+  clash_link?: string;
+  singbox_link?: string;
+  shadowrocket_link?: string;
+};
+
+/** Create or reuse listener-level subscription access token + client links. */
+export const createClientAccess = (id: number) => {
+  const nid = normalizeId(id);
+  if (!nid) return Promise.reject(new Error('invalid node id'));
+  return client.post<ClientAccess>(`/nodes/${nid}/client-access`).then((r) => r.data);
 };
