@@ -10,6 +10,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
 	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
 	"github.com/kazeyukiro/3m-ui/backend/internal/traffic"
@@ -56,6 +57,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 
 		registerDashboardRoute(apiV1, d)
 		registerPanelSettingsRoutes(apiV1, d)
+		protocol.RegisterRoutes(apiV1)
 
 		system.NewHandler(d.systemService()).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
 		registerMihomoRoutes(apiV1, d)
