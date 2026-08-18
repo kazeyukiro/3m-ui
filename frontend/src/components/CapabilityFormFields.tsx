@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Form, Input, InputNumber, Select, Switch, Divider, Radio, Space, Typography } from 'antd';
 import type { ProtocolCapability, FieldCapability, ComponentCapability } from '../api/capabilities';
+import { useI18n } from '../i18n';
 
 const { Text } = Typography;
 
@@ -54,6 +55,7 @@ type Props = {
  * Renders transport/security layers + protocol fields from the manifest.
  */
 const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvanced = false }) => {
+  const { t } = useI18n();
   const transportComps = useMemo(
     () => (capability?.components || []).filter((c) => c.group === 'transport'),
     [capability],
@@ -66,7 +68,7 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
   const hasSecurity = securityComps.length > 0;
 
   if (!protocol || !capability) {
-    return <Text type="secondary">Select a protocol to configure fields.</Text>;
+    return <Text type="secondary">{t('listeners.selectProtocolFirst')}</Text>;
   }
 
   const defaultTransport = capability.layers?.find((l) => l.group === 'transport')?.default_component || 'raw';
@@ -76,8 +78,8 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       {hasTransport && (
         <>
-          <Divider titlePlacement="start" plain>Transport</Divider>
-          <Form.Item name="transport_layer" label="Transport" initialValue={defaultTransport}>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionTransport')}</Divider>
+          <Form.Item name="transport_layer" label={t('listeners.sectionTransport')} initialValue={defaultTransport}>
             <Radio.Group optionType="button" buttonStyle="solid">
               {transportComps.map((c) => (
                 <Radio.Button key={c.kind} value={c.kind}>{c.label}</Radio.Button>
@@ -96,8 +98,8 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
 
       {hasSecurity && (
         <>
-          <Divider titlePlacement="start" plain>Security</Divider>
-          <Form.Item name="security_layer" label="Security" initialValue={defaultSecurity}>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionTLS')}</Divider>
+          <Form.Item name="security_layer" label={t('listeners.tls')} initialValue={defaultSecurity}>
             <Radio.Group optionType="button" buttonStyle="solid">
               {securityComps.map((c) => (
                 <Radio.Button key={c.kind} value={c.kind}>{c.label}</Radio.Button>
@@ -116,7 +118,7 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
 
       {capability.fields && capability.fields.length > 0 && (
         <>
-          <Divider titlePlacement="start" plain>Protocol</Divider>
+          <Divider titlePlacement="start" plain>{t('listeners.protocol')}</Divider>
           {renderFields(capability.fields, showAdvanced)}
         </>
       )}
@@ -177,9 +179,11 @@ export function capabilityFormToConfig(
   for (const [k, v] of Object.entries(values)) {
     if (skip.has(k)) continue;
     if (v === undefined || v === null || v === '') continue;
+    // capability paths already use mihomo keys where possible
     cfg[k] = v;
   }
 
+  // VLESS flow
   if (protocol === 'vless' && values.flow) set('flow', values.flow);
 
   return cfg;
