@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -66,7 +67,7 @@ func GetVisualConfig(db *gorm.DB) (VisualConfig, error) {
 	var fragment models.Config
 	err := db.Where("name = ?", visualConfigName).First(&fragment).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return cfg, nil
 		}
 		return cfg, err
@@ -108,7 +109,7 @@ func SaveVisualConfig(db *gorm.DB, cfg VisualConfig) error {
 		existing.Type, existing.Content, existing.Enabled = fragment.Type, fragment.Content, true
 		return db.Save(&existing).Error
 	}
-	if result.Error != gorm.ErrRecordNotFound {
+	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return result.Error
 	}
 	return db.Create(&fragment).Error
