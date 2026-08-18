@@ -29,15 +29,30 @@
 - 配置应用失败自动回滚
 - SQLite + GORM 数据持久化
 
+## 多套前端
+
+3M-UI 的后端、API 和配置模型与 UI 解耦。除了默认的 Ant Design 版，还提供独立的 Material UI、Mantine 和 shadcn-style 前端版本。
+
+| 版本 | 技术栈 | GitHub Actions |
+|---|---|---|
+| Ant Design | React + Ant Design | `release-ant.yml` |
+| Material | React + MUI | `release-mui.yml` |
+| Mantine | React + Mantine | `release-mantine.yml` |
+| shadcn-style | React + Tailwind CSS | `release-shadcn.yml` |
+
+每个版本独立打包 Linux `amd64`、`arm64` 和 `armv7`。选择的前端只在 CI 构建目录中嵌入 Go 二进制，不会把生成产物自动提交回 `main`。
+
+详细说明见 [`frontend-variants/README.md`](frontend-variants/README.md)。
+
 ## 架构
 
 ```text
-React Web UI
-      │ REST / HTTP
-      ▼
+React Web UI / UI Editions
+          │ REST / HTTP
+          ▼
 Gin API + JWT Middleware
-      │
-      ▼
+          │
+          ▼
 Unified Service Layer
  ┌────┼───────────┐
  │    │           │
@@ -93,7 +108,7 @@ go build -o ../3m-ui ./cmd/server
 ./3m-ui --config /etc/3m-ui/config.yaml
 ```
 
-### 构建前端
+### 构建默认 Ant Design 前端
 
 ```bash
 cd frontend
@@ -101,11 +116,20 @@ npm install
 npm run build
 ```
 
-开发模式：
+### 构建其他前端
 
 ```bash
-npm run dev
+cd frontend-variants/mui
+npm install && npm run build
+
+cd ../mantine
+npm install && npm run build
+
+cd ../shadcn
+npm install && npm run build
 ```
+
+每个版本都共享 `frontend-variants/shared/api.ts` 的认证、Listener、用户、Cluster、配置和 Mihomo API 契约。
 
 ### 安装脚本
 
@@ -196,6 +220,8 @@ cd frontend
 npm run build
 ```
 
+每个替代前端都有独立的 Release Action，不再由一个 Workflow 混合打包所有 UI。
+
 ## 致谢
 
 特别感谢以下开源项目和社区：
@@ -206,6 +232,9 @@ npm run build
 - [GORM](https://github.com/go-gorm/gorm) — 数据库 ORM。
 - [React](https://github.com/facebook/react) — 前端基础框架。
 - [Ant Design](https://github.com/ant-design/ant-design) — UI 组件系统。
+- [MUI](https://github.com/mui/material-ui) — Material UI 组件系统。
+- [Mantine](https://github.com/mantinedev/mantine) — React UI 组件库。
+- [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) — shadcn-style 前端的样式基础。
 - [Zustand](https://github.com/pmndrs/zustand) — 前端状态管理。
 - [golang-jwt/jwt](https://github.com/golang-jwt/jwt) — JWT 实现。
 - Go、Node.js 以及整个开源社区。
@@ -241,15 +270,30 @@ It provides one interface for managing Mihomo listeners, proxy users, subscripti
 - Automatic configuration rollback after failed activation
 - SQLite + GORM persistence
 
+## Multiple Frontend Editions
+
+The 3M-UI backend, API contract and configuration model are decoupled from the UI. In addition to the default Ant Design edition, the repository provides independent Material UI, Mantine and shadcn-style editions.
+
+| Edition | Stack | GitHub Actions |
+|---|---|---|
+| Ant Design | React + Ant Design | `release-ant.yml` |
+| Material | React + MUI | `release-mui.yml` |
+| Mantine | React + Mantine | `release-mantine.yml` |
+| shadcn-style | React + Tailwind CSS | `release-shadcn.yml` |
+
+Each edition produces separate Linux `amd64`, `arm64` and `armv7` packages. The selected frontend is embedded only in the CI workspace before the Go binary is built; generated assets are not automatically committed back to `main`.
+
+See [`frontend-variants/README.md`](frontend-variants/README.md) for details.
+
 ## Architecture
 
 ```text
-React Web UI
-      │ REST / HTTP
-      ▼
+React Web UI / UI Editions
+          │ REST / HTTP
+          ▼
 Gin API + JWT Middleware
-      │
-      ▼
+          │
+          ▼
 Unified Service Layer
  ┌────┼───────────┐
  │    │           │
@@ -305,7 +349,7 @@ Start:
 ./3m-ui --config /etc/3m-ui/config.yaml
 ```
 
-### Build frontend
+### Build the default Ant Design frontend
 
 ```bash
 cd frontend
@@ -313,11 +357,20 @@ npm install
 npm run build
 ```
 
-Development mode:
+### Build alternative editions
 
 ```bash
-npm run dev
+cd frontend-variants/mui
+npm install && npm run build
+
+cd ../mantine
+npm install && npm run build
+
+cd ../shadcn
+npm install && npm run build
 ```
+
+All editions share `frontend-variants/shared/api.ts` for authentication, listeners, users, cluster, configuration and Mihomo process APIs.
 
 ### Installer
 
@@ -408,6 +461,8 @@ cd frontend
 npm run build
 ```
 
+Each alternative frontend has its own release Action; releases are no longer mixed into one UI-agnostic packaging workflow.
+
 ## Acknowledgements
 
 Special thanks to the following open-source projects and communities:
@@ -418,6 +473,9 @@ Special thanks to the following open-source projects and communities:
 - [GORM](https://github.com/go-gorm/gorm) — database ORM.
 - [React](https://github.com/facebook/react) — frontend foundation.
 - [Ant Design](https://github.com/ant-design/ant-design) — UI component system.
+- [MUI](https://github.com/mui/material-ui) — Material UI component system.
+- [Mantine](https://github.com/mantinedev/mantine) — React UI component library.
+- [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss) — styling foundation for the shadcn-style edition.
 - [Zustand](https://github.com/pmndrs/zustand) — frontend state management.
 - [golang-jwt/jwt](https://github.com/golang-jwt/jwt) — JWT implementation.
 - The Go, Node.js and wider open-source communities.
