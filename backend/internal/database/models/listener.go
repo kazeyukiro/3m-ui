@@ -16,4 +16,11 @@ type Listener struct {
 	Config      string `gorm:"type:text" json:"config"`
 	Status      string `gorm:"type:varchar(50);default:'inactive'" json:"status"`
 	RoutingMark int    `gorm:"default:0" json:"routing_mark,omitempty"`
+
+	// Per-node Access Profile (m-ui style) — used for share links / client export.
+	PublicHost        string `gorm:"type:varchar(255)" json:"public_host,omitempty"`
+	PublicPort        string `gorm:"type:varchar(32)" json:"public_port,omitempty"`
+	AccessSNI         string `gorm:"type:varchar(255);column:access_sni" json:"access_sni,omitempty"`
+	ClientFingerprint string `gorm:"type:varchar(64)" json:"client_fingerprint,omitempty"`
+	AccessALPN        string `gorm:"type:varchar(255);column:access_alpn" json:"access_alpn,omitempty"`
 }
