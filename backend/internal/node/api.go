@@ -141,9 +141,12 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 	if config.GlobalConfig != nil {
 		publicURL = strings.TrimSpace(config.GlobalConfig.Server.PublicURL)
 	}
-	// m-ui style Access Profile (panel settings) overrides when set
+	// Priority: per-node Access Profile > global panel Access Profile > server.public_url
 	if ap := protocol.LoadAccessProfile(h.db); ap.PublicHost != "" {
 		publicURL = ap.PublicHost
+	}
+	if host := strings.TrimSpace(listener.PublicHost); host != "" {
+		publicURL = host
 	}
 	host := c.GetHeader("X-Forwarded-Host")
 	if host != "" && !h.isTrustedHost(host) {
