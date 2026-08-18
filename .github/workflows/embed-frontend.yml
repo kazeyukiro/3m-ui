@@ -1,56 +1,21 @@
-name: Embed frontend
-
+name: Validate · Ant Design frontend
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
       - 'frontend/**'
-      - 'backend/cmd/server/web/dist/**'
-      - '.github/workflows/embed-frontend.yml'
-
+  workflow_dispatch:
 permissions:
-  contents: write
-
-concurrency:
-  group: embed-frontend-main
-  cancel-in-progress: true
-
+  contents: read
 jobs:
-  embed:
+  build:
     runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package.json
-
-      - name: Build frontend
+      - name: Build Ant Design frontend
         working-directory: frontend
-        run: |
-          npm install
-          npm run build
-
-      - name: Update embedded frontend
-        run: |
-          set -eu
-          rm -rf backend/cmd/server/web/dist
-          cp -r frontend/dist backend/cmd/server/web/dist
-
-      - name: Commit embedded frontend
-        run: |
-          set -eu
-          if git diff --quiet -- backend/cmd/server/web/dist; then
-            echo 'Embedded frontend is already up to date.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/cmd/server/web/dist
-          git commit -m 'chore(frontend): update embedded web assets'
-          git push
+        run: npm install && npm run build
