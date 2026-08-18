@@ -26,37 +26,61 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		return "", fmt.Errorf("config engine database is not initialized")
 	}
 	baseBytes, err := yaml.Marshal(GetDefaultTemplate())
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	var merged map[string]interface{}
-	if err := yaml.Unmarshal(baseBytes, &merged); err != nil { return "", err }
+	if err := yaml.Unmarshal(baseBytes, &merged); err != nil {
+		return "", err
+	}
 	var customFragments []models.Config
-	if err := ce.db.Where("enabled = ?", true).Find(&customFragments).Error; err != nil { return "", fmt.Errorf("load custom config fragments: %w", err) }
+	if err := ce.db.Where("enabled = ?", true).Find(&customFragments).Error; err != nil {
+		return "", fmt.Errorf("load custom config fragments: %w", err)
+	}
 	for _, fragment := range customFragments {
 		var fragMap map[string]interface{}
-		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil { return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err) }
-		for k, v := range fragMap { merged[k] = v }
+		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil {
+			return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err)
+		}
+		for k, v := range fragMap {
+			merged[k] = v
+		}
 	}
 	var listeners []models.Listener
-	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil { return "", fmt.Errorf("load enabled listeners: %w", err) }
-	if err := validateListenerEndpoints(listeners); err != nil { return "", err }
+	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
+		return "", fmt.Errorf("load enabled listeners: %w", err)
+	}
+	if err := validateListenerEndpoints(listeners); err != nil {
+		return "", err
+	}
 	credentials := make(map[uint][]Credential)
 	if CredentialProvider != nil {
 		credentials, err = CredentialProvider()
-		if err != nil { return "", fmt.Errorf("load listener credentials: %w", err) }
+		if err != nil {
+			return "", fmt.Errorf("load listener credentials: %w", err)
+		}
 	}
 	generated, err := generateListeners(listeners, credentials)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	merged["listeners"] = generated
 	finalBytes, err := yaml.Marshal(merged)
-	if err != nil { return "", fmt.Errorf("serialize final configuration: %w", err) }
+	if err != nil {
+		return "", fmt.Errorf("serialize final configuration: %w", err)
+	}
 	return string(finalBytes), nil
 }
 
 func validateListenerEndpoints(listeners []models.Listener) error {
 	for i := range listeners {
-		if err := validateListenerEndpoint(&listeners[i]); err != nil { return err }
+		if err := validateListenerEndpoint(&listeners[i]); err != nil {
+			return err
+		}
 		for j := i + 1; j < len(listeners); j++ {
-			if !portsOverlap(listeners[i].Port, listeners[j].Port) { continue }
+			if !portsOverlap(listeners[i].Port, listeners[j].Port) {
+				continue
+			}
 			a := firstListenerAddress(listeners[i])
 			b := firstListenerAddress(listeners[j])
 			if listenerAddressesConflict(a, b) {
@@ -69,21 +93,31 @@ func validateListenerEndpoints(listeners []models.Listener) error {
 
 func validateListenerEndpoint(l *models.Listener) error {
 	address := firstListenerAddress(*l)
-	if net.ParseIP(address) == nil { return fmt.Errorf("listener %q has invalid bind address %q", l.Name, address) }
-	if !isValidPortString(l.Port) { return fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port) }
+	if net.ParseIP(address) == nil {
+		return fmt.Errorf("listener %q has invalid bind address %q", l.Name, address)
+	}
+	if !isValidPortString(l.Port) {
+		return fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port)
+	}
 	return nil
 }
 
 func firstListenerAddress(l models.Listener) string {
-	if v := strings.TrimSpace(l.BindAddress); v != "" { return v }
-	if v := strings.TrimSpace(l.Listen); v != "" { return v }
+	if v := strings.TrimSpace(l.BindAddress); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(l.Listen); v != "" {
+		return v
+	}
 	return "0.0.0.0"
 }
 
 func portsOverlap(a, b string) bool {
 	for _, ar := range parsePortRanges(a) {
 		for _, br := range parsePortRanges(b) {
-			if ar[0] <= br[1] && br[0] <= ar[1] { return true }
+			if ar[0] <= br[1] && br[0] <= ar[1] {
+				return true
+			}
 		}
 	}
 	return false
@@ -93,24 +127,39 @@ func parsePortRanges(raw string) [][2]int {
 	var out [][2]int
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
-		if part == "" { continue }
-		if strings.Contains(part, "-") {
-			p := strings.SplitN(part, "-", 2)
-			a, ea := strconv.Atoi(strings.TrimSpace(p[0])); b, eb := strconv.Atoi(strings.TrimSpace(p[1]))
-			if ea == nil && eb == nil { out = append(out, [2]int{a, b}) }
+		if part == "" {
 			continue
 		}
-		if p, err := strconv.Atoi(part); err == nil { out = append(out, [2]int{p, p}) }
+		if strings.Contains(part, "-") {
+			p := strings.SplitN(part, "-", 2)
+			a, ea := strconv.Atoi(strings.TrimSpace(p[0]))
+			b, eb := strconv.Atoi(strings.TrimSpace(p[1]))
+			if ea == nil && eb == nil {
+				out = append(out, [2]int{a, b})
+			}
+			continue
+		}
+		if p, err := strconv.Atoi(part); err == nil {
+			out = append(out, [2]int{p, p})
+		}
 	}
 	return out
 }
 
 func listenerAddressesConflict(a, b string) bool {
 	ia, ib := net.ParseIP(a), net.ParseIP(b)
-	if ia == nil || ib == nil { return false }
-	if ia.Equal(ib) { return true }
-	if ia.To4() != nil && ib.To4() != nil { return ia.IsUnspecified() || ib.IsUnspecified() }
-	if ia.To4() == nil && ib.To4() == nil { return ia.IsUnspecified() || ib.IsUnspecified() }
+	if ia == nil || ib == nil {
+		return false
+	}
+	if ia.Equal(ib) {
+		return true
+	}
+	if ia.To4() != nil && ib.To4() != nil {
+		return ia.IsUnspecified() || ib.IsUnspecified()
+	}
+	if ia.To4() == nil && ib.To4() == nil {
+		return ia.IsUnspecified() || ib.IsUnspecified()
+	}
 	return false
 }
 
@@ -144,7 +193,7 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
 
-		listenerCreds := creds[l.ID]
+		listenerCreds, hasCredState := creds[l.ID]
 		users := make([]protocol.UserCred, 0, len(listenerCreds))
 		for _, c := range listenerCreds {
 			users = append(users, protocol.UserCred{
@@ -155,17 +204,18 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		}
 
 		in := protocol.CompileInput{
-			Name:        l.Name,
-			Protocol:    protocolName,
-			Listen:      listen,
-			Port:        portVal,
-			UDP:         l.UDP,
-			TLS:         l.TLS,
-			Proxy:       l.Proxy,
-			Rule:        l.Rule,
-			RoutingMark: l.RoutingMark,
-			Config:      configMap,
-			Users:       users,
+			Name:               l.Name,
+			Protocol:           protocolName,
+			Listen:             listen,
+			Port:               portVal,
+			UDP:                l.UDP,
+			TLS:                l.TLS,
+			Proxy:              l.Proxy,
+			Rule:               l.Rule,
+			RoutingMark:        l.RoutingMark,
+			Config:             configMap,
+			Users:              users,
+			HasCredentialState: hasCredState,
 		}
 		m, err := reg.Compile(in)
 		if err != nil {
@@ -176,43 +226,115 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 	return result, nil
 }
 
-
 func isValidPortString(s string) bool {
-	s = strings.TrimSpace(s); if s == "" { return false }
-	if strings.Contains(s, ",") { for _, p := range strings.Split(s, ",") { if !isValidPortString(strings.TrimSpace(p)) { return false } }; return true }
-	if strings.Contains(s, "-") { parts := strings.SplitN(s, "-", 2); if len(parts) != 2 { return false }; start, err1 := strconv.Atoi(strings.TrimSpace(parts[0])); end, err2 := strconv.Atoi(strings.TrimSpace(parts[1])); return err1 == nil && err2 == nil && start >= 1 && end <= 65535 && start <= end }
-	port, err := strconv.Atoi(s); return err == nil && port >= 1 && port <= 65535
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	if strings.Contains(s, ",") {
+		for _, p := range strings.Split(s, ",") {
+			if !isValidPortString(strings.TrimSpace(p)) {
+				return false
+			}
+		}
+		return true
+	}
+	if strings.Contains(s, "-") {
+		parts := strings.SplitN(s, "-", 2)
+		if len(parts) != 2 {
+			return false
+		}
+		start, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+		end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+		return err1 == nil && err2 == nil && start >= 1 && end <= 65535 && start <= end
+	}
+	port, err := strconv.Atoi(s)
+	return err == nil && port >= 1 && port <= 65535
 }
 
 func normalizeListenerUserList(value interface{}) ([]map[string]interface{}, error) {
 	switch users := value.(type) {
 	case []interface{}:
-		result := make([]map[string]interface{}, 0, len(users)); for i, item := range users { user, ok := item.(map[string]interface{}); if !ok { return nil, fmt.Errorf("users[%d] must be an object", i) }; result = append(result, user) }; return result, nil
+		result := make([]map[string]interface{}, 0, len(users))
+		for i, item := range users {
+			user, ok := item.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("users[%d] must be an object", i)
+			}
+			result = append(result, user)
+		}
+		return result, nil
 	case map[string]interface{}:
-		result := make([]map[string]interface{}, 0, len(users)); for username, password := range users { result = append(result, map[string]interface{}{"username": username, "password": fmt.Sprint(password)}) }; return result, nil
+		result := make([]map[string]interface{}, 0, len(users))
+		for username, password := range users {
+			result = append(result, map[string]interface{}{"username": username, "password": fmt.Sprint(password)})
+		}
+		return result, nil
 	case map[interface{}]interface{}:
-		result := make([]map[string]interface{}, 0, len(users)); for rawUsername, rawPassword := range users { result = append(result, map[string]interface{}{"username": fmt.Sprint(rawUsername), "password": fmt.Sprint(rawPassword)}) }; return result, nil
-	default: return nil, fmt.Errorf("users must be a list of username/password objects")
+		result := make([]map[string]interface{}, 0, len(users))
+		for rawUsername, rawPassword := range users {
+			result = append(result, map[string]interface{}{"username": fmt.Sprint(rawUsername), "password": fmt.Sprint(rawPassword)})
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("users must be a list of username/password objects")
 	}
 }
 
 func decodeListenerConfig(raw string) (map[string]interface{}, error) {
-	if strings.TrimSpace(raw) == "" { return map[string]interface{}{}, nil }
+	if strings.TrimSpace(raw) == "" {
+		return map[string]interface{}{}, nil
+	}
 	var configMap map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &configMap); err != nil { return nil, fmt.Errorf("invalid listener configuration (must be valid JSON): %w", err) }
-	if configMap == nil { configMap = map[string]interface{}{} }
+	if err := json.Unmarshal([]byte(raw), &configMap); err != nil {
+		return nil, fmt.Errorf("invalid listener configuration (must be valid JSON): %w", err)
+	}
+	if configMap == nil {
+		configMap = map[string]interface{}{}
+	}
 	return configMap, nil
 }
 
 func listenerFieldIsManaged(key string) bool {
 	switch key {
-	case "users", "username", "password", "uuid", "flow", "alterId", "tls", "servername", "sni", "skip-cert-verify", "name-cert-verify", "fingerprint", "client-fingerprint", "reality-opts", "shadow-tls-opts", "restls-opts", "jls-opts", "ws-opts", "grpc-opts", "h2-opts", "http-opts", "mkcp-opts", "certificate", "private-key", "private_key": return true
-	default: return false
+	case "users", "username", "password", "uuid", "flow", "alterId", "tls", "servername", "sni", "skip-cert-verify", "name-cert-verify", "fingerprint", "client-fingerprint", "reality-opts", "shadow-tls-opts", "restls-opts", "jls-opts", "ws-opts", "grpc-opts", "h2-opts", "http-opts", "mkcp-opts", "certificate", "private-key", "private_key":
+		return true
+	default:
+		return false
 	}
 }
 
-func copyServerTLSFields(dst, src map[string]interface{}) { if value, ok := src["certificate"]; ok { dst["certificate"] = value }; if value, ok := src["private-key"]; ok { dst["private-key"] = value } else if value, ok := src["private_key"]; ok { dst["private-key"] = value } }
-func copyOption(dst, src map[string]interface{}, key string) { if value, ok := src[key]; ok { dst[key] = value } }
-func listenerHasUDPOption(protocol string) bool { switch protocol { case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel": return true; default: return false } }
-func listenerSupportsTLS(protocol string) bool { switch protocol { case "vmess", "vless", "trojan", "anytls", "mieru", "trusttunnel": return true; default: return false } }
-func ListenerSupportsTLS(protocol string) bool { return listenerSupportsTLS(strings.ToLower(strings.TrimSpace(protocol))) }
+func copyServerTLSFields(dst, src map[string]interface{}) {
+	if value, ok := src["certificate"]; ok {
+		dst["certificate"] = value
+	}
+	if value, ok := src["private-key"]; ok {
+		dst["private-key"] = value
+	} else if value, ok := src["private_key"]; ok {
+		dst["private-key"] = value
+	}
+}
+func copyOption(dst, src map[string]interface{}, key string) {
+	if value, ok := src[key]; ok {
+		dst[key] = value
+	}
+}
+func listenerHasUDPOption(protocol string) bool {
+	switch protocol {
+	case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel":
+		return true
+	default:
+		return false
+	}
+}
+func listenerSupportsTLS(protocol string) bool {
+	switch protocol {
+	case "vmess", "vless", "trojan", "anytls", "mieru", "trusttunnel":
+		return true
+	default:
+		return false
+	}
+}
+func ListenerSupportsTLS(protocol string) bool {
+	return listenerSupportsTLS(strings.ToLower(strings.TrimSpace(protocol)))
+}
