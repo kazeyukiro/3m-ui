@@ -73,11 +73,11 @@ func Run(frontendFS fs.FS) error {
 		return fmt.Errorf("initialize Mihomo service: service is nil")
 	}
 	if _, statErr := os.Stat(cfg.Mihomo.Binary); statErr == nil {
-		if err := container.Mihomo.SaveConfig(generatedConfig); err != nil {
-			return fmt.Errorf("validate Mihomo configuration: %w", err)
-		}
-		if err := container.Mihomo.StartMihomo(); err != nil {
-			return fmt.Errorf("start Mihomo core: %w", err)
+		// ApplyConfig validates and activates the candidate atomically from the
+		// panel's perspective, restoring the previous working configuration if
+		// Mihomo fails to start or restart.
+		if err := container.Mihomo.ApplyConfig(generatedConfig); err != nil {
+			return fmt.Errorf("apply Mihomo configuration: %w", err)
 		}
 		log.Printf("Mihomo core started successfully")
 	} else {
