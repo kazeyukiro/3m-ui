@@ -2,6 +2,7 @@ export default {
   app: { name: '3M-UI', title: 'Mihomo Core Management Console' },
   nav: { dashboard: 'Dashboard', listeners: 'Nodes', users: 'Users', traffic: 'Traffic', cluster: 'Cluster', routing: 'Routing', core: 'Core', logs: 'Logs', config: 'Config', settings: 'Settings', logout: 'Logout' },
   common: {
+    advanced: 'Advanced',
     prev: 'Previous',
     next: 'Next',
     saved: 'Saved',
@@ -20,7 +21,9 @@ export default {
   traffic: { title: 'Traffic', upload: 'Upload', download: 'Download', uploadRate: 'Upload rate', downloadRate: 'Download rate', connections: 'Connections', onlineUsers: 'Online users', byUser: 'Per-user traffic', listener: 'Listener', network: 'Network', rule: 'Rule' },
   cluster: { title: 'Cluster nodes', subtitle: 'Register remote 3m-ui panels and health-check them (full remote control comes later)', create: 'Add node', edit: 'Edit node', name: 'Name', baseUrl: 'Panel URL', apiToken: 'API Token', apiTokenHint: 'Optional; used to authenticate against the remote panel', remark: 'Remark', health: 'Health check', healthDone: 'Checked', created: 'Created', updated: 'Updated', deleted: 'Deleted' , nodesLoaded: 'Nodes loaded', remoteCreate: 'Remote create', remoteCreated: 'Remote listener created', remoteDeleted: 'Remote listener deleted', remoteNodes: 'Remote nodes'},
   routing: { title: 'Routing & groups', subtitle: 'Manage Mihomo proxy-groups and rules', groups: 'Proxy groups', rules: 'Rules', addGroup: 'Add group', proxies: 'Proxies', proxiesHint: 'Comma-separated proxy / group names', rulesHint: 'One Mihomo rule per line', rulesSaved: 'Rules saved', groupSaved: 'Group saved', groupDeleted: 'Group deleted' },
-  settings: { title: 'Settings', subtitle: 'Preferences & Account', language: 'Language', theme: 'Theme', light: 'Light', dark: 'Dark', system: 'System', passwordTitle: 'Account Security', passwordDescription: 'Change your password regularly', changePassword: 'Change Password', about: 'About 3M-UI', version: 'Version', backup: 'Backup & restore', backupHint: 'Download a zip with SQLite and Mihomo config. Restart the panel after restoring the database.', downloadBackup: 'Download backup', restoreDb: 'Restore database', backupDone: 'Backup downloaded', restoreDone: 'Database restored — restart the panel', apiDocs: 'API documentation', apiDocsHint: 'OpenAPI 3 specification for automation.', openOpenAPI: 'Open openapi.yaml',     accessProfile: 'Access Profile',
+  settings: { title: 'Settings', subtitle: 'Preferences & Account', language: 'Language', theme: 'Theme', light: 'Light', dark: 'Dark', system: 'System', passwordTitle: 'Account Security', passwordDescription: 'Change your password regularly', changePassword: 'Change Password', about: 'About 3M-UI', version: 'Version', backup: 'Backup & restore', backupHint: 'Download a zip with SQLite and Mihomo config. Restart the panel after restoring the database.', downloadBackup: 'Download backup', restoreDb: 'Restore database', backupDone: 'Backup downloaded', restoreDone: 'Database restored — restart the panel', apiDocs: 'API documentation', apiDocsHint: 'OpenAPI 3 specification for automation.', openOpenAPI: 'Open openapi.yaml',
+    alpnHint: 'Comma-separated, e.g. h2,http/1.1',
+    accessProfile: 'Access Profile',
     accessProfileHint: 'Public host / SNI / fingerprint for share links and client YAML (m-ui style)',
     publicHost: 'Public Host',
     publicPort: 'Public Port',
