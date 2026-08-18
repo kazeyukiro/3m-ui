@@ -3,8 +3,14 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	DefaultJWTSecret     = "3m-ui-default-jwt-secret-key-change-it-in-production"
+	DefaultCredentialKey = "3m-ui-default-credential-key-change-it-in-production"
 )
 
 type Config struct {
@@ -36,23 +42,9 @@ type MihomoConfig struct {
 
 var GlobalConfig *Config
 
-// IsMihomoListenerProtocol reports whether protocol is part of the listener
-// protocol surface supported by 3m-ui's listener editor/export pipeline.
 func IsMihomoListenerProtocol(protocol string) bool {
 	switch protocol {
-	case "shadowsocks",
-		"snell",
-		"vmess",
-		"vless",
-		"trojan",
-		"hysteria2",
-		"hysteria2-realm",
-		"tuic",
-		"shadowquic",
-		"anytls",
-		"mieru",
-		"sudoku",
-		"trusttunnel":
+	case "shadowsocks", "snell", "vmess", "vless", "trojan", "hysteria2", "hysteria2-realm", "tuic", "shadowquic", "anytls", "mieru", "sudoku", "trusttunnel":
 		return true
 	default:
 		return false
@@ -71,9 +63,37 @@ func LoadConfig(path string) (*Config, error) {
 	if err := decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode config YAML: %w", err)
 	}
+	if err := Validate(&cfg); err != nil {
+		return nil, err
+	}
 
 	GlobalConfig = &cfg
 	return &cfg, nil
+}
+
+// Validate rejects insecure placeholder secrets and malformed server settings
+// before they can be used to authenticate or encrypt stored credentials.
+func Validate(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("configuration is nil")
+	}
+	if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
+		return fmt.Errorf("server.port must be between 1 and 65535")
+	}
+	if strings.TrimSpace(cfg.Database.Path) == "" {
+		return fmt.Errorf("database.path is required")
+	}
+	if secret := strings.TrimSpace(cfg.JWT.Secret); secret == "" || secret == DefaultJWTSecret {
+		return fmt.Errorf("jwt.secret must be set to a unique secret; the default placeholder is not allowed")
+	} else if len([]byte(secret)) < 32 {
+		return fmt.Errorf("jwt.secret must be at least 32 bytes")
+	}
+	if key := strings.TrimSpace(cfg.Security.CredentialKey); key == "" || key == DefaultCredentialKey {
+		return fmt.Errorf("security.credential_key must be set to a unique secret; the default placeholder is not allowed")
+	} else if len([]byte(key)) < 32 {
+		return fmt.Errorf("security.credential_key must be at least 32 bytes")
+	}
+	return nil
 }
 
 type SecurityConfig struct {
