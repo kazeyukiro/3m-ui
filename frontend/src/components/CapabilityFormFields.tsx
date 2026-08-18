@@ -21,18 +21,26 @@ function FieldInput({ field }: { field: FieldCapability }) {
 
 function renderFields(fields: FieldCapability[] | undefined, showAdvanced: boolean) {
   if (!fields?.length) return null;
-  return fields.filter((f) => showAdvanced || !f.advanced).map((f) => (
-    <Form.Item
-      key={f.path}
-      name={f.path}
-      label={f.label}
-      tooltip={f.description}
-      rules={f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} is required` }] : undefined}
-      valuePropName={f.type === 'boolean' ? 'checked' : 'value'}
-    >
-      <FieldInput field={f} />
-    </Form.Item>
-  ));
+  return fields.filter((f) => showAdvanced || !f.advanced).map((f) => {
+    // Component fields are rendered conditionally inside shouldUpdate. AntD can
+    // validate a stale/unmounted required item from the previous component and
+    // report it as empty even though the currently selected component has a
+    // value. Required checks are therefore performed by the submit handler for
+    // protocol-specific critical fields (not by these transient Form.Items).
+    const transientRequired = f.path === 'reality_dest' || f.path === 'reality_private_key';
+    return (
+      <Form.Item
+        key={f.path}
+        name={f.path}
+        label={f.label}
+        tooltip={f.description}
+        rules={!transientRequired && f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} is required` }] : undefined}
+        valuePropName={f.type === 'boolean' ? 'checked' : 'value'}
+      >
+        <FieldInput field={f} />
+      </Form.Item>
+    );
+  });
 }
 
 type Props = { protocol?: string; capability?: ProtocolCapability; showAdvanced?: boolean };
@@ -114,7 +122,6 @@ export function capabilityFormToConfig(protocol: string, values: Record<string, 
   const cfg: Record<string, any> = {};
   const set = (k: string, v: any) => setIfPresent(cfg, k, v);
   const transport = firstValue(values, 'transport_layer') || 'raw';
-
   if (transport === 'ws') set('ws-path', firstValue(values, 'ws-path', 'ws_path'));
   if (transport === 'grpc') set('grpc-service-name', firstValue(values, 'grpc-service-name', 'grpc_service_name'));
   if (transport === 'xhttp') {
@@ -125,8 +132,6 @@ export function capabilityFormToConfig(protocol: string, values: Record<string, 
 
   const security = firstValue(values, 'security_layer') || 'none';
   if (security === 'reality') {
-    // The manifest deliberately uses UI-safe aliases. Always normalize them to
-    // the real Mihomo object before generic component serialization runs.
     set('reality-config.dest', firstValue(values, 'reality_dest', 'reality-config.dest'));
     set('reality-config.private-key', firstValue(values, 'reality_private_key', 'reality-config.private-key'));
     set('reality-config.short-id', firstValue(values, 'reality_short_id', 'reality-config.short-id'));
@@ -148,13 +153,11 @@ export function capabilityFormToConfig(protocol: string, values: Record<string, 
     || path === 'certificate' || path === 'private-key' || path === 'private_key'
     || path === 'allow-insecure'
   );
-
   const selectedTransport = capability?.components?.find((c) => c.group === 'transport' && c.kind === transport);
   const selectedSecurity = capability?.components?.find((c) => c.group === 'security' && c.kind === security);
   serializeFields(cfg, selectedTransport?.fields, values, skipTransportSecurity);
   serializeFields(cfg, selectedSecurity?.fields, values, skipTransportSecurity);
   serializeFields(cfg, capability?.fields, values, skipTransportSecurity);
-
   if (protocol === 'vless') {
     const flow = firstValue(values, 'flow');
     if (flow) set('flow', flow);
