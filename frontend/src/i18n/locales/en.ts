@@ -24,7 +24,7 @@ export default {
   settings: { title: 'Settings', subtitle: 'Preferences & Account', language: 'Language', theme: 'Theme', light: 'Light', dark: 'Dark', system: 'System', passwordTitle: 'Account Security', passwordDescription: 'Change your password regularly', changePassword: 'Change Password', about: 'About 3M-UI', version: 'Version', backup: 'Backup & restore', backupHint: 'Download a zip with SQLite and Mihomo config. Restart the panel after restoring the database.', downloadBackup: 'Download backup', restoreDb: 'Restore database', backupDone: 'Backup downloaded', restoreDone: 'Database restored — restart the panel', apiDocs: 'API documentation', apiDocsHint: 'OpenAPI 3 specification for automation.', openOpenAPI: 'Open openapi.yaml',
     alpnHint: 'Comma-separated, e.g. h2,http/1.1',
     accessProfile: 'Access Profile',
-    accessProfileHint: 'Public host / SNI / fingerprint for share links and client YAML (m-ui style)',
+    accessProfileHint: 'Public host / SNI / fingerprint for share links and client YAML',
     publicHost: 'Public Host',
     publicPort: 'Public Port',
     clientFingerprint: 'Client Fingerprint',
