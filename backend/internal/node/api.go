@@ -90,15 +90,12 @@ func (h *Handler) isTrustedHost(host string) bool {
 	if host == "" {
 		return false
 	}
-	// Strip port for comparison
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	// Reject anything that looks like a path or contains suspicious characters
 	if strings.ContainsAny(host, "/\\?#@") || strings.Contains(host, "..") {
 		return false
 	}
-	// If public_url is configured, only allow hosts that match it
 	if config.GlobalConfig != nil && config.GlobalConfig.Server.PublicURL != "" {
 		expected := config.GlobalConfig.Server.PublicURL
 		if u, err := url.Parse(expected); err == nil && u.Host != "" {
@@ -115,7 +112,7 @@ func (h *Handler) isTrustedHost(host string) bool {
 }
 
 // ExportNodeURI returns one URI per active client credential. Public host
-// comes from the request Host; wildcard listener addresses are never exposed.
+// comes from public_url, request Host, or loopback as last resort.
 func (h *Handler) ExportNodeURI(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -132,7 +129,10 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		return
 	}
 
-	// Prefer X-Forwarded-Host only when it passes trust validation.
+	publicURL := ""
+	if config.GlobalConfig != nil {
+		publicURL = strings.TrimSpace(config.GlobalConfig.Server.PublicURL)
+	}
 	host := c.GetHeader("X-Forwarded-Host")
 	if host != "" && !h.isTrustedHost(host) {
 		host = ""
@@ -145,6 +145,7 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 			host = parsed.Hostname()
 		}
 	}
+	host = normalizeExportHostPrefer(host, listener.BindAddress, listener.Listen, publicURL)
 
 	credentials := []user.Credential{}
 	if h.user != nil {
