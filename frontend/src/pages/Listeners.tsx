@@ -93,15 +93,13 @@ const Listeners: React.FC = () => {
         return;
       }
       if (!values.name || !String(values.port || '').trim()) {
-        message.error(t('listeners.portHint') || 'Name and port are required');
+        message.error(t('listeners.portHint'));
         return;
       }
       const previous = editing ? parseConfig(editing.config) : null;
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
       let config: Record<string, any>;
       if (useCapabilityForm && cap) {
-        config = { ...capabilityFormToConfig(proto, values, cap), ...formValuesToConfig(proto, values, previous) };
-        // capability form takes precedence for layer-driven keys
         config = { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) };
       } else {
         config = formValuesToConfig(proto, values, previous);
@@ -279,16 +277,16 @@ const Listeners: React.FC = () => {
             <Switch />
           </Form.Item>
         )}
-        <Divider titlePlacement="start" plain>Access Profile</Divider>
-        <Form.Item name="public_host" label="Public Host" tooltip="Per-node host for share links (overrides global Access Profile)">
+        <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
+        <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint')}>
           <Input placeholder="example.com" />
         </Form.Item>
-        <Form.Item name="public_port" label="Public Port"><Input placeholder="443" /></Form.Item>
-        <Form.Item name="access_sni" label="SNI"><Input /></Form.Item>
-        <Form.Item name="client_fingerprint" label="Client Fingerprint" initialValue="chrome">
+        <Form.Item name="public_port" label={t('settings.publicPort')}><Input placeholder="443" /></Form.Item>
+        <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
+        <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome">
           <Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} />
         </Form.Item>
-        <Form.Item name="access_alpn" label="ALPN"><Input placeholder="h2,http/1.1" /></Form.Item>
+        <Form.Item name="access_alpn" label={t('listeners.alpn')}><Input placeholder="h2,http/1.1" /></Form.Item>
 
         {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? (
           <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} />
