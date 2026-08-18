@@ -86,7 +86,6 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 	if token.ListenerID == 0 {
 		return nil, fmt.Errorf("access token is not bound to a listener")
 	}
-
 	var listener models.Listener
 	if err := db.First(&listener, token.ListenerID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -97,7 +96,6 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 	if !listener.Enabled {
 		return nil, fmt.Errorf("listener is disabled")
 	}
-
 	serverHost := ResolveServerAddress(config.GlobalConfig, req)
 	credentials := []user.Credential{}
 	if byListener, err := user.NewService(db).ActiveCredentialsByListener(); err != nil {
@@ -105,7 +103,6 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 	} else {
 		credentials = byListener[listener.ID]
 	}
-
 	proxies, err := listenerToProxies(listener, serverHost, credentials)
 	if err != nil {
 		return nil, err
@@ -113,7 +110,6 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 	if len(proxies) == 0 {
 		return nil, fmt.Errorf("listener %q has no exportable client credentials", listener.Name)
 	}
-
 	names := make([]string, 0, len(proxies))
 	for _, proxy := range proxies {
 		if name, ok := proxy["name"].(string); ok {
@@ -123,11 +119,7 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 	cfg := map[string]interface{}{
 		"proxies": proxies,
 		"proxy-groups": []interface{}{
-			map[string]interface{}{
-				"name":    "PROXY",
-				"type":    "select",
-				"proxies": names,
-			},
+			map[string]interface{}{"name": "PROXY", "type": "select", "proxies": names},
 		},
 		"rules": []string{"MATCH,PROXY"},
 	}
@@ -145,28 +137,20 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if protocol == "hysteria2-realm" {
 		return nil, fmt.Errorf("hysteria2-realm is an auxiliary realm service and has no client proxy configuration")
 	}
-
 	opts, err := decodeOptions(l.Config)
 	if err != nil {
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
-
 	var portVal interface{} = strings.TrimSpace(l.Port)
 	if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil {
 		portVal = p
 	}
-
-	base := map[string]interface{}{
-		"type":   protocol,
-		"server": server,
-		"port":   portVal,
-	}
+	base := map[string]interface{}{"type": protocol, "server": server, "port": portVal}
 	if l.UDP && clientSupportsUDP(protocol) {
 		base["udp"] = true
 	}
 	copyClientTLS(base, opts)
 	copyTransport(base, opts)
-
 	makeProxy := func(suffix string) map[string]interface{} {
 		p := cloneMap(base)
 		name := l.Name
@@ -176,7 +160,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		p["name"] = name
 		return p
 	}
-
 	result := make([]map[string]interface{}, 0, max(1, len(credentials)))
 	switch protocol {
 	case "shadowsocks":
@@ -194,17 +177,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["plugin"] = "simple-obfs"
 			p["plugin-opts"] = value
 		}
-		if value := shadowTLSClientOptions(opts); value != nil {
-			p["shadow-tls-opts"] = value
-		}
-		if value := resTLSClientOptions(opts); value != nil {
-			p["restls-opts"] = value
-		}
-		if value := jlsClientOptions(opts); value != nil {
-			p["jls-opts"] = value
-		}
+		applyClientWrappers(p, opts)
 		result = append(result, p)
-
 	case "snell":
 		p := makeProxy("")
 		copyOption(p, opts, "psk")
@@ -214,7 +188,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["obfs-opts"] = value
 		}
 		result = append(result, p)
-
 	case "vmess", "vless":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for %s client export", l.Name, protocol)
@@ -237,6 +210,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			copyOption(p, opts, "global-padding")
 			copyOption(p, opts, "authenticated-length")
 			copyOption(p, opts, "encryption")
+			if p["encryption"] == nil {
+				if dec, ok := opts["decryption"].(string); ok && strings.TrimSpace(dec) != "" {
+					p["encryption"] = dec
+				}
+			}
 			if flow := userFieldFromOpts(opts, cred.UUID, "flow"); flow != nil {
 				p["flow"] = flow
 			} else {
@@ -250,21 +228,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			} else {
 				copyOption(p, opts, "alterId")
 			}
-			if value := realityClientOptions(opts); value != nil {
-				p["reality-opts"] = value
-			}
-			if value := shadowTLSClientOptions(opts); value != nil {
-				p["shadow-tls-opts"] = value
-			}
-			if value := resTLSClientOptions(opts); value != nil {
-				p["restls-opts"] = value
-			}
-			if value := jlsClientOptions(opts); value != nil {
-				p["jls-opts"] = value
-			}
+			applyClientWrappers(p, opts)
 			result = append(result, p)
 		}
-
 	case "trojan":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for Trojan client export", l.Name)
@@ -272,30 +238,15 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		for i, cred := range credentials {
 			p := makeProxy(fmt.Sprintf("%d", i+1))
 			p["password"] = cred.Password
-			copyOption(p, opts, "sni")
-			copyOption(p, opts, "alpn")
-			copyOption(p, opts, "fingerprint")
-			copyOption(p, opts, "client-fingerprint")
-			copyOption(p, opts, "skip-cert-verify")
-			copyOption(p, opts, "name-cert-verify")
-			if value := realityClientOptions(opts); value != nil {
-				p["reality-opts"] = value
+			for _, key := range []string{"sni", "alpn", "fingerprint", "client-fingerprint", "skip-cert-verify", "name-cert-verify"} {
+				copyOption(p, opts, key)
 			}
-			if value := shadowTLSClientOptions(opts); value != nil {
-				p["shadow-tls-opts"] = value
-			}
-			if value := resTLSClientOptions(opts); value != nil {
-				p["restls-opts"] = value
-			}
-			if value := jlsClientOptions(opts); value != nil {
-				p["jls-opts"] = value
-			}
+			applyClientWrappers(p, opts)
 			if value, ok := opts["ss-option"]; ok {
 				p["ss-opts"] = value
 			}
 			result = append(result, p)
 		}
-
 	case "hysteria2":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for Hysteria 2 client export", l.Name)
@@ -311,15 +262,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			result = append(result, p)
 		}
-
 	case "tuic":
 		if token, ok := opts["token"]; ok {
 			p := makeProxy("")
 			p["token"] = token
-			for _, key := range []string{
-				"congestion-controller", "bbr-profile", "max-idle-time",
-				"authentication-timeout", "alpn", "max-udp-relay-packet-size",
-			} {
+			for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size"} {
 				copyOption(p, opts, key)
 			}
 			result = append(result, p)
@@ -331,16 +278,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p := makeProxy(fmt.Sprintf("%d", i+1))
 				p["uuid"] = cred.UUID
 				p["password"] = cred.Password
-				for _, key := range []string{
-					"congestion-controller", "bbr-profile", "max-idle-time",
-					"authentication-timeout", "alpn", "max-udp-relay-packet-size",
-				} {
+				for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size"} {
 					copyOption(p, opts, key)
 				}
 				result = append(result, p)
 			}
 		}
-
 	case "shadowquic":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for ShadowQUIC client export", l.Name)
@@ -359,7 +302,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			result = append(result, p)
 		}
-
 	case "anytls":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for AnyTLS client export", l.Name)
@@ -374,18 +316,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			} {
 				copyOption(p, opts, key)
 			}
-			if value := shadowTLSClientOptions(opts); value != nil {
-				p["shadow-tls-opts"] = value
-			}
-			if value := resTLSClientOptions(opts); value != nil {
-				p["restls-opts"] = value
-			}
-			if value := jlsClientOptions(opts); value != nil {
-				p["jls-opts"] = value
-			}
+			applyClientWrappers(p, opts)
 			result = append(result, p)
 		}
-
 	case "mieru":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for Mieru client export", l.Name)
@@ -399,7 +332,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			result = append(result, p)
 		}
-
 	case "sudoku":
 		p := makeProxy("")
 		for _, key := range []string{
@@ -410,7 +342,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			copyOption(p, opts, key)
 		}
 		result = append(result, p)
-
 	case "trusttunnel":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for TrustTunnel client export", l.Name)
@@ -429,8 +360,22 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			result = append(result, p)
 		}
 	}
-
 	return result, nil
+}
+
+func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) {
+	if value := realityClientOptions(opts); value != nil {
+		p["reality-opts"] = value
+	}
+	if value := shadowTLSClientOptions(opts); value != nil {
+		p["shadow-tls-opts"] = value
+	}
+	if value := resTLSClientOptions(opts); value != nil {
+		p["restls-opts"] = value
+	}
+	if value := jlsClientOptions(opts); value != nil {
+		p["jls-opts"] = value
+	}
 }
 
 func decodeOptions(raw string) (map[string]interface{}, error) {
@@ -454,16 +399,29 @@ func copyClientTLS(dst, src map[string]interface{}) {
 	if _, ok := src["reality-config"]; ok {
 		dst["tls"] = true
 	}
-	for _, key := range []string{
-		"sni", "servername", "alpn", "fingerprint", "client-fingerprint",
-		"skip-cert-verify", "name-cert-verify",
-	} {
+	if enabledWrapper(src, "shadow-tls") || enabledWrapper(src, "res-tls") || enabledWrapper(src, "jls-config") {
+		dst["tls"] = true
+	}
+	for _, key := range []string{"sni", "servername", "alpn", "fingerprint", "client-fingerprint", "skip-cert-verify", "name-cert-verify"} {
 		copyOption(dst, src, key)
 	}
 	if dst["sni"] == nil && dst["servername"] == nil {
 		if reality, ok := src["reality-config"].(map[string]interface{}); ok {
 			if sni, ok := firstStringValue(reality["server-names"]); ok {
 				dst["servername"] = sni
+			}
+		}
+		if dst["servername"] == nil {
+			if jls, ok := src["jls-config"].(map[string]interface{}); ok {
+				if sni, ok := jls["sni"].(string); ok && sni != "" {
+					dst["servername"] = sni
+				} else if dest, ok := jls["dest"].(string); ok && dest != "" {
+					host := dest
+					if h, _, err := net.SplitHostPort(dest); err == nil {
+						host = h
+					}
+					dst["servername"] = host
+				}
 			}
 		}
 	}
@@ -474,16 +432,34 @@ func copyClientTLS(dst, src map[string]interface{}) {
 	}
 }
 
-func copyTransport(dst, src map[string]interface{}) {
-	if path, ok := src["ws-path"].(string); ok && path != "" {
-		dst["network"] = "ws"
-		dst["ws-opts"] = map[string]interface{}{"path": path}
+func enabledWrapper(src map[string]interface{}, key string) bool {
+	raw, ok := src[key]
+	if !ok || raw == nil {
+		return false
 	}
-	if service, ok := src["grpc-service-name"].(string); ok && service != "" {
+	if m, ok := raw.(map[string]interface{}); ok {
+		if en, ok := m["enable"].(bool); ok {
+			return en
+		}
+		return len(m) > 0
+	}
+	return false
+}
+
+func copyTransport(dst, src map[string]interface{}) {
+	if path, ok := src["ws-path"].(string); ok && strings.TrimSpace(path) != "" {
+		dst["network"] = "ws"
+		wsOpts := map[string]interface{}{"path": path}
+		if headers, ok := src["ws-headers"].(map[string]interface{}); ok && len(headers) > 0 {
+			wsOpts["headers"] = headers
+		}
+		dst["ws-opts"] = wsOpts
+	}
+	if service, ok := src["grpc-service-name"].(string); ok && strings.TrimSpace(service) != "" {
 		dst["network"] = "grpc"
 		dst["grpc-opts"] = map[string]interface{}{"grpc-service-name": service}
 	}
-	if value, ok := src["xhttp-config"]; ok {
+	if value, ok := src["xhttp-config"]; ok && value != nil {
 		dst["network"] = "xhttp"
 		dst["xhttp-opts"] = value
 	}
@@ -518,10 +494,8 @@ func deriveRealityPublicKey(cfg map[string]interface{}) (string, error) {
 	var raw []byte
 	var err error
 	for _, decode := range []func(string) ([]byte, error){
-		base64.RawStdEncoding.DecodeString,
-		base64.StdEncoding.DecodeString,
-		base64.RawURLEncoding.DecodeString,
-		base64.URLEncoding.DecodeString,
+		base64.RawStdEncoding.DecodeString, base64.StdEncoding.DecodeString,
+		base64.RawURLEncoding.DecodeString, base64.URLEncoding.DecodeString,
 	} {
 		raw, err = decode(strings.TrimSpace(private))
 		if err == nil && len(raw) == 32 {
