@@ -29,10 +29,10 @@ func Run(frontendFS fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("initialize database: %w", err)
 	}
-	if created, username, password, err := auth.EnsureAdmin(db, cfg.Database.Path); err != nil {
+	if created, username, _, err := auth.EnsureAdmin(db, cfg.Database.Path); err != nil {
 		return fmt.Errorf("initialize administrator: %w", err)
 	} else if created {
-		log.Printf("initial administrator created: username=%s password=%s (change it immediately)", username, password)
+		log.Printf("initial administrator created: username=%s", username)
 	}
 	security.InitCredentialKey(cfg.Security.CredentialKey)
 	container := NewContainer(db, cfg)
