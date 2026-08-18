@@ -12,8 +12,12 @@ func TestTokenFromRequest(t *testing.T) {
 		want   string
 	}{
 		{name: "bearer", header: "Bearer abc.def.ghi", want: "abc.def.ghi"},
+		{name: "lowercase bearer", header: "bearer abc", want: "abc"},
+		{name: "uppercase bearer", header: "BEARER abc", want: "abc"},
 		{name: "bearer with surrounding whitespace", header: "Bearer   abc", want: "abc"},
 		{name: "wrong scheme", header: "Basic abc", want: ""},
+		{name: "missing token", header: "Bearer", want: ""},
+		{name: "too many fields", header: "Bearer abc def", want: ""},
 		{name: "empty", header: "", want: ""},
 	}
 	for _, tt := range tests {

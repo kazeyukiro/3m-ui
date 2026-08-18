@@ -9,7 +9,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// JWTClaims represents the authenticated administrator identity.
 type JWTClaims struct {
 	UserID         uint      `json:"user_id"`
 	Username       string    `json:"username"`
@@ -18,7 +17,6 @@ type JWTClaims struct {
 	ExpiresAt      time.Time `json:"expires_at"`
 }
 
-// GenerateToken issues a signed JWT using the standard library.
 func GenerateToken(secret string, userID uint, username, role string, sessionVersion uint, ttl time.Duration) (string, time.Time, error) {
 	if strings.TrimSpace(secret) == "" {
 		return "", time.Time{}, errors.New("JWT secret is not configured")
@@ -39,7 +37,6 @@ func GenerateToken(secret string, userID uint, username, role string, sessionVer
 	return signed, exp, nil
 }
 
-// ParseToken verifies the signature and returns parsed claims.
 func ParseToken(secret, tokenString string) (*JWTClaims, error) {
 	if strings.TrimSpace(secret) == "" {
 		return nil, errors.New("JWT secret is not configured")
@@ -82,11 +79,13 @@ func ParseToken(secret, tokenString string) (*JWTClaims, error) {
 	return jc, nil
 }
 
-// TokenFromRequest extracts the Bearer token from the Authorization header.
+// TokenFromRequest extracts the Bearer token from Authorization. The HTTP
+// authentication scheme is case-insensitive, so "bearer" and "BEARER" are
+// accepted as well as the conventional "Bearer" spelling.
 func TokenFromRequest(authHeader string) string {
-	const prefix = "Bearer "
-	if strings.HasPrefix(authHeader, prefix) {
-		return strings.TrimSpace(authHeader[len(prefix):])
+	parts := strings.Fields(authHeader)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return ""
 	}
-	return ""
+	return parts[1]
 }

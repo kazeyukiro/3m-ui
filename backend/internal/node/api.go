@@ -42,6 +42,13 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/:id/client-access", h.CreateClientAccess)
 }
 
+// RegisterClientRoutes registers only routes that are unique to the node
+// handler. The listener handler already owns the shared CRUD/reload routes.
+func (h *Handler) RegisterClientRoutes(rg *gin.RouterGroup) {
+	rg.GET("/:id/uri", h.ExportNodeURI)
+	rg.POST("/:id/client-access", h.CreateClientAccess)
+}
+
 func (h *Handler) ListNodes(c *gin.Context) {
 	list, err := h.svc.GetAll()
 	if err != nil {
