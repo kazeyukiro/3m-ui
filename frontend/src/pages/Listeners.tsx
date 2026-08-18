@@ -47,6 +47,8 @@ const Listeners: React.FC = () => {
   const [diffText, setDiffText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const protocol = Form.useWatch('protocol', form);
+  const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
+  const [useCapabilityForm] = useState(true);
 
   const load = async () => {
     setLoading(true);
@@ -56,7 +58,7 @@ const Listeners: React.FC = () => {
     setTemplateLoading(true);
     try { setTemplates(await listListenerTemplates()); } catch (e: any) { message.error(e.message); } finally { setTemplateLoading(false); }
   };
-  useEffect(() => { load(); loadTemplates(); }, []);
+  useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
 
   const openCreate = () => {
     setEditing(null);
