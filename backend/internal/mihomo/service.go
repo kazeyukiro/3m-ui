@@ -30,7 +30,7 @@ func (s *Service) SaveConfig(content string) error {
 
 // ApplyConfig validates and activates a candidate configuration. Before the
 // live file is changed, the current file is copied to <config>.bak. If
-// validation or restart fails, the previous configuration is restored.
+// validation or start/restart fails, the previous configuration is restored.
 func (s *Service) ApplyConfig(content string) error {
 	if s == nil || s.cm == nil { return fmt.Errorf("mihomo service not initialized") }
 	old, readErr := s.cm.ReadConfig()
@@ -45,7 +45,17 @@ func (s *Service) ApplyConfig(content string) error {
 		if readErr == nil { _ = s.cm.SaveConfig(old) }
 		return fmt.Errorf("validate Mihomo configuration: %w", err)
 	}
-	if !wasRunning { return s.pm.Start() }
+	if !wasRunning {
+		if err := s.pm.Start(); err != nil {
+			if readErr == nil {
+				if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
+					return fmt.Errorf("start Mihomo: %v; restore previous config: %w", err, restoreErr)
+				}
+			}
+			return fmt.Errorf("start Mihomo: %w", err)
+		}
+		return nil
+	}
 	if err := s.pm.Restart(); err != nil {
 		if readErr == nil {
 			if restoreErr := s.cm.SaveConfig(old); restoreErr == nil { _ = s.pm.Restart() }
