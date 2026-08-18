@@ -217,6 +217,6 @@ main(){
   say "3m-ui installed successfully."
   say "Command: 3m-ui"
   say "Panel: http://SERVER_IP:8080/"
-  say "The initial administrator password is generated randomly and printed once in the service log; change it immediately."
+  say "Default administrator credentials are unchanged; first login requires a password change."
 }
 main "$@"
