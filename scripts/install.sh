@@ -123,9 +123,7 @@ install_mihomo(){
 install_release_asset(){
   tag="$1"; file="$2"; destination="$3"
   tmp="$(mktemp)"
-  if download "https://github.com/$REPO/releases/download/${tag}/${file}" "$tmp" 2>/dev/null; then
-    :
-  else
+  if download "https://github.com/$REPO/releases/download/${tag}/${file}" "$tmp" 2>/dev/null; then :; else
     say "Release $tag does not contain $file; using the matching main-branch management script."
     rm -f "$tmp"
     download "https://raw.githubusercontent.com/$REPO/main/scripts/$file" "$tmp"
@@ -219,6 +217,6 @@ main(){
   say "3m-ui installed successfully."
   say "Command: 3m-ui"
   say "Panel: http://SERVER_IP:8080/"
-  say "Default administrator credentials are unchanged; first login requires a password change."
+  say "The initial administrator password is generated randomly and printed once in the service log; change it immediately."
 }
 main "$@"
