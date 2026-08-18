@@ -366,6 +366,22 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) {
 	if value := realityClientOptions(opts); value != nil {
 		p["reality-opts"] = value
+		// Minimal working clients (clashmeta-inbound VLESS-Reality-*).
+		if p["client-fingerprint"] == nil {
+			p["client-fingerprint"] = "chrome"
+		}
+		if p["tls"] == nil {
+			p["tls"] = true
+		}
+		if p["udp"] == nil {
+			p["udp"] = true
+		}
+		if p["alpn"] == nil {
+			p["alpn"] = []string{"h2", "http/1.1"}
+		}
+		if p["network"] == nil {
+			p["network"] = "tcp"
+		}
 	}
 	if value := shadowTLSClientOptions(opts); value != nil {
 		p["shadow-tls-opts"] = value
@@ -479,6 +495,11 @@ func realityClientOptions(src map[string]interface{}) map[string]interface{} {
 		result["short-id"] = ids[0]
 	} else if value, ok := cfg["short-id"]; ok {
 		result["short-id"] = value
+	}
+	if v, ok := cfg["support-x25519mlkem768"]; ok {
+		result["support-x25519mlkem768"] = v
+	} else {
+		result["support-x25519mlkem768"] = true
 	}
 	return result
 }
