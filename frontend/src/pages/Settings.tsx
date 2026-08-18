@@ -15,6 +15,7 @@ const Settings: React.FC = () => {
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
   const [tgForm] = Form.useForm();
+  const [accessForm] = Form.useForm();
   const [tplForm] = Form.useForm();
   const [tplOut, setTplOut] = useState('');
   const [acmeForm] = Form.useForm();
@@ -25,6 +26,13 @@ const Settings: React.FC = () => {
     client.get('/panel-settings').then((r) => {
       const day = Number(r.data?.traffic_reset_day || 0);
       if (!Number.isNaN(day)) setResetDay(day);
+      accessForm.setFieldsValue({
+        public_host: r.data?.['access_profile.public_host'] || '',
+        public_port: r.data?.['access_profile.public_port'] || '',
+        sni: r.data?.['access_profile.sni'] || '',
+        client_fingerprint: r.data?.['access_profile.client_fingerprint'] || 'chrome',
+        alpn: r.data?.['access_profile.alpn'] || '',
+      });
     }).catch(() => {});
     fetchTelegramSettings().then((s: TelegramSettings) => {
       tgForm.setFieldsValue({
@@ -71,6 +79,32 @@ const Settings: React.FC = () => {
         <Text type="secondary">{t('settings.apiDocsHint')}</Text>
         <div style={{ marginTop: 12 }}><Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">{t('settings.openOpenAPI')}</Button></div>
       </Card>
+      
+      <Card title={t('settings.accessProfile') || 'Access Profile'} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.accessProfileHint') || 'Public host / SNI / fingerprint used when exporting share links (m-ui style).'}</Text>
+        <Form form={accessForm} layout="vertical" style={{ marginTop: 12 }} onFinish={async (values) => {
+          try {
+            await client.put('/panel-settings', {
+              'access_profile.public_host': values.public_host || '',
+              'access_profile.public_port': values.public_port || '',
+              'access_profile.sni': values.sni || '',
+              'access_profile.client_fingerprint': values.client_fingerprint || 'chrome',
+              'access_profile.alpn': values.alpn || '',
+            });
+            message.success(t('common.saved') || t('common.success'));
+          } catch (e: any) { message.error(e.message || t('common.error')); }
+        }}>
+          <Form.Item name="public_host" label={t('settings.publicHost') || 'Public Host'}><Input placeholder="example.com" /></Form.Item>
+          <Form.Item name="public_port" label={t('settings.publicPort') || 'Public Port'}><Input placeholder="443" /></Form.Item>
+          <Form.Item name="sni" label="SNI"><Input placeholder="www.example.com" /></Form.Item>
+          <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint') || 'Client Fingerprint'}>
+            <Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} />
+          </Form.Item>
+          <Form.Item name="alpn" label="ALPN" tooltip="comma-separated"><Input placeholder="h2,http/1.1" /></Form.Item>
+          <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+        </Form>
+      </Card>
+
       <Card title={t('settings.telegram')} style={{ marginBottom: 16 }}>
         <Form form={tgForm} layout="vertical" onFinish={async (values) => {
           try {
