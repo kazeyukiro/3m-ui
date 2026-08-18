@@ -66,10 +66,13 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
 		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))
 
+		// Listener owns CRUD / templates / versions. Node additionally registers
+		// GET /:id/uri and client-access (subscription share links).
 		if d.listenerService() != nil {
 			listener.NewHandler(d.listenerService()).RegisterRoutes(apiV1.Group("/nodes"))
 			listener.NewHandler(d.listenerService()).RegisterRoutes(apiV1.Group("/listeners"))
-		} else {
+		}
+		if d.nodeService() != nil {
 			nodeHandler := node.NewHandler(d.nodeService(), d.userService(), db)
 			nodeHandler.RegisterRoutes(apiV1.Group("/nodes"))
 			nodeHandler.RegisterRoutes(apiV1.Group("/listeners"))
