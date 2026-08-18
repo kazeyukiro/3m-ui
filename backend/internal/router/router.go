@@ -36,8 +36,6 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	r := gin.Default()
 	r.Use(CORSMiddleware(cfg.Security.CORSOrigins))
 
-	// Keep legacy subscription URLs available for existing clients while the
-	// canonical API endpoint remains under /api/v1/client/sub/:token.
 	RegisterLegacySubscriptionRoutes(r, db, cfg)
 
 	apiV1 := r.Group("/api/v1")
@@ -66,16 +64,17 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
 		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))
 
-		// Listener owns CRUD / templates / versions. Node additionally registers
-		// GET /:id/uri and client-access (subscription share links).
+		// Listener owns the CRUD/template/version endpoints. Node adds the
+		// node-specific URI and client-access endpoints. Registering both full
+		// route sets on the same group causes Gin to panic on duplicate paths.
 		if d.listenerService() != nil {
-			listener.NewHandler(d.listenerService()).RegisterRoutes(apiV1.Group("/nodes"))
-			listener.NewHandler(d.listenerService()).RegisterRoutes(apiV1.Group("/listeners"))
+			listenerHandler := listener.NewHandler(d.listenerService())
+			listenerHandler.RegisterRoutes(apiV1.Group("/nodes"))
+			listenerHandler.RegisterRoutes(apiV1.Group("/listeners"))
 		}
 		if d.nodeService() != nil {
 			nodeHandler := node.NewHandler(d.nodeService(), d.userService(), db)
-			nodeHandler.RegisterRoutes(apiV1.Group("/nodes"))
-			nodeHandler.RegisterRoutes(apiV1.Group("/listeners"))
+			nodeHandler.RegisterClientRoutes(apiV1.Group("/nodes"))
 		}
 
 		traffic.RegisterRoutes(
