@@ -12,6 +12,8 @@ import (
 
 var SubconverterURL = "http://127.0.0.1:25500"
 
+const maxSubconverterResponseBytes = 16 << 20
+
 // CallSubconverter calls the local subconverter service to convert standard configurations.
 func CallSubconverter(cfg *config.Config, token string, target string, rawYAML []byte) ([]byte, error) {
 	return CallSubconverterWithRequest(cfg, token, target, rawYAML)
@@ -25,7 +27,6 @@ func CallSubconverterWithRequest(cfg *config.Config, token string, target string
 		port = cfg.Server.Port
 	}
 
-	// Build raw source config URL pointing back to our own local endpoint
 	sourceURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/client/sub/%s?raw=true", port, token)
 
 	u, err := url.Parse(fmt.Sprintf("%s/sub", SubconverterURL))
@@ -38,7 +39,6 @@ func CallSubconverterWithRequest(cfg *config.Config, token string, target string
 	q.Set("url", sourceURL)
 	u.RawQuery = q.Encode()
 
-	// Call subconverter with a safe timeout
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(u.String())
 	if err != nil {
@@ -47,13 +47,16 @@ func CallSubconverterWithRequest(cfg *config.Config, token string, target string
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxSubconverterResponseBytes))
 		return nil, fmt.Errorf("subconverter returned error status %d: %s", resp.StatusCode, string(body))
 	}
 
-	converted, err := io.ReadAll(resp.Body)
+	converted, err := io.ReadAll(io.LimitReader(resp.Body, maxSubconverterResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read subconverter response: %w", err)
+	}
+	if int64(len(converted)) > maxSubconverterResponseBytes {
+		return nil, fmt.Errorf("subconverter response exceeds 16 MiB limit")
 	}
 
 	return converted, nil
