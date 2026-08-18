@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic,
-  fetchUserNodes, bindUserNodes, ProxyUser,
+  fetchUserNodes, bindUserNodes, fetchUserSubscription, rotateUserSubscription, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { useI18n } from '../i18n';
@@ -32,12 +32,18 @@ const Users: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
+  const [keyword, setKeyword] = useState('');
 
   const [bindOpen, setBindOpen] = useState(false);
   const [bindUser, setBindUser] = useState<ProxyUser | null>(null);
   const [allNodes, setAllNodes] = useState<Listener[]>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<number[]>([]);
   const [bindLoading, setBindLoading] = useState(false);
+
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUser, setShareUser] = useState<ProxyUser | null>(null);
+  const [shareUrl, setShareUrl] = useState('');
+  const [shareLoading, setShareLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -54,6 +60,15 @@ const Users: React.FC = () => {
     load();
   }, []);
 
+  const filtered = useMemo(() => {
+    const q = keyword.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((u) =>
+      (u.username || '').toLowerCase().includes(q) ||
+      (u.remark || '').toLowerCase().includes(q)
+    );
+  }, [data, keyword]);
+
   const onSubmit = async (values: any) => {
     try {
       const trafficGB = values.traffic_limit_gb;
@@ -61,6 +76,8 @@ const Users: React.FC = () => {
         username: values.username,
         enabled: !!values.enabled,
         traffic_limit: trafficGB && trafficGB > 0 ? Math.round(Number(trafficGB) * 1024 * 1024 * 1024) : 0,
+        ip_limit: values.ip_limit != null ? Number(values.ip_limit) : 0,
+        remark: values.remark || '',
       };
       if (values.password) payload.password = values.password;
       if (values.expire_time) {
@@ -120,6 +137,8 @@ const Users: React.FC = () => {
       traffic_limit_gb: limitGB,
       expire_time: exp,
       password: undefined,
+      ip_limit: record.ip_limit || 0,
+      remark: record.remark || '',
     });
     setModalOpen(true);
   };
@@ -157,8 +176,46 @@ const Users: React.FC = () => {
     }
   };
 
+  const openShare = async (record: ProxyUser) => {
+    setShareUser(record);
+    setShareOpen(true);
+    setShareLoading(true);
+    setShareUrl('');
+    try {
+      const res = await fetchUserSubscription(record.id);
+      setShareUrl(res.url);
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const onRotateShare = async () => {
+    if (!shareUser) return;
+    setShareLoading(true);
+    try {
+      const res = await rotateUserSubscription(shareUser.id);
+      setShareUrl(res.url);
+      message.success(t('users.subRotated') || 'Subscription rotated');
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
   const columns = [
-    { title: t('users.username'), dataIndex: 'username', key: 'username', width: 120 },
+    { title: t('users.username'), dataIndex: 'username', key: 'username', width: 120, ellipsis: true },
+    {
+      title: t('users.remark') || 'Remark',
+      dataIndex: 'remark',
+      key: 'remark',
+      width: 120,
+      ellipsis: true,
+      render: (v: string) => v || '-',
+    },
     {
       title: t('users.traffic'),
       key: 'traffic',
@@ -177,6 +234,13 @@ const Users: React.FC = () => {
           </div>
         );
       },
+    },
+    {
+      title: t('users.ipLimit') || 'IP limit',
+      dataIndex: 'ip_limit',
+      key: 'ip_limit',
+      width: 90,
+      render: (v: number) => (v && v > 0 ? v : t('users.unlimited')),
     },
     {
       title: t('users.expire'),
@@ -203,12 +267,16 @@ const Users: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'actions',
-      width: 220,
+      width: 260,
+      fixed: 'right' as const,
       render: (_: any, record: ProxyUser) => (
         <Space wrap size={4}>
           <Button size="small" icon={<LinkOutlined />} onClick={() => openBind(record)}>
             {t('users.bind')}
           </Button>
+          <Tooltip title={t('users.shareTitle') || 'Subscription'}>
+            <Button size="small" icon={<ShareAltOutlined />} onClick={() => openShare(record)} />
+          </Tooltip>
           <Tooltip title={t('users.resetTraffic')}>
             <Popconfirm title={t('users.resetTrafficConfirm')} onConfirm={() => onResetTraffic(record.id)}>
               <Button size="small" icon={<ClearOutlined />} />
@@ -228,21 +296,30 @@ const Users: React.FC = () => {
       <h2>{t('users.title')}</h2>
       <Card
         extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditing(null);
-              form.resetFields();
-              form.setFieldsValue({ enabled: true });
-              setModalOpen(true);
-            }}
-          >
-            {t('users.create')}
-          </Button>
+          <Space wrap>
+            <Input.Search
+              allowClear
+              placeholder={t('common.search')}
+              onSearch={setKeyword}
+              onChange={(e) => { if (!e.target.value) setKeyword(''); }}
+              style={{ width: 200 }}
+            />
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({ enabled: true, ip_limit: 0 });
+                setModalOpen(true);
+              }}
+            >
+              {t('users.create')}
+            </Button>
+          </Space>
         }
       >
-        <Table scroll={{ x: 780 }} size="middle" dataSource={data} columns={columns} rowKey="id" loading={loading} />
+        <Table scroll={{ x: 960 }} size="middle" dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
       </Card>
 
       <Modal
@@ -269,6 +346,16 @@ const Users: React.FC = () => {
             tooltip={t('users.trafficLimitHint')}
           >
             <InputNumber min={0} step={1} style={{ width: '100%' }} placeholder="0 = unlimited" />
+          </Form.Item>
+          <Form.Item
+            name="ip_limit"
+            label={t('users.ipLimit') || 'IP limit'}
+            tooltip={t('users.ipLimitHint') || '0 = unlimited concurrent client IPs'}
+          >
+            <InputNumber min={0} step={1} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="remark" label={t('users.remark') || 'Remark'}>
+            <Input maxLength={255} />
           </Form.Item>
           <Form.Item name="expire_time" label={t('users.expire')} tooltip={t('users.expireHint')}>
             <DatePicker showTime style={{ width: '100%' }} />
@@ -306,6 +393,47 @@ const Users: React.FC = () => {
             label: `${n.name} (${n.protocol}:${n.port})`,
           }))}
         />
+      </Modal>
+
+      <Modal
+        open={shareOpen}
+        title={(t('users.shareTitle') || 'Subscription') + (shareUser ? ` — ${shareUser.username}` : '')}
+        onCancel={() => { setShareOpen(false); setShareUser(null); setShareUrl(''); }}
+        footer={null}
+        width={520}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Input
+            value={shareUrl}
+            readOnly
+            placeholder={shareLoading ? t('common.loading') : ''}
+            addonAfter={
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                disabled={!shareUrl}
+                onClick={() => {
+                  if (!shareUrl) return;
+                  navigator.clipboard.writeText(shareUrl);
+                  message.success(t('common.copied') || 'Copied');
+                }}
+              />
+            }
+          />
+          {shareUrl && (
+            <div style={{ textAlign: 'center' }}>
+              <img
+                alt="qr"
+                style={{ width: 180, height: 180 }}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`}
+              />
+            </div>
+          )}
+          <Button loading={shareLoading} onClick={onRotateShare} block>
+            {t('users.rotateSub') || 'Rotate subscription token'}
+          </Button>
+        </Space>
       </Modal>
     </div>
   );
