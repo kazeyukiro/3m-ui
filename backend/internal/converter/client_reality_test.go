@@ -23,8 +23,12 @@ func TestVLESSRealityClientExport(t *testing.T) {
 		t.Fatalf("%#v", p)
 	}
 	ro, ok := p["reality-opts"].(map[string]interface{})
-	if !ok || strings.TrimSpace(fmt.Sprint(ro["public-key"])) == "" {
-		t.Fatalf("reality-opts %#v", p)
+	if !ok {
+		t.Fatalf("missing reality-opts %#v", p)
+	}
+	pk, _ := ro["public-key"].(string)
+	if strings.TrimSpace(pk) == "" {
+		t.Fatalf("empty public-key %#v", ro)
 	}
 	if p["client-fingerprint"] != "chrome" {
 		t.Fatalf("fp=%v", p["client-fingerprint"])
