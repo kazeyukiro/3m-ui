@@ -17,17 +17,18 @@ type UserCred struct {
 
 // CompileInput is the normalized node state passed to protocol modules.
 type CompileInput struct {
-	Name        string
-	Protocol    string
-	Listen      string
-	Port        interface{} // int or official ports string
-	UDP         bool
-	TLS         bool
-	Proxy       string
-	Rule        string
-	RoutingMark int
-	Config      map[string]interface{}
-	Users       []UserCred
+	Name               string
+	Protocol           string
+	Listen             string
+	Port               interface{} // int or official ports string
+	UDP                bool
+	TLS                bool
+	Proxy              string
+	Rule               string
+	RoutingMark        int
+	Config             map[string]interface{}
+	Users              []UserCred
+	HasCredentialState bool // true when creds map has this listener key (even if empty)
 }
 
 // Module is a protocol compiler (m-ui style).
@@ -138,7 +139,7 @@ func managedKeys() map[string]struct{} {
 	}
 }
 
-func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string) []map[string]interface{} {
+func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string, hasCredState bool) []map[string]interface{} {
 	if len(fromCreds) > 0 {
 		out := make([]map[string]interface{}, 0, len(fromCreds))
 		for _, c := range fromCreds {
@@ -170,18 +171,43 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 		}
 		return out
 	}
+	// Explicit empty credential state must not fall back to config users.
+	if hasCredState {
+		return nil
+	}
 	if raw, ok := cfg["users"]; ok {
-		if arr, ok := raw.([]interface{}); ok {
-			out := make([]map[string]interface{}, 0, len(arr))
-			for _, item := range arr {
-				if m, ok := item.(map[string]interface{}); ok {
-					out = append(out, m)
-				}
-			}
-			return out
-		}
+		return normalizeUsersValue(raw)
 	}
 	return nil
+}
+
+func normalizeUsersValue(value interface{}) []map[string]interface{} {
+	switch users := value.(type) {
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for _, item := range users {
+			if m, ok := item.(map[string]interface{}); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	case []map[string]interface{}:
+		return users
+	case map[string]interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for username, password := range users {
+			out = append(out, map[string]interface{}{"username": username, "password": fmt.Sprint(password)})
+		}
+		return out
+	case map[interface{}]interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for rawUsername, rawPassword := range users {
+			out = append(out, map[string]interface{}{"username": fmt.Sprint(rawUsername), "password": fmt.Sprint(rawPassword)})
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func portValue(port string) interface{} {
