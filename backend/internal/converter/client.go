@@ -12,9 +12,9 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"golang.org/x/crypto/curve25519"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
+	"golang.org/x/crypto/curve25519"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
@@ -209,12 +209,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			copyOption(p, opts, "packet-encoding")
 			copyOption(p, opts, "global-padding")
 			copyOption(p, opts, "authenticated-length")
+			// encryption (client) and decryption (server) are a generated pair from
+			// `mihomo generate vless-x25519` / `vless-mlkem768` — never copy decryption→encryption.
 			copyOption(p, opts, "encryption")
-			if p["encryption"] == nil {
-				if dec, ok := opts["decryption"].(string); ok && strings.TrimSpace(dec) != "" {
-					p["encryption"] = dec
-				}
-			}
 			if flow := userFieldFromOpts(opts, cred.UUID, "flow"); flow != nil {
 				p["flow"] = flow
 			} else {

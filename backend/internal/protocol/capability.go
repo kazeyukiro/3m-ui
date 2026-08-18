@@ -165,11 +165,12 @@ func vlessCapability() ProtocolCapability {
 	comps := append(transportComponents(), securityComponents(true)...)
 	return ProtocolCapability{
 		Kind: "vless", Label: "VLESS",
-		Layers: transportSecurityLayers("raw", "reality"),
+		Layers:     transportSecurityLayers("raw", "reality"),
 		Components: comps,
 		Fields: []FieldCapability{
 			{Path: "flow", Label: "Flow", Type: FieldString, Options: []string{"xtls-rprx-vision"}},
-			{Path: "decryption", Label: "Decryption", Type: FieldText, Advanced: true},
+			{Path: "decryption", Label: "Decryption", Type: FieldText, Advanced: true, Description: "Server-side VLESS decryption (mihomo generate vless-x25519 / vless-mlkem768)"},
+			{Path: "encryption", Label: "Encryption", Type: FieldText, Advanced: true, Description: "Client-side VLESS encryption pair (do not reuse decryption value)"},
 		},
 		UserFields: []FieldCapability{
 			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true},
@@ -183,7 +184,7 @@ func vmessCapability() ProtocolCapability {
 	comps := append(transportComponents(), securityComponents(true)...)
 	return ProtocolCapability{
 		Kind: "vmess", Label: "VMess",
-		Layers: transportSecurityLayers("raw", "none"),
+		Layers:     transportSecurityLayers("raw", "none"),
 		Components: comps,
 		Fields: []FieldCapability{
 			{Path: "alterId", Label: "Alter ID", Type: FieldInteger},
@@ -199,7 +200,7 @@ func trojanCapability() ProtocolCapability {
 	comps := append(transportComponents(), securityComponents(true)...)
 	return ProtocolCapability{
 		Kind: "trojan", Label: "Trojan",
-		Layers: transportSecurityLayers("raw", "tls"),
+		Layers:     transportSecurityLayers("raw", "tls"),
 		Components: comps,
 		UserFields: []FieldCapability{
 			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
@@ -211,7 +212,7 @@ func trojanCapability() ProtocolCapability {
 func shadowsocksCapability() ProtocolCapability {
 	return ProtocolCapability{
 		Kind: "shadowsocks", Label: "Shadowsocks",
-		Layers: []LayerCapability{},
+		Layers:     []LayerCapability{},
 		Components: []ComponentCapability{},
 		Fields: []FieldCapability{
 			{Path: "cipher", Label: "Cipher", Type: FieldString, Required: true, Options: []string{
@@ -277,7 +278,7 @@ func tuicCapability() ProtocolCapability {
 func shadowquicCapability() ProtocolCapability {
 	return ProtocolCapability{
 		Kind: "shadowquic", Label: "ShadowQUIC",
-		Layers: []LayerCapability{},
+		Layers:     []LayerCapability{},
 		Components: []ComponentCapability{},
 		Fields: []FieldCapability{
 			{Path: "alpn", Label: "ALPN", Type: FieldStringList},

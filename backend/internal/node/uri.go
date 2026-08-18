@@ -190,8 +190,9 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		if flow, _ := row["flow"].(string); flow != "" {
 			params["flow"] = flow
 		}
-		if decryption, _ := cfg["decryption"].(string); decryption != "" {
-			params["encryption"] = decryption
+		// Client URI uses encryption (not server-side decryption).
+		if encryption, _ := cfg["encryption"].(string); encryption != "" {
+			params["encryption"] = encryption
 		}
 		if reality, ok := cfg["reality-config"].(map[string]interface{}); ok {
 			params["security"] = "reality"

@@ -124,8 +124,9 @@ func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]stru
 		if _, ok := skip[k]; ok {
 			continue
 		}
-		// strip panel-only keys
-		if strings.HasPrefix(k, "_") || k == "access_profile" {
+		// strip panel-only / client-export-only keys
+		if strings.HasPrefix(k, "_") || k == "access_profile" || k == "encryption" ||
+			k == "transport_layer" || k == "security_layer" {
 			continue
 		}
 		dst[k] = v

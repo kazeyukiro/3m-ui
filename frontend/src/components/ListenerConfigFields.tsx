@@ -298,7 +298,7 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
 
 /** Keys the visual form fully owns. */
 const FORM_OWNED_KEYS = new Set([
-  'cipher', 'password', 'psk', 'version', 'alterId', 'flow', 'decryption',
+  'cipher', 'password', 'psk', 'version', 'alterId', 'flow', 'decryption', 'encryption',
   'ws-path', 'grpc-service-name', 'ss-option',
   'up', 'down', 'ignore-client-bandwidth', 'obfs', 'obfs-password', 'obfs-min-packet-size', 'obfs-max-packet-size',
   'masquerade', 'alpn', 'max-idle-time', 'handshake-timeout', 'token', 'congestion-controller',
@@ -386,6 +386,7 @@ export function formValuesToConfig(
       set('ws-path', values['ws-path']);
       set('grpc-service-name', values['grpc-service-name']);
       set('decryption', values.decryption);
+      set('encryption', values.encryption);
       break;
     case 'trojan':
       set('ws-path', values['ws-path']);
@@ -776,6 +777,9 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
             <Select allowClear options={[{ value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' }]} />
           </Form.Item>
           <Form.Item name="decryption" label={t('listeners.decryption')} tooltip={t('listeners.decryptionHint')}>
+            <Input.TextArea rows={2} placeholder="mlkem768x25519plus...." />
+          </Form.Item>
+          <Form.Item name="encryption" label={t('listeners.encryption')} tooltip={t('listeners.encryptionHint')}>
             <Input.TextArea rows={2} placeholder="mlkem768x25519plus...." />
           </Form.Item>
         </>
