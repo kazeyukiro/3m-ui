@@ -71,13 +71,33 @@ const Listeners: React.FC = () => {
     form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, ...configToFormValues(record.config) });
     setModalOpen(true);
   };
-  const onSubmit = async (values: any) => {
+  const onSubmit = async (rawValues?: any) => {
     try {
-      const proto = values.protocol as string;
+      // Wizard unmounts prior steps; always read full store (including preserved fields).
+      const values = { ...(form.getFieldsValue(true) || {}), ...(rawValues || {}) };
+      const proto = String(values.protocol || '').trim();
+      if (!proto) {
+        message.error(t('listeners.selectProtocolFirst'));
+        setWizardStep(0);
+        return;
+      }
+      if (!values.name || !String(values.port || '').trim()) {
+        message.error(t('listeners.portHint') || 'Name and port are required');
+        setWizardStep(0);
+        return;
+      }
       const previous = editing ? parseConfig(editing.config) : null;
       const config = formValuesToConfig(proto, values, previous);
-      const payload: Partial<Listener> = { name: values.name, protocol: proto, port: String(values.port), bind_address: values.bind_address || '0.0.0.0', enabled: !!values.enabled, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config) };
-      if (editing) { await updateListener(editing.id, payload); message.success(t('listeners.updated')); }
+      const payload: Partial<Listener> = {
+        name: String(values.name).trim(),
+        protocol: proto,
+        port: String(values.port).trim(),
+        bind_address: values.bind_address || '0.0.0.0',
+        enabled: values.enabled !== false,
+        udp: protocolSupportsUDP(proto) ? !!values.udp : false,
+        config: JSON.stringify(config),
+      };
+      if (editing) { await updateListener(normalizeId(editing), payload); message.success(t('listeners.updated')); }
       else { await createListener(payload); message.success(t('listeners.created')); }
       setModalOpen(false); setEditing(null); setWizardStep(0); form.resetFields(); await load();
     } catch (e: any) { message.error(e.message); }
@@ -89,7 +109,7 @@ const Listeners: React.FC = () => {
   const openClone = (record: Listener) => { setCloneSource(record); cloneForm.setFieldsValue({ name: `${record.name}-copy`, port: '' }); setCloneModal(true); };
   const doClone = async (values: { name: string; port: string }) => {
     if (!cloneSource) return;
-    try { await cloneListener(cloneSource.id, { name: values.name, port: values.port }); message.success(t('listeners.cloned')); setCloneModal(false); await load(); } catch (e: any) { message.error(e.message); }
+    try { await cloneListener(normalizeId(cloneSource), { name: values.name, port: values.port }); message.success(t('listeners.cloned')); setCloneModal(false); await load(); } catch (e: any) { message.error(e.message); }
   };
   const openSaveTemplate = (record: Listener) => { setTemplateSource(record); templateForm.setFieldsValue({ name: `${record.name} template` }); setTemplateModal(true); };
   const saveTemplate = async (values: { name: string }) => {
@@ -106,15 +126,15 @@ const Listeners: React.FC = () => {
     try { await batchSetListenersEnabled(ids, enabled); message.success(t('listeners.batchDone')); setSelectedRowKeys([]); await load(); } catch (e: any) { message.error(e.message); }
   };
   const openVersions = async (record: Listener) => {
-    try { setVersionListener(record); setVersions(await listListenerVersions(record.id)); setVersionsModal(true); } catch (e: any) { message.error(e.message); }
+    try { setVersionListener(record); setVersions(await listListenerVersions(normalizeId(record))); setVersionsModal(true); } catch (e: any) { message.error(e.message); }
   };
   const showDiff = async (version: number) => {
     if (!versionListener) return;
-    try { setDiffText(await diffListenerVersion(versionListener.id, version)); setDiffModal(true); } catch (e: any) { message.error(e.message); }
+    try { setDiffText(await diffListenerVersion(normalizeId(versionListener), version)); setDiffModal(true); } catch (e: any) { message.error(e.message); }
   };
   const doRollback = async (version: number) => {
     if (!versionListener) return;
-    try { await rollbackListenerVersion(versionListener.id, version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(versionListener.id)); await load(); } catch (e: any) { message.error(e.message); }
+    try { await rollbackListenerVersion(normalizeId(versionListener), version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(normalizeId(versionListener))); await load(); } catch (e: any) { message.error(e.message); }
   };
   const deleteTemplate = async (id: number) => { try { await deleteListenerTemplate(id); message.success(t('listeners.templateDeleted')); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
 
@@ -212,21 +232,39 @@ const Listeners: React.FC = () => {
           ]}
         />
       )}
-      <Form form={form} layout="vertical" onFinish={onSubmit}>
+      <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
         {(editing || wizardStep === 0) && (
           <>
             <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
             <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}>
               <Select
                 options={PROTOCOLS.map(p => ({ value: p, label: p }))}
-                onChange={() => {
-                  const keep = form.getFieldsValue(['name', 'protocol', 'port', 'bind_address', 'enabled', 'udp']);
+                onChange={(nextProto: string) => {
+                  const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']);
                   form.resetFields();
-                  form.setFieldsValue(keep);
+                  form.setFieldsValue({ ...keep, protocol: nextProto });
                 }}
               />
             </Form.Item>
-            <Form.Item name="port" label={t('listeners.port')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item>
+            <Form.Item
+              name="port"
+              label={t('listeners.port')}
+              tooltip={t('listeners.portHint')}
+              rules={[
+                { required: true, message: t('listeners.portHint') },
+                {
+                  validator: async (_, v) => {
+                    const s = String(v || '').trim();
+                    if (!s) return Promise.reject(new Error(t('listeners.portHint')));
+                    // Official: single port or ports syntax e.g. 200,204,401-429
+                    if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) {
+                      return Promise.reject(new Error(t('listeners.portHint')));
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            ><Input placeholder="443" /></Form.Item>
             <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0"><Input /></Form.Item>
             <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
             {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
@@ -254,7 +292,7 @@ const Listeners: React.FC = () => {
             )}
             <Descriptions.Item label={t('listeners.wizardConfig') || 'Config'}>
               <pre style={{ margin: 0, maxHeight: 200, overflow: 'auto', fontSize: 12 }}>
-                {JSON.stringify(formValuesToConfig(form.getFieldValue('protocol') || protocol, form.getFieldsValue(), null), null, 2)}
+                {JSON.stringify(formValuesToConfig(form.getFieldValue('protocol') || protocol, form.getFieldsValue(true), null), null, 2)}
               </pre>
             </Descriptions.Item>
           </Descriptions>
