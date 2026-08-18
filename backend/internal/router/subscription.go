@@ -1,6 +1,7 @@
 package router
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -39,10 +40,10 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				return
 			}
 			raw, err = converter.GenerateRawConfig(db, access, c.Request)
-		} else if err == gorm.ErrRecordNotFound {
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
 			var pu models.ProxyUser
 			if err = db.Where("sub_token = ?", tok).First(&pu).Error; err != nil {
-				if err == gorm.ErrRecordNotFound {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
 					c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 					return
 				}
