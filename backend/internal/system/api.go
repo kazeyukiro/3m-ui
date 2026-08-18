@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxRestoreDatabaseBytes = 128 << 20
+
 type Handler struct {
 	svc       *Service
 	dbPath    string
@@ -49,9 +51,20 @@ func (h *Handler) ExportBackup(c *gin.Context) {
 }
 
 func (h *Handler) RestoreDatabase(c *gin.Context) {
+	if h.dbPath == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database path is not configured"})
+		return
+	}
+	// FormFile otherwise permits arbitrarily large multipart requests to be
+	// written to disk, turning an authenticated endpoint into a storage DoS.
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRestoreDatabaseBytes)
 	file, err := c.FormFile("database")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart field database is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart field database is required and must be <= 128 MiB"})
+		return
+	}
+	if file.Size > maxRestoreDatabaseBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "database backup exceeds 128 MiB limit"})
 		return
 	}
 	f, err := file.Open()
@@ -60,10 +73,6 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	if h.dbPath == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database path is not configured"})
-		return
-	}
 	if err := RestoreDatabase(h.dbPath, f); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
