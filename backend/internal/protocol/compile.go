@@ -1,0 +1,193 @@
+package protocol
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// UserCred is a protocol-agnostic credential injected at compile time.
+type UserCred struct {
+	Username string
+	Password string
+	UUID     string
+	Flow     string
+}
+
+// CompileInput is the normalized node state passed to protocol modules.
+type CompileInput struct {
+	Name        string
+	Protocol    string
+	Listen      string
+	Port        interface{} // int or official ports string
+	UDP         bool
+	TLS         bool
+	Proxy       string
+	Rule        string
+	RoutingMark int
+	Config      map[string]interface{}
+	Users       []UserCred
+}
+
+// Module is a protocol compiler (m-ui style).
+type Module interface {
+	Kind() string
+	Compile(in CompileInput) (map[string]interface{}, error)
+	Capability() ProtocolCapability
+}
+
+// Registry maps protocol kind → Module.
+type Registry struct {
+	modules map[string]Module
+}
+
+func NewRegistry(mods ...Module) Registry {
+	r := Registry{modules: make(map[string]Module, len(mods))}
+	for _, m := range mods {
+		if m == nil {
+			continue
+		}
+		r.modules[strings.ToLower(m.Kind())] = m
+	}
+	return r
+}
+
+func DefaultCompileRegistry() Registry {
+	return NewRegistry(
+		VLESSCompiler{},
+		VMessCompiler{},
+		TrojanCompiler{},
+		ShadowsocksCompiler{},
+		Hysteria2Compiler{},
+		TUICCompiler{},
+		ShadowQUICCompiler{},
+		GenericCompiler{kind: "snell"},
+		GenericCompiler{kind: "anytls"},
+		GenericCompiler{kind: "mieru"},
+		GenericCompiler{kind: "sudoku"},
+		GenericCompiler{kind: "trusttunnel"},
+	)
+}
+
+func (r Registry) Compile(in CompileInput) (map[string]interface{}, error) {
+	kind := strings.ToLower(strings.TrimSpace(in.Protocol))
+	m, ok := r.modules[kind]
+	if !ok {
+		return nil, fmt.Errorf("unsupported protocol %q", kind)
+	}
+	return m.Compile(in)
+}
+
+func (r Registry) Has(kind string) bool {
+	_, ok := r.modules[strings.ToLower(strings.TrimSpace(kind))]
+	return ok
+}
+
+// ParseConfigJSON decodes listener config JSON into a map.
+func ParseConfigJSON(raw string) (map[string]interface{}, error) {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]interface{}{}, nil
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return nil, fmt.Errorf("invalid config json: %w", err)
+	}
+	if m == nil {
+		m = map[string]interface{}{}
+	}
+	return m, nil
+}
+
+func baseMap(in CompileInput) map[string]interface{} {
+	m := map[string]interface{}{
+		"name":   in.Name,
+		"type":   strings.ToLower(in.Protocol),
+		"port":   in.Port,
+		"listen": in.Listen,
+	}
+	if in.Proxy != "" {
+		m["proxy"] = in.Proxy
+	}
+	if in.Rule != "" {
+		m["rule"] = in.Rule
+	}
+	if in.RoutingMark > 0 {
+		m["routing-mark"] = in.RoutingMark
+	}
+	return m
+}
+
+func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]struct{}) {
+	for k, v := range cfg {
+		if _, ok := skip[k]; ok {
+			continue
+		}
+		// strip panel-only keys
+		if strings.HasPrefix(k, "_") || k == "access_profile" {
+			continue
+		}
+		dst[k] = v
+	}
+}
+
+func managedKeys() map[string]struct{} {
+	return map[string]struct{}{
+		"name": {}, "type": {}, "port": {}, "listen": {}, "proxy": {}, "rule": {},
+		"routing-mark": {}, "udp": {}, "tls": {}, "users": {},
+	}
+}
+
+func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string) []map[string]interface{} {
+	if len(fromCreds) > 0 {
+		out := make([]map[string]interface{}, 0, len(fromCreds))
+		for _, c := range fromCreds {
+			u := map[string]interface{}{}
+			switch field {
+			case "uuid":
+				if c.UUID != "" {
+					u["uuid"] = c.UUID
+				} else if c.Password != "" {
+					u["uuid"] = c.Password
+				}
+				if c.Flow != "" {
+					u["flow"] = c.Flow
+				}
+			case "password":
+				if c.Username != "" {
+					u["username"] = c.Username
+					u["password"] = c.Password
+				} else {
+					u["password"] = c.Password
+					if c.UUID != "" {
+						u["uuid"] = c.UUID
+					}
+				}
+			}
+			if len(u) > 0 {
+				out = append(out, u)
+			}
+		}
+		return out
+	}
+	if raw, ok := cfg["users"]; ok {
+		if arr, ok := raw.([]interface{}); ok {
+			out := make([]map[string]interface{}, 0, len(arr))
+			for _, item := range arr {
+				if m, ok := item.(map[string]interface{}); ok {
+					out = append(out, m)
+				}
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+func portValue(port string) interface{} {
+	s := strings.TrimSpace(port)
+	if p, err := strconv.Atoi(s); err == nil {
+		return p
+	}
+	return s
+}

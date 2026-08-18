@@ -1,0 +1,157 @@
+package protocol
+
+import "fmt"
+
+// GenericCompiler passes config through with optional users injection.
+type GenericCompiler struct{ kind string }
+
+func (g GenericCompiler) Kind() string { return g.kind }
+func (g GenericCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: g.kind, Label: g.kind}
+}
+func (g GenericCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	if in.TLS {
+		m["tls"] = true
+	}
+	return m, nil
+}
+
+type VLESSCompiler struct{}
+
+func (VLESSCompiler) Kind() string                    { return "vless" }
+func (VLESSCompiler) Capability() ProtocolCapability  { return vlessCapability() }
+func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	skip := managedKeys()
+	copyConfigPassthrough(m, in.Config, skip)
+	if in.UDP {
+		m["udp"] = true
+	}
+	// Reality: never set top-level tls
+	if _, hasReality := in.Config["reality-config"]; hasReality {
+		delete(m, "tls")
+	} else if in.TLS {
+		m["tls"] = true
+	} else {
+		delete(m, "tls")
+	}
+	users := asUsersArray(in.Config, in.Users, "uuid")
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type VMessCompiler struct{}
+
+func (VMessCompiler) Kind() string                    { return "vmess" }
+func (VMessCompiler) Capability() ProtocolCapability  { return vmessCapability() }
+func (VMessCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	if _, hasReality := in.Config["reality-config"]; hasReality {
+		delete(m, "tls")
+	} else if in.TLS {
+		m["tls"] = true
+	} else {
+		delete(m, "tls")
+	}
+	users := asUsersArray(in.Config, in.Users, "uuid")
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type TrojanCompiler struct{}
+
+func (TrojanCompiler) Kind() string                   { return "trojan" }
+func (TrojanCompiler) Capability() ProtocolCapability { return trojanCapability() }
+func (TrojanCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	if _, hasReality := in.Config["reality-config"]; hasReality {
+		delete(m, "tls")
+	} else if in.TLS {
+		m["tls"] = true
+	} else {
+		delete(m, "tls")
+	}
+	users := asUsersArray(in.Config, in.Users, "password")
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type ShadowsocksCompiler struct{}
+
+func (ShadowsocksCompiler) Kind() string                   { return "shadowsocks" }
+func (ShadowsocksCompiler) Capability() ProtocolCapability { return shadowsocksCapability() }
+func (ShadowsocksCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	if len(in.Users) > 1 {
+		return nil, fmt.Errorf("shadowsocks supports one password; %d credentials bound", len(in.Users))
+	}
+	if len(in.Users) == 1 && in.Users[0].Password != "" {
+		m["password"] = in.Users[0].Password
+	}
+	return m, nil
+}
+
+type Hysteria2Compiler struct{}
+
+func (Hysteria2Compiler) Kind() string                   { return "hysteria2" }
+func (Hysteria2Compiler) Capability() ProtocolCapability { return hysteria2Capability() }
+func (Hysteria2Compiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersArray(in.Config, in.Users, "password")
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type TUICCompiler struct{}
+
+func (TUICCompiler) Kind() string                   { return "tuic" }
+func (TUICCompiler) Capability() ProtocolCapability { return tuicCapability() }
+func (TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersArray(in.Config, in.Users, "password")
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type ShadowQUICCompiler struct{}
+
+func (ShadowQUICCompiler) Kind() string                   { return "shadowquic" }
+func (ShadowQUICCompiler) Capability() ProtocolCapability { return shadowquicCapability() }
+func (ShadowQUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersArray(in.Config, in.Users, "password")
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
