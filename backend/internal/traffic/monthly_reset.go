@@ -1,6 +1,7 @@
 package traffic
 
 import (
+	"errors"
 	"log"
 	"strconv"
 	"time"
@@ -41,7 +42,7 @@ func MaybeResetMonthlyTraffic(db *gorm.DB) {
 		log.Printf("traffic: monthly reset failed: %v", res.Error)
 		return
 	}
-	if err := db.Where("key = ?", "traffic_reset_last").First(&last).Error; err == gorm.ErrRecordNotFound {
+	if err := db.Where("key = ?", "traffic_reset_last").First(&last).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		_ = db.Create(&models.PanelSetting{Key: "traffic_reset_last", Value: today}).Error
 	} else if err == nil {
 		last.Value = today
