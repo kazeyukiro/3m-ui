@@ -53,6 +53,9 @@ func TestVLESSRealityClientExport(t *testing.T) {
 	if ro["short-id"] != "0123456789abcdef" {
 		t.Fatalf("short-id=%v", ro["short-id"])
 	}
+	if p["client-fingerprint"] != "chrome" {
+		t.Fatalf("fingerprint=%v", p["client-fingerprint"])
+	}
 }
 
 func TestTrojanCertificateClientExport(t *testing.T) {
