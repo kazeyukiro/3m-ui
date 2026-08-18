@@ -135,13 +135,14 @@ func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]stru
 func managedKeys() map[string]struct{} {
 	return map[string]struct{}{
 		"name": {}, "type": {}, "port": {}, "listen": {}, "proxy": {}, "rule": {},
-		"routing-mark": {}, "udp": {}, "tls": {}, "users": {},
+		"routing-mark": {}, "udp": {}, "tls": {}, "users": {}, "flow": {},
 	}
 }
 
 func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string, hasCredState bool) []map[string]interface{} {
+	var out []map[string]interface{}
 	if len(fromCreds) > 0 {
-		out := make([]map[string]interface{}, 0, len(fromCreds))
+		out = make([]map[string]interface{}, 0, len(fromCreds))
 		for _, c := range fromCreds {
 			u := map[string]interface{}{}
 			switch field {
@@ -169,16 +170,23 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 				out = append(out, u)
 			}
 		}
-		return out
+	} else {
+		// Explicit empty credential state must not fall back to config users.
+		if hasCredState {
+			return nil
+		}
+		if raw, ok := cfg["users"]; ok {
+			out = normalizeUsersValue(raw)
+		}
 	}
-	// Explicit empty credential state must not fall back to config users.
-	if hasCredState {
-		return nil
+	if flow, ok := cfg["flow"].(string); ok && strings.TrimSpace(flow) != "" {
+		for _, user := range out {
+			if _, exists := user["flow"]; !exists {
+				user["flow"] = flow
+			}
+		}
 	}
-	if raw, ok := cfg["users"]; ok {
-		return normalizeUsersValue(raw)
-	}
-	return nil
+	return out
 }
 
 func normalizeUsersValue(value interface{}) []map[string]interface{} {
