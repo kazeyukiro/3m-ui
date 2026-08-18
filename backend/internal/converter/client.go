@@ -256,9 +256,21 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["password"] = cred.Password
 			for _, key := range []string{
 				"up", "down", "obfs", "obfs-password", "masquerade", "bbr-profile",
-				"realm-opts", "alpn", "sni", "skip-cert-verify", "name-cert-verify", "fingerprint",
+				"realm-opts", "alpn", "sni", "servername", "skip-cert-verify", "name-cert-verify",
+				"fingerprint", "ca", "ca-str",
 			} {
 				copyOption(p, opts, key)
+			}
+			if p["alpn"] == nil {
+				p["alpn"] = []string{"h3"}
+			}
+			if p["sni"] == nil {
+				if sn, ok := p["servername"].(string); ok && sn != "" {
+					p["sni"] = sn
+				}
+			}
+			if value, ok := opts["ech-opts"]; ok {
+				p["ech-opts"] = value
 			}
 			result = append(result, p)
 		}
@@ -299,6 +311,34 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				"recv-window-conn", "recv-window", "disable-mtu-discovery",
 			} {
 				copyOption(p, opts, key)
+			}
+			if p["sni"] == nil {
+				if ju, ok := opts["jls-upstream"].(map[string]interface{}); ok {
+					if sni, ok := ju["sni"].(string); ok && strings.TrimSpace(sni) != "" {
+						p["sni"] = sni
+					} else if addr, ok := ju["addr"].(string); ok && strings.TrimSpace(addr) != "" {
+						host := addr
+						if h, _, err := net.SplitHostPort(addr); err == nil {
+							host = h
+						}
+						p["sni"] = host
+					}
+				}
+			}
+			if p["udp"] == nil {
+				p["udp"] = true
+			}
+			if p["alpn"] == nil {
+				p["alpn"] = []string{"h3"}
+			}
+			if p["quic-versions"] == nil {
+				p["quic-versions"] = []string{"v2"}
+			}
+			if p["congestion-controller"] == nil {
+				p["congestion-controller"] = "bbr"
+			}
+			if p["zero-rtt"] == nil {
+				p["zero-rtt"] = true
 			}
 			result = append(result, p)
 		}
@@ -366,7 +406,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) {
 	if value := realityClientOptions(opts); value != nil {
 		p["reality-opts"] = value
-		// Minimal working clients (clashmeta-inbound VLESS-Reality-*).
 		if p["client-fingerprint"] == nil {
 			p["client-fingerprint"] = "chrome"
 		}
