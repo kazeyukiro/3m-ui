@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -52,9 +53,8 @@ func Login(db *gorm.DB, jwtSecret string, input LoginInput) (*LoginResult, error
 }
 
 // EnsureAdmin creates the first administrator only when the database has no
-// administrator. An explicit THREE_M_UI_ADMIN_PASSWORD is preferred.
-// Otherwise a random password is written to the database directory so the
-// installer/operator can retrieve it once.
+// administrator. An explicit THREE_M_UI_ADMIN_PASSWORD is preferred. When it
+// is absent, a cryptographically random bootstrap password is used.
 func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password string, err error) {
 	var count int64
 	if err := db.Model(&models.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil {
@@ -70,7 +70,14 @@ func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password s
 	}
 	password = os.Getenv("THREE_M_UI_ADMIN_PASSWORD")
 	if password == "" {
-		password = "admin"
+		buf := make([]byte, 24)
+		if _, err := rand.Read(buf); err != nil {
+			return false, "", "", fmt.Errorf("generate initial admin password: %w", err)
+		}
+		password = base64.RawURLEncoding.EncodeToString(buf)
+	}
+	if len([]rune(password)) < 8 {
+		return false, "", "", errors.New("THREE_M_UI_ADMIN_PASSWORD must be at least 8 characters")
 	}
 
 	hash, err := HashPassword(password)
@@ -81,6 +88,7 @@ func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password s
 		return false, "", "", fmt.Errorf("create initial admin: %w", err)
 	}
 
+	_ = dbPath
 	return true, username, password, nil
 }
 
