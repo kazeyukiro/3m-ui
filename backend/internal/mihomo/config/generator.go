@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
@@ -114,82 +115,67 @@ func listenerAddressesConflict(a, b string) bool {
 }
 
 func generateListeners(listeners []models.Listener, creds map[uint][]Credential) ([]map[string]interface{}, error) {
+	reg := protocol.DefaultCompileRegistry()
 	result := make([]map[string]interface{}, 0, len(listeners))
 	for _, l := range listeners {
-		if !l.Enabled { continue }
-		protocol := strings.ToLower(strings.TrimSpace(l.Protocol))
-		if protocol == "" { protocol = strings.ToLower(strings.TrimSpace(l.Type)) }
-		if !IsMihomoListenerProtocol(protocol) { return nil, fmt.Errorf("unsupported Mihomo listener protocol %q", protocol) }
-		if !isValidPortString(l.Port) { return nil, fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port) }
+		if !l.Enabled {
+			continue
+		}
+		protocolName := strings.ToLower(strings.TrimSpace(l.Protocol))
+		if protocolName == "" {
+			protocolName = strings.ToLower(strings.TrimSpace(l.Type))
+		}
+		if !IsMihomoListenerProtocol(protocolName) {
+			return nil, fmt.Errorf("unsupported Mihomo listener protocol %q", protocolName)
+		}
+		if !isValidPortString(l.Port) {
+			return nil, fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port)
+		}
 		listen := firstListenerAddress(l)
 		var portVal interface{} = strings.TrimSpace(l.Port)
-		if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil { portVal = p }
-		m := map[string]interface{}{"name": l.Name, "type": protocol, "port": portVal, "listen": listen}
+		if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil {
+			portVal = p
+		}
 		configMap, err := decodeListenerConfig(l.Config)
-		if err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }
-		if err := ValidateListenerConfig(protocol, l.Config); err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }
-		if l.Proxy != "" { m["proxy"] = l.Proxy }
-		if l.Rule != "" { m["rule"] = l.Rule }
-		if l.RoutingMark > 0 { m["routing-mark"] = l.RoutingMark }
-		if l.UDP && listenerHasUDPOption(protocol) { m["udp"] = true }
-		if value, ok := configMap["routing-mark"]; ok { m["routing-mark"] = value }
-		for k, v := range configMap { if listenerFieldIsManaged(k) { continue }; m[k] = v }
-		copyServerTLSFields(m, configMap)
-		listenerCreds, hasCredentialState := creds[l.ID]
-		// Official Reality listeners use reality-config only — do not emit top-level tls: true
-		// (clashmeta-inbound VLESS-Reality-TCP-Vision).
-		if _, hasReality := configMap["reality-config"]; hasReality {
-			delete(m, "tls")
-		} else if l.TLS {
-			if !ListenerSupportsTLS(protocol) { return nil, fmt.Errorf("listener %q: TLS is not supported for protocol %q", l.Name, protocol) }
-			m["tls"] = true
-		} else {
-			delete(m, "tls")
+		if err != nil {
+			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
+		}
+		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
+			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
 
-		switch protocol {
-		case "shadowsocks":
-			if len(listenerCreds) > 1 { return nil, fmt.Errorf("listener %q: Shadowsocks supports one password; %d active credentials are bound", l.Name, len(listenerCreds)) }
-			copyOption(m, configMap, "cipher")
-			if len(listenerCreds) == 1 && listenerCreds[0].Password != "" { m["password"] = listenerCreds[0].Password } else { copyOption(m, configMap, "password") }
-		case "snell":
-			copyOption(m, configMap, "psk"); copyOption(m, configMap, "version")
-		case "vmess", "vless":
-			users := make([]map[string]interface{}, 0, len(listenerCreds))
-			for _, cred := range listenerCreds {
-				if cred.UUID == "" { continue }
-				u := map[string]interface{}{"uuid": cred.UUID}
-				if cred.Username != "" { u["username"] = cred.Username }
-				if flow, ok := configMap["flow"]; ok && protocol == "vless" { u["flow"] = flow }
-				if alterID, ok := configMap["alterId"]; ok && protocol == "vmess" { u["alterId"] = alterID }
-				users = append(users, u)
-			}
-			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { m["users"] = value }
-		case "trojan":
-			users := make([]map[string]interface{}, 0, len(listenerCreds))
-			for _, cred := range listenerCreds { if cred.Password != "" { u := map[string]interface{}{"password": cred.Password}; if cred.Username != "" { u["username"] = cred.Username }; users = append(users, u) } }
-			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { m["users"] = value }
-		case "hysteria2", "anytls", "mieru":
-			users := make(map[string]string)
-			for _, cred := range listenerCreds { if cred.Username != "" && cred.Password != "" { users[cred.Username] = cred.Password } }
-			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { m["users"] = value }
-		case "tuic":
-			if value, ok := configMap["token"]; ok && !hasCredentialState { m["token"] = value } else { users := make(map[string]string); for _, cred := range listenerCreds { if cred.UUID != "" && cred.Password != "" { users[cred.UUID] = cred.Password } }; if len(users) > 0 { m["users"] = users } }
-		case "shadowquic", "trusttunnel":
-			users := make([]map[string]interface{}, 0, len(listenerCreds))
-			for _, cred := range listenerCreds { if cred.Username != "" && cred.Password != "" { users = append(users, map[string]interface{}{"username": cred.Username, "password": cred.Password}) } }
-			if len(users) > 0 { m["users"] = users } else if value, ok := configMap["users"]; ok && !hasCredentialState { normalized, err := normalizeListenerUserList(value); if err != nil { return nil, fmt.Errorf("listener %q: %w", l.Name, err) }; if normalized != nil { m["users"] = normalized } }
-		case "sudoku":
+		listenerCreds := creds[l.ID]
+		users := make([]protocol.UserCred, 0, len(listenerCreds))
+		for _, c := range listenerCreds {
+			users = append(users, protocol.UserCred{
+				Username: c.Username,
+				Password: c.Password,
+				UUID:     c.UUID,
+			})
 		}
-		if hasCredentialState && len(listenerCreds) == 0 {
-			delete(m, "users")
-			if protocol == "shadowsocks" { delete(m, "password") }
-			if protocol == "tuic" { delete(m, "token") }
+
+		in := protocol.CompileInput{
+			Name:        l.Name,
+			Protocol:    protocolName,
+			Listen:      listen,
+			Port:        portVal,
+			UDP:         l.UDP,
+			TLS:         l.TLS,
+			Proxy:       l.Proxy,
+			Rule:        l.Rule,
+			RoutingMark: l.RoutingMark,
+			Config:      configMap,
+			Users:       users,
+		}
+		m, err := reg.Compile(in)
+		if err != nil {
+			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
 		result = append(result, m)
 	}
 	return result, nil
 }
+
 
 func isValidPortString(s string) bool {
 	s = strings.TrimSpace(s); if s == "" { return false }
