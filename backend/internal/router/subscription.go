@@ -88,6 +88,10 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 	var pu models.ProxyUser
 	if err := db.Where("sub_token = ?", tok).First(&pu).Error; err == nil {
+		if !user.IsCredentialActive(pu) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "user is not active"})
+			return
+		}
 		expire := ""
 		if !pu.ExpireTime.IsZero() {
 			expire = pu.ExpireTime.UTC().Format(time.RFC3339)
@@ -95,7 +99,7 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 		c.JSON(http.StatusOK, gin.H{
 			"username":       pu.Username,
 			"enabled":        pu.Enabled,
-			"blocked":        !user.IsCredentialActive(pu),
+			"blocked":        false,
 			"online":         pu.Online,
 			"traffic_used":   pu.TrafficUsed,
 			"traffic_limit":  pu.TrafficLimit,
@@ -107,8 +111,12 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 		return
 	}
 	var access models.AccessToken
-	if err := db.Where("token = ?", tok).First(&access).Error; err != nil {
+	if err := db.Where("token = ? AND enabled = ?", tok, true).First(&access).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		return
+	}
+	if access.ExpireAt != nil && !access.ExpireAt.After(time.Now()) {
+		c.JSON(http.StatusGone, gin.H{"error": "subscription expired"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
