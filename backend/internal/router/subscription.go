@@ -14,7 +14,7 @@ import (
 )
 
 func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
-	api.GET("/client/sub/:token", func(c *gin.Context) {
+	handler := func(c *gin.Context) {
 		if db == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database is not configured"})
 			return
@@ -82,7 +82,21 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 		}
 		c.Header("Cache-Control", "no-store")
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", converted)
-	})
+	}
+
+	// Keep the current canonical API path and accept legacy subscription URLs
+	// so existing clients do not start returning 404 after an upgrade.
+	api.GET("/client/sub/:token", handler)
+	api.GET("/client/sub/:token/", handler)
+
+	// Legacy paths are registered on the engine root by SetupRouterWithDeps.
+	// The aliases below are attached to the same handler through the parent
+	// router group so all subscription URLs share exactly the same behavior.
+	root := api.Group("/")
+	root.GET("/sub/:token", handler)
+	root.GET("/sub/:token/", handler)
+	root.GET("/api/client/sub/:token", handler)
+	root.GET("/api/client/sub/:token/", handler)
 }
 
 func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
