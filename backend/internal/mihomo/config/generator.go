@@ -136,10 +136,16 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		for k, v := range configMap { if listenerFieldIsManaged(k) { continue }; m[k] = v }
 		copyServerTLSFields(m, configMap)
 		listenerCreds, hasCredentialState := creds[l.ID]
-		if l.TLS {
+		// Official Reality listeners use reality-config only — do not emit top-level tls: true
+		// (clashmeta-inbound VLESS-Reality-TCP-Vision).
+		if _, hasReality := configMap["reality-config"]; hasReality {
+			delete(m, "tls")
+		} else if l.TLS {
 			if !ListenerSupportsTLS(protocol) { return nil, fmt.Errorf("listener %q: TLS is not supported for protocol %q", l.Name, protocol) }
 			m["tls"] = true
-		} else { delete(m, "tls") }
+		} else {
+			delete(m, "tls")
+		}
 
 		switch protocol {
 		case "shadowsocks":
