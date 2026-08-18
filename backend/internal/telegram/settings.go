@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -59,7 +60,7 @@ func LoadSettings(db *gorm.DB) (Settings, error) {
 	}
 	var row models.PanelSetting
 	if err := db.Where("key = ?", settingKey).First(&row).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return s, nil
 		}
 		return s, err
@@ -84,7 +85,7 @@ func SaveSettings(db *gorm.DB, s Settings) error {
 	}
 	var row models.PanelSetting
 	err = db.Where("key = ?", settingKey).First(&row).Error
-	if err == gorm.ErrRecordNotFound {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return db.Create(&models.PanelSetting{Key: settingKey, Value: string(raw)}).Error
 	}
 	if err != nil {
