@@ -59,7 +59,10 @@ const Listeners: React.FC = () => {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless' });
+    form.setFieldsValue({
+      bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless',
+      transport_layer: 'raw', security_layer: 'reality', flow: 'xtls-rprx-vision',
+    });
     setModalOpen(true);
   };
   const openEdit = (record: Listener) => {
@@ -208,7 +211,14 @@ const Listeners: React.FC = () => {
             onChange={(nextProto: string) => {
               const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']);
               form.resetFields();
-              form.setFieldsValue({ ...keep, protocol: nextProto });
+              const layerDefaults: Record<string, string> = {
+                transport_layer: 'raw',
+                security_layer: 'none',
+              };
+              if (nextProto === 'vless') {
+                layerDefaults.security_layer = 'reality';
+              }
+              form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults });
             }}
           />
         </Form.Item>
