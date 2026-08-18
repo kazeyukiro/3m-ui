@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Form, Input, InputNumber, Select, Switch, Divider, Radio, Space, Typography } from 'antd';
-import type { ProtocolCapability, FieldCapability, ComponentCapability } from '../api/capabilities';
+import type { ProtocolCapability, FieldCapability } from '../api/capabilities';
 import { useI18n } from '../i18n';
 
 const { Text } = Typography;
@@ -51,8 +51,8 @@ type Props = {
 };
 
 /**
- * Dynamic node form driven by backend capability JSON (m-ui style).
- * Renders transport/security layers + protocol fields from the manifest.
+ * Dynamic listener form driven by the backend capability manifest.
+ * Nested Mihomo paths are represented by Ant Design's nested form values.
  */
 const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvanced = false }) => {
   const { t } = useI18n();
@@ -128,11 +128,27 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
 
 export default CapabilityFormFields;
 
+function getNestedValue(values: Record<string, any>, key: string): any {
+  if (Object.prototype.hasOwnProperty.call(values, key)) return values[key];
+  return key.split('.').reduce((current: any, part: string) => {
+    if (current === undefined || current === null) return undefined;
+    return current[part];
+  }, values);
+}
+
+function firstValue(values: Record<string, any>, ...keys: string[]): any {
+  for (const key of keys) {
+    const value = getNestedValue(values, key);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+}
+
 /** Map capability-driven form values into Mihomo listener config JSON keys. */
 export function capabilityFormToConfig(
   protocol: string,
   values: Record<string, any>,
-  capability?: ProtocolCapability,
+  _capability?: ProtocolCapability,
 ): Record<string, any> {
   const cfg: Record<string, any> = {};
   const set = (k: string, v: any) => {
@@ -140,51 +156,60 @@ export function capabilityFormToConfig(
     cfg[k] = v;
   };
 
-  // Transport exclusivity
-  const transport = values.transport_layer || 'raw';
-  if (transport === 'ws') set('ws-path', values['ws-path'] || values.ws_path);
-  if (transport === 'grpc') set('grpc-service-name', values['grpc-service-name'] || values.grpc_service_name);
+  // Transport exclusivity. Capability paths may be nested by Ant Design.
+  const transport = firstValue(values, 'transport_layer') || 'raw';
+  if (transport === 'ws') set('ws-path', firstValue(values, 'ws-path', 'ws_path'));
+  if (transport === 'grpc') set('grpc-service-name', firstValue(values, 'grpc-service-name', 'grpc_service_name'));
   if (transport === 'xhttp') {
     const x: Record<string, any> = {};
-    if (values.xhttp_path) x.path = values.xhttp_path;
-    if (values.xhttp_host) x.host = values.xhttp_host;
-    if (values.xhttp_mode) x.mode = values.xhttp_mode;
+    const path = firstValue(values, 'xhttp_path', 'xhttp-config.path');
+    const host = firstValue(values, 'xhttp_host', 'xhttp-config.host');
+    const mode = firstValue(values, 'xhttp_mode', 'xhttp-config.mode');
+    if (path !== undefined) x.path = path;
+    if (host !== undefined) x.host = host;
+    if (mode !== undefined) x.mode = mode;
     if (Object.keys(x).length) cfg['xhttp-config'] = x;
   }
 
-  // Security exclusivity
-  const security = values.security_layer || 'none';
+  // Security exclusivity. Reality fields must work whether the capability
+  // manifest exposes flat names or Mihomo-style nested paths.
+  const security = firstValue(values, 'security_layer') || 'none';
   if (security === 'reality') {
     const r: Record<string, any> = {};
-    if (values.reality_dest) r.dest = values.reality_dest;
-    if (values.reality_private_key) r['private-key'] = values.reality_private_key;
-    if (values.reality_short_id) r['short-id'] = values.reality_short_id;
-    if (values.reality_server_names) r['server-names'] = values.reality_server_names;
+    const dest = firstValue(values, 'reality_dest', 'reality-config.dest');
+    const privateKey = firstValue(values, 'reality_private_key', 'reality-config.private-key');
+    const shortID = firstValue(values, 'reality_short_id', 'reality-config.short-id');
+    const serverNames = firstValue(values, 'reality_server_names', 'reality-config.server-names');
+    if (dest !== undefined) r.dest = dest;
+    if (privateKey !== undefined) r['private-key'] = privateKey;
+    if (shortID !== undefined) r['short-id'] = shortID;
+    if (serverNames !== undefined) r['server-names'] = serverNames;
     if (Object.keys(r).length) cfg['reality-config'] = r;
   } else if (security === 'tls') {
-    set('certificate', values.certificate);
-    set('private-key', values['private-key'] || values.private_key);
-    set('alpn', values.alpn);
-    if (values['allow-insecure'] === true) cfg['allow-insecure'] = true;
+    set('certificate', firstValue(values, 'certificate'));
+    set('private-key', firstValue(values, 'private-key', 'private_key'));
+    set('alpn', firstValue(values, 'alpn'));
+    if (firstValue(values, 'allow-insecure') === true) cfg['allow-insecure'] = true;
   }
 
-  // Protocol fields by path (from capability)
+  // Protocol fields by path (from capability). Exclude all transport/security
+  // component fields handled explicitly above, including nested objects.
   const skip = new Set([
     'transport_layer', 'security_layer', 'name', 'protocol', 'port', 'bind_address', 'enabled', 'udp',
     'public_host', 'public_port', 'access_sni', 'client_fingerprint', 'access_alpn',
     'ws-path', 'grpc-service-name', 'xhttp_path', 'xhttp_host', 'xhttp_mode',
-    'reality_dest', 'reality_private_key', 'reality_short_id', 'reality_server_names',
-    'certificate', 'private-key', 'private_key', 'allow-insecure',
+    'xhttp-config', 'reality_dest', 'reality_private_key', 'reality_short_id', 'reality_server_names',
+    'reality-config', 'certificate', 'private-key', 'private_key', 'allow-insecure',
   ]);
   for (const [k, v] of Object.entries(values)) {
     if (skip.has(k)) continue;
     if (v === undefined || v === null || v === '') continue;
-    // capability paths already use mihomo keys where possible
     cfg[k] = v;
   }
 
   // VLESS flow
-  if (protocol === 'vless' && values.flow) set('flow', values.flow);
+  const flow = firstValue(values, 'flow');
+  if (protocol === 'vless' && flow) set('flow', flow);
 
   return cfg;
 }
