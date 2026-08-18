@@ -178,54 +178,19 @@ func normalizeChatID(id string) string {
 }
 
 func buildAllowedChats(ids []string) map[string]struct{} {
-	allowed := make(map[string]struct{}, len(ids)*4)
-	add := func(v string) {
-		v = normalizeChatID(v)
-		if v == "" {
-			return
-		}
-		allowed[v] = struct{}{}
-	}
+	allowed := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		n := normalizeChatID(id)
-		if n == "" {
-			continue
-		}
-		add(n)
-		if strings.HasPrefix(n, "-") {
-			add(strings.TrimPrefix(n, "-"))
-		} else if _, err := strconv.ParseInt(n, 10, 64); err == nil {
-			add("-" + n)
-		}
-		if strings.HasPrefix(n, "-100") {
-			body := strings.TrimPrefix(n, "-100")
-			add(body)
-			add("-" + body)
-		} else if !strings.HasPrefix(n, "-") {
-			if _, err := strconv.ParseInt(n, 10, 64); err == nil {
-				add("-100" + n)
-			}
-		} else if strings.HasPrefix(n, "-") && !strings.HasPrefix(n, "-100") {
-			add("-100" + strings.TrimPrefix(n, "-"))
+		if n != "" {
+			allowed[n] = struct{}{}
 		}
 	}
 	return allowed
 }
 
 func chatAllowed(allowed map[string]struct{}, chatID string) bool {
-	n := normalizeChatID(chatID)
-	if _, ok := allowed[n]; ok {
-		return true
-	}
-	if v, err := strconv.ParseInt(n, 10, 64); err == nil {
-		if _, ok := allowed[strconv.FormatInt(v, 10)]; ok {
-			return true
-		}
-		if _, ok := allowed[strconv.FormatInt(-v, 10)]; ok {
-			return true
-		}
-	}
-	return false
+	_, ok := allowed[normalizeChatID(chatID)]
+	return ok
 }
 
 type tgUpdate struct {
