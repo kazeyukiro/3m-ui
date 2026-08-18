@@ -2,6 +2,7 @@ export default {
   app: { name: '3M-UI', title: 'Mihomo 核心管理控制台' },
   nav: { dashboard: '仪表盘', listeners: '节点管理', users: '用户管理', traffic: '流量监控', cluster: '多机节点', routing: '路由规则', core: '核心管理', logs: '运行日志', config: '配置引擎', settings: '系统设置', logout: '退出登录' },
   common: {
+    advanced: '高级选项',
     prev: '上一步',
     next: '下一步',
     saved: '已保存',
@@ -20,7 +21,9 @@ export default {
   traffic: { title: '流量监控', upload: '上传', download: '下载', uploadRate: '上传速率', downloadRate: '下载速率', connections: '连接', onlineUsers: '在线用户', byUser: '用户流量', listener: '节点', network: '网络', rule: '规则' },
   cluster: { title: '多机节点', subtitle: '登记远程 3m-ui 面板并做健康检查（完整远程管控后续迭代）', create: '添加节点', edit: '编辑节点', name: '名称', baseUrl: '面板地址', apiToken: 'API Token', apiTokenHint: '可选；用于鉴权远程面板', remark: '备注', health: '健康检查', healthDone: '已探测', created: '已添加', updated: '已更新', deleted: '已删除' , nodesLoaded: '已加载节点', remoteCreate: '远程创建', remoteCreated: '远程节点已创建', remoteDeleted: '远程节点已删除', remoteNodes: '远程节点'},
   routing: { title: '路由与策略组', subtitle: '管理 Mihomo proxy-groups 与 rules', groups: '策略组', rules: '规则列表', addGroup: '添加策略组', proxies: '节点列表', proxiesHint: '逗号分隔的 proxy / group 名称', rulesHint: '每行一条 Mihomo rule', rulesSaved: '规则已保存', groupSaved: '策略组已保存', groupDeleted: '策略组已删除' },
-  settings: { title: '系统设置', subtitle: '偏好与账户', language: '界面语言', theme: '主题外观', light: '浅色', dark: '深色', system: '跟随系统', passwordTitle: '账户安全', passwordDescription: '定期修改密码可以提高账户安全性', changePassword: '前往修改密码', about: '关于 3M-UI', version: '版本', backup: '备份与恢复', backupHint: '下载包含 SQLite 与 Mihomo 配置的 zip。恢复数据库后需重启面板进程。', downloadBackup: '下载备份', restoreDb: '恢复数据库', backupDone: '备份已下载', restoreDone: '数据库已恢复，请重启面板', apiDocs: 'API 文档', apiDocsHint: '用于自动化的 OpenAPI 3 规范。', openOpenAPI: '打开 openapi.yaml',     accessProfile: '访问配置 (Access Profile)',
+  settings: { title: '系统设置', subtitle: '偏好与账户', language: '界面语言', theme: '主题外观', light: '浅色', dark: '深色', system: '跟随系统', passwordTitle: '账户安全', passwordDescription: '定期修改密码可以提高账户安全性', changePassword: '前往修改密码', about: '关于 3M-UI', version: '版本', backup: '备份与恢复', backupHint: '下载包含 SQLite 与 Mihomo 配置的 zip。恢复数据库后需重启面板进程。', downloadBackup: '下载备份', restoreDb: '恢复数据库', backupDone: '备份已下载', restoreDone: '数据库已恢复，请重启面板', apiDocs: 'API 文档', apiDocsHint: '用于自动化的 OpenAPI 3 规范。', openOpenAPI: '打开 openapi.yaml',
+    alpnHint: '逗号分隔，如 h2,http/1.1',
+    accessProfile: '访问配置 (Access Profile)',
     accessProfileHint: '用于导出订阅链接 / 客户端 YAML 的公网 Host、SNI、指纹（对齐 m-ui）',
     publicHost: '公网 Host',
     publicPort: '公网端口',
