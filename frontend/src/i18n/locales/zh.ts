@@ -1,11 +1,14 @@
 export default {
   app: { name: '3M-UI', title: 'Mihomo 核心管理控制台' },
+  nav: { dashboard: '仪表盘', listeners: '节点管理', users: '用户管理', traffic: '流量监控', cluster: '多机节点', routing: '路由规则', core: '核心管理', logs: '日志', settings: '设置', logout: '退出' },
   common: {
     save: '保存', cancel: '取消', delete: '删除', edit: '编辑', create: '创建', search: '搜索',
     confirm: '确认', loading: '加载中...', success: '成功', failed: '失败', actions: '操作',
     enable: '启用', disable: '禁用', copy: '复制', refresh: '刷新', back: '返回',
-    username: '用户名', password: '密码', yes: '是', no: '否', all: '全部',
+    username: '用户名', password: '密码', yes: '是', no: '否', all: '全部', close: '关闭',
+    submit: '提交', reset: '重置', export: '导出', import: '导入', status: '状态',
   },
+  auth: { login: '登录', username: '用户名', password: '密码', loginSuccess: '登录成功', loginFailed: '登录失败' },
   listeners: {
     title: '节点管理', create: '创建节点', edit: '编辑节点', name: '名称', protocol: '协议',
     port: '端口', listen: '监听地址', enabled: '启用', udp: 'UDP', tls: 'TLS',
@@ -30,5 +33,8 @@ export default {
     realityServerNames: 'Server Names',
     certificate: '证书路径/内容',
     privateKey: '私钥路径/内容',
+    reload: '重载', clone: '克隆', exportUri: '导出链接',
   },
+  users: { title: '用户管理', create: '创建用户', username: '用户名', uuid: 'UUID', quota: '流量配额', expire: '到期时间' },
+  settings: { title: '系统设置', saved: '已保存' },
 };
