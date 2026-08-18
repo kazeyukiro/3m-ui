@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"golang.org/x/crypto/curve25519"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gopkg.in/yaml.v3"
@@ -149,7 +151,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
 
-	// Prefer numeric port for single ports so client YAML matches official examples.
 	var portVal interface{} = strings.TrimSpace(l.Port)
 	if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil {
 		portVal = p
@@ -222,7 +223,6 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if cred.UUID == "" {
 				continue
 			}
-			// Single-user export keeps the listener name; multi-user gets a stable suffix.
 			suffix := ""
 			if len(credentials) > 1 {
 				suffix = credentialSuffix(credentials, i)
@@ -237,11 +237,13 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			copyOption(p, opts, "global-padding")
 			copyOption(p, opts, "authenticated-length")
 			copyOption(p, opts, "encryption")
-			// Per-user fields (flow / alterId) live under users[] in official listener schema.
 			if flow := userFieldFromOpts(opts, cred.UUID, "flow"); flow != nil {
 				p["flow"] = flow
 			} else {
 				copyOption(p, opts, "flow")
+			}
+			if flow, ok := p["flow"].(string); ok && strings.Contains(strings.ToLower(flow), "vision") {
+				p["tls"] = true
 			}
 			if alterID := userFieldFromOpts(opts, cred.UUID, "alterId"); alterID != nil {
 				p["alterId"] = alterID
@@ -449,11 +451,26 @@ func copyClientTLS(dst, src map[string]interface{}) {
 	if _, ok := src["certificate"]; ok {
 		dst["tls"] = true
 	}
+	if _, ok := src["reality-config"]; ok {
+		dst["tls"] = true
+	}
 	for _, key := range []string{
-		"sni", "alpn", "fingerprint", "client-fingerprint",
+		"sni", "servername", "alpn", "fingerprint", "client-fingerprint",
 		"skip-cert-verify", "name-cert-verify",
 	} {
 		copyOption(dst, src, key)
+	}
+	if dst["sni"] == nil && dst["servername"] == nil {
+		if reality, ok := src["reality-config"].(map[string]interface{}); ok {
+			if sni, ok := firstStringValue(reality["server-names"]); ok {
+				dst["servername"] = sni
+			}
+		}
+	}
+	if dst["servername"] == nil {
+		if sni, ok := dst["sni"].(string); ok && sni != "" {
+			dst["servername"] = sni
+		}
 	}
 }
 
@@ -477,8 +494,8 @@ func realityClientOptions(src map[string]interface{}) map[string]interface{} {
 	if !ok {
 		return nil
 	}
-	publicKey, hasPublic := cfg["public-key"]
-	if !hasPublic {
+	publicKey, err := deriveRealityPublicKey(cfg)
+	if err != nil || publicKey == "" {
 		return nil
 	}
 	result := map[string]interface{}{"public-key": publicKey}
@@ -488,6 +505,52 @@ func realityClientOptions(src map[string]interface{}) map[string]interface{} {
 		result["short-id"] = value
 	}
 	return result
+}
+
+func deriveRealityPublicKey(cfg map[string]interface{}) (string, error) {
+	if public, ok := cfg["public-key"].(string); ok && strings.TrimSpace(public) != "" {
+		return strings.TrimSpace(public), nil
+	}
+	private, ok := cfg["private-key"].(string)
+	if !ok || strings.TrimSpace(private) == "" {
+		return "", fmt.Errorf("reality-config missing public-key and private-key")
+	}
+	var raw []byte
+	var err error
+	for _, decode := range []func(string) ([]byte, error){
+		base64.RawStdEncoding.DecodeString,
+		base64.StdEncoding.DecodeString,
+		base64.RawURLEncoding.DecodeString,
+		base64.URLEncoding.DecodeString,
+	} {
+		raw, err = decode(strings.TrimSpace(private))
+		if err == nil && len(raw) == 32 {
+			break
+		}
+		raw = nil
+	}
+	if len(raw) != 32 {
+		return "", fmt.Errorf("invalid Reality private key")
+	}
+	public, err := curve25519.X25519(raw, curve25519.Basepoint)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawStdEncoding.EncodeToString(public), nil
+}
+
+func firstStringValue(v interface{}) (string, bool) {
+	if s, ok := v.(string); ok {
+		return s, s != ""
+	}
+	if a, ok := v.([]interface{}); ok && len(a) > 0 {
+		s, _ := a[0].(string)
+		return s, s != ""
+	}
+	if a, ok := v.([]string); ok && len(a) > 0 {
+		return a[0], a[0] != ""
+	}
+	return "", false
 }
 
 func shadowTLSClientOptions(src map[string]interface{}) map[string]interface{} {
@@ -582,8 +645,6 @@ func credentialSuffix(credentials []user.Credential, index int) string {
 	return ""
 }
 
-// userFieldFromOpts reads a per-user field (e.g. flow, alterId) from the
-// official listeners users[] list by matching uuid.
 func userFieldFromOpts(opts map[string]interface{}, uuid, field string) interface{} {
 	uuid = strings.TrimSpace(uuid)
 	if uuid == "" {
