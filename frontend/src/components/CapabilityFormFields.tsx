@@ -144,47 +144,54 @@ function firstValue(values: Record<string, any>, ...keys: string[]): any {
   return undefined;
 }
 
+function setConfigPath(cfg: Record<string, any>, path: string, value: any): void {
+  const parts = path.split('.');
+  let current = cfg;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const part = parts[i];
+    if (!current[part] || typeof current[part] !== 'object' || Array.isArray(current[part])) {
+      current[part] = {};
+    }
+    current = current[part];
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+function setIfPresent(cfg: Record<string, any>, path: string, value: any): void {
+  if (value === undefined || value === null || value === '') return;
+  setConfigPath(cfg, path, value);
+}
+
 /** Map capability-driven form values into Mihomo listener config JSON keys. */
 export function capabilityFormToConfig(
   protocol: string,
   values: Record<string, any>,
-  _capability?: ProtocolCapability,
+  capability?: ProtocolCapability,
 ): Record<string, any> {
   const cfg: Record<string, any> = {};
-  const set = (k: string, v: any) => {
-    if (v === undefined || v === null || v === '') return;
-    cfg[k] = v;
-  };
+  const set = (k: string, v: any) => setIfPresent(cfg, k, v);
 
   // Transport exclusivity. Capability paths may be nested by Ant Design.
   const transport = firstValue(values, 'transport_layer') || 'raw';
   if (transport === 'ws') set('ws-path', firstValue(values, 'ws-path', 'ws_path'));
   if (transport === 'grpc') set('grpc-service-name', firstValue(values, 'grpc-service-name', 'grpc_service_name'));
   if (transport === 'xhttp') {
-    const x: Record<string, any> = {};
     const path = firstValue(values, 'xhttp_path', 'xhttp-config.path');
     const host = firstValue(values, 'xhttp_host', 'xhttp-config.host');
     const mode = firstValue(values, 'xhttp_mode', 'xhttp-config.mode');
-    if (path !== undefined) x.path = path;
-    if (host !== undefined) x.host = host;
-    if (mode !== undefined) x.mode = mode;
-    if (Object.keys(x).length) cfg['xhttp-config'] = x;
+    setIfPresent(cfg, 'xhttp-config.path', path);
+    setIfPresent(cfg, 'xhttp-config.host', host);
+    setIfPresent(cfg, 'xhttp-config.mode', mode);
   }
 
-  // Security exclusivity. Reality fields must work whether the capability
-  // manifest exposes flat names or Mihomo-style nested paths.
+  // Security exclusivity. Reality fields work whether the capability manifest
+  // exposes flat names or Mihomo-style nested paths.
   const security = firstValue(values, 'security_layer') || 'none';
   if (security === 'reality') {
-    const r: Record<string, any> = {};
-    const dest = firstValue(values, 'reality_dest', 'reality-config.dest');
-    const privateKey = firstValue(values, 'reality_private_key', 'reality-config.private-key');
-    const shortID = firstValue(values, 'reality_short_id', 'reality-config.short-id');
-    const serverNames = firstValue(values, 'reality_server_names', 'reality-config.server-names');
-    if (dest !== undefined) r.dest = dest;
-    if (privateKey !== undefined) r['private-key'] = privateKey;
-    if (shortID !== undefined) r['short-id'] = shortID;
-    if (serverNames !== undefined) r['server-names'] = serverNames;
-    if (Object.keys(r).length) cfg['reality-config'] = r;
+    setIfPresent(cfg, 'reality-config.dest', firstValue(values, 'reality_dest', 'reality-config.dest'));
+    setIfPresent(cfg, 'reality-config.private-key', firstValue(values, 'reality_private_key', 'reality-config.private-key'));
+    setIfPresent(cfg, 'reality-config.short-id', firstValue(values, 'reality_short_id', 'reality-config.short-id'));
+    setIfPresent(cfg, 'reality-config.server-names', firstValue(values, 'reality_server_names', 'reality-config.server-names'));
   } else if (security === 'tls') {
     set('certificate', firstValue(values, 'certificate'));
     set('private-key', firstValue(values, 'private-key', 'private_key'));
@@ -192,22 +199,23 @@ export function capabilityFormToConfig(
     if (firstValue(values, 'allow-insecure') === true) cfg['allow-insecure'] = true;
   }
 
-  // Protocol fields by path (from capability). Exclude all transport/security
-  // component fields handled explicitly above, including nested objects.
-  const skip = new Set([
-    'transport_layer', 'security_layer', 'name', 'protocol', 'port', 'bind_address', 'enabled', 'udp',
-    'public_host', 'public_port', 'access_sni', 'client_fingerprint', 'access_alpn',
-    'ws-path', 'grpc-service-name', 'xhttp_path', 'xhttp_host', 'xhttp_mode',
-    'xhttp-config', 'reality_dest', 'reality_private_key', 'reality_short_id', 'reality_server_names',
-    'reality-config', 'certificate', 'private-key', 'private_key', 'allow-insecure',
-  ]);
-  for (const [k, v] of Object.entries(values)) {
-    if (skip.has(k)) continue;
-    if (v === undefined || v === null || v === '') continue;
-    cfg[k] = v;
+  // Only serialize fields declared by the capability manifest. Previously this
+  // loop copied every Form value, including legacy UI-only aliases such as
+  // reality_enabled, reality_dest, shadow_tls_enabled, etc. Those keys are not
+  // Mihomo config keys and caused valid configurations to be rejected by the
+  // backend schema when an existing listener was edited.
+  for (const field of capability?.fields || []) {
+    const path = field.path;
+    if (!path || path === 'transport_layer' || path === 'security_layer') continue;
+    if (path === 'ws-path' || path === 'grpc-service-name' || path.startsWith('xhttp-config.')) continue;
+    if (path === 'reality-config' || path.startsWith('reality-config.')) continue;
+    if (path === 'certificate' || path === 'private-key' || path === 'private_key' || path === 'allow-insecure') continue;
+    const value = firstValue(values, path);
+    if (value !== undefined && value !== null && value !== '') setConfigPath(cfg, path, value);
   }
 
-  // VLESS flow
+  // VLESS flow may be represented by the legacy visual form even when the
+  // capability manifest does not expose it yet.
   const flow = firstValue(values, 'flow');
   if (protocol === 'vless' && flow) set('flow', flow);
 
