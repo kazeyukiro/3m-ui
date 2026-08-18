@@ -23,8 +23,8 @@ func (g GenericCompiler) Compile(in CompileInput) (map[string]interface{}, error
 
 type VLESSCompiler struct{}
 
-func (VLESSCompiler) Kind() string                    { return "vless" }
-func (VLESSCompiler) Capability() ProtocolCapability  { return vlessCapability() }
+func (VLESSCompiler) Kind() string                   { return "vless" }
+func (VLESSCompiler) Capability() ProtocolCapability { return vlessCapability() }
 func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	skip := managedKeys()
@@ -40,7 +40,7 @@ func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	} else {
 		delete(m, "tls")
 	}
-	users := asUsersArray(in.Config, in.Users, "uuid")
+	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
@@ -49,8 +49,8 @@ func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 
 type VMessCompiler struct{}
 
-func (VMessCompiler) Kind() string                    { return "vmess" }
-func (VMessCompiler) Capability() ProtocolCapability  { return vmessCapability() }
+func (VMessCompiler) Kind() string                   { return "vmess" }
+func (VMessCompiler) Capability() ProtocolCapability { return vmessCapability() }
 func (VMessCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
@@ -64,7 +64,7 @@ func (VMessCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	} else {
 		delete(m, "tls")
 	}
-	users := asUsersArray(in.Config, in.Users, "uuid")
+	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
@@ -88,7 +88,7 @@ func (TrojanCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	} else {
 		delete(m, "tls")
 	}
-	users := asUsersArray(in.Config, in.Users, "password")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
@@ -121,7 +121,7 @@ func (Hysteria2Compiler) Capability() ProtocolCapability { return hysteria2Capab
 func (Hysteria2Compiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	users := asUsersArray(in.Config, in.Users, "password")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
@@ -135,7 +135,7 @@ func (TUICCompiler) Capability() ProtocolCapability { return tuicCapability() }
 func (TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	users := asUsersArray(in.Config, in.Users, "password")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
@@ -149,7 +149,7 @@ func (ShadowQUICCompiler) Capability() ProtocolCapability { return shadowquicCap
 func (ShadowQUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	users := asUsersArray(in.Config, in.Users, "password")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
