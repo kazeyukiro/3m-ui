@@ -28,7 +28,6 @@ func (h *Handler) Get(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	// Never echo full key path contents; just settings metadata.
 	c.JSON(http.StatusOK, s)
 }
 
@@ -44,6 +43,10 @@ func (h *Handler) Put(c *gin.Context) {
 	}
 	in.Domain = strings.TrimSpace(in.Domain)
 	in.Email = strings.TrimSpace(in.Email)
+	in.Domain = strings.TrimPrefix(strings.TrimPrefix(in.Domain, "https://"), "http://")
+	if i := strings.IndexAny(in.Domain, "/:"); i >= 0 {
+		in.Domain = in.Domain[:i]
+	}
 	if in.Enabled {
 		if in.CertFile == "" && in.Domain == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required when Let's Encrypt is enabled (or provide cert_file + key_file)"})
@@ -59,8 +62,8 @@ func (h *Handler) Put(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"message": "SSL settings saved. Restart the panel process for ListenTLS / autocert changes to take effect.",
+		"status":   "ok",
+		"message":  "SSL settings saved. Restart the panel process for ListenTLS / autocert changes to take effect.",
 		"settings": in,
 	})
 }
