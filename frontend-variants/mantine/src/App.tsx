@@ -1,15 +1,48 @@
-import {StrictMode,useEffect,useState} from 'react';import {createRoot} from 'react-dom/client';import {AppShell,NavLink,Group,Text,Button,Paper,Stack,TextInput,PasswordInput,Title,SimpleGrid,Card,Table,Modal,Textarea,Select,Switch,Badge,Alert,ActionIcon,Divider} from '@mantine/core';import '@mantine/core/styles.css';import {IconDashboard,IconNetwork,IconUsers,IconServer,IconFileCode,IconLogout,IconRefresh,IconPlus,IconTrash,IconPlayerPlay,IconPlayerStop,IconRefreshAlert} from '@tabler/icons-react';import {api,authState,clearAuth,saveAuth,Listener,ProxyUser,RemoteServer} from '../../shared/api';
-function Login({done}:{done:()=>void}){const[u,setU]=useState('admin'),[p,setP]=useState(''),[err,setErr]=useState('');return <Stack justify="center" align="center" h="100vh" bg="gray.0"><Paper withBorder shadow="sm" p="xl" w={380}><Title order={2}>3M-UI</Title><Text c="dimmed" mb="lg">Mantine Edition</Text>{err&&<Alert color="red" mb="md">{err}</Alert>}<TextInput label="Username" value={u} onChange={e=>setU(e.currentTarget.value)} mb="sm"/><PasswordInput label="Password" value={p} onChange={e=>setP(e.currentTarget.value)} mb="lg"/><Button fullWidth onClick={async()=>{try{const r=await api.login(u,p);saveAuth(r.token,r.username,r.must_change_password);done()}catch(e:any){setErr(e.message)}}}>Sign in</Button></Paper></Stack>}
-export default function App(){const[logged,setLogged]=useState(!!authState().token);const[page,setPage]=useState('dashboard');const[busy,setBusy]=useState(false);const[err,setErr]=useState('');const[dash,setDash]=useState<any>();const[listeners,setListeners]=useState<Listener[]>([]);const[users,setUsers]=useState<ProxyUser[]>([]);const[cluster,setCluster]=useState<RemoteServer[]>([]);const[yaml,setYaml]=useState('');const[edit,setEdit]=useState<any>(null);const[userEdit,setUserEdit]=useState<any>(null);const[clusterEdit,setClusterEdit]=useState<any>(null);
-const load=async()=>{setBusy(true);try{if(page==='dashboard')setDash(await api.dashboard());else if(page==='listeners')setListeners(await api.listeners());else if(page==='users')setUsers(await api.users());else if(page==='cluster')setCluster(await api.cluster());else if(page==='config')setYaml((await api.config()).config)}catch(e:any){setErr(e.message)}finally{setBusy(false)}};useEffect(()=>{if(logged)load()},[logged,page]);if(!logged)return <Login done={()=>setLogged(true)}/>;
-const saveL=async()=>{try{const p={name:edit.name,protocol:edit.protocol,port:String(edit.port),bind_address:edit.bind_address||'0.0.0.0',enabled:!!edit.enabled,config:edit.config||'{}'};JSON.parse(p.config);edit.id?await api.updateListener(edit.id,p):await api.createListener(p);setEdit(null);load()}catch(e:any){setErr(e.message)}};const saveU=async()=>{try{const p={username:userEdit.username,password:userEdit.password,enabled:userEdit.enabled,remark:userEdit.remark};userEdit.id?await api.updateUser(userEdit.id,p):await api.createUser(p);setUserEdit(null);load()}catch(e:any){setErr(e.message)}};const saveC=async()=>{try{await api.createCluster(clusterEdit);setClusterEdit(null);load()}catch(e:any){setErr(e.message)}};
-const nav=[['dashboard','Dashboard',IconDashboard],['listeners','Listeners',IconNetwork],['users','Users',IconUsers],['cluster','Cluster',IconServer],['config','Config',IconFileCode]];return <AppShell header={{height:58}} navbar={{width:240,breakpoint:'sm'}} padding="md"><AppShell.Header><Group h="100%" px="md" justify="space-between"><Text fw={800} size="lg">3M-UI</Text><Group><ActionIcon variant="subtle" onClick={load}><IconRefresh size={18}/></ActionIcon><Button variant="subtle" leftSection={<IconLogout size={16}/>} onClick={()=>{clearAuth();setLogged(false)}}>Logout</Button></Group></Group></AppShell.Header><AppShell.Navbar p="sm">{nav.map(([k,l,I])=><NavLink key={k} active={page===k} label={l} leftSection={<I size={18}/>} onClick={()=>setPage(k)}/>)}</AppShell.Navbar><AppShell.Main>{err&&<Alert color="red" mb="md" withCloseButton onClose={()=>setErr('')}>{err}</Alert>}{busy&&<Alert mb="md">Loading…</Alert>}
-{page==='dashboard'&&<><SimpleGrid cols={{base:1,sm:2,lg:4}}><Card withBorder><Text c="dimmed">Listeners</Text><Title order={2}>{dash?.listeners?.total??0}</Title></Card><Card withBorder><Text c="dimmed">Enabled</Text><Title order={2}>{dash?.listeners?.enabled??0}</Title></Card><Card withBorder><Text c="dimmed">Online users</Text><Title order={2}>{dash?.traffic?.onlineUsers??0}</Title></Card><Card withBorder><Text c="dimmed">Mihomo</Text><Title order={2}>{dash?.mihomo?.running?'Running':'Stopped'}</Title></Card></SimpleGrid><Paper withBorder p="lg" mt="md"><Title order={4}>Core control</Title><Text c="dimmed">{dash?.mihomo?.version||'—'} · PID {dash?.mihomo?.pid||'—'} · {dash?.mihomo?.uptime||'—'}</Text><Group mt="md"><Button leftSection={<IconPlayerPlay size={16}/>} onClick={()=>api.mihomo('start').then(load).catch(e=>setErr(e.message))}>Start</Button><Button leftSection={<IconRefreshAlert size={16}/>} onClick={()=>api.mihomo('restart').then(load).catch(e=>setErr(e.message))}>Restart</Button><Button color="red" leftSection={<IconPlayerStop size={16}/>} onClick={()=>api.mihomo('stop').then(load).catch(e=>setErr(e.message))}>Stop</Button></Group></Paper></>}
-{page==='listeners'&&<Paper withBorder p="md"><Group justify="space-between" mb="md"><Title order={3}>Listeners</Title><Button leftSection={<IconPlus size={16}/>} onClick={()=>setEdit({protocol:'vless',port:'443',bind_address:'0.0.0.0',enabled:true,config:'{}'})}>Add</Button></Group><Table.ScrollContainer minWidth={700}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Protocol</Table.Th><Table.Th>Port</Table.Th><Table.Th>Status</Table.Th><Table.Th/></Table.Tr></Table.Thead><Table.Tbody>{listeners.map(l=><Table.Tr key={l.id}><Table.Td>{l.name}</Table.Td><Table.Td>{l.protocol}</Table.Td><Table.Td>{l.port}</Table.Td><Table.Td><Badge color={l.enabled?'green':'gray'}>{l.enabled?'Enabled':'Disabled'}</Badge></Table.Td><Table.Td><Group gap="xs"><Button size="xs" variant="light" onClick={()=>setEdit({...l})}>Edit</Button><ActionIcon color="red" onClick={()=>api.deleteListener(l.id).then(load).catch(e=>setErr(e.message))}><IconTrash size={16}/></ActionIcon></Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper>}
-{page==='users'&&<Paper withBorder p="md"><Group justify="space-between" mb="md"><Title order={3}>Users</Title><Button leftSection={<IconPlus size={16}/>} onClick={()=>setUserEdit({username:'',password:'',enabled:true,remark:''})}>Add</Button></Group><Table.ScrollContainer minWidth={700}><Table><Table.Thead><Table.Tr><Table.Th>Username</Table.Th><Table.Th>Status</Table.Th><Table.Th>Remark</Table.Th><Table.Th/></Table.Tr></Table.Thead><Table.Tbody>{users.map(u=><Table.Tr key={u.id}><Table.Td>{u.username}</Table.Td><Table.Td><Badge>{u.enabled?'Enabled':'Disabled'}</Badge></Table.Td><Table.Td>{u.remark||'—'}</Table.Td><Table.Td><Group gap="xs"><Button size="xs" onClick={()=>setUserEdit({...u,password:''})}>Edit</Button><ActionIcon color="red" onClick={()=>api.deleteUser(u.id).then(load).catch(e=>setErr(e.message))}><IconTrash size={16}/></ActionIcon></Group></Table.Td></Table.Tr>)}</Table.Tbody></Table></Table.ScrollContainer></Paper>}
-{page==='cluster'&&<Paper withBorder p="md"><Group justify="space-between" mb="md"><Title order={3}>Cluster</Title><Button leftSection={<IconPlus size={16}/>} onClick={()=>setClusterEdit({name:'',base_url:'',api_token:''})}>Add</Button></Group>{cluster.map(c=><Group key={c.id} justify="space-between" py="sm"><div><Text fw={600}>{c.name}</Text><Text size="sm" c="dimmed">{c.base_url}</Text></div><Group><Badge>{c.last_status||'Unknown'}</Badge><Button size="xs" onClick={()=>api.healthCluster(c.id).then(load).catch(e=>setErr(e.message))}>Health</Button><ActionIcon color="red" onClick={()=>api.deleteCluster(c.id).then(load).catch(e=>setErr(e.message))}><IconTrash size={16}/></ActionIcon></Group></Group>)}</Paper>}
-{page==='config'&&<Paper withBorder p="md"><Title order={3}>Generated YAML</Title><Textarea mt="md" minRows={25} autosize value={yaml} onChange={e=>setYaml(e.currentTarget.value)} styles={{input:{fontFamily:'ui-monospace,monospace',fontSize:13}}}/><Group mt="md"><Button onClick={()=>api.validateConfig(yaml).then(r=>setErr(r.valid?'':'Invalid configuration')).catch(e=>setErr(e.message))}>Validate</Button><Button variant="light" onClick={()=>api.generateConfig().then(load).catch(e=>setErr(e.message))}>Generate</Button></Group></Paper>}</AppShell.Main>
-<Modal opened={!!edit} onClose={()=>setEdit(null)} title={edit?.id?'Edit Listener':'Create Listener'} size="lg"><Stack><TextInput label="Name" value={edit?.name||''} onChange={e=>setEdit({...edit,name:e.currentTarget.value})}/><Select label="Protocol" data={['vless','hysteria2','shadowquic']} value={edit?.protocol||'vless'} onChange={v=>setEdit({...edit,protocol:v||'vless'})}/><TextInput label="Port" value={edit?.port||''} onChange={e=>setEdit({...edit,port:e.currentTarget.value})}/><Switch label="Enabled" checked={!!edit?.enabled} onChange={e=>setEdit({...edit,enabled:e.currentTarget.checked})}/><Textarea label="Mihomo listener JSON" minRows={14} value={edit?.config||'{}'} onChange={e=>setEdit({...edit,config:e.currentTarget.value})}/><Button onClick={saveL}>Save</Button></Stack></Modal>
-<Modal opened={!!userEdit} onClose={()=>setUserEdit(null)} title={userEdit?.id?'Edit User':'Create User'}><Stack><TextInput label="Username" value={userEdit?.username||''} onChange={e=>setUserEdit({...userEdit,username:e.currentTarget.value})}/><PasswordInput label="Password" value={userEdit?.password||''} onChange={e=>setUserEdit({...userEdit,password:e.currentTarget.value})}/><TextInput label="Remark" value={userEdit?.remark||''} onChange={e=>setUserEdit({...userEdit,remark:e.currentTarget.value})}/><Switch label="Enabled" checked={!!userEdit?.enabled} onChange={e=>setUserEdit({...userEdit,enabled:e.currentTarget.checked})}/><Button onClick={saveU}>Save</Button></Stack></Modal>
-<Modal opened={!!clusterEdit} onClose={()=>setClusterEdit(null)} title="Add Cluster Node"><Stack><TextInput label="Name" value={clusterEdit?.name||''} onChange={e=>setClusterEdit({...clusterEdit,name:e.currentTarget.value})}/><TextInput label="Base URL" value={clusterEdit?.base_url||''} onChange={e=>setClusterEdit({...clusterEdit,base_url:e.currentTarget.value})}/><PasswordInput label="API Token" value={clusterEdit?.api_token||''} onChange={e=>setClusterEdit({...clusterEdit,api_token:e.currentTarget.value})}/><Button onClick={saveC}>Save</Button></Stack></Modal></AppShell>}
-createRoot(document.getElementById('root')!).render(<App/>);
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { I18nProvider } from '@shared/i18n'
+import AppLayout from './components/AppLayout'
+import ProtectedRoute from './components/ProtectedRoute'
+import Login from './pages/Login'
+import ChangePassword from './pages/ChangePassword'
+import Dashboard from './pages/Dashboard'
+import Listeners from './pages/Listeners'
+import Users from './pages/Users'
+import Core from './pages/Core'
+import Logs from './pages/Logs'
+import ConfigPage from './pages/Config'
+import Settings from './pages/Settings'
+import TrafficPage from './pages/Traffic'
+import ClusterPage from './pages/Cluster'
+import RoutingPage from './pages/Routing'
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/*" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/listeners" element={<Listeners />} />
+                  <Route path="/users" element={<Users />} />
+                  <Route path="/traffic" element={<TrafficPage />} />
+                  <Route path="/cluster" element={<ClusterPage />} />
+                  <Route path="/routing" element={<RoutingPage />} />
+                  <Route path="/core" element={<Core />} />
+                  <Route path="/logs" element={<Logs />} />
+                  <Route path="/config" element={<ConfigPage />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </BrowserRouter>
+    </I18nProvider>
+  )
+}

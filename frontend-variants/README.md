@@ -1,38 +1,53 @@
 # 3M-UI Frontend Editions
 
-3M-UI keeps the backend, API contract and configuration model shared while offering independent frontend editions.
+Three independent UI kits sharing **the same** API, i18n, stores, and listener serialization as Ant Design (`frontend/`).
 
 ## Editions
 
-| Edition | UI stack | Workflow |
+| Edition | Path | Stack |
 |---|---|---|
-| Ant Design | React + Ant Design | `release-ant.yml` |
-| Material | React + MUI | `release-mui.yml` |
-| Mantine | React + Mantine | `release-mantine.yml` |
-| shadcn-style | React + Tailwind CSS + shadcn-style primitives | `release-shadcn.yml` |
+| Ant Design (reference) | `frontend/` | antd + `@ant-design/icons` |
+| Material | `frontend-variants/mui` | MUI 9 + `@mui/icons-material` |
+| Mantine | `frontend-variants/mantine` | Mantine 9 + `@tabler/icons-react` |
+| shadcn-style | `frontend-variants/shadcn` | Tailwind 4 + `lucide-react` |
 
-The Ant Design frontend remains the reference implementation. Alternative editions use the same API and session contract, so they can be packaged with the same Go backend without changing backend behavior.
+## Alignment with Ant Design
 
-## Build locally
+### Routes (identical)
+`/login` `/change-password` `/` `/listeners` `/users` `/traffic` `/cluster` `/routing` `/core` `/logs` `/config` `/settings`
+
+### Listeners (aligned)
+- CRUD, reload, URI export
+- **Full protocol form** via shared `listenerFormSchema` (shadowsocks / snell / vmess / vless / trojan / hysteria2 / tuic / shadowquic / anytls / mieru / sudoku / trusttunnel)
+- Transport (TCP / WS / gRPC / XHTTP), Security (none / TLS / Reality)
+- Wrappers: simple-obfs, shadow-tls, res-tls, JLS, mux, kcp-tun, mkcp, mekya, realm, JLS upstream
+- VLESS encryption / decryption + flow (xtls-rprx-vision)
+- Access Profile (public host/port/SNI/fingerprint/ALPN)
+- Capability-driven fields + `capabilityFormToConfig`
+- Templates, instantiate, clone, version history, diff, rollback
+- Batch enable / disable
+
+### Users (aligned)
+- CRUD, traffic limit (GB), IP limit, expire
+- Bind listeners, subscription URL/token, reset traffic, copy sub token
+
+### Other pages
+Dashboard / Core / Logs / Config (Monaco) / Traffic / Cluster / Routing / Settings (i18n, theme, password, backup, Telegram, OpenAPI)
+
+### Shared logic (`frontend-variants/shared/`)
+- `api/*` — full axios client
+- `logic/listenerConfig.ts` — `configToFormValues` / `formValuesToConfig`
+- `logic/capabilityForm.ts` — capability serialization
+- `logic/listenerFormSchema.ts` — declarative form sections (Ant field coverage)
+- `i18n` / `stores` / `utils`
+
+Vite alias: `@shared/...`
+
+## Build
 
 ```bash
-cd frontend-variants/mui
-npm install
-npm run build
+cd frontend-variants/mui   # or mantine / shadcn
+npm install && npm run build
 ```
 
-Replace `mui` with `mantine` or `shadcn` for the other editions.
-
-## Release
-
-Each edition has its own GitHub Actions workflow and produces separate Linux `amd64`, `arm64`, and `armv7` archives. A workflow is started manually with a release tag.
-
-The selected frontend is copied into `backend/cmd/server/web/dist` only inside the CI workspace before the Go binary is built. CI does not commit generated frontend assets back to `main`.
-
-## Shared contract
-
-`frontend-variants/shared/api.ts` contains the common authentication/session, dashboard, listener, user, cluster, config and Mihomo process API layer. UI code must not duplicate backend semantics.
-
-## Important
-
-Alternative editions intentionally start with the high-value operational surfaces: login, dashboard, Mihomo control, listeners, users, cluster and generated YAML. The Ant Design edition remains the full-featured reference UI while the alternative editions are expanded independently without coupling the backend to a UI library.
+`base: './'` for `go:embed`. Dev server proxies `/api` → `:8080`.
