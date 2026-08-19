@@ -107,3 +107,45 @@ func TestBindListenersIsReplacement(t *testing.T) {
 		t.Fatalf("expected soft-deleted bindings to be reused without duplicates, got %#v", rows)
 	}
 }
+
+func TestDeleteDepletedKeepsDisabled(t *testing.T) {
+	security.InitCredentialKey("test-secret")
+	db, err := database.InitDB(t.TempDir() + "/test-del.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(db)
+
+	active, err := svc.Create(CreateInput{Username: "keep-active", Password: "p1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := svc.Create(CreateInput{Username: "keep-disabled", Password: "p2", Enabled: boolPtr(false)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredAt := time.Now().Add(-time.Hour)
+	expired, err := svc.Create(CreateInput{Username: "del-expired", Password: "p3", ExpireTime: &expiredAt})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := svc.DeleteDepleted()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 deleted (expired only), got %d", n)
+	}
+	if _, err := svc.GetByID(active.ID); err != nil {
+		t.Fatalf("active user should remain: %v", err)
+	}
+	if _, err := svc.GetByID(disabled.ID); err != nil {
+		t.Fatalf("disabled user should remain: %v", err)
+	}
+	if _, err := svc.GetByID(expired.ID); err == nil {
+		t.Fatal("expired user should be deleted")
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }

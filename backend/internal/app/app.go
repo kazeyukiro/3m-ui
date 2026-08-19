@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
@@ -122,9 +123,10 @@ func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error
 		tlsAddr = fmt.Sprintf(":%d", fallbackPort)
 	}
 	srv := &http.Server{
-		Addr:      tlsAddr,
-		Handler:   handler,
-		TLSConfig: tlsCfg,
+		Addr:              tlsAddr,
+		Handler:           handler,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	// HTTP-01 challenge + optional redirect to HTTPS.
 	httpAddr := s.ListenHTTP

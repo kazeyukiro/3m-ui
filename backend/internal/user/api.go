@@ -3,7 +3,9 @@ package user
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -194,12 +196,18 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
-	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
-		scheme = xf
+	if xf := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xf != "" {
+		if i := strings.IndexByte(xf, ','); i >= 0 {
+			xf = xf[:i]
+		}
+		xf = strings.ToLower(strings.TrimSpace(xf))
+		if xf == "https" || xf == "http" {
+			scheme = xf
+		}
 	}
 	base := scheme + "://" + c.Request.Host
-	url := base + "/api/v1/client/sub/" + token
-	c.JSON(http.StatusOK, gin.H{"token": token, "url": url})
+	subURL := base + "/api/v1/client/sub/" + url.PathEscape(token)
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": subURL})
 }
 
 func (h *Handler) RotateSubscription(c *gin.Context) {
@@ -216,12 +224,18 @@ func (h *Handler) RotateSubscription(c *gin.Context) {
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
-	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
-		scheme = xf
+	if xf := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xf != "" {
+		if i := strings.IndexByte(xf, ','); i >= 0 {
+			xf = xf[:i]
+		}
+		xf = strings.ToLower(strings.TrimSpace(xf))
+		if xf == "https" || xf == "http" {
+			scheme = xf
+		}
 	}
 	base := scheme + "://" + c.Request.Host
-	url := base + "/api/v1/client/sub/" + token
-	c.JSON(http.StatusOK, gin.H{"token": token, "url": url})
+	subURL := base + "/api/v1/client/sub/" + url.PathEscape(token)
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": subURL})
 }
 
 // DeleteDepleted removes expired / over-quota proxy users (3x-ui delDepletedClients parity).

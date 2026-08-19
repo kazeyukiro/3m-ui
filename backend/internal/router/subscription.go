@@ -1,8 +1,10 @@
 package router
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -227,18 +229,19 @@ func detectSubTarget(ua string) string {
 }
 
 func writeSubHTML(c *gin.Context, db *gorm.DB, cfg *config.Config, pu models.ProxyUser, tok string) {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if xf := c.GetHeader("X-Forwarded-Proto"); xf != "" {
-		scheme = xf
-	}
-	base := scheme + "://" + c.Request.Host + "/api/v1/client/sub/" + tok
+	scheme := requestScheme(c)
+	host := c.Request.Host
+	base := scheme + "://" + host + "/api/v1/client/sub/" + url.PathEscape(tok)
 	var links []string
 	if raw, err := converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials); err == nil {
-		// Decode is not needed; body is base64 of newline-joined URIs — leave empty for page.
-		_ = raw
+		if decoded, err := base64.StdEncoding.DecodeString(string(raw)); err == nil {
+			for _, line := range strings.Split(string(decoded), "\n") {
+				line = strings.TrimSpace(line)
+				if line != "" {
+					links = append(links, line)
+				}
+			}
+		}
 	}
 	html, err := subpage.RenderHTML(db, pu, base, links)
 	if err != nil {
@@ -247,4 +250,21 @@ func writeSubHTML(c *gin.Context, db *gorm.DB, cfg *config.Config, pu models.Pro
 	}
 	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "text/html; charset=utf-8", html)
+}
+
+func requestScheme(c *gin.Context) string {
+	if xf := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xf != "" {
+		// Take the first value when proxies send a comma-separated list.
+		if i := strings.IndexByte(xf, ','); i >= 0 {
+			xf = xf[:i]
+		}
+		xf = strings.ToLower(strings.TrimSpace(xf))
+		if xf == "https" || xf == "http" {
+			return xf
+		}
+	}
+	if c.Request.TLS != nil {
+		return "https"
+	}
+	return "http"
 }
