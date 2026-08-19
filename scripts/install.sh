@@ -15,7 +15,8 @@ MIHOMO_BIN="/usr/local/bin/mihomo"
 SERVICE_NAME="3m-ui"
 YES=0
 INSTALL_MIHOMO=1
-STATIC="${THREE_M_UI_STATIC:-0}"
+# Official releases are pure-Go static binaries (portable on glibc + musl).
+STATIC="${THREE_M_UI_STATIC:-1}"
 REQUESTED_VERSION=""
 RELEASE_TAG=""
 
@@ -32,12 +33,15 @@ Usage: $0 [VERSION] [options]
 Options:
   -y, --yes          Non-interactive installation
       --no-mihomo    Do not install Mihomo when it is missing
-      --static       Install the static 3m-ui build
-      --dynamic      Install the CGO/dynamic 3m-ui build
+      --static       Prefer static build (default; official releases are static)
+      --dynamic      Legacy no-op (releases are static pure-Go only)
   -h, --help         Show this help
 
 Environment:
-  THREE_M_UI_STATIC=1  Install the static build
+  THREE_M_UI_STATIC=1  Prefer static build (default)
+
+Supported CPU: x86_64, aarch64, armv7, armv6, i386/i686, riscv64, loongarch64, ppc64le, s390x
+Supported OS: Alpine, Debian/Ubuntu, RHEL/Fedora/CentOS/Rocky/Alma, Arch, openSUSE, Gentoo, Void, …
 EOF
 }
 
@@ -46,7 +50,7 @@ for arg in "$@"; do
     -y|--yes) YES=1;;
     --no-mihomo) INSTALL_MIHOMO=0;;
     --static) STATIC=1;;
-    --dynamic) STATIC=0;;
+    --dynamic) STATIC=1;; # official artifacts are always static pure-Go
     -h|--help) usage; exit 0;;
     v[0-9]*|manual-[0-9]*) [ -z "$REQUESTED_VERSION" ] || err "Only one version may be specified."; REQUESTED_VERSION="$arg";;
     *) err "Unknown option: $arg";;
@@ -56,7 +60,23 @@ done
 os_id(){
   if [ -r /etc/os-release ]; then . /etc/os-release; printf '%s' "${ID:-unknown}"; else printf '%s' unknown; fi
 }
-arch(){ case "$(uname -m)" in x86_64|amd64) echo amd64;; aarch64|arm64) echo arm64;; armv7l|armv7*) echo armv7;; *) err "Unsupported CPU architecture: $(uname -m)";; esac; }
+
+# Map uname -m → release artifact arch suffix (must match release.yml).
+arch(){
+  case "$(uname -m)" in
+    x86_64|amd64) echo amd64;;
+    aarch64|arm64) echo arm64;;
+    armv7l|armv7*) echo armv7;;
+    armv6l|armv6*) echo armv6;;
+    i386|i486|i586|i686|x86) echo 386;;
+    riscv64) echo riscv64;;
+    loongarch64|loong64) echo loong64;;
+    ppc64le) echo ppc64le;;
+    s390x) echo s390x;;
+    *) err "Unsupported CPU architecture: $(uname -m). Supported: x86_64 aarch64 armv7 armv6 i686 riscv64 loongarch64 ppc64le s390x";;
+  esac
+}
+
 init_system(){ if [ -d /run/systemd/system ] && command_exists systemctl; then echo systemd; elif command_exists rc-service; then echo openrc; else echo unsupported; fi; }
 
 install_deps(){
@@ -65,11 +85,13 @@ install_deps(){
   [ -z "$missing" ] && return
   case "$(os_id)" in
     alpine) apk add --no-cache curl ca-certificates gzip tar sed;;
-    debian|ubuntu|linuxmint|raspbian) apt-get update && apt-get install -y curl ca-certificates gzip tar sed;;
-    fedora|rhel|centos|rocky|almalinux|oracle) if command_exists dnf; then dnf install -y curl ca-certificates gzip tar sed; else yum install -y curl ca-certificates gzip tar sed; fi;;
-    arch|manjaro) pacman -Sy --noconfirm curl ca-certificates gzip tar sed;;
+    debian|ubuntu|linuxmint|raspbian|pop|elementary|zorin|kali|parrot) apt-get update && apt-get install -y curl ca-certificates gzip tar sed;;
+    fedora|rhel|centos|rocky|almalinux|oracle|amzn|ol) if command_exists dnf; then dnf install -y curl ca-certificates gzip tar sed; else yum install -y curl ca-certificates gzip tar sed; fi;;
+    arch|manjaro|endeavouros|garuda|artix) pacman -Sy --noconfirm curl ca-certificates gzip tar sed;;
     opensuse*|sles) zypper --non-interactive install curl ca-certificates gzip tar sed;;
-    *) err "Cannot install dependencies automatically on $(os_id):$missing";;
+    void) xbps-install -Sy curl ca-certificates gzip tar sed;;
+    gentoo) emerge --ask=n net-misc/curl app-arch/gzip app-arch/tar sys-apps/sed || err "emerge failed; install curl gzip tar sed manually";;
+    *) err "Cannot install dependencies automatically on $(os_id):$missing. Install curl ca-certificates gzip tar sed, then re-run.";;
   esac
 }
 
@@ -106,7 +128,18 @@ EOF
   chmod 0600 "$CONFIG_DIR/config.yaml"
 }
 
-mihomo_asset(){ case "$(uname -m)" in x86_64|amd64) echo mihomo-linux-amd64-compatible;; aarch64|arm64) echo mihomo-linux-arm64;; armv7l|armv7*) echo mihomo-linux-armv7;; *) err "Unsupported CPU architecture for Mihomo";; esac; }
+mihomo_asset(){
+  case "$(uname -m)" in
+    x86_64|amd64) echo mihomo-linux-amd64-compatible;;
+    aarch64|arm64) echo mihomo-linux-arm64;;
+    armv7l|armv7*) echo mihomo-linux-armv7;;
+    armv6l|armv6*) echo mihomo-linux-armv6;;
+    i386|i486|i586|i686|x86) echo mihomo-linux-386;;
+    riscv64) echo mihomo-linux-riscv64;;
+    loongarch64|loong64) echo mihomo-linux-loong64-abi2.0;;
+    *) err "Unsupported CPU architecture for Mihomo: $(uname -m)";;
+  esac
+}
 
 install_mihomo(){
   [ "$INSTALL_MIHOMO" -eq 1 ] || { say "Mihomo installation skipped."; return; }
@@ -145,15 +178,24 @@ install_helpers(){
 install_panel(){
   RELEASE_TAG="${REQUESTED_VERSION:-$(latest_tag https://github.com/$REPO)}"
   [ -n "$RELEASE_TAG" ] || err "Unable to determine latest 3m-ui release."
-  suffix=""; [ "$STATIC" = "1" ] && suffix="-static"
-  asset="3m-ui-linux-$(arch)${suffix}"
+  # Official releases are pure-Go static binaries named 3m-ui-linux-<arch>.
+  # Fall back to legacy *-static name for older tags if needed.
+  cpu="$(arch)"
+  asset="3m-ui-linux-${cpu}"
   tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT INT TERM
   url="https://github.com/$REPO/releases/download/${RELEASE_TAG}/${asset}"
-  say "Downloading 3m-ui $RELEASE_TAG ($asset)..."; download "$url" "$tmp"; chmod 0755 "$tmp"
+  say "Downloading 3m-ui $RELEASE_TAG ($asset)..."
+  if ! download "$url" "$tmp" 2>/dev/null; then
+    asset="3m-ui-linux-${cpu}-static"
+    url="https://github.com/$REPO/releases/download/${RELEASE_TAG}/${asset}"
+    say "Retrying legacy asset name: $asset"
+    download "$url" "$tmp"
+  fi
+  chmod 0755 "$tmp"
   "$tmp" --version >/dev/null 2>&1 || err "Downloaded 3m-ui failed executable validation."
   install -m 0755 "$tmp" "$APP_BIN"
   printf '%s\n' "$RELEASE_TAG" > "$VERSION_FILE"
-  printf '%s\n' "$([ "$STATIC" = "1" ] && echo static || echo dynamic)" > "$MODE_FILE"
+  printf '%s\n' static > "$MODE_FILE"
   chmod 0600 "$VERSION_FILE" "$MODE_FILE"
   rm -f "$tmp"; trap - EXIT INT TERM
 }
