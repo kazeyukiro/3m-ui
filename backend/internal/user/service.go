@@ -1,17 +1,9 @@
 package user
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
 	"time"
 
-	"github.com/kazeyukiro/3m-ui/backend/internal/credentials"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"github.com/kazeyukiro/3m-ui/backend/internal/security"
 	"gorm.io/gorm"
 )
 
@@ -59,56 +51,38 @@ type UpdateInput struct {
 
 type Credential struct{ Username, Password, UUID string }
 
-func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
-	username := strings.TrimSpace(in.Username)
-	if username == "" {
-		return nil, errors.New("username is required")
-	}
-	password := in.Password
-	var err error
-	if password == "" {
-		password, err = randomToken(24)
-		if err != nil {
-			return nil, fmt.Errorf("generate proxy user password: %w", err)
-		}
-	}
-	uuid := in.UUID
-	if uuid == "" {
-		var err error
-		uuid, err = newUUID()
-		if err != nil {
-			return nil, err
-		}
-	}
-	expire := time.Time{}
-	if in.ExpireTime != nil {
-		expire = in.ExpireTime.UTC()
-	}
-	enabled := true
-	if in.Enabled != nil {
-		enabled = *in.Enabled
-	}
-	encrypted, err := encryptPassword(password)
-	if err != nil {
+func (s *Service) GetAll() ([]models.ProxyUser, error) {
+	var users []models.ProxyUser
+	if err := s.db.Order("id desc").Find(&users).Error; err != nil {
 		return nil, err
 	}
-	subTok, _ := randomHex(16)
-	u := &models.ProxyUser{
-		Username:          username,
-		PasswordEncrypted: encrypted,
-		UUID:              uuid,
-		TrafficLimit:      in.TrafficLimit,
-		IPLimit:           max0(in.IPLimit),
-		Remark:            strings.TrimSpace(in.Remark),
-		ExpireTime:        expire,
-		Enabled:           enabled,
-		SubToken:          subTok,
+	return users, nil
+}
+
+func (s *Service) GetByID(id uint) (*models.ProxyUser, error) {
+	var u models.ProxyUser
+	if err := s.db.First(&u, id).Error; err != nil {
+		return nil, err
 	}
-	if err := s.db.Create(u).Error; err != nil {
-		return nil, fmt.Errorf("create proxy user: %w", err)
+	return &u, nil
+}
+
+func (s *Service) GetListeners(userID uint) ([]models.Listener, error) {
+	var listeners []models.Listener
+	err := s.db.Model(&models.Listener{}).Joins("JOIN listener_users ON listener_users.listener_id = listeners.id AND listener_users.deleted_at IS NULL").Where("listener_users.proxy_user_id = ?", userID).Order("listeners.id").Find(&listeners).Error
+	return listeners, err
+}
+
+func IsCredentialActive(u models.ProxyUser) bool {
+	now := time.Now()
+	if !u.Enabled {
+		return false
 	}
-	if err := s.notifyCredentialsChanged(); err != nil {
-		return u, fmt.Errorf("proxy user created, but Mihomo configuration could not be updated: %w", err)
+	if !u.ExpireTime.IsZero() && !u.ExpireTime.After(now) {
+		return false
 	}
-	return u, nil
+	if u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit {
+		return false
+	}
+	return true
 }
