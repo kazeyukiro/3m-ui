@@ -87,7 +87,7 @@ export default function Listeners() {
         setError(t('listeners.portHint') !== 'listeners.portHint' ? t('listeners.portHint') : 'Name/protocol/port required')
         return
       }
-      if (REALITY_PROTOCOLS.has(edit.protocol) && (edit.security_layer === 'reality' || !edit.security_layer)) {
+      if (REALITY_PROTOCOLS.has(edit.protocol) && edit.security_layer === 'reality') {
         if (!edit.reality_dest || !edit.reality_private_key) {
           setError('Reality Dest / Private Key cannot be empty')
           return
@@ -190,7 +190,16 @@ export default function Listeners() {
         <DialogContent dividers>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label={t('listeners.name')} value={edit?.name || ''} onChange={(e) => set('name', e.target.value)} fullWidth required />
-            <TextField select label={t('listeners.protocol')} value={edit?.protocol || 'vless'} onChange={(e) => set('protocol', e.target.value)} fullWidth>
+            <TextField select label={t('listeners.protocol')} value={edit?.protocol || 'vless'} onChange={(e) => {
+              const protocol = e.target.value
+              const next: any = { protocol }
+              // Clamp security when switching away from Reality-capable protocols
+              if (!REALITY_PROTOCOLS.has(protocol) && (edit?.security_layer === 'reality' || edit?.reality_enabled)) {
+                next.security_layer = 'tls'
+                next.reality_enabled = false
+              }
+              setEdit((prev: any) => ({ ...prev, ...next }))
+            }} fullWidth>
               {PROTOCOLS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
             </TextField>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

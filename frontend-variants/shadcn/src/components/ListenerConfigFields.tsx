@@ -1,19 +1,27 @@
-import { visibleSections, FormField } from '@shared/logic/listenerFormSchema'
+import { visibleSections, FormField, securityOptions } from '@shared/logic/listenerFormSchema'
 import { useI18n } from '@shared/i18n'
 
 type Props = { protocol?: string; values: Record<string, any>; onChange: (key: string, value: any) => void }
 
-function Field({ field, value, onChange, t }: { field: FormField; value: any; onChange: (v: any) => void; t: (k: string) => string }) {
+function Field({ field, value, onChange, t, protocol }: { field: FormField; value: any; onChange: (v: any) => void; t: (k: string) => string; protocol?: string }) {
+  let opts = field.options
+  let optLabels = field.optionLabels
+  if (field.name === 'security_layer' && protocol) {
+    const s = securityOptions(protocol)
+    opts = s.options
+    optLabels = s.optionLabels
+  }
+
   const label = field.labelKey ? (t(field.labelKey) !== field.labelKey ? t(field.labelKey) : (field.label || field.name)) : (field.label || field.name)
   const hint = field.hintKey && t(field.hintKey) !== field.hintKey ? t(field.hintKey) : undefined
   if (field.type === 'boolean') {
     return <label className="label"><input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /> {label}</label>
   }
-  if ((field.type === 'radio' || field.type === 'select') && field.options) {
+  if ((field.type === 'radio' || field.type === 'select') && opts) {
     return (
       <label className="label">{label}
         <select className="select" value={value ?? field.default ?? ''} onChange={(e) => onChange(e.target.value)}>
-          {field.options.map((o, i) => <option key={String(o)} value={o}>{field.optionLabels?.[i] || o || '(none)'}</option>)}
+          {opts!.map((o, i) => <option key={String(o)} value={o}>{optLabels?.[i] || o || '(none)'}</option>)}
         </select>
         {hint && <span className="muted">{hint}</span>}
       </label>
@@ -58,7 +66,7 @@ export default function ListenerConfigFields({ protocol, values, onChange }: Pro
             {t(sec.titleKey) !== sec.titleKey ? t(sec.titleKey) : sec.id}
           </h4>
           {sec.fields.map((f) => (
-            <Field key={f.name} field={f} value={values[f.name]} onChange={(v) => onChange(f.name, v)} t={t} />
+            <Field key={f.name} field={f} value={values[f.name]} onChange={(v) => onChange(f.name, v)} t={t} protocol={protocol} />
           ))}
         </div>
       ))}

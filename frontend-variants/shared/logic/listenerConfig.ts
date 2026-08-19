@@ -49,6 +49,28 @@ function asStringList(v: any): string[] {
   return [String(v)];
 }
 
+/** Accept array of objects, JSON string, or "name:password" lines. */
+function parseUsersList(v: any, keys: ['name', 'password'] | ['username', 'password'] = ['name', 'password']): any[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed;
+    } catch { /* fall through */ }
+    return s.split(/\n|,/).map((line) => {
+      const [a, ...rest] = line.split(':');
+      const b = rest.join(':');
+      if (keys[0] === 'name') return { name: (a || '').trim(), password: (b || '').trim() };
+      return { username: (a || '').trim(), password: (b || '').trim() };
+    }).filter((u: any) => u.name || u.username || u.password);
+  }
+  return [];
+}
+
+
 /** Parse stored config JSON into form field values. */
 export function configToFormValues(raw: string | undefined | null): Record<string, any> {
   let cfg: Record<string, any> = {};
@@ -100,10 +122,10 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.shadow_tls_password = s.password;
     values.shadow_tls_handshake_dest = s.handshake?.dest;
     values.shadow_tls_handshake_proxy = s.handshake?.proxy;
-    values.shadow_tls_users = asArray(s.users).map((u: any) => ({
-      name: u?.name ?? u?.username ?? '',
-      password: u?.password ?? '',
-    }));
+    values.shadow_tls_users = asArray(s.users)
+      .map((u: any) => `${u?.name ?? u?.username ?? ''}:${u?.password ?? ''}`)
+      .filter((line: string) => line !== ':')
+      .join('\n');
   }
 
   // res-tls
@@ -127,10 +149,10 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.jls_alpn = asStringList(j.alpn);
     values.jls_proxy = j.proxy;
     values.jls_rate_limit = j['rate-limit'];
-    values.jls_users = asArray(j.users).map((u: any) => ({
-      username: u?.username ?? u?.name ?? '',
-      password: u?.password ?? '',
-    }));
+    values.jls_users = asArray(j.users)
+      .map((u: any) => `${u?.username ?? u?.name ?? ''}:${u?.password ?? ''}`)
+      .filter((line: string) => line !== ':')
+      .join('\n');
   }
 
   // mux-option
@@ -455,7 +477,7 @@ export function formValuesToConfig(
   }
 
   // Reality vs certificate/private-key are mutually exclusive per official docs.
-  if (values.security_layer === 'reality') {
+  if (values.security_layer === 'reality' && REALITY_PROTOCOLS.has(protocol)) {
     values.reality_enabled = true;
   } else if (values.security_layer === 'none' || values.security_layer === 'tls') {
     values.reality_enabled = false;
@@ -480,8 +502,8 @@ export function formValuesToConfig(
     const reality = cleanObj({
       dest: values.reality_dest,
       'private-key': values.reality_private_key,
-      'short-id': values.reality_short_id,
-      'server-names': values.reality_server_names,
+      'short-id': asStringList(values.reality_short_id),
+      'server-names': asStringList(values.reality_server_names),
     });
     if (reality) cfg['reality-config'] = reality;
   } else if (TLS_PROTOCOLS.has(protocol)) {
@@ -503,7 +525,7 @@ export function formValuesToConfig(
 
   // shadow-tls
   if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.shadow_tls_enabled) {
-    const users = asArray(values.shadow_tls_users)
+    const users = parseUsersList(values.shadow_tls_users, ['name', 'password'])
       .filter((u: any) => u?.name || u?.password)
       .map((u: any) => cleanObj({ name: u.name, password: u.password }))
       .filter(Boolean);
@@ -535,9 +557,9 @@ export function formValuesToConfig(
 
   // jls-config
   if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.jls_enabled) {
-    const users = asArray(values.jls_users)
+    const users = parseUsersList(values.jls_users, ['username', 'password'])
       .filter((u: any) => u?.username || u?.password)
-      .map((u: any) => cleanObj({ username: u.username, password: u.password }))
+      .map((u: any) => cleanObj({ username: u.username || u.name, password: u.password }))
       .filter(Boolean);
     cfg['jls-config'] = cleanObj({
       enable: true,

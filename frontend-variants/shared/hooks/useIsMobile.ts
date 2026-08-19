@@ -1,10 +1,20 @@
-import { Grid } from 'antd';
+import { useEffect, useState } from 'react';
 
-/** True when viewport is below Ant Design `md` breakpoint (768px). */
-export function useIsMobile(): boolean {
-  const screens = Grid.useBreakpoint();
-  // screens.md is undefined during first SSR/hydration tick; treat as desktop until known
-  return screens.md === false;
+/** True when viewport is below 768px. Framework-agnostic (no antd dependency). */
+export function useIsMobile(breakpoint = 768): boolean {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [breakpoint]);
+
+  return mobile;
 }
 
 export default useIsMobile;

@@ -15,7 +15,7 @@ export default function Login() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={async (e) => {
         e.preventDefault()
-        try { await login({ username: u, password: p }); navigate(from, { replace: true }) } catch (ex: any) { setErr(ex.message) }
+        try { const data = await login({ username: u, password: p }); navigate(data.must_change_password ? '/change-password' : from, { replace: true }) } catch (ex: any) { setErr(ex.message) }
       }}>
         <h2>{t('login.title')}</h2>
         <p className="muted">{t('login.subtitle')}</p>

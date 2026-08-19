@@ -13,6 +13,7 @@ import { fetchCapabilities, protocolCapability, CapabilityManifest } from '@shar
 import { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '@shared/logic/listenerConfig'
 import { capabilityFormToConfig } from '@shared/logic/capabilityForm'
 import ListenerConfigFields from '../components/ListenerConfigFields'
+import CapabilityFormFields from '../components/CapabilityFormFields'
 import { useI18n } from '@shared/i18n'
 
 const PROTOCOLS = ['shadowsocks','snell','vmess','vless','trojan','hysteria2','tuic','shadowquic','anytls','mieru','sudoku','trusttunnel']
@@ -49,7 +50,7 @@ export default function Listeners() {
   const save = async () => {
     try {
       if (!edit?.name || !edit?.protocol || !String(edit?.port||'').trim()) { setError('Name/protocol/port required'); return }
-      if (REALITY.has(edit.protocol) && (edit.security_layer==='reality'||!edit.security_layer) && (!edit.reality_dest||!edit.reality_private_key)) {
+      if (REALITY.has(edit.protocol) && (edit.security_layer==='reality') && (!edit.reality_dest||!edit.reality_private_key)) {
         setError('Reality Dest / Private Key required'); return
       }
       const previous = edit.id ? (()=>{ try{return JSON.parse(edit.config||'{}')}catch{return null}})() : null
@@ -122,7 +123,7 @@ export default function Listeners() {
       <Modal opened={!!edit} onClose={()=>setEdit(null)} title={edit?.id?t('common.edit'):t('common.create')} size="xl">
         <Stack>
           <TextInput label={t('listeners.name')} value={edit?.name||''} onChange={(e)=>set('name',e.currentTarget.value)} required />
-          <Select label={t('listeners.protocol')} data={PROTOCOLS} value={edit?.protocol||'vless'} onChange={(v)=>set('protocol',v)} />
+          <Select label={t('listeners.protocol')} data={PROTOCOLS} value={edit?.protocol||'vless'} onChange={(v)=>{ const protocol=v||'vless'; const next:any={protocol}; if(!REALITY.has(protocol)&&(edit?.security_layer==='reality'||edit?.reality_enabled)){next.security_layer='tls';next.reality_enabled=false} setEdit((p:any)=>({...p,...next})) }} />
           <Group grow>
             <TextInput label={t('listeners.port')} value={edit?.port||''} onChange={(e)=>set('port',e.currentTarget.value)} required />
             <TextInput label="Bind" value={edit?.bind_address||'0.0.0.0'} onChange={(e)=>set('bind_address',e.currentTarget.value)} />
@@ -140,6 +141,7 @@ export default function Listeners() {
           </Group>
           <TextInput label="ALPN" value={edit?.access_alpn||''} onChange={(e)=>set('access_alpn',e.currentTarget.value)} />
           <ListenerConfigFields protocol={edit?.protocol} values={edit||{}} onChange={set} />
+          {cap && <CapabilityFormFields protocol={edit?.protocol} capability={cap} showAdvanced values={edit||{}} onChange={set} />}
           <Button onClick={save}>{t('common.save')}</Button>
         </Stack>
       </Modal>

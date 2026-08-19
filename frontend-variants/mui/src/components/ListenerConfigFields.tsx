@@ -1,5 +1,5 @@
 import { Stack, Typography, TextField, MenuItem, Switch, FormControlLabel, Divider, Alert, ToggleButton, ToggleButtonGroup } from '@mui/material'
-import { visibleSections, FormField } from '@shared/logic/listenerFormSchema'
+import { visibleSections, FormField, securityOptions } from '@shared/logic/listenerFormSchema'
 import { useI18n } from '@shared/i18n'
 
 type Props = {
@@ -8,30 +8,37 @@ type Props = {
   onChange: (key: string, value: any) => void
 }
 
-function Field({ field, value, onChange, t }: { field: FormField; value: any; onChange: (v: any) => void; t: (k: string) => string }) {
+function Field({ field, value, onChange, t, protocol }: { field: FormField; value: any; onChange: (v: any) => void; t: (k: string) => string; protocol?: string }) {
+  let opts = field.options
+  let optLabels = field.optionLabels
+  if (field.name === 'security_layer' && protocol) {
+    const s = securityOptions(protocol)
+    opts = s.options
+    optLabels = s.optionLabels
+  }
   const label = field.labelKey ? (t(field.labelKey) !== field.labelKey ? t(field.labelKey) : (field.label || field.name)) : (field.label || field.name)
   const hint = field.hintKey ? (t(field.hintKey) !== field.hintKey ? t(field.hintKey) : undefined) : undefined
 
   if (field.type === 'boolean') {
     return <FormControlLabel control={<Switch checked={!!value} onChange={(e) => onChange(e.target.checked)} />} label={label} />
   }
-  if (field.type === 'radio' && field.options) {
+  if (field.type === 'radio' && opts) {
     return (
       <Stack spacing={0.5}>
         <Typography variant="body2" color="text.secondary">{label}</Typography>
-        <ToggleButtonGroup exclusive size="small" value={value ?? field.default ?? field.options[0]} onChange={(_, v) => v != null && onChange(v)}>
-          {field.options.map((o, i) => (
-            <ToggleButton key={o} value={o}>{field.optionLabels?.[i] || o || '(none)'}</ToggleButton>
+        <ToggleButtonGroup exclusive size="small" value={value ?? field.default ?? opts[0]} onChange={(_, v) => v != null && onChange(v)}>
+          {opts.map((o, i) => (
+            <ToggleButton key={o} value={o}>{optLabels?.[i] || o || '(none)'}</ToggleButton>
           ))}
         </ToggleButtonGroup>
       </Stack>
     )
   }
-  if (field.type === 'select' || (field.options && field.type !== 'tags')) {
+  if (field.type === 'select' || (opts && field.type !== 'tags')) {
     return (
       <TextField select fullWidth label={label} helperText={hint} required={field.required} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
-        {(field.options || []).map((o, i) => (
-          <MenuItem key={String(o)} value={o}>{field.optionLabels?.[i] || o || '(none)'}</MenuItem>
+        {(opts || []).map((o, i) => (
+          <MenuItem key={String(o)} value={o}>{optLabels?.[i] || o || '(none)'}</MenuItem>
         ))}
       </TextField>
     )
@@ -69,7 +76,7 @@ export default function ListenerConfigFields({ protocol, values, onChange }: Pro
         <Stack key={sec.id} spacing={1.5}>
           <Divider>{t(sec.titleKey) !== sec.titleKey ? t(sec.titleKey) : sec.id}</Divider>
           {sec.fields.map((f) => (
-            <Field key={f.name} field={f} value={values[f.name]} onChange={(v) => onChange(f.name, v)} t={t} />
+            <Field key={f.name} field={f} value={values[f.name]} onChange={(v) => onChange(f.name, v)} t={t} protocol={protocol} />
           ))}
         </Stack>
       ))}

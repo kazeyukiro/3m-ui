@@ -10,6 +10,7 @@ import { fetchCapabilities, protocolCapability, CapabilityManifest } from '@shar
 import { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '@shared/logic/listenerConfig'
 import { capabilityFormToConfig } from '@shared/logic/capabilityForm'
 import ListenerConfigFields from '../components/ListenerConfigFields'
+import CapabilityFormFields from '../components/CapabilityFormFields'
 import { useI18n } from '@shared/i18n'
 
 const PROTOCOLS = ['shadowsocks','snell','vmess','vless','trojan','hysteria2','tuic','shadowquic','anytls','mieru','sudoku','trusttunnel']
@@ -46,7 +47,7 @@ export default function Listeners() {
   const save = async () => {
     try {
       if (!edit?.name || !edit?.protocol || !String(edit?.port||'').trim()) { setError('Name/protocol/port required'); return }
-      if (REALITY.has(edit.protocol) && (edit.security_layer==='reality'||!edit.security_layer) && (!edit.reality_dest||!edit.reality_private_key)) {
+      if (REALITY.has(edit.protocol) && (edit.security_layer==='reality') && (!edit.reality_dest||!edit.reality_private_key)) {
         setError('Reality Dest / Private Key required'); return
       }
       const previous = edit.id ? (()=>{ try{return JSON.parse(edit.config||'{}')}catch{return null}})() : null
@@ -122,7 +123,7 @@ export default function Listeners() {
             <h3>{edit.id?t('common.edit'):t('common.create')}</h3>
             <label className="label">{t('listeners.name')}<input className="input" value={edit.name||''} onChange={(e)=>set('name',e.target.value)} /></label>
             <label className="label">{t('listeners.protocol')}
-              <select className="select" value={edit.protocol||'vless'} onChange={(e)=>set('protocol',e.target.value)}>
+              <select className="select" value={edit.protocol||'vless'} onChange={(e)=>{ const protocol=e.target.value; const next:any={protocol}; if(!REALITY.has(protocol)&&(edit?.security_layer==='reality'||edit?.reality_enabled)){next.security_layer='tls';next.reality_enabled=false} setEdit((p:any)=>({...p,...next})) }}>
                 {PROTOCOLS.map((p)=><option key={p} value={p}>{p}</option>)}
               </select>
             </label>
@@ -137,6 +138,7 @@ export default function Listeners() {
               <label className="label" style={{flex:1}}>{t('settings.publicPort')}<input className="input" value={edit.public_port||''} onChange={(e)=>set('public_port',e.target.value)} /></label>
             </div>
             <ListenerConfigFields protocol={edit.protocol} values={edit} onChange={set} />
+            {cap && <CapabilityFormFields protocol={edit.protocol} capability={cap} showAdvanced values={edit} onChange={set} />}
             <button className="btn primary" onClick={save}>{t('common.save')}</button>
           </div>
         </div>

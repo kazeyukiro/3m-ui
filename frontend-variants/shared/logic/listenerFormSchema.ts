@@ -249,7 +249,7 @@ export const LISTENER_FORM_SECTIONS: FormSection[] = [
     fields: [
       { name: 'reality_dest', type: 'string', labelKey: 'listeners.realityDest', required: true },
       { name: 'reality_private_key', type: 'secret', labelKey: 'listeners.realityPrivateKey', required: true },
-      { name: 'reality_short_id', type: 'string', labelKey: 'listeners.realityShortId' },
+      { name: 'reality_short_id', type: 'tags', labelKey: 'listeners.realityShortId' },
       { name: 'reality_server_names', type: 'tags', labelKey: 'listeners.realityServerNames' },
     ],
   },
@@ -286,7 +286,7 @@ export const LISTENER_FORM_SECTIONS: FormSection[] = [
       { name: 'shadow_tls_password', type: 'secret', labelKey: 'listeners.password' },
       { name: 'shadow_tls_handshake_dest', type: 'string', labelKey: 'listeners.handshakeDest' },
       { name: 'shadow_tls_handshake_proxy', type: 'string', labelKey: 'listeners.handshakeProxy' },
-      { name: 'shadow_tls_users', type: 'text', labelKey: 'listeners.shadowTLSUsers' },
+      { name: 'shadow_tls_users', type: 'text', labelKey: 'listeners.shadowTLSUsers', hintKey: 'listeners.usersLinesHint' },
     ],
   },
   {
@@ -328,7 +328,7 @@ export const LISTENER_FORM_SECTIONS: FormSection[] = [
       { name: 'jls_proxy', type: 'string', labelKey: 'listeners.jlsProxy' },
       { name: 'jls_rate_limit', type: 'integer', labelKey: 'listeners.rateLimit' },
       { name: 'jls_alpn', type: 'tags', labelKey: 'listeners.alpn' },
-      { name: 'jls_users', type: 'text', labelKey: 'listeners.jlsUsers' },
+      { name: 'jls_users', type: 'text', labelKey: 'listeners.jlsUsers', hintKey: 'listeners.usersLinesHint' },
     ],
   },
   {
@@ -498,6 +498,18 @@ export function visibleSections(protocol: string, values: Record<string, any>): 
     }
     return sectionVisible(s, protocol, values)
   })
+}
+
+
+/** Security options depend on protocol (Reality only for vmess/vless/trojan). */
+export function securityOptions(protocol: string): { options: string[]; optionLabels: string[] } {
+  if (REALITY.has(protocol)) {
+    return { options: ['none', 'tls', 'reality'], optionLabels: ['None', 'TLS', 'Reality'] }
+  }
+  if (TLS.has(protocol)) {
+    return { options: ['none', 'tls'], optionLabels: ['None', 'TLS'] }
+  }
+  return { options: ['none'], optionLabels: ['None'] }
 }
 
 export { TRANSPORT as TRANSPORT_PROTOCOLS, TLS as TLS_PROTOCOLS, REALITY as REALITY_PROTOCOLS }

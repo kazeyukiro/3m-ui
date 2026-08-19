@@ -19,8 +19,12 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      await login({ username, password })
-      navigate(from, { replace: true })
+      const data = await login({ username, password })
+      if ((data as any)?.must_change_password) {
+        navigate('/change-password', { replace: true })
+      } else {
+        navigate(from, { replace: true })
+      }
     } catch (err: any) {
       setError(err.message || t('login.failed'))
     } finally {

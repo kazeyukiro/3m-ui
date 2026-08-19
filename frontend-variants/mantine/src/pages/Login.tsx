@@ -21,7 +21,7 @@ export default function Login() {
         {err && <Alert color="red" mb="md">{err}</Alert>}
         <form onSubmit={async (e) => {
           e.preventDefault(); setLoading(true); setErr('')
-          try { await login({ username: u, password: p }); navigate(from, { replace: true }) }
+          try { const data = await login({ username: u, password: p }); navigate(data.must_change_password ? '/change-password' : from, { replace: true }) }
           catch (ex: any) { setErr(ex.message) } finally { setLoading(false) }
         }}>
           <TextInput label={t('login.username')} value={u} onChange={(e) => setU(e.currentTarget.value)} mb="sm" required />
