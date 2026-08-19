@@ -129,7 +129,9 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 	if err != nil {
 		row.LastStatus = "down"
 		row.LastError = err.Error()
-		_ = s.db.Save(&row)
+		if saveErr := s.db.Save(&row).Error; saveErr != nil {
+			return nil, fmt.Errorf("health check result could not be saved: %w", saveErr)
+		}
 		row.APITokenSet = row.APIToken != ""
 		row.APIToken = ""
 		return &row, nil
@@ -143,7 +145,9 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 		row.LastStatus = "error"
 		row.LastError = fmt.Sprintf("HTTP %d", resp.StatusCode)
 	}
-	_ = s.db.Save(&row)
+	if saveErr := s.db.Save(&row).Error; saveErr != nil {
+		return nil, fmt.Errorf("health check result could not be saved: %w", saveErr)
+	}
 	row.APITokenSet = row.APIToken != ""
 	row.APIToken = ""
 	return &row, nil

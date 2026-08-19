@@ -14,16 +14,17 @@ import (
 )
 
 type ProcessManager struct {
-	mu         sync.Mutex
-	cmd        *exec.Cmd
-	pid        int
-	startTime  time.Time
-	binaryPath string
-	configPath string
-	done       chan struct{}
-	logs       []string
-	desired    bool
-	external   bool
+	mu          sync.Mutex
+	lifecycleMu sync.Mutex
+	cmd         *exec.Cmd
+	pid         int
+	startTime   time.Time
+	binaryPath  string
+	configPath  string
+	done        chan struct{}
+	logs        []string
+	desired     bool
+	external    bool
 }
 
 var globalPM *ProcessManager
@@ -349,6 +350,12 @@ func (pm *ProcessManager) adoptExistingLocked(
 }
 
 func (pm *ProcessManager) Start() error {
+	pm.lifecycleMu.Lock()
+	defer pm.lifecycleMu.Unlock()
+	return pm.start()
+}
+
+func (pm *ProcessManager) start() error {
 	pm.mu.Lock()
 
 	if pm.isRunning() {
@@ -576,6 +583,12 @@ func (pm *ProcessManager) waitProcess(
 }
 
 func (pm *ProcessManager) Stop() error {
+	pm.lifecycleMu.Lock()
+	defer pm.lifecycleMu.Unlock()
+	return pm.stop()
+}
+
+func (pm *ProcessManager) stop() error {
 	pm.mu.Lock()
 
 	if !pm.isRunning() {
@@ -667,8 +680,11 @@ func (pm *ProcessManager) Stop() error {
 }
 
 func (pm *ProcessManager) Restart() error {
+	pm.lifecycleMu.Lock()
+	defer pm.lifecycleMu.Unlock()
+
 	if pm.IsRunning() {
-		if err := pm.Stop(); err != nil {
+		if err := pm.stop(); err != nil {
 			return fmt.Errorf(
 				"failed to stop before restart: %w",
 				err,
@@ -680,7 +696,7 @@ func (pm *ProcessManager) Restart() error {
 		return err
 	}
 
-	return pm.Start()
+	return pm.start()
 }
 
 func (pm *ProcessManager) IsRunning() bool {

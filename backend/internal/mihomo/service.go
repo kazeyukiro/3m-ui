@@ -3,6 +3,7 @@ package mihomo
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
@@ -11,6 +12,9 @@ import (
 type Service struct {
 	pm *ProcessManager
 	cm *ConfigManager
+	// applyMu serializes configuration replacement, backup rotation, validation,
+	// and process restart. Multiple API routes can call ApplyConfig concurrently.
+	applyMu sync.Mutex
 }
 
 func NewService(cfg *config.Config) *Service {
@@ -22,7 +26,9 @@ func NewService(cfg *config.Config) *Service {
 func (s *Service) StartMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")
-	}
+	}	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
+
 	if err := s.pm.ValidateConfig(); err != nil {
 		return err
 	}
@@ -31,13 +37,17 @@ func (s *Service) StartMihomo() error {
 func (s *Service) StopMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")
-	}
+	}	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
+
 	return s.pm.Stop()
 }
 func (s *Service) RestartMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")
-	}
+	}	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
+
 	return s.pm.Restart()
 }
 func (s *Service) GetStatus() (*StatusResponse, error) {
@@ -61,6 +71,8 @@ func (s *Service) SaveConfig(content string) error {
 	if err := s.pm.ValidateConfig(); err != nil {
 		if readErr == nil {
 			_ = s.cm.SaveConfig(old)
+		} else {
+			_ = os.Remove(s.cm.configPath)
 		}
 		return err
 	}
@@ -74,6 +86,8 @@ func (s *Service) ApplyConfig(content string) error {
 	if s == nil || s.cm == nil {
 		return fmt.Errorf("mihomo service not initialized")
 	}
+	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
 	old, readErr := s.cm.ReadConfig()
 	if readErr != nil && !os.IsNotExist(readErr) {
 		return fmt.Errorf("read current Mihomo config: %w", readErr)
@@ -93,6 +107,8 @@ func (s *Service) ApplyConfig(content string) error {
 	if err := s.pm.ValidateConfig(); err != nil {
 		if readErr == nil {
 			_ = s.cm.SaveConfig(old)
+		} else {
+			_ = os.Remove(s.cm.configPath)
 		}
 		return fmt.Errorf("validate Mihomo configuration: %w", err)
 	}
@@ -102,6 +118,8 @@ func (s *Service) ApplyConfig(content string) error {
 				if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
 					return fmt.Errorf("start Mihomo: %v; restore previous config: %w", err, restoreErr)
 				}
+			} else {
+				_ = os.Remove(s.cm.configPath)
 			}
 			return fmt.Errorf("start Mihomo: %w", err)
 		}
@@ -109,8 +127,11 @@ func (s *Service) ApplyConfig(content string) error {
 	}
 	if err := s.pm.Restart(); err != nil {
 		if readErr == nil {
-			if restoreErr := s.cm.SaveConfig(old); restoreErr == nil {
-				_ = s.pm.Restart()
+			if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
+				return fmt.Errorf("apply Mihomo configuration: %v; restore previous config: %w", err, restoreErr)
+			}
+			if restartErr := s.pm.Restart(); restartErr != nil {
+				return fmt.Errorf("apply Mihomo configuration: %v; restored previous config but restart also failed: %w", err, restartErr)
 			}
 		}
 		return fmt.Errorf("apply Mihomo configuration: %w", err)

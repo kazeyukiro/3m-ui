@@ -49,7 +49,12 @@ const Listeners: React.FC = () => {
   const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
   const [useCapabilityForm] = useState(true);
 
-  const load = async () => { setLoading(true); try { setData(await fetchListeners()); } catch (e: any) { message.error(e.message); } finally { setLoading(false); } };
+  const load = async (showError = true) => {
+    setLoading(true);
+    try { setData(await fetchListeners()); return true; }
+    catch (e: any) { if (showError) message.error(e.message); return false; }
+    finally { setLoading(false); }
+  };
   const loadTemplates = async () => { setTemplateLoading(true); try { setTemplates(await listListenerTemplates()); } catch (e: any) { message.error(e.message); } finally { setTemplateLoading(false); } };
   useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
 
@@ -80,22 +85,22 @@ const Listeners: React.FC = () => {
       const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
       const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '' };
       if (editing) { await updateListener(normalizeId(editing), payload); message.success(t('listeners.updated')); } else { await createListener(payload); message.success(t('listeners.created')); }
-      setModalOpen(false); setEditing(null); form.resetFields(); await load();
+      setModalOpen(false); setEditing(null); form.resetFields(); if (!(await load(false))) message.warning(t('common.error'));
     } catch (e: any) { message.error(e.message); }
   };
-  const onDelete = async (id: number) => { try { await deleteListener(id); message.success(t('listeners.deleted')); await load(); } catch (e: any) { message.error(e.message); } };
-  const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); await load(); } catch (e: any) { message.error(e.message); } };
+  const onDelete = async (id: number) => { try { await deleteListener(id); message.success(t('listeners.deleted')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const showURIs = async (id: number) => { try { const res = await exportNodeURI(id); setUris(res.uris); setUriModal(true); } catch (e: any) { message.error(e.message); } };
   const openClone = (record: Listener) => { setCloneSource(record); cloneForm.setFieldsValue({ name: `${record.name}-copy`, port: '' }); setCloneModal(true); };
-  const doClone = async (values: { name: string; port: string }) => { if (!cloneSource) return; try { await cloneListener(normalizeId(cloneSource), { name: values.name, port: values.port }); message.success(t('listeners.cloned')); setCloneModal(false); await load(); } catch (e: any) { message.error(e.message); } };
+  const doClone = async (values: { name: string; port: string }) => { if (!cloneSource) return; try { await cloneListener(normalizeId(cloneSource), { name: values.name, port: values.port }); message.success(t('listeners.cloned')); setCloneModal(false); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const openSaveTemplate = (record: Listener) => { setTemplateSource(record); templateForm.setFieldsValue({ name: `${record.name} template` }); setTemplateModal(true); };
   const saveTemplate = async (values: { name: string }) => { if (!templateSource) return; try { await createListenerTemplate({ name: values.name, protocol: templateSource.protocol, config: templateSource.config }); message.success(t('listeners.templateCreated')); setTemplateModal(false); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
   const openInstantiate = (template: ListenerTemplate) => { setInstantiateSource(template); instantiateForm.setFieldsValue({ name: template.name.replace(/\s+template$/i, ''), port: '' }); setInstantiateModal(true); };
-  const doInstantiate = async (values: { name: string; port: string }) => { if (!instantiateSource) return; try { await instantiateListenerTemplate(instantiateSource.id, values); message.success(t('listeners.instantiated')); setInstantiateModal(false); await load(); } catch (e: any) { message.error(e.message); } };
-  const batchEnabled = async (enabled: boolean) => { const ids = selectedRowKeys.map(Number); if (!ids.length) return; try { await batchSetListenersEnabled(ids, enabled); message.success(t('listeners.batchDone')); setSelectedRowKeys([]); await load(); } catch (e: any) { message.error(e.message); } };
+  const doInstantiate = async (values: { name: string; port: string }) => { if (!instantiateSource) return; try { await instantiateListenerTemplate(instantiateSource.id, values); message.success(t('listeners.instantiated')); setInstantiateModal(false); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const batchEnabled = async (enabled: boolean) => { const ids = selectedRowKeys.map(Number); if (!ids.length) return; try { await batchSetListenersEnabled(ids, enabled); message.success(t('listeners.batchDone')); setSelectedRowKeys([]); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const openVersions = async (record: Listener) => { try { setVersionListener(record); setVersions(await listListenerVersions(normalizeId(record))); setVersionsModal(true); } catch (e: any) { message.error(e.message); } };
   const showDiff = async (version: number) => { if (!versionListener) return; try { setDiffText(await diffListenerVersion(normalizeId(versionListener), version)); setDiffModal(true); } catch (e: any) { message.error(e.message); } };
-  const doRollback = async (version: number) => { if (!versionListener) return; try { await rollbackListenerVersion(normalizeId(versionListener), version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(normalizeId(versionListener))); await load(); } catch (e: any) { message.error(e.message); } };
+  const doRollback = async (version: number) => { if (!versionListener) return; try { await rollbackListenerVersion(normalizeId(versionListener), version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(normalizeId(versionListener))); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const deleteTemplate = async (id: number) => { try { await deleteListenerTemplate(id); message.success(t('listeners.templateDeleted')); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
 
   const columns = [

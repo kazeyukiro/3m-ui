@@ -54,9 +54,9 @@ export const downloadBackup = async () => {
 export const restoreDatabase = (file: File) => {
   const fd = new FormData();
   fd.append('database', file);
-  return client.post('/system/backup/restore-db', fd, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  // Let Axios/browser set the multipart boundary automatically. Manually
+  // setting Content-Type can omit the boundary and make Gin reject the upload.
+  return client.post('/system/backup/restore-db', fd);
 };
 
 export const openApiUrl = '/api/v1/openapi.yaml';

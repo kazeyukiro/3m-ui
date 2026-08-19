@@ -12,17 +12,26 @@ export default function Core() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const load = async () => {
-    try { const { data } = await client.get('/mihomo/status'); setStatus(data); }
-    catch (e: any) { message.error(e.message || t('core.unavailable')); }
-    finally { setLoading(false); }
+  const load = async (showError = true) => {
+    try {
+      const { data } = await client.get('/mihomo/status');
+      setStatus(data);
+      return true;
+    } catch (e: any) {
+      if (showError) message.error(e.message || t('core.unavailable'));
+      return false;
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); const id = window.setInterval(load, 5000); return () => window.clearInterval(id); }, []);
 
   const action = async (path: string, successKey: 'started' | 'stopped' | 'restarted') => {
     setBusy(true);
-    try { await client.post(`/mihomo/${path}`); message.success(t(`core.${successKey}`)); await load(); }
+    try {
+      await client.post(`/mihomo/${path}`);
+      message.success(t(`core.${successKey}`));
+      if (!(await load(false))) message.warning(t('core.unavailable'));
+    }
     catch (e: any) { message.error(e.message || t('core.operationFailed')); }
     finally { setBusy(false); }
   };

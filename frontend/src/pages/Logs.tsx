@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, List, Tag, Button, Space, Empty, Spin } from 'antd';
+import { Card, List, Tag, Button, Space, Empty, Spin, message } from 'antd';
 import { ReloadOutlined, ClearOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../api/client';
@@ -18,7 +18,7 @@ const Logs: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try { const { data } = await client.get<LogEntry[]>('/mihomo/logs'); setLogs(Array.isArray(data) ? data : []); }
-    catch (e: any) {}
+    catch (e: any) { message.error(e.message || t('common.error')); }
     finally { setLoading(false); }
   };
 

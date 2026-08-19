@@ -1,5 +1,4 @@
-name: Release
-# Builds all UI editions and publishes one GitHub Release with every artifact.
+name: Release · Ant Design
 on:
   push:
     tags:
@@ -19,78 +18,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Ant Design (primary)
-          - edition: antd
-            frontend_dir: frontend
-            goarch: amd64
-            artifact: linux-amd64-antd
-          - edition: antd
-            frontend_dir: frontend
-            goarch: arm64
-            artifact: linux-arm64-antd
-          - edition: antd
-            frontend_dir: frontend
-            goarch: arm
+          - goarch: amd64
+            artifact: linux-amd64
+          - goarch: arm64
+            artifact: linux-arm64
+          - goarch: arm
             goarm: '7'
-            artifact: linux-armv7-antd
-          # Material UI
-          - edition: mui
-            frontend_dir: frontend-variants/mui
-            goarch: amd64
-            artifact: linux-amd64-mui
-          - edition: mui
-            frontend_dir: frontend-variants/mui
-            goarch: arm64
-            artifact: linux-arm64-mui
-          - edition: mui
-            frontend_dir: frontend-variants/mui
-            goarch: arm
-            goarm: '7'
-            artifact: linux-armv7-mui
-          # Mantine
-          - edition: mantine
-            frontend_dir: frontend-variants/mantine
-            goarch: amd64
-            artifact: linux-amd64-mantine
-          - edition: mantine
-            frontend_dir: frontend-variants/mantine
-            goarch: arm64
-            artifact: linux-arm64-mantine
-          - edition: mantine
-            frontend_dir: frontend-variants/mantine
-            goarch: arm
-            goarm: '7'
-            artifact: linux-armv7-mantine
-          # shadcn
-          - edition: shadcn
-            frontend_dir: frontend-variants/shadcn
-            goarch: amd64
-            artifact: linux-amd64-shadcn
-          - edition: shadcn
-            frontend_dir: frontend-variants/shadcn
-            goarch: arm64
-            artifact: linux-arm64-shadcn
-          - edition: shadcn
-            frontend_dir: frontend-variants/shadcn
-            goarch: arm
-            goarm: '7'
-            artifact: linux-armv7-shadcn
+            artifact: linux-armv7
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package.json
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
-      - name: Build frontend (${{ matrix.edition }})
-        working-directory: ${{ matrix.frontend_dir }}
+      - name: Build Ant Design frontend
+        working-directory: frontend
         run: npm install && npm run build
       - name: Embed frontend
         run: |
           rm -rf backend/cmd/server/web/dist
-          cp -r "${{ matrix.frontend_dir }}/dist" backend/cmd/server/web/dist
+          cp -r frontend/dist backend/cmd/server/web/dist
       - name: Build backend
         working-directory: backend
         env:
@@ -113,8 +65,6 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: List artifacts
-        run: find artifacts -type f | sort
       - name: Resolve tag
         id: meta
         run: |
@@ -134,14 +84,7 @@ jobs:
           body: |
             ## Packages
 
-            All UI editions are included in this release:
-
-            | File pattern | Frontend |
-            |---|---|
-            | `3m-ui-linux-*-antd.tar.gz` | Ant Design (primary) |
-            | `3m-ui-linux-*-mui.tar.gz` | Material UI |
-            | `3m-ui-linux-*-mantine.tar.gz` | Mantine |
-            | `3m-ui-linux-*-shadcn.tar.gz` | shadcn / Tailwind |
+            Official frontend: Ant Design.
 
             Architectures: `amd64`, `arm64`, `armv7`.
-          files: artifacts/**/*.tar.gz
+          files: artifacts/*.tar.gz

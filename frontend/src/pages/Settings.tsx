@@ -33,14 +33,14 @@ const Settings: React.FC = () => {
         client_fingerprint: r.data?.['access_profile.client_fingerprint'] || 'chrome',
         alpn: r.data?.['access_profile.alpn'] || '',
       });
-    }).catch(() => {});
+    }).catch((e: any) => { message.error(e.message || t('common.error')); });
     fetchTelegramSettings().then((s: TelegramSettings) => {
       tgForm.setFieldsValue({
         ...s,
         chat_ids: (s.chat_ids || []).join(','),
         bot_token: s.bot_token || '',
       });
-    }).catch(() => {});
+    }).catch((e: any) => { message.error(e.message || t('common.error')); });
   }, []);
 
   return (

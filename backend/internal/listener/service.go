@@ -35,11 +35,21 @@ func (s *Service) Create(l *models.Listener) error {
 		return fmt.Errorf("failed to create listener: %w", err)
 	}
 	if err := s.regenerateConfigLocked(); err != nil {
-		_ = s.db.Delete(&models.Listener{}, l.ID).Error
+		if rollbackErr := s.db.Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
+			return fmt.Errorf("%v; rollback newly created listener failed: %w", err, rollbackErr)
+		}
 		return err
 	}
 	if err := s.SaveVersion(l.ID, "create"); err != nil {
-		return fmt.Errorf("listener created but history save failed: %w", err)
+		// Version history is part of the create contract: do not report a
+		// failed create while leaving a listener that the caller cannot account for.
+		if rollbackErr := s.db.Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
+			return fmt.Errorf("save listener history: %v; rollback created listener failed: %w", err, rollbackErr)
+		}
+		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
+			return fmt.Errorf("save listener history: %v; listener rolled back but previous configuration regeneration failed: %w", err, regenerateErr)
+		}
+		return fmt.Errorf("save listener history: %w", err)
 	}
 	return nil
 }
@@ -83,7 +93,9 @@ func (s *Service) Update(l *models.Listener) error {
 		if rollbackErr := s.db.Save(&previous).Error; rollbackErr != nil {
 			return fmt.Errorf("%v; rollback listener failed: %w", err, rollbackErr)
 		}
-		_ = s.regenerateConfigLocked()
+		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
+			return fmt.Errorf("%v; listener restored but previous configuration regeneration failed: %w", err, regenerateErr)
+		}
 		return err
 	}
 	return nil
@@ -119,7 +131,9 @@ func (s *Service) Delete(id uint) error {
 				return fmt.Errorf("%v; rollback listener bindings failed: %w", err, restoreErr)
 			}
 		}
-		_ = s.regenerateConfigLocked()
+		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
+			return fmt.Errorf("%v; listener and bindings restored but previous configuration regeneration failed: %w", err, regenerateErr)
+		}
 		return err
 	}
 	return nil

@@ -16,7 +16,10 @@ func registerPanelSettingsRoutes(api *gin.RouterGroup, d Deps) {
 			return
 		}
 		var rows []models.PanelSetting
-		_ = db.Find(&rows).Error
+		if err := db.Find(&rows).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		out := map[string]string{}
 		for _, r := range rows {
 			if strings.Contains(strings.ToLower(r.Key), "token") || strings.Contains(strings.ToLower(r.Key), "secret") {
@@ -45,10 +48,16 @@ func registerPanelSettingsRoutes(api *gin.RouterGroup, d Deps) {
 			var row models.PanelSetting
 			err := db.Where("key = ?", k).First(&row).Error
 			if err != nil {
-				_ = db.Create(&models.PanelSetting{Key: k, Value: v}).Error
+				if createErr := db.Create(&models.PanelSetting{Key: k, Value: v}).Error; createErr != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": createErr.Error()})
+					return
+				}
 			} else {
 				row.Value = v
-				_ = db.Save(&row).Error
+				if saveErr := db.Save(&row).Error; saveErr != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": saveErr.Error()})
+					return
+				}
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})

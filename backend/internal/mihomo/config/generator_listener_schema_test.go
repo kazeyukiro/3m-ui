@@ -9,7 +9,7 @@ import (
 func TestGenerateListenersUsesNativeSchema(t *testing.T) {
 	listeners := []models.Listener{
 		{BaseModel: models.BaseModel{ID: 1}, Name: "ss", Protocol: "shadowsocks", Port: "443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"cipher":"aes-256-gcm"}`},
-		{BaseModel: models.BaseModel{ID: 2}, Name: "vless", Protocol: "vless", Port: "8443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"flow":"xtls-rprx-vision","certificate":"cert","private-key":"key","reality-config":{"private-key":"secret"}}`},
+		{BaseModel: models.BaseModel{ID: 2}, Name: "vless", Protocol: "vless", Port: "8443", BindAddress: "0.0.0.0", Enabled: true, Config: `{"flow":"xtls-rprx-vision","certificate":"cert","private-key":"key","reality-config":{"dest":"example.com:443","private-key":"secret","short-id":["0123456789abcdef"],"server-names":["example.com"]}}`},
 	}
 	creds := map[uint][]Credential{
 		1: {{Username: "alice", Password: "ss-pass"}},
@@ -32,6 +32,19 @@ func TestGenerateListenersUsesNativeSchema(t *testing.T) {
 	}
 	if result[1]["certificate"] != "cert" || result[1]["private-key"] != "key" {
 		t.Fatal("listener certificate/private-key fields were not preserved")
+	}
+	reality, ok := result[1]["reality-config"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("reality-config was not preserved as an object: %#v", result[1]["reality-config"])
+	}
+	if reality["dest"] != "example.com:443" || reality["private-key"] != "secret" {
+		t.Fatalf("Reality dest/private-key were not preserved: %#v", reality)
+	}
+	if _, ok := reality["short-id"].([]string); !ok {
+		t.Fatalf("Reality short-id was not preserved as a list: %#v", reality["short-id"])
+	}
+	if _, ok := reality["server-names"].([]string); !ok {
+		t.Fatalf("Reality server-names was not preserved as a list: %#v", reality["server-names"])
 	}
 }
 
