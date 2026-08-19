@@ -28,6 +28,7 @@ func (h *Handler) Get(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// Never echo full key path contents; just settings metadata.
 	c.JSON(http.StatusOK, s)
 }
 

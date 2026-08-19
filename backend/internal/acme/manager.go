@@ -25,10 +25,10 @@ type Settings struct {
 	Domain     string `json:"domain"`
 	Email      string `json:"email"`
 	CacheDir   string `json:"cache_dir"`
-	CertFile   string `json:"cert_file"`
-	KeyFile    string `json:"key_file"`
-	ListenHTTP string `json:"listen_http"`
-	ListenTLS  string `json:"listen_tls"`
+	CertFile   string `json:"cert_file"` // optional manual cert (PEM)
+	KeyFile    string `json:"key_file"`  // optional manual key (PEM)
+	ListenHTTP string `json:"listen_http"` // e.g. ":80" for ACME HTTP-01 + redirect
+	ListenTLS  string `json:"listen_tls"`  // e.g. ":443"
 }
 
 func DefaultSettings() Settings {
@@ -95,6 +95,7 @@ func SaveSettings(db *gorm.DB, s Settings) error {
 	return db.Save(&row).Error
 }
 
+// Manager wraps autocert or manual TLS for the panel listener.
 type Manager struct {
 	mu       sync.Mutex
 	settings Settings
@@ -115,6 +116,7 @@ func NewManager(s Settings) (*Manager, error) {
 func (m *Manager) configure() error {
 	s := m.settings
 	if s.CertFile != "" && s.KeyFile != "" {
+		// Manual PEM pair — no autocert.
 		return nil
 	}
 	if s.Domain == "" {
@@ -133,6 +135,7 @@ func (m *Manager) configure() error {
 	return nil
 }
 
+// TLSConfig returns a *tls.Config suitable for https.Server, or nil if SSL is disabled.
 func (m *Manager) TLSConfig() (*tls.Config, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -158,6 +161,7 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 	return m.manager.TLSConfig(), nil
 }
 
+// HTTPHandler returns the ACME HTTP-01 challenge handler (nil if not using autocert).
 func (m *Manager) HTTPHandler(fallback http.Handler) http.Handler {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -184,6 +188,7 @@ func (m *Manager) Update(s Settings) error {
 	return m.configure()
 }
 
+// Status reports current SSL configuration for the panel UI.
 func Status(db *gorm.DB) map[string]interface{} {
 	s, _ := LoadSettings(db)
 	hasCache := false
@@ -217,6 +222,7 @@ func modeLabel(s Settings, manual bool) string {
 	return "letsencrypt"
 }
 
+// LogHint prints a one-line hint after enabling SSL.
 func LogHint(s Settings) {
 	if !s.Enabled {
 		return
@@ -225,6 +231,6 @@ func LogHint(s Settings) {
 		log.Printf("panel SSL: manual cert %s (listen %s)", s.CertFile, s.ListenTLS)
 		return
 	}
-	log.Printf("panel SSL: Let's Encrypt for %s (HTTP %s -> TLS %s, cache %s)",
+	log.Printf("panel SSL: Let's Encrypt for %s (HTTP %s → TLS %s, cache %s)",
 		s.Domain, s.ListenHTTP, s.ListenTLS, s.CacheDir)
 }

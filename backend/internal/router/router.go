@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
 	"github.com/kazeyukiro/3m-ui/backend/internal/cluster"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
+	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
 	"github.com/kazeyukiro/3m-ui/backend/internal/traffic"
@@ -64,6 +66,8 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 
 		user.NewHandler(d.userService()).RegisterRoutes(apiV1.Group("/users"))
 		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
+		acme.NewHandler(db).RegisterRoutes(apiV1.Group("/system"))
+		subpage.NewHandler(db).RegisterRoutes(apiV1.Group("/system"))
 		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))
 
 		// Listener owns the CRUD/template/version endpoints. Node adds the

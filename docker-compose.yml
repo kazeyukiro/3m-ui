@@ -1,0 +1,30 @@
+# 3m-ui — Mihomo management panel (Ant Design frontend)
+# Usage:
+#   docker compose up -d
+# Panel: http://localhost:8080/
+
+services:
+  3m-ui:
+    build: .
+    image: 3m-ui:local
+    container_name: 3m-ui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      THREE_M_UI_CONFIG: /etc/3m-ui/config.yaml
+      TZ: Asia/Shanghai
+    volumes:
+      - 3m-ui-config:/etc/3m-ui
+      - 3m-ui-data:/var/lib/3m-ui
+      - 3m-ui-logs:/var/log/3m-ui
+      # Optional: share host Mihomo binary + config
+      # - /usr/local/bin/mihomo:/usr/local/bin/mihomo:ro
+      # - /etc/mihomo:/etc/mihomo
+    # First run: create a minimal config if missing (via entrypoint override or mount).
+    # Generate secrets yourself — do not use example values in production.
+
+volumes:
+  3m-ui-config:
+  3m-ui-data:
+  3m-ui-logs:

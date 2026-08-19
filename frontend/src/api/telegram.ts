@@ -7,7 +7,10 @@ export interface TelegramSettings {
   notify_on_block: boolean;
   notify_on_unblock: boolean;
   notify_on_expiry: boolean;
+  notify_on_traffic?: boolean;
   notify_daily_digest: boolean;
+  traffic_warn_pct?: number;
+  expiry_warn_hours?: number;
 }
 
 export const fetchTelegramSettings = () =>

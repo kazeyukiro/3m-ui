@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database"
@@ -90,12 +91,66 @@ func Run(frontendFS fs.FS) error {
 
 	r := router.SetupRouterWithDeps(container.RouterDeps())
 	mountFrontend(r, frontendFS)
+
+	sslSettings, _ := acme.LoadSettings(db)
+	if sslSettings.Enabled {
+		return serveWithSSL(r, sslSettings, cfg.Server.Port)
+	}
+
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("3m-ui listening on %s", addr)
 	if err := r.Run(addr); err != nil {
 		return fmt.Errorf("run server: %w", err)
 	}
 	return nil
+}
+
+// serveWithSSL starts HTTPS (Let's Encrypt autocert or manual cert) and optional
+// HTTP-01 challenge / redirect listener — 3x-ui panel SSL parity.
+func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error {
+	mgr, err := acme.NewManager(s)
+	if err != nil {
+		return fmt.Errorf("panel SSL: %w", err)
+	}
+	acme.LogHint(s)
+	tlsCfg, err := mgr.TLSConfig()
+	if err != nil {
+		return fmt.Errorf("panel SSL tls config: %w", err)
+	}
+	tlsAddr := s.ListenTLS
+	if tlsAddr == "" {
+		tlsAddr = fmt.Sprintf(":%d", fallbackPort)
+	}
+	srv := &http.Server{
+		Addr:      tlsAddr,
+		Handler:   handler,
+		TLSConfig: tlsCfg,
+	}
+	// HTTP-01 challenge + optional redirect to HTTPS.
+	httpAddr := s.ListenHTTP
+	if httpAddr == "" {
+		httpAddr = ":80"
+	}
+	go func() {
+		redirect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			host := r.Host
+			if s.Domain != "" {
+				host = s.Domain
+			}
+			http.Redirect(w, r, "https://"+host+r.URL.RequestURI(), http.StatusMovedPermanently)
+		})
+		h := mgr.HTTPHandler(redirect)
+		log.Printf("3m-ui ACME/HTTP listening on %s", httpAddr)
+		if err := http.ListenAndServe(httpAddr, h); err != nil {
+			log.Printf("panel HTTP listener: %v", err)
+		}
+	}()
+	log.Printf("3m-ui HTTPS listening on %s", tlsAddr)
+	if s.CertFile != "" && s.KeyFile != "" {
+		return srv.ListenAndServeTLS(s.CertFile, s.KeyFile)
+	}
+	// autocert: certificates obtained on first request for the configured domain.
+	return srv.ListenAndServeTLS("", "")
 }
 
 func defaultConfigPath() string {

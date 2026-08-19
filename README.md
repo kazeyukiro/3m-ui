@@ -214,7 +214,7 @@ npm run build
 
 ## 许可证
 
-EPL 2.0，详见 [`LICENSE`](LICENSE)。
+Apache License 2.0，详见 [`LICENSE`](LICENSE)。
 
 ---
 
@@ -428,4 +428,4 @@ Special thanks to the following open-source projects and communities:
 
 ## License
 
-EPL 2.0. See [`LICENSE`](LICENSE).
+Apache License 2.0. See [`LICENSE`](LICENSE).

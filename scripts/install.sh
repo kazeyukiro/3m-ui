@@ -195,7 +195,7 @@ install_panel(){
   "$tmp" --version >/dev/null 2>&1 || err "Downloaded 3m-ui failed executable validation."
   install -m 0755 "$tmp" "$APP_BIN"
   printf '%s\n' "$RELEASE_TAG" > "$VERSION_FILE"
-  printf '%s\n' static > "$MODE_FILE"
+  printf '%s\n' "$([ "$STATIC" = "1" ] && echo static || echo dynamic)" > "$MODE_FILE"
   chmod 0600 "$VERSION_FILE" "$MODE_FILE"
   rm -f "$tmp"; trap - EXIT INT TERM
 }

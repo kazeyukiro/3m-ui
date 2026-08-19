@@ -185,6 +185,34 @@ func (s *Service) Delete(id uint) error {
 	return nil
 }
 
+// DeleteDepleted removes proxy users that are expired or over traffic quota
+// (3x-ui delDepletedClients parity). Returns the number of deleted rows.
+func (s *Service) DeleteDepleted() (int, error) {
+	var users []models.ProxyUser
+	if err := s.db.Find(&users).Error; err != nil {
+		return 0, err
+	}
+	ids := make([]uint, 0)
+	for _, u := range users {
+		if !IsCredentialActive(u) {
+			ids = append(ids, u.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("proxy_user_id IN ?", ids).Delete(&models.ListenerUser{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id IN ?", ids).Delete(&models.ProxyUser{}).Error
+	}); err != nil {
+		return 0, err
+	}
+	_ = s.notifyCredentialsChanged()
+	return len(ids), nil
+}
+
 func (s *Service) BindListeners(userID uint, listenerIDs []uint) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		var user models.ProxyUser

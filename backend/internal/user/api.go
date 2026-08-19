@@ -21,6 +21,8 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.List)
 	rg.POST("", h.Create)
+	// Static path must be registered before /:id to avoid being captured as id.
+	rg.POST("/del-depleted", h.DeleteDepleted)
 	rg.GET("/:id", h.Get)
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
@@ -220,4 +222,14 @@ func (h *Handler) RotateSubscription(c *gin.Context) {
 	base := scheme + "://" + c.Request.Host
 	url := base + "/api/v1/client/sub/" + token
 	c.JSON(http.StatusOK, gin.H{"token": token, "url": url})
+}
+
+// DeleteDepleted removes expired / over-quota proxy users (3x-ui delDepletedClients parity).
+func (h *Handler) DeleteDepleted(c *gin.Context) {
+	n, err := h.svc.DeleteDepleted()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": n})
 }

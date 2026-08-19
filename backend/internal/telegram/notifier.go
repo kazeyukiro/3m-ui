@@ -144,17 +144,25 @@ func (n *Notifier) emitThresholdWarnings(client *Client, settings Settings, user
 	if client == nil {
 		return
 	}
+	warnPct := settings.TrafficWarnPct
+	if warnPct <= 0 || warnPct > 100 {
+		warnPct = 80
+	}
+	warnHours := settings.ExpiryWarnHours
+	if warnHours <= 0 {
+		warnHours = 72
+	}
 	for _, u := range users {
 		if !u.Enabled {
 			continue
 		}
-		if settings.NotifyOnBlock && u.TrafficLimit > 0 {
+		if settings.NotifyOnTraffic && u.TrafficLimit > 0 {
 			pct := float64(u.TrafficUsed) * 100 / float64(u.TrafficLimit)
-			if pct >= 80 && pct < 100 {
+			if pct >= float64(warnPct) && pct < 100 {
 				key := fmt.Sprintf("tg_warn_traffic_%d_%s", u.ID, now.Format("2006-01-02"))
 				if !settingExists(n.db, key) {
-					msg := fmt.Sprintf("⚠️ <b>流量预警 / Traffic warning</b>\n用户 / User：<code>%s</code>\n已用 / Used：%s / %s (%.0f%%)\n时间 / Time：%s",
-						escapeHTML(u.Username), formatBytes(u.TrafficUsed), formatBytes(u.TrafficLimit), pct, now.Format("2006-01-02 15:04:05"))
+					msg := fmt.Sprintf("⚠️ <b>流量预警 / Traffic warning</b>\n用户 / User：<code>%s</code>\n已用 / Used：%s / %s (%.0f%%)\n阈值 / Threshold：%d%%\n时间 / Time：%s",
+						escapeHTML(u.Username), formatBytes(u.TrafficUsed), formatBytes(u.TrafficLimit), pct, warnPct, now.Format("2006-01-02 15:04:05"))
 					if err := client.SendText(msg); err != nil {
 						log.Printf("telegram: traffic warn failed: %v", err)
 					} else {
@@ -165,7 +173,7 @@ func (n *Notifier) emitThresholdWarnings(client *Client, settings Settings, user
 		}
 		if settings.NotifyOnExpiry && !u.ExpireTime.IsZero() && u.ExpireTime.After(now) {
 			until := u.ExpireTime.Sub(now)
-			if until <= 72*time.Hour {
+			if until <= time.Duration(warnHours)*time.Hour {
 				key := fmt.Sprintf("tg_warn_expire_%d_%s", u.ID, u.ExpireTime.Format("2006-01-02"))
 				if !settingExists(n.db, key) {
 					msg := fmt.Sprintf("⏰ <b>到期预警 / Expiry warning</b>\n用户 / User：<code>%s</code>\n到期 / Expires：%s\n剩余 / Left：%s\n时间 / Time：%s",

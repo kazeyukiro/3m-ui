@@ -50,3 +50,7 @@ export const fetchUserSubscription = (id: number) =>
   client.get<{ token: string; url: string }>(`/users/${id}/subscription`).then((r) => r.data);
 export const rotateUserSubscription = (id: number) =>
   client.post<{ token: string; url: string }>(`/users/${id}/subscription/rotate`).then((r) => r.data);
+
+/** 3x-ui delDepletedClients parity — remove expired / over-quota users. */
+export const deleteDepletedUsers = () =>
+  client.post<{ deleted: number }>('/users/del-depleted').then((r) => r.data);

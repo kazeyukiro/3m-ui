@@ -135,7 +135,7 @@ install -m 0755 "$updater_tmp" "$staging/update.sh"
 install -m 0755 "$uninstall_tmp" "$staging/uninstall.sh"
 install -m 0755 "$entry_tmp" "$staging/3m-ui"
 printf '%s\n' "$tag" > "$staging/VERSION"
-printf '%s\n' static > "$staging/BUILD_MODE"
+printf '%s\n' "$current_mode" > "$staging/BUILD_MODE"
 
 rm -rf "$BASE"
 mkdir -p "$BASE"

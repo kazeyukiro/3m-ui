@@ -37,7 +37,10 @@ type putSettingsBody struct {
 	NotifyOnBlock     bool     `json:"notify_on_block"`
 	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
 	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
+	NotifyOnTraffic   bool     `json:"notify_on_traffic"`
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
+	TrafficWarnPct    int      `json:"traffic_warn_pct"`
+	ExpiryWarnHours   int      `json:"expiry_warn_hours"`
 	KeepToken         bool     `json:"keep_token"`
 }
 
@@ -48,7 +51,13 @@ func (h *Handler) PutSettings(c *gin.Context) {
 		return
 	}
 	current, _ := LoadSettings(h.db)
-	s := Settings{Enabled: body.Enabled, BotToken: strings.TrimSpace(body.BotToken), ChatIDs: body.ChatIDs, NotifyOnBlock: body.NotifyOnBlock, NotifyOnUnblock: body.NotifyOnUnblock, NotifyOnExpiry: body.NotifyOnExpiry, NotifyDailyDigest: body.NotifyDailyDigest}
+	s := Settings{
+		Enabled: body.Enabled, BotToken: strings.TrimSpace(body.BotToken), ChatIDs: body.ChatIDs,
+		NotifyOnBlock: body.NotifyOnBlock, NotifyOnUnblock: body.NotifyOnUnblock,
+		NotifyOnExpiry: body.NotifyOnExpiry, NotifyOnTraffic: body.NotifyOnTraffic,
+		NotifyDailyDigest: body.NotifyDailyDigest,
+		TrafficWarnPct: body.TrafficWarnPct, ExpiryWarnHours: body.ExpiryWarnHours,
+	}
 	if body.KeepToken || s.BotToken == "" || strings.Contains(s.BotToken, "…") || strings.Contains(s.BotToken, "...") {
 		s.BotToken = current.BotToken
 	}

@@ -18,12 +18,13 @@ type Settings struct {
 	NotifyOnBlock     bool     `json:"notify_on_block"`
 	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
 	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
-	NotifyOnTraffic   bool     `json:"notify_on_traffic"`
+	NotifyOnTraffic   bool     `json:"notify_on_traffic"` // warn when usage >= TrafficWarnPct
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
-	TrafficWarnPct    int      `json:"traffic_warn_pct"`
-	ExpiryWarnHours   int      `json:"expiry_warn_hours"`
+	TrafficWarnPct    int      `json:"traffic_warn_pct"`   // default 80
+	ExpiryWarnHours   int      `json:"expiry_warn_hours"`  // default 72
 }
 
+// normalizeChatIDList accepts values like "123", "-100123", "123,456" or multiline.
 func normalizeChatIDList(ids []string) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(ids))
@@ -49,12 +50,12 @@ func normalizeChatIDList(ids []string) []string {
 
 func DefaultSettings() Settings {
 	return Settings{
-		NotifyOnBlock:   true,
-		NotifyOnUnblock: true,
-		NotifyOnExpiry:  true,
-		NotifyOnTraffic: true,
-		TrafficWarnPct:  80,
-		ExpiryWarnHours: 72,
+		NotifyOnBlock:    true,
+		NotifyOnUnblock:  true,
+		NotifyOnExpiry:   true,
+		NotifyOnTraffic:  true,
+		TrafficWarnPct:   80,
+		ExpiryWarnHours:  72,
 	}
 }
 

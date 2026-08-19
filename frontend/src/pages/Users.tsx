@@ -6,7 +6,7 @@ import {
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
-  fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic,
+  fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers,
   fetchUserNodes, bindUserNodes, fetchUserSubscription, rotateUserSubscription, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
@@ -206,6 +206,16 @@ const Users: React.FC = () => {
     }
   };
 
+  const onDeleteDepleted = async () => {
+    try {
+      const res = await deleteDepletedUsers();
+      message.success((t('users.depletedDeleted') || 'Deleted depleted users') + `: ${res.deleted}`);
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
   const columns = [
     { title: t('users.username'), dataIndex: 'username', key: 'username', width: 120, ellipsis: true },
     {
@@ -304,6 +314,14 @@ const Users: React.FC = () => {
               onChange={(e) => { if (!e.target.value) setKeyword(''); }}
               style={{ width: 200 }}
             />
+            <Popconfirm
+              title={t('users.deleteDepletedConfirm') || 'Delete all expired / over-quota users?'}
+              onConfirm={onDeleteDepleted}
+            >
+              <Button danger icon={<DeleteOutlined />}>
+                {t('users.deleteDepleted') || 'Delete depleted'}
+              </Button>
+            </Popconfirm>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -400,27 +418,51 @@ const Users: React.FC = () => {
         title={(t('users.shareTitle') || 'Subscription') + (shareUser ? ` — ${shareUser.username}` : '')}
         onCancel={() => { setShareOpen(false); setShareUser(null); setShareUrl(''); }}
         footer={null}
-        width={520}
+        width={560}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Input
-            value={shareUrl}
-            readOnly
-            placeholder={shareLoading ? t('common.loading') : ''}
-            addonAfter={
-              <Button
-                type="text"
-                size="small"
-                icon={<CopyOutlined />}
-                disabled={!shareUrl}
-                onClick={() => {
-                  if (!shareUrl) return;
-                  navigator.clipboard.writeText(shareUrl);
-                  message.success(t('common.copied') || 'Copied');
-                }}
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div>
+            <div style={{ marginBottom: 4, fontWeight: 500 }}>{t('users.subMihomo') || 'Mihomo / Clash YAML'}</div>
+            <Input
+              value={shareUrl}
+              readOnly
+              placeholder={shareLoading ? t('common.loading') : ''}
+              addonAfter={
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  disabled={!shareUrl}
+                  onClick={() => {
+                    if (!shareUrl) return;
+                    navigator.clipboard.writeText(shareUrl);
+                    message.success(t('common.copied') || 'Copied');
+                  }}
+                />
+              }
+            />
+          </div>
+          {shareUrl && (
+            <div>
+              <div style={{ marginBottom: 4, fontWeight: 500 }}>{t('users.subV2ray') || 'V2Ray / Base64 (v2rayNG / Hiddify)'}</div>
+              <Input
+                value={`${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=v2ray`}
+                readOnly
+                addonAfter={
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      const u = `${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=v2ray`;
+                      navigator.clipboard.writeText(u);
+                      message.success(t('common.copied') || 'Copied');
+                    }}
+                  />
+                }
               />
-            }
-          />
+            </div>
+          )}
           {shareUrl && (
             <div style={{ textAlign: 'center' }}>
               <img
@@ -428,6 +470,9 @@ const Users: React.FC = () => {
                 style={{ width: 180, height: 180 }}
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`}
               />
+              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                {t('users.qrHint') || 'QR = default (Mihomo). Paste the V2Ray URL into classic clients.'}
+              </div>
             </div>
           )}
           <Button loading={shareLoading} onClick={onRotateShare} block>

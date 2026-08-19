@@ -21,6 +21,9 @@ const Settings: React.FC = () => {
   const [acmeForm] = Form.useForm();
   const [acmeCmd, setAcmeCmd] = useState('');
   const [resetDay, setResetDay] = useState<number>(0);
+  const [sslForm] = Form.useForm();
+  const [subPageForm] = Form.useForm();
+  const [sslStatus, setSslStatus] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     client.get('/panel-settings').then((r) => {
@@ -39,8 +42,18 @@ const Settings: React.FC = () => {
         ...s,
         chat_ids: (s.chat_ids || []).join(','),
         bot_token: s.bot_token || '',
+        traffic_warn_pct: s.traffic_warn_pct ?? 80,
+        expiry_warn_hours: s.expiry_warn_hours ?? 72,
+        notify_on_traffic: s.notify_on_traffic ?? true,
       });
     }).catch((e: any) => { message.error(e.message || t('common.error')); });
+    client.get('/system/ssl').then((r) => {
+      sslForm.setFieldsValue(r.data || {});
+    }).catch(() => {});
+    client.get('/system/ssl/status').then((r) => setSslStatus(r.data)).catch(() => {});
+    client.get('/system/subscription-page').then((r) => {
+      subPageForm.setFieldsValue(r.data || {});
+    }).catch(() => {});
   }, []);
 
   return (
@@ -115,7 +128,10 @@ const Settings: React.FC = () => {
               notify_on_block: !!values.notify_on_block,
               notify_on_unblock: !!values.notify_on_unblock,
               notify_on_expiry: !!values.notify_on_expiry,
+              notify_on_traffic: !!values.notify_on_traffic,
               notify_daily_digest: !!values.notify_daily_digest,
+              traffic_warn_pct: Number(values.traffic_warn_pct || 80),
+              expiry_warn_hours: Number(values.expiry_warn_hours || 72),
               keep_token: !values.bot_token || String(values.bot_token).includes('…'),
             });
             message.success(t('settings.telegramSaved'));
@@ -128,12 +144,85 @@ const Settings: React.FC = () => {
           <Form.Item name="notify_on_unblock" label={t('settings.notifyUnblock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_expiry" label={t('settings.notifyExpiry')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_daily_digest" label={t('settings.notifyDailyDigest')} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="notify_on_traffic" label={t('settings.notifyTraffic') || 'Traffic threshold warning'} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="traffic_warn_pct" label={t('settings.trafficWarnPct') || 'Traffic warn %'}><InputNumber min={1} max={100} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="expiry_warn_hours" label={t('settings.expiryWarnHours') || 'Expiry warn (hours)'}><InputNumber min={1} max={720} style={{ width: '100%' }} /></Form.Item>
           <Space>
             <Button type="primary" htmlType="submit">{t('common.save')}</Button>
             <Button onClick={async () => { try { await testTelegram(); message.success(t('settings.telegramTestOk')); } catch (e: any) { message.error(e.message || t('common.error')); } }}>{t('settings.telegramTest')}</Button>
           </Space>
         </Form>
       </Card>
+
+      <Card title={t('settings.panelSSL') || 'Panel SSL (ACME)'} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.panelSSLHint') || 'Enable HTTPS for the panel via Let\'s Encrypt (autocert) or a manual certificate. Restart the panel after saving.'}</Text>
+        {sslStatus && (
+          <div style={{ marginTop: 8 }}>
+            <Tag color={sslStatus.enabled ? 'green' : 'default'}>{String(sslStatus.mode || 'disabled')}</Tag>
+            {sslStatus.domain ? <Tag>{String(sslStatus.domain)}</Tag> : null}
+            {sslStatus.has_cache ? <Tag color="blue">cert cached</Tag> : null}
+          </div>
+        )}
+        <Form form={sslForm} layout="vertical" style={{ marginTop: 12 }} onFinish={async (values) => {
+          try {
+            await client.put('/system/ssl', {
+              enabled: !!values.enabled,
+              domain: values.domain || '',
+              email: values.email || '',
+              cache_dir: values.cache_dir || '/var/lib/3m-ui/acme',
+              cert_file: values.cert_file || '',
+              key_file: values.key_file || '',
+              listen_http: values.listen_http || ':80',
+              listen_tls: values.listen_tls || ':443',
+            });
+            message.success(t('settings.sslSaved') || 'SSL settings saved — restart panel to apply');
+            const st = await client.get('/system/ssl/status');
+            setSslStatus(st.data);
+          } catch (e: any) { message.error(e.message || t('common.error')); }
+        }}>
+          <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="domain" label={t('settings.domain')}><Input placeholder="panel.example.com" /></Form.Item>
+          <Form.Item name="email" label={t('settings.email')}><Input placeholder="admin@example.com" /></Form.Item>
+          <Form.Item name="cache_dir" label={t('settings.acmeCacheDir') || 'ACME cache dir'}><Input placeholder="/var/lib/3m-ui/acme" /></Form.Item>
+          <Form.Item name="listen_http" label="HTTP listen"><Input placeholder=":80" /></Form.Item>
+          <Form.Item name="listen_tls" label="TLS listen"><Input placeholder=":443" /></Form.Item>
+          <Form.Item name="cert_file" label={t('settings.manualCert') || 'Manual cert file (optional)'}><Input placeholder="/path/fullchain.pem" /></Form.Item>
+          <Form.Item name="key_file" label={t('settings.manualKey') || 'Manual key file (optional)'}><Input placeholder="/path/privkey.pem" /></Form.Item>
+          <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+        </Form>
+      </Card>
+
+      <Card title={t('settings.subPage') || 'Subscription page template'} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.subPageHint') || 'Custom HTML template directory (index.html or sub.html). Leave empty for the built-in page. Browsers hitting the subscription URL with Accept: text/html will see this page.'}</Text>
+        <Form form={subPageForm} layout="vertical" style={{ marginTop: 12 }} onFinish={async (values) => {
+          try {
+            await client.put('/system/subscription-page', {
+              theme_dir: values.theme_dir || '',
+              title: values.title || '',
+              support_url: values.support_url || '',
+            });
+            message.success(t('common.saved'));
+          } catch (e: any) { message.error(e.message || t('common.error')); }
+        }}>
+          <Form.Item name="theme_dir" label={t('settings.subThemeDir') || 'Theme directory'}><Input placeholder="/var/lib/3m-ui/sub-theme" /></Form.Item>
+          <Form.Item name="title" label={t('settings.subTitle') || 'Page title'}><Input placeholder="My VPN Subscription" /></Form.Item>
+          <Form.Item name="support_url" label={t('settings.subSupportUrl') || 'Support URL'}><Input placeholder="https://t.me/support" /></Form.Item>
+          <Space>
+            <Button type="primary" htmlType="submit">{t('common.save')}</Button>
+            <Button onClick={async () => {
+              try {
+                const r = await client.get('/system/subscription-page/default-template', { responseType: 'text' });
+                const blob = new Blob([r.data], { type: 'text/html' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'sub-template.html';
+                a.click();
+              } catch (e: any) { message.error(e.message || t('common.error')); }
+            }}>{t('settings.downloadDefaultTpl') || 'Download default template'}</Button>
+          </Space>
+        </Form>
+      </Card>
+
       <Card title={t('settings.certWizard')} style={{ marginBottom: 16 }}>
         <Form form={acmeForm} layout="vertical" initialValues={{ webroot: '/var/www/acme' }} onFinish={async (values) => {
           try {
