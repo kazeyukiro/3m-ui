@@ -1,4 +1,6 @@
 name: Release · Ant Design
+# Pure-Go static binaries (CGO_ENABLED=0 + modernc sqlite) for maximum Linux portability:
+# works on glibc and musl (Alpine), old and new distros, without system libsqlite3.
 on:
   push:
     tags:
@@ -18,13 +20,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # x86_64 — GOAMD64=v1 for broadest CPU compatibility (pre-AVX hosts)
           - goarch: amd64
+            goamd64: v1
             artifact: linux-amd64
           - goarch: arm64
             artifact: linux-arm64
           - goarch: arm
             goarm: '7'
             artifact: linux-armv7
+          - goarch: arm
+            goarm: '6'
+            artifact: linux-armv6
+          - goarch: '386'
+            artifact: linux-386
+          - goarch: riscv64
+            artifact: linux-riscv64
+          - goarch: loong64
+            artifact: linux-loong64
+          - goarch: ppc64le
+            artifact: linux-ppc64le
+          - goarch: s390x
+            artifact: linux-s390x
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,19 +60,34 @@ jobs:
         run: |
           rm -rf backend/cmd/server/web/dist
           cp -r frontend/dist backend/cmd/server/web/dist
-      - name: Build backend
+      - name: Build static backend (${{ matrix.artifact }})
         working-directory: backend
         env:
+          CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
-        run: go build -trimpath -ldflags='-s -w' -o "../3m-ui-${{ matrix.artifact }}" ./cmd/server
+          GOAMD64: ${{ matrix.goamd64 }}
+        run: |
+          go build -tags sqlite_modernc -trimpath -ldflags='-s -w' \
+            -o "../3m-ui-${{ matrix.artifact }}" ./cmd/server
+          file "../3m-ui-${{ matrix.artifact }}" || true
+          if command -v ldd >/dev/null 2>&1; then
+            if ldd "../3m-ui-${{ matrix.artifact }}" 2>&1 | grep -qiE 'not a dynamic|statically linked'; then
+              echo "OK: static binary"
+            else
+              echo "WARN: binary may be dynamically linked:"
+              ldd "../3m-ui-${{ matrix.artifact }}" || true
+            fi
+          fi
       - name: Archive
         run: tar -czf "3m-ui-${{ matrix.artifact }}.tar.gz" "3m-ui-${{ matrix.artifact }}"
       - uses: actions/upload-artifact@v4
         with:
           name: archive-${{ matrix.artifact }}
-          path: 3m-ui-${{ matrix.artifact }}.tar.gz
+          path: |
+            3m-ui-${{ matrix.artifact }}
+            3m-ui-${{ matrix.artifact }}.tar.gz
 
   release:
     needs: build
@@ -65,6 +97,8 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      - name: List artifacts
+        run: find artifacts -type f | sort
       - name: Resolve tag
         id: meta
         run: |
@@ -84,7 +118,23 @@ jobs:
           body: |
             ## Packages
 
-            Official frontend: Ant Design.
+            Official frontend: **Ant Design**.
 
-            Architectures: `amd64`, `arm64`, `armv7`.
-          files: artifacts/*.tar.gz
+            All binaries are **pure-Go static** (`CGO_ENABLED=0` + `modernc` SQLite):
+            run on glibc *and* musl (Alpine), without system `libsqlite3`.
+
+            | Artifact | Architecture |
+            |---|---|
+            | `3m-ui-linux-amd64` | x86_64 (GOAMD64=v1) |
+            | `3m-ui-linux-arm64` | aarch64 |
+            | `3m-ui-linux-armv7` | ARMv7 |
+            | `3m-ui-linux-armv6` | ARMv6 (e.g. older Pi) |
+            | `3m-ui-linux-386` | i386 / i686 |
+            | `3m-ui-linux-riscv64` | RISC-V 64 |
+            | `3m-ui-linux-loong64` | LoongArch64 |
+            | `3m-ui-linux-ppc64le` | POWER little-endian |
+            | `3m-ui-linux-s390x` | IBM Z |
+
+            Each arch is also published as `.tar.gz`.
+          files: |
+            artifacts/3m-ui-linux-*
