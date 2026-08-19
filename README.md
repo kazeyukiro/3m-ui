@@ -196,8 +196,6 @@ cd frontend
 npm run build
 ```
 
-每个替代前端都有独立的 Release Action，不再由一个 Workflow 混合打包所有 UI。
-
 ## 致谢
 
 特别感谢以下开源项目和社区：

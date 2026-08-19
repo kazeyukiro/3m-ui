@@ -40,11 +40,31 @@ func TestGenerateListenersUsesNativeSchema(t *testing.T) {
 	if reality["dest"] != "example.com:443" || reality["private-key"] != "secret" {
 		t.Fatalf("Reality dest/private-key were not preserved: %#v", reality)
 	}
-	if _, ok := reality["short-id"].([]string); !ok {
+	if !isStringList(reality["short-id"]) {
 		t.Fatalf("Reality short-id was not preserved as a list: %#v", reality["short-id"])
 	}
-	if _, ok := reality["server-names"].([]string); !ok {
+	if !isStringList(reality["server-names"]) {
 		t.Fatalf("Reality server-names was not preserved as a list: %#v", reality["server-names"])
+	}
+}
+
+// JSON/YAML decode typically yields []interface{}, not []string.
+func isStringList(v interface{}) bool {
+	switch xs := v.(type) {
+	case []string:
+		return len(xs) > 0
+	case []interface{}:
+		if len(xs) == 0 {
+			return false
+		}
+		for _, item := range xs {
+			if _, ok := item.(string); !ok {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
 	}
 }
 
