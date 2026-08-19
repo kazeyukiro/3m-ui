@@ -18,10 +18,12 @@ type Settings struct {
 	NotifyOnBlock     bool     `json:"notify_on_block"`
 	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
 	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
+	NotifyOnTraffic   bool     `json:"notify_on_traffic"`
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
+	TrafficWarnPct    int      `json:"traffic_warn_pct"`
+	ExpiryWarnHours   int      `json:"expiry_warn_hours"`
 }
 
-// normalizeChatIDList accepts values like "123", "-100123", "123,456" or multiline.
 func normalizeChatIDList(ids []string) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(ids))
@@ -50,6 +52,9 @@ func DefaultSettings() Settings {
 		NotifyOnBlock:   true,
 		NotifyOnUnblock: true,
 		NotifyOnExpiry:  true,
+		NotifyOnTraffic: true,
+		TrafficWarnPct:  80,
+		ExpiryWarnHours: 72,
 	}
 }
 
@@ -73,6 +78,12 @@ func LoadSettings(db *gorm.DB) (Settings, error) {
 	}
 	s.ChatIDs = normalizeChatIDList(s.ChatIDs)
 	s.BotToken = strings.TrimSpace(s.BotToken)
+	if s.TrafficWarnPct <= 0 || s.TrafficWarnPct > 100 {
+		s.TrafficWarnPct = 80
+	}
+	if s.ExpiryWarnHours <= 0 {
+		s.ExpiryWarnHours = 72
+	}
 	return s, nil
 }
 
