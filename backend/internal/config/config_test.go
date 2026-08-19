@@ -25,9 +25,9 @@ func TestIsMihomoListenerProtocolRejectsInboundOnlyTypes(t *testing.T) {
 
 func TestValidateRejectsDefaultSecrets(t *testing.T) {
 	cfg := &Config{
-		Server: ServerConfig{Port: 8080},
+		Server:   ServerConfig{Port: 8080},
 		Database: DatabaseConfig{Path: "test.db"},
-		JWT: JWTConfig{Secret: DefaultJWTSecret},
+		JWT:      JWTConfig{Secret: DefaultJWTSecret},
 		Security: SecurityConfig{CredentialKey: "a-unique-credential-key-that-is-long-enough"},
 	}
 	if err := Validate(cfg); err == nil {

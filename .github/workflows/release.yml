@@ -1,17 +1,147 @@
-name: Release (legacy)
-
-# Deprecated: releases are now split by frontend edition.
-# Use release-ant.yml, release-mui.yml, release-mantine.yml or release-shadcn.yml.
+name: Release
+# Builds all UI editions and publishes one GitHub Release with every artifact.
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
-
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.1.0). Required for manual runs on a branch.
+        required: false
+        type: string
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  notice:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ant Design (primary)
+          - edition: antd
+            frontend_dir: frontend
+            goarch: amd64
+            artifact: linux-amd64-antd
+          - edition: antd
+            frontend_dir: frontend
+            goarch: arm64
+            artifact: linux-arm64-antd
+          - edition: antd
+            frontend_dir: frontend
+            goarch: arm
+            goarm: '7'
+            artifact: linux-armv7-antd
+          # Material UI
+          - edition: mui
+            frontend_dir: frontend-variants/mui
+            goarch: amd64
+            artifact: linux-amd64-mui
+          - edition: mui
+            frontend_dir: frontend-variants/mui
+            goarch: arm64
+            artifact: linux-arm64-mui
+          - edition: mui
+            frontend_dir: frontend-variants/mui
+            goarch: arm
+            goarm: '7'
+            artifact: linux-armv7-mui
+          # Mantine
+          - edition: mantine
+            frontend_dir: frontend-variants/mantine
+            goarch: amd64
+            artifact: linux-amd64-mantine
+          - edition: mantine
+            frontend_dir: frontend-variants/mantine
+            goarch: arm64
+            artifact: linux-arm64-mantine
+          - edition: mantine
+            frontend_dir: frontend-variants/mantine
+            goarch: arm
+            goarm: '7'
+            artifact: linux-armv7-mantine
+          # shadcn
+          - edition: shadcn
+            frontend_dir: frontend-variants/shadcn
+            goarch: amd64
+            artifact: linux-amd64-shadcn
+          - edition: shadcn
+            frontend_dir: frontend-variants/shadcn
+            goarch: arm64
+            artifact: linux-arm64-shadcn
+          - edition: shadcn
+            frontend_dir: frontend-variants/shadcn
+            goarch: arm
+            goarm: '7'
+            artifact: linux-armv7-shadcn
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          echo 'This workflow is deprecated.'
-          echo 'Use one of the edition-specific release workflows instead.'
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+      - name: Build frontend (${{ matrix.edition }})
+        working-directory: ${{ matrix.frontend_dir }}
+        run: npm install && npm run build
+      - name: Embed frontend
+        run: |
+          rm -rf backend/cmd/server/web/dist
+          cp -r "${{ matrix.frontend_dir }}/dist" backend/cmd/server/web/dist
+      - name: Build backend
+        working-directory: backend
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: go build -trimpath -ldflags='-s -w' -o "../3m-ui-${{ matrix.artifact }}" ./cmd/server
+      - name: Archive
+        run: tar -czf "3m-ui-${{ matrix.artifact }}.tar.gz" "3m-ui-${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.artifact }}
+          path: 3m-ui-${{ matrix.artifact }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: List artifacts
+        run: find artifacts -type f | sort
+      - name: Resolve tag
+        id: meta
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag is required for workflow_dispatch on a branch" >&2
+            exit 1
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            ## Packages
+
+            All UI editions are included in this release:
+
+            | File pattern | Frontend |
+            |---|---|
+            | `3m-ui-linux-*-antd.tar.gz` | Ant Design (primary) |
+            | `3m-ui-linux-*-mui.tar.gz` | Material UI |
+            | `3m-ui-linux-*-mantine.tar.gz` | Mantine |
+            | `3m-ui-linux-*-shadcn.tar.gz` | shadcn / Tailwind |
+
+            Architectures: `amd64`, `arm64`, `armv7`.
+          files: artifacts/**/*.tar.gz

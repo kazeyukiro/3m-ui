@@ -12,9 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )

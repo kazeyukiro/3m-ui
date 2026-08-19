@@ -3,8 +3,8 @@ package protocol
 import (
 	"strings"
 
-	"gorm.io/gorm"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"gorm.io/gorm"
 )
 
 // AccessProfile is the public-facing endpoint used when generating share links / client YAML.

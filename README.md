@@ -42,6 +42,27 @@
 
 每个版本独立打包 Linux `amd64`、`arm64` 和 `armv7`。选择的前端只在 CI 构建目录中嵌入 Go 二进制，不会把生成产物自动提交回 `main`。
 
+### 发布（推送标签）
+
+推送任意 `v*` 标签会触发统一 **Release** 工作流，一次构建全部 UI 版本，并挂到**同一个** GitHub Release 下：
+
+| 产物后缀 | 前端 |
+|---|---|
+| `*-antd` | Ant Design（主版） |
+| `*-mui` | Material UI |
+| `*-mantine` | Mantine |
+| `*-shadcn` | shadcn |
+
+每个版本均提供 `linux-amd64` / `arm64` / `armv7`。
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+# → 一个 Release，内含 12 个 tar.gz（4 前端 × 3 架构）
+```
+
+也可在 Actions 中手动运行 **Release**。单前端重建仍可用 `Release · Ant Design` 等独立 workflow（仅 `workflow_dispatch`）。
+
 详细说明见 [`frontend-variants/README.md`](frontend-variants/README.md)。
 
 ## 架构
@@ -282,6 +303,27 @@ The 3M-UI backend, API contract and configuration model are decoupled from the U
 | shadcn-style | React + Tailwind CSS | `release-shadcn.yml` |
 
 Each edition produces separate Linux `amd64`, `arm64` and `armv7` packages. The selected frontend is embedded only in the CI workspace before the Go binary is built; generated assets are not automatically committed back to `main`.
+
+### Release (push tags)
+
+Pushing any `v*` tag runs the unified **Release** workflow: all UI editions are built and attached to **one** GitHub Release:
+
+| Artifact suffix | Frontend |
+|---|---|
+| `*-antd` | Ant Design (primary) |
+| `*-mui` | Material UI |
+| `*-mantine` | Mantine |
+| `*-shadcn` | shadcn |
+
+Each edition ships `linux-amd64` / `arm64` / `armv7`.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+# → one Release with 12 tar.gz files (4 frontends × 3 archs)
+```
+
+You can also run **Release** manually in Actions. Single-edition rebuilds remain available via the `Release · …` workflows (`workflow_dispatch` only).
 
 See [`frontend-variants/README.md`](frontend-variants/README.md) for details.
 

@@ -13,7 +13,7 @@ func TestValidateNode(t *testing.T) {
 	n1 := models.Listener{
 		Name:        "hk-ss",
 		Protocol:    "shadowsocks",
-		Port: "8388",
+		Port:        "8388",
 		BindAddress: "0.0.0.0",
 		Config:      `{"password": "mypassword"}`,
 	}
@@ -26,7 +26,7 @@ func TestValidateNode(t *testing.T) {
 	n2 := models.Listener{
 		Name:        "hk-ss",
 		Protocol:    "shadowsocks",
-		Port: "8388",
+		Port:        "8388",
 		BindAddress: "0.0.0.0",
 		Config:      `{}`,
 	}
@@ -38,7 +38,7 @@ func TestValidateNode(t *testing.T) {
 	n3 := models.Listener{
 		Name:        "hk-ss",
 		Protocol:    "shadowsocks",
-		Port: "99999",
+		Port:        "99999",
 		BindAddress: "0.0.0.0",
 		Config:      `{"password": "pass"}`,
 	}
@@ -52,7 +52,7 @@ func TestGenerateConfigYAML(t *testing.T) {
 		{
 			Name:        "hk-ss",
 			Protocol:    "shadowsocks",
-			Port: "8388",
+			Port:        "8388",
 			BindAddress: "0.0.0.0",
 			Enabled:     true,
 			Config:      `{"password": "secretpwd"}`,

@@ -11,7 +11,7 @@ func TestListenerToProxiesDoesNotLeakServerTLSSecrets(t *testing.T) {
 	listener := models.Listener{
 		Name:     "vless-reality",
 		Protocol: "vless",
-		Port: "443",
+		Port:     "443",
 		Enabled:  true,
 		Config:   `{"certificate":"/etc/server.crt","private-key":"/etc/server.key","flow":"xtls-rprx-vision","ws-path":"/ws","reality-config":{"private-key":"server-secret","short-id":["0123456789abcdef"]}}`,
 	}

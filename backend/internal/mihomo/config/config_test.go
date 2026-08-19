@@ -55,7 +55,7 @@ func TestConfigEngineGeneration(t *testing.T) {
 		Name:    "hk-gate",
 		Type:    "mixed",
 		Listen:  "127.0.0.1",
-		Port: "8081",
+		Port:    "8081",
 		Enabled: true,
 	}
 	if err := db.Create(&listener).Error; err != nil {
