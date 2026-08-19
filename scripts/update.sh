@@ -27,7 +27,20 @@ done
 [ "$(id -u)" -eq 0 ] || { echo "Error: please run as root." >&2; exit 1; }
 [ -x "$APP_BIN" ] || { echo "Error: 3m-ui application is not installed at $APP_BIN" >&2; exit 1; }
 command_exists(){ command -v "$1" >/dev/null 2>&1; }
-arch(){ case "$(uname -m)" in x86_64|amd64) echo amd64;; aarch64|arm64) echo arm64;; armv7l|armv7*) echo armv7;; *) echo "Error: unsupported architecture" >&2; exit 1;; esac; }
+arch(){
+  case "$(uname -m)" in
+    x86_64|amd64) echo amd64;;
+    aarch64|arm64) echo arm64;;
+    armv7l|armv7*) echo armv7;;
+    armv6l|armv6*) echo armv6;;
+    i386|i486|i586|i686|x86) echo 386;;
+    riscv64) echo riscv64;;
+    loongarch64|loong64) echo loong64;;
+    ppc64le) echo ppc64le;;
+    s390x) echo s390x;;
+    *) echo "Error: unsupported architecture: $(uname -m)" >&2; exit 1;;
+  esac
+}
 init_system(){ if [ -d /run/systemd/system ] && command_exists systemctl; then echo systemd; elif command_exists rc-service; then echo openrc; else echo unsupported; fi; }
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
 latest_tag(){
@@ -52,18 +65,22 @@ panel_tmp="$(mktemp)"; manager_tmp="$(mktemp)"; installer_tmp="$(mktemp)"; updat
 cleanup(){ rm -f "$panel_tmp" "$manager_tmp" "$installer_tmp" "$updater_tmp" "$uninstall_tmp" "$entry_tmp" "$mihomo_tmp" "$mihomo_tmp.gz"; rm -rf "$staging"; }
 trap cleanup EXIT INT TERM
 
-current_mode="dynamic"
+# Official releases are pure-Go static only (no -static suffix).
+current_mode="static"
 if [ -s "$MODE_FILE" ]; then
   current_mode="$(cat "$MODE_FILE")"
-elif command_exists file; then
-  description="$(file "$APP_BIN" 2>/dev/null || true)"
-  case "$description" in *"statically linked"*) current_mode="static";; esac
 fi
-case "$current_mode" in static) suffix="-static";; dynamic) suffix="";; *) echo "Warning: unknown build mode '$current_mode'; defaulting to dynamic." >&2; suffix="";; esac
+cpu="$(arch)"
+asset="3m-ui-linux-${cpu}"
 
 tag="$(latest_tag https://github.com/$REPO)"; [ -n "$tag" ] || { echo "Error: unable to determine latest 3m-ui release." >&2; exit 1; }
-echo "[1/5] Downloading 3m-ui $tag ($current_mode)..."
-download "https://github.com/$REPO/releases/download/${tag}/3m-ui-linux-$(arch)${suffix}" "$panel_tmp"
+echo "[1/5] Downloading 3m-ui $tag ($asset)..."
+if ! download "https://github.com/$REPO/releases/download/${tag}/${asset}" "$panel_tmp" 2>/dev/null; then
+  # Legacy tags used a -static suffix.
+  asset="3m-ui-linux-${cpu}-static"
+  echo "Retrying legacy asset: $asset"
+  download "https://github.com/$REPO/releases/download/${tag}/${asset}" "$panel_tmp"
+fi
 chmod 0755 "$panel_tmp"
 "$panel_tmp" --version >/dev/null 2>&1 || { echo "Error: downloaded 3m-ui failed validation." >&2; exit 1; }
 
@@ -92,6 +109,10 @@ if [ "$UPDATE_MIHOMO" -eq 1 ] && [ -x "$MIHOMO_BIN" ]; then
       x86_64|amd64) mihomo_asset="mihomo-linux-amd64-compatible";;
       aarch64|arm64) mihomo_asset="mihomo-linux-arm64";;
       armv7l|armv7*) mihomo_asset="mihomo-linux-armv7";;
+      armv6l|armv6*) mihomo_asset="mihomo-linux-armv6";;
+      i386|i486|i586|i686|x86) mihomo_asset="mihomo-linux-386";;
+      riscv64) mihomo_asset="mihomo-linux-riscv64";;
+      loongarch64|loong64) mihomo_asset="mihomo-linux-loong64-abi2.0";;
       *) mihomo_asset="";;
     esac
     if [ -n "$mihomo_asset" ] && download "https://github.com/MetaCubeX/mihomo/releases/download/${mtag}/${mihomo_asset}-${mtag}.gz" "$mihomo_tmp.gz" && gzip -dc "$mihomo_tmp.gz" > "$mihomo_tmp"; then
@@ -114,7 +135,7 @@ install -m 0755 "$updater_tmp" "$staging/update.sh"
 install -m 0755 "$uninstall_tmp" "$staging/uninstall.sh"
 install -m 0755 "$entry_tmp" "$staging/3m-ui"
 printf '%s\n' "$tag" > "$staging/VERSION"
-printf '%s\n' "$current_mode" > "$staging/BUILD_MODE"
+printf '%s\n' static > "$staging/BUILD_MODE"
 
 rm -rf "$BASE"
 mkdir -p "$BASE"
