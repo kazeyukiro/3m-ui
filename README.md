@@ -33,7 +33,9 @@
 
 项目仅维护一个官方前端：**React + Ant Design**，位于 `frontend/`。
 
-发布构建提供 Linux `amd64`、`arm64` 和 `armv7` 三种架构。
+发布产物为 **纯 Go 静态二进制**（`CGO_ENABLED=0` + modernc SQLite），可在 glibc / musl（Alpine）及新旧发行版上直接运行，无需系统 `libsqlite3`。
+
+支持架构：`amd64`（x86_64）、`arm64`、`armv7`、`armv6`、`386`、`riscv64`、`loong64`、`ppc64le`、`s390x`。
 
 ## 架构
 
@@ -245,7 +247,9 @@ It provides one interface for managing Mihomo listeners, proxy users, subscripti
 
 The project maintains one official frontend: **React + Ant Design**, located in `frontend/`.
 
-Release builds are provided for Linux `amd64`, `arm64` and `armv7`.
+Release artifacts are **pure-Go static binaries** (`CGO_ENABLED=0` + modernc SQLite). They run on glibc and musl (Alpine) without a system `libsqlite3`.
+
+Architectures: `amd64` (x86_64), `arm64`, `armv7`, `armv6`, `386`, `riscv64`, `loong64`, `ppc64le`, `s390x`.
 
 ## Architecture
 
