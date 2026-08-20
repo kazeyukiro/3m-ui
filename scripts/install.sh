@@ -214,6 +214,11 @@ WorkingDirectory=$DATA_DIR
 Restart=always
 RestartSec=5
 KillMode=control-group
+# Allow binding privileged ports (80/443) for optional panel ACME/SSL.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target

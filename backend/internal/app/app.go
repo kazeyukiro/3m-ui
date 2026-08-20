@@ -67,27 +67,37 @@ func Run(frontendFS fs.FS) error {
 		return result, nil
 	}
 
+	// Configuration generation must not block the panel. A bad custom fragment
+	// or listener can be fixed from the UI once HTTP is up.
 	generatedConfig, err := container.ConfigEngine.GenerateFinalConfig()
 	if err != nil {
-		return fmt.Errorf("generate Mihomo configuration: %w", err)
+		log.Printf("warning: generate Mihomo configuration failed: %v; panel will start without applying core config", err)
+		generatedConfig = ""
 	}
 	if container.Mihomo == nil {
 		return fmt.Errorf("initialize Mihomo service: service is nil")
 	}
-	if _, statErr := os.Stat(cfg.Mihomo.Binary); statErr == nil {
-		// ApplyConfig validates and activates the candidate atomically from the
-		// panel's perspective, restoring the previous working configuration if
-		// Mihomo fails to start or restart.
-		if err := container.Mihomo.ApplyConfig(generatedConfig); err != nil {
-			return fmt.Errorf("apply Mihomo configuration: %w", err)
+	if generatedConfig != "" {
+		if _, statErr := os.Stat(cfg.Mihomo.Binary); statErr == nil {
+			// Soft-fail: Mihomo problems must not prevent the management panel
+			// from starting. Operators can inspect logs and fix listeners/config
+			// from the UI, then start/restart the core explicitly.
+			if err := container.Mihomo.ApplyConfig(generatedConfig); err != nil {
+				log.Printf("warning: apply Mihomo configuration failed: %v; panel started without core", err)
+				if saveErr := mihomo.NewConfigManager(cfg.Mihomo.Config).SaveConfig(generatedConfig); saveErr != nil {
+					log.Printf("warning: also failed to persist generated config: %v", saveErr)
+				}
+			} else {
+				log.Printf("Mihomo core started successfully")
+			}
+		} else {
+			manager := mihomo.NewConfigManager(cfg.Mihomo.Config)
+			if err := manager.SaveConfig(generatedConfig); err != nil {
+				log.Printf("warning: save Mihomo configuration failed: %v", err)
+			} else {
+				log.Printf("warning: Mihomo binary unavailable at %s; panel started without core", cfg.Mihomo.Binary)
+			}
 		}
-		log.Printf("Mihomo core started successfully")
-	} else {
-		manager := mihomo.NewConfigManager(cfg.Mihomo.Config)
-		if err := manager.SaveConfig(generatedConfig); err != nil {
-			return fmt.Errorf("save Mihomo configuration: %w", err)
-		}
-		log.Printf("warning: Mihomo binary unavailable at %s; panel started without core", cfg.Mihomo.Binary)
 	}
 
 	r := router.SetupRouterWithDeps(container.RouterDeps())
@@ -95,7 +105,13 @@ func Run(frontendFS fs.FS) error {
 
 	sslSettings, _ := acme.LoadSettings(db)
 	if sslSettings.Enabled {
-		return serveWithSSL(r, sslSettings, cfg.Server.Port)
+		if err := serveWithSSL(r, sslSettings, cfg.Server.Port); err != nil {
+			// Fall back to plain HTTP so the panel remains reachable when TLS
+			// bind / ACME fails (port in use, missing domain, permission, …).
+			log.Printf("warning: panel SSL failed (%v); falling back to HTTP on :%d", err, cfg.Server.Port)
+		} else {
+			return nil
+		}
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)

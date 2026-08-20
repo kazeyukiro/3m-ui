@@ -56,7 +56,9 @@ func (cm *ConfigManager) ReadConfig() (string, error) {
 	}
 	data, err := os.ReadFile(cm.configPath)
 	if err != nil {
-		return "", fmt.Errorf("read mihomo config: %w", err)
+		// Preserve os.IsNotExist so callers (ApplyConfig first-boot) can
+		// distinguish a missing file from other I/O failures.
+		return "", err
 	}
 	return string(data), nil
 }

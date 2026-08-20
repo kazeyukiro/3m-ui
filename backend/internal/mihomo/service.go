@@ -1,6 +1,7 @@
 package mihomo
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -94,7 +95,7 @@ func (s *Service) ApplyConfig(content string) error {
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
 	old, readErr := s.cm.ReadConfig()
-	if readErr != nil && !os.IsNotExist(readErr) {
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !os.IsNotExist(readErr) {
 		return fmt.Errorf("read current Mihomo config: %w", readErr)
 	}
 	if readErr == nil {
