@@ -104,10 +104,10 @@ func (s *Service) Batch(action BatchAction, ids []uint) (int, error) {
 		return int(res.RowsAffected), nil
 	case BatchDelete:
 		if err := s.db.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Where("proxy_user_id IN ?", clean).Delete(&models.ListenerUser{}).Error; err != nil {
+			if err := tx.Unscoped().Where("proxy_user_id IN ?", clean).Delete(&models.ListenerUser{}).Error; err != nil {
 				return err
 			}
-			return tx.Where("id IN ?", clean).Delete(&models.ProxyUser{}).Error
+			return tx.Unscoped().Where("id IN ?", clean).Delete(&models.ProxyUser{}).Error
 		}); err != nil {
 			return 0, err
 		}

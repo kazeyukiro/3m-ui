@@ -68,6 +68,10 @@ func (s *Service) SaveConfig(content string) error {
 		return fmt.Errorf("mihomo service not initialized")
 	}
 	old, readErr := s.cm.ReadConfig()
+	hadOld := readErr == nil
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !os.IsNotExist(readErr) {
+		return fmt.Errorf("read current Mihomo config: %w", readErr)
+	}
 	if err := s.cm.SaveConfig(content); err != nil {
 		return err
 	}
@@ -75,7 +79,7 @@ func (s *Service) SaveConfig(content string) error {
 		return nil
 	}
 	if err := s.pm.ValidateConfig(); err != nil {
-		if readErr == nil {
+		if hadOld {
 			_ = s.cm.SaveConfig(old)
 		} else {
 			_ = os.Remove(s.cm.configPath)

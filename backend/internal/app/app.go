@@ -83,10 +83,10 @@ func Run(frontendFS fs.FS) error {
 			// from starting. Operators can inspect logs and fix listeners/config
 			// from the UI, then start/restart the core explicitly.
 			if err := container.Mihomo.ApplyConfig(generatedConfig); err != nil {
+				// ApplyConfig already rolled back any on-disk candidate on failure.
+				// Do NOT re-write the failed config — that would undo the rollback
+				// and leave a broken YAML for the next restart.
 				log.Printf("warning: apply Mihomo configuration failed: %v; panel started without core", err)
-				if saveErr := mihomo.NewConfigManager(cfg.Mihomo.Config).SaveConfig(generatedConfig); saveErr != nil {
-					log.Printf("warning: also failed to persist generated config: %v", saveErr)
-				}
 			} else {
 				log.Printf("Mihomo core started successfully")
 			}

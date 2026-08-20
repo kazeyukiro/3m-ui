@@ -83,7 +83,8 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				}
 				writeSubHeaders(c, &pu)
 				c.Header("Cache-Control", "no-store")
-				c.Header("Content-Disposition", "attachment; filename=subscription.txt")
+				// Base64 list uses .txt; writeSubHeaders already set a profile filename.
+				c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(pu.Username)+`.txt"`)
 				c.Data(http.StatusOK, "text/plain; charset=utf-8", raw)
 				return
 			}
@@ -100,10 +101,11 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 		if c.Query("raw") == "true" || target == "" || target == "mihomo" || target == "clash" || target == "meta" {
 			if isProxyUser {
 				writeSubHeaders(c, &pu)
+			} else {
+				c.Header("Content-Disposition", "attachment; filename=3m-ui.yaml")
 			}
 			c.Header("Cache-Control", "no-store")
 			c.Header("Profile-Update-Interval", "24")
-			c.Header("Content-Disposition", "attachment; filename=3m-ui.yaml")
 			c.Data(http.StatusOK, "text/yaml; charset=utf-8", raw)
 			return
 		}

@@ -10,10 +10,12 @@ import (
 
 func (s *Service) Delete(id uint) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("proxy_user_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
+		// Hard-delete bindings + user so the unique username/uuid indexes can be
+		// reused (soft-delete would block 3x-ui-style recreate-after-delete).
+		if err := tx.Unscoped().Where("proxy_user_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&models.ProxyUser{}, id).Error
+		return tx.Unscoped().Delete(&models.ProxyUser{}, id).Error
 	}); err != nil {
 		return err
 	}
@@ -44,10 +46,10 @@ func (s *Service) DeleteDepleted() (int, error) {
 		return 0, nil
 	}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("proxy_user_id IN ?", ids).Delete(&models.ListenerUser{}).Error; err != nil {
+		if err := tx.Unscoped().Where("proxy_user_id IN ?", ids).Delete(&models.ListenerUser{}).Error; err != nil {
 			return err
 		}
-		return tx.Where("id IN ?", ids).Delete(&models.ProxyUser{}).Error
+		return tx.Unscoped().Where("id IN ?", ids).Delete(&models.ProxyUser{}).Error
 	}); err != nil {
 		return 0, err
 	}
