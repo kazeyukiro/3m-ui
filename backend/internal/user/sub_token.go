@@ -11,7 +11,7 @@ import (
 )
 
 // EnsureSubToken returns a stable public subscription token for the user,
-// creating one if missing (3x-ui client subscription parity).
+// creating one if missing (client subscription token).
 func (s *Service) EnsureSubToken(id uint) (string, error) {
 	var u models.ProxyUser
 	if err := s.db.First(&u, id).Error; err != nil {

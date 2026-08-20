@@ -126,7 +126,7 @@ func Run(frontendFS fs.FS) error {
 }
 
 // serveWithSSL starts HTTPS (Let's Encrypt autocert or manual cert) and optional
-// HTTP-01 challenge / redirect listener — 3x-ui panel SSL parity.
+// HTTP-01 challenge / redirect listener — panel SSL with HTTP-01.
 func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error {
 	mgr, err := acme.NewManager(s)
 	if err != nil {

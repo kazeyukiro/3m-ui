@@ -82,7 +82,7 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Batch runs enable|disable|reset-traffic|delete on multiple users (3x-ui parity).
+// Batch runs enable|disable|reset-traffic|delete on multiple users .
 func (h *Handler) Batch(c *gin.Context) {
 	var req struct {
 		Action string `json:"action" binding:"required"`
@@ -279,7 +279,7 @@ func (h *Handler) RotateSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token, "url": subURL})
 }
 
-// DeleteDepleted removes expired / over-quota proxy users (3x-ui delDepletedClients parity).
+// DeleteDepleted removes expired / over-quota proxy users (remove expired or over-quota users).
 func (h *Handler) DeleteDepleted(c *gin.Context) {
 	n, err := h.svc.DeleteDepleted()
 	if err != nil {

@@ -122,7 +122,7 @@ func (h *Handler) ACME(c *gin.Context) {
 }
 
 
-// UpdateGeoFiles downloads MetaCubeX GeoIP/GeoSite databases next to the Mihomo config (3x-ui parity).
+// UpdateGeoFiles downloads MetaCubeX GeoIP/GeoSite databases next to the Mihomo config .
 func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 	dir := filepath.Dir(h.mihomoCfg)
 	if h.mihomoCfg == "" {
@@ -137,7 +137,7 @@ func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 }
 
 
-// WARP returns a Mihomo WireGuard fragment for Cloudflare WARP (3x-ui parity).
+// WARP returns a Mihomo WireGuard fragment for Cloudflare WARP .
 func (h *Handler) WARP(c *gin.Context) {
 	var body struct {
 		PrivateKey string `json:"private_key"`

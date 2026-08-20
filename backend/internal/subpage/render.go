@@ -22,7 +22,7 @@ const (
 )
 
 // ViewModel is the data passed to custom / built-in subscription HTML templates
-// (3x-ui subThemeDir parity).
+// (custom subscription page theme).
 type ViewModel struct {
 	Username    string
 	Remark      string

@@ -6,7 +6,7 @@ import (
 )
 
 // WARPTemplate returns a Mihomo YAML fragment for Cloudflare WARP (WireGuard)
-// outbound — 3x-ui "WARP" helper parity. Operators paste private_key / addresses
+// outbound — WARP helper. Operators paste private_key / addresses
 // from `warp-cli` or wgcf.
 func WARPTemplate(privateKey, address, reserved string) string {
 	privateKey = strings.TrimSpace(privateKey)

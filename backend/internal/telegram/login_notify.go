@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// NotifyLogin sends an optional panel-login alert (3x-ui parity).
+// NotifyLogin sends an optional panel-login alert .
 func NotifyLogin(db *gorm.DB, username, clientIP string) {
 	if db == nil {
 		return

@@ -74,7 +74,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				writeSubHTML(c, db, cfg, pu, tok)
 				return
 			}
-			// Native v2ray / base64 subscription (3x-ui /sub/ parity).
+			// Native v2ray / base64 subscription (classic client subscription).
 			if target == "v2ray" || target == "base64" || target == "raw" || target == "uri" {
 				raw, err = converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials)
 				if err != nil {
@@ -87,7 +87,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				c.Data(http.StatusOK, "text/plain; charset=utf-8", raw)
 				return
 			}
-			// Native sing-box JSON outbounds (3x-ui sing-box subscription parity).
+			// Native sing-box JSON outbounds (sing-box subscription).
 			if target == "singbox" || target == "sing-box" || target == "sfa" || target == "sfm" {
 				raw, err = converter.GenerateUserSingboxSubscription(db, pu, c.Request)
 				if err != nil {
@@ -137,7 +137,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 
 // writeSubHeaders emits the standard subscription response headers that
 // compatible clients (v2rayNG, Hiddify, Clash, …) read for traffic / expiry.
-// Profile-Title / support-url / announce mirror 3x-ui subscription metadata.
+// Profile-Title / support-url / announce mirror common client subscription metadata.
 func writeSubHeaders(c *gin.Context, pu *models.ProxyUser) {
 	if pu == nil {
 		return
@@ -273,7 +273,7 @@ func detectSubTarget(ua string) string {
 		return "mihomo"
 	case strings.Contains(u, "sing-box") || strings.Contains(u, "sfa") || strings.Contains(u, "sfm") || strings.Contains(u, "sfi"):
 		return "singbox"
-	// Classic v2ray / Xray clients expect base64 list of share links (3x-ui /sub/ parity).
+	// Classic v2ray / Xray clients expect base64 list of share links (classic client subscription).
 	case strings.Contains(u, "v2ray") || strings.Contains(u, "v2rayng") || strings.Contains(u, "v2rayn") ||
 		strings.Contains(u, "streisand") || strings.Contains(u, "hiddify") || strings.Contains(u, "nekobox") ||
 		strings.Contains(u, "nekoray"):

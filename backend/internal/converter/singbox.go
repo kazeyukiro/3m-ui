@@ -13,7 +13,7 @@ import (
 )
 
 // GenerateUserSingboxSubscription builds a minimal sing-box outbound document
-// from the user's bound Mihomo listeners (3x-ui sing-box subscription parity).
+// from the user's bound Mihomo listeners (sing-box subscription).
 func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http.Request) ([]byte, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database is not initialized")

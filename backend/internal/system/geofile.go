@@ -20,7 +20,7 @@ var defaultGeoFiles = []struct {
 }
 
 // UpdateGeoFiles downloads the latest GeoIP/GeoSite databases into dir
-// (typically the Mihomo working directory next to config.yaml). 3x-ui parity.
+// (typically the Mihomo working directory next to config.yaml). .
 func UpdateGeoFiles(dir string) (map[string]string, error) {
 	if dir == "" {
 		return nil, fmt.Errorf("geofile directory is empty")

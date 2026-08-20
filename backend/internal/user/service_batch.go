@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ListFilter supports 3x-ui-style search across proxy users.
+// ListFilter supports search across proxy users.
 type ListFilter struct {
 	Query   string // username / remark substring
 	Enabled *bool
@@ -46,7 +46,7 @@ func (s *Service) ListFiltered(f ListFilter) ([]models.ProxyUser, error) {
 	return out, nil
 }
 
-// BatchAction is a 3x-ui-style bulk operation over proxy user IDs.
+// BatchAction is a bulk operation over proxy user IDs.
 type BatchAction string
 
 const (

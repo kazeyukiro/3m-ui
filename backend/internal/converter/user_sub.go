@@ -56,7 +56,7 @@ func userBoundListeners(db *gorm.DB, pu models.ProxyUser) ([]models.Listener, ma
 }
 
 // GenerateUserRawConfig builds a multi-proxy Mihomo YAML for one ProxyUser
-// across all bound enabled listeners (3x-ui client subscription parity).
+// across all bound enabled listeners (client subscription token).
 func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) ([]byte, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -112,7 +112,7 @@ type URIGenerator func(listener models.Listener, host string, credentials []user
 
 // GenerateUserBase64Subscription returns the classic v2ray-style subscription body:
 // share links (vless://, vmess://, trojan://, …) joined by newlines, then base64-encoded.
-// This matches 3x-ui /sub/ output so v2rayNG / Hiddify / Streisand clients can import it.
+// v2rayNG / Hiddify / Streisand clients can import it.
 func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.Request, gen URIGenerator) ([]byte, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database is not initialized")

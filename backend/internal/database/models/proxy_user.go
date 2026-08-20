@@ -19,11 +19,11 @@ type ProxyUser struct {
 	Online            bool       `gorm:"not null;default:false" json:"online"`
 	ExpireTime        time.Time  `json:"expire_time"`
 	Enabled           bool       `gorm:"not null;default:true" json:"enabled"`
-	// IPLimit is max concurrent client IPs (0 = unlimited). Parity with 3x-ui client limitIP.
+	// IPLimit is max concurrent client IPs (0 = unlimited). Max concurrent client IPs.
 	IPLimit int `gorm:"not null;default:0" json:"ip_limit"`
 	// Remark is an admin-facing note (not used for auth).
 	Remark string `gorm:"size:255" json:"remark"`
-	// SubToken is the public subscription credential (3x-ui style client sub).
+	// SubToken is the public subscription credential (client sub).
 	// Indexed (not unique): empty values on legacy rows would clash under UNIQUE.
 	SubToken string `gorm:"size:64;index" json:"sub_token,omitempty"`
 }

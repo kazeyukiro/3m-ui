@@ -45,7 +45,7 @@ func (h *Handler) ListListeners(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	// 3x-ui style search across inbound name / protocol / port / bind.
+	// search across inbound name / protocol / port / bind.
 	q := strings.ToLower(strings.TrimSpace(c.Query("q")))
 	if q != "" {
 		filtered := make([]models.Listener, 0, len(list))

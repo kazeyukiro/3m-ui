@@ -89,7 +89,7 @@ const Settings: React.FC = () => {
         </div>
       </Card>
       <Card title={t('settings.geofiles') || 'GeoIP / GeoSite'} style={{ marginBottom: 16 }}>
-        <Text type="secondary">{t('settings.geofilesHint') || 'Download latest MetaCubeX GeoIP/GeoSite databases into the Mihomo data directory (3x-ui parity).'}</Text>
+        <Text type="secondary">{t('settings.geofilesHint') || 'Download latest MetaCubeX GeoIP/GeoSite databases into the Mihomo data directory .'}</Text>
         <div style={{ marginTop: 12 }}>
           <Button type="primary" onClick={async () => {
             try {
