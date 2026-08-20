@@ -1,6 +1,9 @@
 package app
 
 import (
+	"strings"
+	"strconv"
+	"net"
 	"fmt"
 	"io/fs"
 	"log"
@@ -114,8 +117,8 @@ func Run(frontendFS fs.FS) error {
 		}
 	}
 
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	log.Printf("3m-ui listening on %s", addr)
+	addr := panelListenAddr(cfg.Server.Listen, cfg.Server.Port)
+	log.Printf("3m-ui listening on %s (IPv4/IPv6)", addr)
 	if err := r.Run(addr); err != nil {
 		return fmt.Errorf("run server: %w", err)
 	}
@@ -219,4 +222,16 @@ func mustReadFile(fsys fs.FS, name string) []byte {
 		return []byte("3m-ui frontend unavailable")
 	}
 	return data
+}
+
+
+// panelListenAddr builds a net listen address supporting dual-stack and IPv6.
+// Empty / wildcard listen → ":port" (Go dual-stack on Linux).
+// Concrete IPs use JoinHostPort so IPv6 is correctly bracketed.
+func panelListenAddr(listen string, port int) string {
+	listen = strings.TrimSpace(listen)
+	if listen == "" || listen == "0.0.0.0" || listen == "::" || listen == "*" {
+		return fmt.Sprintf(":%d", port)
+	}
+	return net.JoinHostPort(listen, strconv.Itoa(port))
 }

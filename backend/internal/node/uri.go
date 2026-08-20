@@ -4,23 +4,26 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"golang.org/x/crypto/curve25519"
 )
 
 // ClientURIs exports client share links from the same Listener schema used by
 // Mihomo config generation. Server-only fields are never copied blindly.
 func ClientURIs(listener models.Listener, host string) ([]string, error) {
-	host = strings.TrimSpace(host)
+	host = netutil.NormalizeHost(host)
+	if host == "" {
+		host = netutil.NormalizeHost(listener.PublicHost)
+	}
 	if host == "" {
 		host = normalizeExportHost("", listener.BindAddress, listener.Listen)
 	}
 	if host == "" {
-		return nil, fmt.Errorf("cannot determine public host for listener; set server.public_url in config or access the panel via a public hostname")
+		return nil, fmt.Errorf("cannot determine public host for listener; set public_host / server.public_url or access via a public hostname (IPv4/IPv6 supported)")
 	}
 	cfg, err := decodeURIConfig(listener.Config)
 	if err != nil {
@@ -28,7 +31,10 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	}
 	cfg["_listener-tls"] = listener.TLS
 	cfg["_listener-udp"] = listener.UDP
-	port := strings.TrimSpace(listener.Port)
+	port := strings.TrimSpace(listener.PublicPort)
+	if port == "" {
+		port = strings.TrimSpace(listener.Port)
+	}
 	if strings.ContainsAny(port, ",-") {
 		return nil, fmt.Errorf("URI export requires a single listener port; ranges and port lists are not representable in a share URI")
 	}
@@ -171,7 +177,7 @@ func shadowsocksURIs(name, host, port string, cfg map[string]interface{}) ([]str
 		return nil, fmt.Errorf("shadowsocks listener requires cipher and password for URI export")
 	}
 	encoded := base64.RawStdEncoding.EncodeToString([]byte(cipher + ":" + password))
-	return []string{addName("ss://"+encoded+"@"+net.JoinHostPort(host, port), name)}, nil
+	return []string{addName("ss://"+encoded+"@"+netutil.JoinHostPort(host, port), name)}, nil
 }
 
 func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
@@ -211,7 +217,7 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		for k, v := range transportParams(cfg) {
 			params[k] = v
 		}
-		result = append(result, addName(query("vless://"+url.PathEscape(uuid)+"@"+net.JoinHostPort(host, port), params), name))
+		result = append(result, addName(query("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
@@ -293,7 +299,7 @@ func trojanURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 				params["sid"] = sid
 			}
 		}
-		result = append(result, addName(query("trojan://"+url.PathEscape(password)+"@"+net.JoinHostPort(host, port), params), name))
+		result = append(result, addName(query("trojan://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
@@ -329,14 +335,14 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			params["down"] = v
 		}
 		_ = username
-		result = append(result, addName(query("hysteria2://"+url.PathEscape(password)+"@"+net.JoinHostPort(host, port), params), name))
+		result = append(result, addName(query("hysteria2://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
 
 func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
 	if token, ok := cfg["token"].(string); ok && strings.TrimSpace(token) != "" {
-		return []string{addName("tuic://"+url.PathEscape(token)+"@"+net.JoinHostPort(host, port), name)}, nil
+		return []string{addName("tuic://"+url.PathEscape(token)+"@"+netutil.JoinHostPort(host, port), name)}, nil
 	}
 	users := userMap(cfg)
 	if len(users) == 0 {
@@ -363,7 +369,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 		if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
 			params["allow_insecure"] = "1"
 		}
-		result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+net.JoinHostPort(host, port), params), name))
+		result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
@@ -399,7 +405,7 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 			params["min_idle_session"] = v
 		}
 		_ = username
-		result = append(result, addName(query("anytls://"+url.PathEscape(password)+"@"+net.JoinHostPort(host, port), params), name))
+		result = append(result, addName(query("anytls://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }

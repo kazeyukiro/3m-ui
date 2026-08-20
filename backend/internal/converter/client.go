@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"golang.org/x/crypto/curve25519"
@@ -27,29 +28,30 @@ func ResolveServerAddress(cfg *config.Config, req *http.Request) string {
 		return cleanURLHost(cfg.Server.PublicURL)
 	}
 	if req != nil && req.Host != "" {
-		host := req.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			return h
-		}
-		return strings.Trim(host, "[]")
+		return cleanURLHost(req.Host)
 	}
 	return "127.0.0.1"
 }
 
+// ResolveListenerServer prefers per-listener PublicHost (IPv4/IPv6/domain),
+// then the global public URL / request host. Used for share links and client YAML.
+func ResolveListenerServer(cfg *config.Config, req *http.Request, l models.Listener) string {
+	if h := netutil.NormalizeHost(l.PublicHost); h != "" && !netutil.IsUnspecifiedBind(h) {
+		return h
+	}
+	return ResolveServerAddress(cfg, req)
+}
+
+// ResolveListenerPort prefers PublicPort when set (NAT / dual-stack publish).
+func ResolveListenerPort(l models.Listener) string {
+	if p := strings.TrimSpace(l.PublicPort); p != "" {
+		return p
+	}
+	return strings.TrimSpace(l.Port)
+}
+
 func cleanURLHost(raw string) string {
-	raw = strings.TrimSpace(raw)
-	u := raw
-	if parsed, err := url.Parse(raw); err == nil && parsed.Host != "" {
-		u = parsed.Host
-	} else {
-		u = strings.TrimPrefix(u, "https://")
-		u = strings.TrimPrefix(u, "http://")
-		u = strings.Split(u, "/")[0]
-	}
-	if h, _, err := net.SplitHostPort(u); err == nil {
-		u = h
-	}
-	u = strings.Trim(u, "[]")
+	u := netutil.NormalizeHost(raw)
 	if u == "" || strings.ContainsAny(u, "\r\n/\\") {
 		return "127.0.0.1"
 	}
@@ -59,14 +61,17 @@ func cleanURLHost(raw string) string {
 func GetSubscriptionURL(cfg *config.Config, req *http.Request, token string, target string) string {
 	var base string
 	if envURL := os.Getenv("PUBLIC_URL"); envURL != "" {
-		base = envURL
+		base = strings.TrimSpace(envURL)
 	} else if cfg != nil && cfg.Server.PublicURL != "" {
-		base = cfg.Server.PublicURL
+		base = strings.TrimSpace(cfg.Server.PublicURL)
 	} else if req != nil && req.Host != "" {
 		scheme := "http"
 		if req.TLS != nil {
 			scheme = "https"
+		} else if proto := req.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
+			scheme = "https"
 		}
+		// req.Host already includes [ipv6]:port when applicable.
 		base = fmt.Sprintf("%s://%s", scheme, req.Host)
 	} else {
 		base = "http://127.0.0.1:8080"
@@ -141,10 +146,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if err != nil {
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
-	var portVal interface{} = strings.TrimSpace(l.Port)
-	if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil {
+	portStr := ResolveListenerPort(l)
+	var portVal interface{} = portStr
+	if p, err := strconv.Atoi(portStr); err == nil {
 		portVal = p
 	}
+	server = netutil.NormalizeHost(server)
 	base := map[string]interface{}{"type": protocol, "server": server, "port": portVal}
 	if l.UDP && clientSupportsUDP(protocol) {
 		base["udp"] = true

@@ -103,10 +103,10 @@ func validateListenerEndpoint(l *models.Listener) error {
 }
 
 func firstListenerAddress(l models.Listener) string {
-	if v := strings.TrimSpace(l.BindAddress); v != "" {
+	if v := strings.Trim(strings.TrimSpace(l.BindAddress), "[]"); v != "" {
 		return v
 	}
-	if v := strings.TrimSpace(l.Listen); v != "" {
+	if v := strings.Trim(strings.TrimSpace(l.Listen), "[]"); v != "" {
 		return v
 	}
 	return "0.0.0.0"

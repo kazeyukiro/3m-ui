@@ -132,11 +132,11 @@ const columns = [
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
         <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
         <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" /></Form.Item>
-        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0"><Input /></Form.Item>
+        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip="IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1"><Input placeholder="0.0.0.0 or ::" /></Form.Item>
         <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
         <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
-        <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint')}><Input placeholder="example.com" /></Form.Item>
+        <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>
         <Form.Item name="public_port" label={t('settings.publicPort')}><Input placeholder="443" /></Form.Item>
         <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
         <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome"><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>

@@ -31,7 +31,11 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 	tagNames := make([]string, 0)
 	for _, listener := range listeners {
 		creds := filtered[listener.ID]
-		proxies, err := listenerToProxies(listener, serverHost, creds)
+		host := ResolveListenerServer(config.GlobalConfig, req, listener)
+		if host == "" {
+			host = serverHost
+		}
+		proxies, err := listenerToProxies(listener, host, creds)
 		if err != nil {
 			continue
 		}

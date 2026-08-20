@@ -74,7 +74,11 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 	var names []string
 	for _, listener := range listeners {
 		creds := filtered[listener.ID]
-		proxies, err := listenerToProxies(listener, serverHost, creds)
+		host := ResolveListenerServer(config.GlobalConfig, req, listener)
+		if host == "" {
+			host = serverHost
+		}
+		proxies, err := listenerToProxies(listener, host, creds)
 		if err != nil {
 			continue
 		}
@@ -128,7 +132,11 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 	var links []string
 	for _, listener := range listeners {
 		creds := filtered[listener.ID]
-		uris, err := gen(listener, serverHost, creds)
+		host := ResolveListenerServer(config.GlobalConfig, req, listener)
+		if host == "" {
+			host = serverHost
+		}
+		uris, err := gen(listener, host, creds)
 		if err != nil {
 			continue
 		}

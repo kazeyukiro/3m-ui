@@ -1,6 +1,7 @@
 package node
 
 import (
+	"net"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -36,6 +37,15 @@ func ValidateNode(l *models.Listener) error {
 	}
 	if l.BindAddress == "" {
 		l.BindAddress = "0.0.0.0"
+	}
+	// Strip brackets; accept IPv4 / IPv6 (including :: and 0.0.0.0).
+	l.BindAddress = strings.Trim(l.BindAddress, "[]")
+	if net.ParseIP(l.BindAddress) == nil {
+		return fmt.Errorf("bind address must be a valid IPv4 or IPv6 address (got %q)", l.BindAddress)
+	}
+	if h := strings.TrimSpace(l.PublicHost); h != "" {
+		// Public host may be domain or IP — normalize bracketed IPv6.
+		l.PublicHost = strings.Trim(h, "[]")
 	}
 
 	if l.RoutingMark < 0 {
