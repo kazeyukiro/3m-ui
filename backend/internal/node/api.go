@@ -14,6 +14,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
@@ -155,12 +156,9 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 	if host == "" {
 		host = c.Request.Host
 	}
-	if host != "" {
-		if parsed, err := url.Parse("//" + host); err == nil && parsed.Hostname() != "" {
-			host = parsed.Hostname()
-		}
-	}
+	host = netutil.NormalizeHost(host)
 	host = normalizeExportHostPrefer(host, listener.BindAddress, listener.Listen, publicURL)
+	host = netutil.NormalizeHost(host)
 
 	credentials := []user.Credential{}
 	if h.user != nil {
@@ -172,7 +170,7 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		credentials = byListener[listener.ID]
 	}
 
-	uris, err := ClientURIsWithCredentials(*listener, strings.TrimSpace(host), credentials)
+	uris, err := ClientURIsWithCredentials(*listener, host, credentials)
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return

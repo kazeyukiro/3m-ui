@@ -101,7 +101,7 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 	if !listener.Enabled {
 		return nil, fmt.Errorf("listener is disabled")
 	}
-	serverHost := ResolveServerAddress(config.GlobalConfig, req)
+	serverHost := ResolveListenerServer(config.GlobalConfig, req, listener)
 	credentials := []user.Credential{}
 	if byListener, err := user.NewService(db).ActiveCredentialsByListener(); err != nil {
 		return nil, fmt.Errorf("failed to load listener credentials: %w", err)
