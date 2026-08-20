@@ -1,19 +1,19 @@
 package system
 
 type CPUInfo struct {
-	Percent float64 `json:"percent"`
+	Percent float64 `json:"percent"` // 0–100
 }
 
 type MemoryInfo struct {
-	Used    float64 `json:"used"`    // in MB
-	Total   float64 `json:"total"`   // in MB
-	Percent float64 `json:"percent"` // in %
+	Used    float64 `json:"used"`    // bytes
+	Total   float64 `json:"total"`   // bytes
+	Percent float64 `json:"percent"` // 0–100
 }
 
 type DiskInfo struct {
-	Used    float64 `json:"used"`    // in GB
-	Total   float64 `json:"total"`   // in GB
-	Percent float64 `json:"percent"` // in %
+	Used    float64 `json:"used"`    // bytes
+	Total   float64 `json:"total"`   // bytes
+	Percent float64 `json:"percent"` // 0–100
 }
 
 type NetworkInfo struct {

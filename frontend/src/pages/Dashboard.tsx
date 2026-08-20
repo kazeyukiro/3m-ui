@@ -5,13 +5,20 @@ import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/s
 import { useI18n } from '../i18n';
 
 const formatBytes = (bytes: number) => {
-  if (bytes === 0) return '0 B';
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(k)), sizes.length - 1);
+  return `${(n / Math.pow(k, i)).toFixed(i === 0 ? 0 : 2)} ${sizes[i]}`;
 };
-const formatRate = (bps: number) => formatBytes(bps) + '/s';
+const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
+const clampPct = (v: unknown) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  if (n > 100) return 100;
+  return Math.round(n * 10) / 10;
+};
 
 const Dashboard: React.FC = () => {
   const { t } = useI18n();
@@ -89,17 +96,17 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title={`${t('dashboard.cpu')} ${sys.cpu?.percent || 0}%`}><Progress percent={sys.cpu?.percent || 0} size="small" /></Card>
+          <Card title={`${t('dashboard.cpu')} ${clampPct(sys.cpu?.percent)}%`}><Progress percent={clampPct(sys.cpu?.percent)} size="small" status={clampPct(sys.cpu?.percent) > 90 ? 'exception' : 'normal'} /></Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title={`${t('dashboard.memory')} ${sys.memory?.percent || 0}%`}>
-            <Progress percent={sys.memory?.percent || 0} size="small" status={sys.memory?.percent > 90 ? 'exception' : 'normal'} />
+          <Card title={`${t('dashboard.memory')} ${clampPct(sys.memory?.percent)}%`}>
+            <Progress percent={clampPct(sys.memory?.percent)} size="small" status={clampPct(sys.memory?.percent) > 90 ? 'exception' : 'normal'} />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{formatBytes(sys.memory?.used || 0)} / {formatBytes(sys.memory?.total || 0)}</div>
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title={`${t('dashboard.disk')} ${sys.disk?.percent || 0}%`}>
-            <Progress percent={sys.disk?.percent || 0} size="small" />
+          <Card title={`${t('dashboard.disk')} ${clampPct(sys.disk?.percent)}%`}>
+            <Progress percent={clampPct(sys.disk?.percent)} size="small" status={clampPct(sys.disk?.percent) > 90 ? 'exception' : 'normal'} />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{formatBytes(sys.disk?.used || 0)} / {formatBytes(sys.disk?.total || 0)}</div>
           </Card>
         </Col>
