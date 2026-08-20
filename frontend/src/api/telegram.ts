@@ -4,6 +4,7 @@ export interface TelegramSettings {
   enabled: boolean;
   bot_token: string;
   chat_ids: string[];
+  notify_on_login?: boolean;
   notify_on_block: boolean;
   notify_on_unblock: boolean;
   notify_on_expiry: boolean;

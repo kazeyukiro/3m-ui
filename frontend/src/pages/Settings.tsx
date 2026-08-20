@@ -139,6 +139,7 @@ const Settings: React.FC = () => {
               enabled: !!values.enabled,
               bot_token: values.bot_token,
               chat_ids: String(values.chat_ids || '').split(',').map((x: string) => x.trim()).filter(Boolean),
+              notify_on_login: !!values.notify_on_login,
               notify_on_block: !!values.notify_on_block,
               notify_on_unblock: !!values.notify_on_unblock,
               notify_on_expiry: !!values.notify_on_expiry,

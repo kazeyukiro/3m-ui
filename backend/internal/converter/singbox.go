@@ -46,7 +46,7 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 			}
 		}
 	}
-	if len(outbounds) == 0 {
+	if len(outbounds) == 0 || len(tagNames) == 0 {
 		return nil, fmt.Errorf("no exportable sing-box outbounds for user")
 	}
 	// Selector + direct for a usable minimal config (clients often strip extras).
@@ -55,7 +55,7 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 		map[string]interface{}{
 			"type":      "selector",
 			"tag":       "proxy",
-			"outbounds": tagNames,
+			"outbounds": append([]string{}, tagNames...),
 			"default":   tagNames[0],
 		},
 	)
