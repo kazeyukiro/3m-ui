@@ -506,7 +506,13 @@ const Users: React.FC = () => {
                 style={{ width: 180, height: 180 }}
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`}
               />
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+              
+            <div style={{ marginTop: 12, marginBottom: 4, fontWeight: 500 }}>{t('users.subSingbox') || 'Sing-box JSON'}</div>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input value={shareUrl ? `${shareUrl}?target=singbox` : ''} readOnly />
+              <Button icon={<CopyOutlined />} onClick={() => { if (shareUrl) { navigator.clipboard.writeText(`${shareUrl}?target=singbox`); message.success(t('common.copied')); } }} />
+            </Space.Compact>
+<div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
                 {t('users.qrHint') || 'QR = default (Mihomo). Paste the V2Ray URL into classic clients.'}
               </div>
             </div>

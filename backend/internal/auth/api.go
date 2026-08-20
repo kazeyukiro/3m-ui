@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
 )
@@ -127,6 +128,8 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	resetLoginLimit(clientID)
+	// 3x-ui parity: optional Telegram notice on successful panel login.
+	go telegram.NotifyLogin(h.db, input.Username, clientID)
 	c.JSON(http.StatusOK, result)
 }
 

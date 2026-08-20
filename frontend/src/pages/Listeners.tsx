@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider } from 'antd';
 import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined } from '@ant-design/icons';
 import {
@@ -24,6 +24,7 @@ const Listeners: React.FC = () => {
   const [data, setData] = useState<Listener[]>([]);
   const [templates, setTemplates] = useState<ListenerTemplate[]>([]);
   const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
   const [templateLoading, setTemplateLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Listener | null>(null);
@@ -103,7 +104,15 @@ const Listeners: React.FC = () => {
   const doRollback = async (version: number) => { if (!versionListener) return; try { await rollbackListenerVersion(normalizeId(versionListener), version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(normalizeId(versionListener))); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const deleteTemplate = async (id: number) => { try { await deleteListenerTemplate(id); message.success(t('listeners.templateDeleted')); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
 
-  const columns = [
+    const filteredListeners = useMemo(() => {
+    const q = keyword.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((l) =>
+      [l.name, l.protocol, l.port, l.bind_address, l.public_host].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+  }, [data, keyword]);
+
+const columns = [
     { title: t('listeners.name'), dataIndex: 'name', key: 'name', ellipsis: true, width: 150 },
     { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', width: 110, render: (p: string) => <Tag>{p}</Tag> },
     { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 100 },
@@ -117,7 +126,7 @@ const Listeners: React.FC = () => {
     { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
   return <div>
-    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}><Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={data} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" /></Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}><Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" /></Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
     <Modal open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 720} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
       <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>

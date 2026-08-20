@@ -1,0 +1,200 @@
+package converter
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/user"
+	"gorm.io/gorm"
+)
+
+// GenerateUserSingboxSubscription builds a minimal sing-box outbound document
+// from the user's bound Mihomo listeners (3x-ui sing-box subscription parity).
+func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http.Request) ([]byte, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if !user.IsCredentialActive(pu) {
+		return nil, fmt.Errorf("user is not active")
+	}
+	listeners, filtered, err := userBoundListeners(db, pu)
+	if err != nil {
+		return nil, err
+	}
+	serverHost := ResolveServerAddress(config.GlobalConfig, req)
+
+	outbounds := make([]map[string]interface{}, 0)
+	tagNames := make([]string, 0)
+	for _, listener := range listeners {
+		creds := filtered[listener.ID]
+		proxies, err := listenerToProxies(listener, serverHost, creds)
+		if err != nil {
+			continue
+		}
+		for _, p := range proxies {
+			ob, tag := mihomoProxyToSingbox(p)
+			if ob == nil {
+				continue
+			}
+			outbounds = append(outbounds, ob)
+			if tag != "" {
+				tagNames = append(tagNames, tag)
+			}
+		}
+	}
+	if len(outbounds) == 0 {
+		return nil, fmt.Errorf("no exportable sing-box outbounds for user")
+	}
+	// Selector + direct for a usable minimal config (clients often strip extras).
+	outbounds = append(outbounds,
+		map[string]interface{}{"type": "direct", "tag": "direct"},
+		map[string]interface{}{
+			"type":      "selector",
+			"tag":       "proxy",
+			"outbounds": tagNames,
+			"default":   tagNames[0],
+		},
+	)
+	doc := map[string]interface{}{
+		"outbounds": outbounds,
+	}
+	return json.MarshalIndent(doc, "", "  ")
+}
+
+func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, string) {
+	typ, _ := p["type"].(string)
+	name, _ := p["name"].(string)
+	if name == "" {
+		name = "proxy"
+	}
+	server, _ := p["server"].(string)
+	port := toInt(p["port"])
+	if server == "" || port == 0 {
+		return nil, ""
+	}
+	ob := map[string]interface{}{
+		"type":        mapMihomoTypeToSingbox(typ),
+		"tag":         name,
+		"server":      server,
+		"server_port": port,
+	}
+	switch strings.ToLower(typ) {
+	case "ss", "shadowsocks":
+		ob["method"] = p["cipher"]
+		ob["password"] = p["password"]
+	case "vmess":
+		ob["uuid"] = firstString(p["uuid"], p["password"])
+		ob["security"] = firstString(p["cipher"], "auto")
+		ob["alter_id"] = 0
+	case "vless":
+		ob["uuid"] = firstString(p["uuid"], p["password"])
+		if flow, ok := p["flow"].(string); ok && flow != "" {
+			ob["flow"] = flow
+		}
+	case "trojan":
+		ob["password"] = p["password"]
+	case "hysteria2":
+		ob["password"] = p["password"]
+		if up, ok := p["up"].(string); ok {
+			ob["up_mbps"] = parseMbps(up)
+		}
+		if down, ok := p["down"].(string); ok {
+			ob["down_mbps"] = parseMbps(down)
+		}
+	case "tuic":
+		ob["uuid"] = p["uuid"]
+		ob["password"] = p["password"]
+	default:
+		// Keep generic fields best-effort.
+		if pw, ok := p["password"]; ok {
+			ob["password"] = pw
+		}
+		if uuid, ok := p["uuid"]; ok {
+			ob["uuid"] = uuid
+		}
+	}
+	// TLS / reality / transport — best-effort mapping from Mihomo fields.
+	if tls, _ := p["tls"].(bool); tls || strings.EqualFold(fmt.Sprint(p["tls"]), "true") {
+		tlsObj := map[string]interface{}{"enabled": true}
+		if sni, ok := p["servername"].(string); ok && sni != "" {
+			tlsObj["server_name"] = sni
+		} else if sni, ok := p["sni"].(string); ok && sni != "" {
+			tlsObj["server_name"] = sni
+		}
+		if fp, ok := p["client-fingerprint"].(string); ok && fp != "" {
+			tlsObj["utls"] = map[string]interface{}{"enabled": true, "fingerprint": fp}
+		}
+		if reality, ok := p["reality-opts"].(map[string]interface{}); ok {
+			tlsObj["reality"] = map[string]interface{}{
+				"enabled":    true,
+				"public_key": reality["public-key"],
+				"short_id":   reality["short-id"],
+			}
+		}
+		ob["tls"] = tlsObj
+	}
+	if network, ok := p["network"].(string); ok && network != "" && network != "tcp" {
+		tr := map[string]interface{}{"type": network}
+		if opts, ok := p["ws-opts"].(map[string]interface{}); ok {
+			tr["path"] = opts["path"]
+			if headers, ok := opts["headers"].(map[string]interface{}); ok {
+				tr["headers"] = headers
+			}
+		}
+		if opts, ok := p["grpc-opts"].(map[string]interface{}); ok {
+			tr["service_name"] = opts["grpc-service-name"]
+		}
+		ob["transport"] = tr
+	}
+	return ob, name
+}
+
+func mapMihomoTypeToSingbox(t string) string {
+	switch strings.ToLower(t) {
+	case "ss", "shadowsocks":
+		return "shadowsocks"
+	case "hysteria2":
+		return "hysteria2"
+	default:
+		return strings.ToLower(t)
+	}
+}
+
+func toInt(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case string:
+		var x int
+		fmt.Sscanf(n, "%d", &x)
+		return x
+	default:
+		return 0
+	}
+}
+
+func firstString(vals ...interface{}) string {
+	for _, v := range vals {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func parseMbps(s string) int {
+	s = strings.TrimSpace(strings.ToLower(s))
+	s = strings.TrimSuffix(s, "mbps")
+	s = strings.TrimSpace(s)
+	var n int
+	fmt.Sscanf(s, "%d", &n)
+	return n
+}

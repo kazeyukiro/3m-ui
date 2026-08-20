@@ -154,6 +154,7 @@ const Settings: React.FC = () => {
           <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="bot_token" label={t('settings.botToken')}><Input.Password /></Form.Item>
           <Form.Item name="chat_ids" label={t('settings.chatIds')} tooltip={t('settings.chatIdsHint')}><Input placeholder="123456789, -100123..." /></Form.Item>
+          <Form.Item name="notify_on_login" label={t('settings.notifyLogin') || 'Notify on panel login'} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_unblock" label={t('settings.notifyUnblock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_expiry" label={t('settings.notifyExpiry')} valuePropName="checked"><Switch /></Form.Item>

@@ -34,6 +34,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/templates/reverse-proxy", h.ReverseProxy)
 	rg.POST("/templates/acme", h.ACME)
 	rg.POST("/geofiles/update", h.UpdateGeoFiles)
+	rg.POST("/templates/warp", h.WARP)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
@@ -133,4 +134,16 @@ func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"dir": dir, "files": result})
+}
+
+
+// WARP returns a Mihomo WireGuard fragment for Cloudflare WARP (3x-ui parity).
+func (h *Handler) WARP(c *gin.Context) {
+	var body struct {
+		PrivateKey string `json:"private_key"`
+		Address    string `json:"address"`
+		Reserved   string `json:"reserved"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	c.JSON(http.StatusOK, gin.H{"yaml": WARPTemplate(body.PrivateKey, body.Address, body.Reserved)})
 }

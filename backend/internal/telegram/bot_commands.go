@@ -42,6 +42,8 @@ func (b *Bot) handleCommand(text string) string {
 			q = strings.Join(parts[1:], " ")
 		}
 		return b.cmdSearch(q)
+	case "backup", "备份":
+		return b.cmdBackup()
 	default:
 		return "未知指令。发送 /help 查看可用命令。"
 	}
@@ -58,6 +60,7 @@ func helpText() string {
 /restart — 重启 Mihomo 核心
 /deldepleted — 清理到期/超额用户
 /search &lt;关键字&gt; — 按用户名/备注搜索
+/backup — 备份提示
 /help — 本帮助
 `)
 }
@@ -244,4 +247,12 @@ func (b *Bot) cmdSearch(q string) string {
 		bld.WriteString(fmt.Sprintf("%s <code>%s</code> used=%s\n", flag, escapeHTML(u.Username), formatBytes(u.TrafficUsed)))
 	}
 	return bld.String()
+}
+
+
+func (b *Bot) cmdBackup() string {
+	return strings.TrimSpace(`📦 <b>Backup</b>
+请在面板「系统设置 → 备份」下载完整备份（SQLite + Mihomo 配置）。
+Use panel Settings → Backup to download a full zip (database + Mihomo config).
+API: <code>GET /api/v1/system/backup</code>`)
 }

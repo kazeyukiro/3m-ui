@@ -83,9 +83,21 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				}
 				writeSubHeaders(c, &pu)
 				c.Header("Cache-Control", "no-store")
-				// Base64 list uses .txt; writeSubHeaders already set a profile filename.
 				c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(pu.Username)+`.txt"`)
 				c.Data(http.StatusOK, "text/plain; charset=utf-8", raw)
+				return
+			}
+			// Native sing-box JSON outbounds (3x-ui sing-box subscription parity).
+			if target == "singbox" || target == "sing-box" || target == "sfa" || target == "sfm" {
+				raw, err = converter.GenerateUserSingboxSubscription(db, pu, c.Request)
+				if err != nil {
+					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+					return
+				}
+				writeSubHeaders(c, &pu)
+				c.Header("Cache-Control", "no-store")
+				c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(pu.Username)+`.json"`)
+				c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
 				return
 			}
 			raw, err = converter.GenerateUserRawConfig(db, pu, c.Request)
@@ -204,10 +216,13 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 		if !pu.ExpireTime.IsZero() {
 			expire = pu.ExpireTime.UTC().Format(time.RFC3339)
 		}
+		scheme := requestScheme(c)
+		base := scheme + "://" + c.Request.Host + "/api/v1/client/sub/" + url.PathEscape(tok)
 		c.JSON(http.StatusOK, gin.H{
 			"username":       pu.Username,
+			"remark":         pu.Remark,
 			"enabled":        pu.Enabled,
-			"blocked":        false,
+			"blocked":        !user.IsCredentialActive(pu),
 			"online":         pu.Online,
 			"traffic_used":   pu.TrafficUsed,
 			"traffic_limit":  pu.TrafficLimit,
@@ -215,6 +230,14 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 			"download_bytes": pu.DownloadBytes,
 			"expire_time":    expire,
 			"ip_limit":       pu.IPLimit,
+			"links": gin.H{
+				"mihomo":  base,
+				"clash":   base + "?target=clash",
+				"v2ray":   base + "?target=v2ray",
+				"singbox": base + "?target=singbox",
+				"html":    base + "?html=1",
+				"info":    base + "?format=info",
+			},
 		})
 		return
 	}
@@ -248,11 +271,12 @@ func detectSubTarget(ua string) string {
 		return "loon"
 	case strings.Contains(u, "shadowrocket"):
 		return "mihomo"
+	case strings.Contains(u, "sing-box") || strings.Contains(u, "sfa") || strings.Contains(u, "sfm") || strings.Contains(u, "sfi"):
+		return "singbox"
 	// Classic v2ray / Xray clients expect base64 list of share links (3x-ui /sub/ parity).
 	case strings.Contains(u, "v2ray") || strings.Contains(u, "v2rayng") || strings.Contains(u, "v2rayn") ||
 		strings.Contains(u, "streisand") || strings.Contains(u, "hiddify") || strings.Contains(u, "nekobox") ||
-		strings.Contains(u, "nekoray") || strings.Contains(u, "sing-box") || strings.Contains(u, "sfa") ||
-		strings.Contains(u, "sfm") || strings.Contains(u, "sfi"):
+		strings.Contains(u, "nekoray"):
 		return "v2ray"
 	default:
 		return "mihomo"

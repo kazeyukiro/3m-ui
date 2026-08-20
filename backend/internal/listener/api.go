@@ -1,10 +1,12 @@
 package listener
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"net/http"
 	"strconv"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
 
 type Handler struct{ svc *Service }
@@ -42,6 +44,35 @@ func (h *Handler) ListListeners(c *gin.Context) {
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
+	}
+	// 3x-ui style search across inbound name / protocol / port / bind.
+	q := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	if q != "" {
+		filtered := make([]models.Listener, 0, len(list))
+		for _, l := range list {
+			hay := strings.ToLower(l.Name + " " + l.Protocol + " " + l.Port + " " + l.BindAddress + " " + l.PublicHost)
+			if strings.Contains(hay, q) {
+				filtered = append(filtered, l)
+			}
+		}
+		list = filtered
+	}
+	if en := c.Query("enabled"); en == "true" || en == "1" {
+		out := make([]models.Listener, 0)
+		for _, l := range list {
+			if l.Enabled {
+				out = append(out, l)
+			}
+		}
+		list = out
+	} else if en == "false" || en == "0" {
+		out := make([]models.Listener, 0)
+		for _, l := range list {
+			if !l.Enabled {
+				out = append(out, l)
+			}
+		}
+		list = out
 	}
 	c.JSON(200, list)
 }

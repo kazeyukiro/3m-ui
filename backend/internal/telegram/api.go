@@ -34,6 +34,7 @@ type putSettingsBody struct {
 	Enabled           bool     `json:"enabled"`
 	BotToken          string   `json:"bot_token"`
 	ChatIDs           []string `json:"chat_ids"`
+	NotifyOnLogin     bool     `json:"notify_on_login"`
 	NotifyOnBlock     bool     `json:"notify_on_block"`
 	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
 	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
@@ -53,6 +54,7 @@ func (h *Handler) PutSettings(c *gin.Context) {
 	current, _ := LoadSettings(h.db)
 	s := Settings{
 		Enabled: body.Enabled, BotToken: strings.TrimSpace(body.BotToken), ChatIDs: body.ChatIDs,
+		NotifyOnLogin: body.NotifyOnLogin,
 		NotifyOnBlock: body.NotifyOnBlock, NotifyOnUnblock: body.NotifyOnUnblock,
 		NotifyOnExpiry: body.NotifyOnExpiry, NotifyOnTraffic: body.NotifyOnTraffic,
 		NotifyDailyDigest: body.NotifyDailyDigest,
