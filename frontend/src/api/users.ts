@@ -54,3 +54,7 @@ export const rotateUserSubscription = (id: number) =>
 /** 3x-ui delDepletedClients parity — remove expired / over-quota users. */
 export const deleteDepletedUsers = () =>
   client.post<{ deleted: number }>('/users/del-depleted').then((r) => r.data);
+
+/** 3x-ui style bulk actions: enable | disable | reset-traffic | delete */
+export const batchUsers = (action: string, ids: number[]) =>
+  client.post<{ affected: number; action: string }>('/users/batch', { action, ids }).then((r) => r.data);

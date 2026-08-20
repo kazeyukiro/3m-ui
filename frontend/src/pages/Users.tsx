@@ -6,7 +6,7 @@ import {
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
-  fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers,
+  fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
   fetchUserNodes, bindUserNodes, fetchUserSubscription, rotateUserSubscription, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
@@ -33,6 +33,7 @@ const Users: React.FC = () => {
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [bindOpen, setBindOpen] = useState(false);
   const [bindUser, setBindUser] = useState<ProxyUser | null>(null);
@@ -216,6 +217,23 @@ const Users: React.FC = () => {
     }
   };
 
+  const onBatch = async (action: string) => {
+    const ids = selectedRowKeys.map((k) => Number(k)).filter((n) => n > 0);
+    if (!ids.length) {
+      message.warning(t('users.batchNeedSelect') || 'Select users first');
+      return;
+    }
+    try {
+      const res = await batchUsers(action, ids);
+      message.success((t('users.batchDone') || 'Batch done') + `: ${res.affected}`);
+      setSelectedRowKeys([]);
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
+
   const columns = [
     { title: t('users.username'), dataIndex: 'username', key: 'username', width: 120, ellipsis: true },
     {
@@ -314,6 +332,24 @@ const Users: React.FC = () => {
               onChange={(e) => { if (!e.target.value) setKeyword(''); }}
               style={{ width: 200 }}
             />
+            <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('enable')}>
+              {t('users.batchEnable') || 'Enable'}
+            </Button>
+            <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('disable')}>
+              {t('users.batchDisable') || 'Disable'}
+            </Button>
+            <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('reset-traffic')}>
+              {t('users.batchResetTraffic') || 'Reset traffic'}
+            </Button>
+            <Popconfirm
+              title={t('users.batchDeleteConfirm') || 'Delete selected users?'}
+              onConfirm={() => onBatch('delete')}
+              disabled={!selectedRowKeys.length}
+            >
+              <Button danger disabled={!selectedRowKeys.length} icon={<DeleteOutlined />}>
+                {t('users.batchDelete') || 'Delete selected'}
+              </Button>
+            </Popconfirm>
             <Popconfirm
               title={t('users.deleteDepletedConfirm') || 'Delete all expired / over-quota users?'}
               onConfirm={onDeleteDepleted}
@@ -337,7 +373,7 @@ const Users: React.FC = () => {
           </Space>
         }
       >
-        <Table scroll={{ x: 960 }} size="middle" dataSource={filtered} columns={columns} rowKey="id" loading={loading} />
+        <Table scroll={{ x: 960 }} size="middle" dataSource={filtered} columns={columns} rowKey="id" loading={loading} rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} />
       </Card>
 
       <Modal

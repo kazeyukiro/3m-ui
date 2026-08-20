@@ -32,6 +32,16 @@ func (b *Bot) handleCommand(text string) string {
 		return b.cmdListeners()
 	case "traffic", "流量":
 		return b.cmdTraffic()
+	case "restart", "重启":
+		return b.cmdRestart()
+	case "deldepleted", "清理":
+		return b.cmdDelDepleted()
+	case "search", "查找":
+		q := ""
+		if len(parts) > 1 {
+			q = strings.Join(parts[1:], " ")
+		}
+		return b.cmdSearch(q)
 	default:
 		return "未知指令。发送 /help 查看可用命令。"
 	}
@@ -45,6 +55,9 @@ func helpText() string {
 /online — 当前在线用户
 /listeners — 入站节点列表
 /traffic — 流量快照
+/restart — 重启 Mihomo 核心
+/deldepleted — 清理到期/超额用户
+/search &lt;关键字&gt; — 按用户名/备注搜索
 /help — 本帮助
 `)
 }
@@ -180,4 +193,55 @@ func formatBytes(n int64) string {
 		i++
 	}
 	return fmt.Sprintf("%.2f %s", v, units[i])
+}
+
+
+func (b *Bot) cmdRestart() string {
+	if b.mihomo == nil {
+		return "Mihomo 服务未初始化。"
+	}
+	if err := b.mihomo.RestartMihomo(); err != nil {
+		return "重启失败: " + escapeHTML(err.Error())
+	}
+	return "✅ Mihomo 核心已重启。"
+}
+
+func (b *Bot) cmdDelDepleted() string {
+	svc := user.NewService(b.db)
+	n, err := svc.DeleteDepleted()
+	if err != nil {
+		return "清理失败: " + escapeHTML(err.Error())
+	}
+	return fmt.Sprintf("🧹 已删除 %d 个到期/超额用户。", n)
+}
+
+func (b *Bot) cmdSearch(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return "用法: /search &lt;用户名或备注关键字&gt;"
+	}
+	svc := user.NewService(b.db)
+	users, err := svc.ListFiltered(user.ListFilter{Query: q})
+	if err != nil {
+		return "搜索失败: " + escapeHTML(err.Error())
+	}
+	if len(users) == 0 {
+		return "未找到匹配用户。"
+	}
+	var bld strings.Builder
+	bld.WriteString(fmt.Sprintf("🔍 <b>Search</b> <code>%s</code> (%d)\n", escapeHTML(q), len(users)))
+	for i, u := range users {
+		if i >= 20 {
+			bld.WriteString("…\n")
+			break
+		}
+		flag := "✅"
+		if !user.IsCredentialActive(u) {
+			flag = "⛔"
+		} else if u.Online {
+			flag = "🟢"
+		}
+		bld.WriteString(fmt.Sprintf("%s <code>%s</code> used=%s\n", flag, escapeHTML(u.Username), formatBytes(u.TrafficUsed)))
+	}
+	return bld.String()
 }

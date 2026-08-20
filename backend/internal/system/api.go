@@ -33,6 +33,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/backup/restore-db", h.RestoreDatabase)
 	rg.POST("/templates/reverse-proxy", h.ReverseProxy)
 	rg.POST("/templates/acme", h.ACME)
+	rg.POST("/geofiles/update", h.UpdateGeoFiles)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
@@ -117,4 +118,19 @@ func (h *Handler) ACME(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"command": ACMECommand(req.Domain, req.Email, req.Webroot)})
+}
+
+
+// UpdateGeoFiles downloads MetaCubeX GeoIP/GeoSite databases next to the Mihomo config (3x-ui parity).
+func (h *Handler) UpdateGeoFiles(c *gin.Context) {
+	dir := filepath.Dir(h.mihomoCfg)
+	if h.mihomoCfg == "" {
+		dir = "/var/lib/3m-ui/mihomo"
+	}
+	result, err := UpdateGeoFiles(dir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"dir": dir, "files": result})
 }

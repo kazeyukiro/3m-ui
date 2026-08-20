@@ -25,6 +25,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("", h.Create)
 	// Static path must be registered before /:id to avoid being captured as id.
 	rg.POST("/del-depleted", h.DeleteDepleted)
+	rg.POST("/batch", h.Batch)
 	rg.GET("/:id", h.Get)
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
@@ -47,7 +48,29 @@ func parseID(c *gin.Context) (uint, bool) {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	users, err := h.svc.GetAll()
+	f := ListFilter{Query: strings.TrimSpace(c.Query("q"))}
+	if v := c.Query("enabled"); v == "true" || v == "1" {
+		b := true
+		f.Enabled = &b
+	} else if v == "false" || v == "0" {
+		b := false
+		f.Enabled = &b
+	}
+	if v := c.Query("online"); v == "true" || v == "1" {
+		b := true
+		f.Online = &b
+	} else if v == "false" || v == "0" {
+		b := false
+		f.Online = &b
+	}
+	if v := c.Query("blocked"); v == "true" || v == "1" {
+		b := true
+		f.Blocked = &b
+	} else if v == "false" || v == "0" {
+		b := false
+		f.Blocked = &b
+	}
+	users, err := h.svc.ListFiltered(f)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -57,6 +80,24 @@ func (h *Handler) List(c *gin.Context) {
 		out = append(out, ToSafeUser(&users[i]))
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+// Batch runs enable|disable|reset-traffic|delete on multiple users (3x-ui parity).
+func (h *Handler) Batch(c *gin.Context) {
+	var req struct {
+		Action string `json:"action" binding:"required"`
+		IDs    []uint `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	n, err := h.svc.Batch(BatchAction(strings.ToLower(strings.TrimSpace(req.Action))), req.IDs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"affected": n, "action": req.Action})
 }
 
 func (h *Handler) Create(c *gin.Context) {

@@ -88,6 +88,20 @@ const Settings: React.FC = () => {
           </Space>
         </div>
       </Card>
+      <Card title={t('settings.geofiles') || 'GeoIP / GeoSite'} style={{ marginBottom: 16 }}>
+        <Text type="secondary">{t('settings.geofilesHint') || 'Download latest MetaCubeX GeoIP/GeoSite databases into the Mihomo data directory (3x-ui parity).'}</Text>
+        <div style={{ marginTop: 12 }}>
+          <Button type="primary" onClick={async () => {
+            try {
+              const r = await client.post('/system/geofiles/update');
+              message.success(t('settings.geofilesDone') || 'Geo files updated');
+              console.log(r.data);
+            } catch (e: any) {
+              message.error(e.message || t('common.error'));
+            }
+          }}>{t('settings.updateGeofiles') || 'Update geo files'}</Button>
+        </div>
+      </Card>
       <Card title={<><ApiOutlined /> {t('settings.apiDocs')}</>} style={{ marginBottom: 16 }}>
         <Text type="secondary">{t('settings.apiDocsHint')}</Text>
         <div style={{ marginTop: 12 }}><Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">{t('settings.openOpenAPI')}</Button></div>

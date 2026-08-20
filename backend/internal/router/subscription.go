@@ -123,6 +123,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 
 // writeSubHeaders emits the standard subscription response headers that
 // compatible clients (v2rayNG, Hiddify, Clash, …) read for traffic / expiry.
+// Profile-Title / support-url / announce mirror 3x-ui subscription metadata.
 func writeSubHeaders(c *gin.Context, pu *models.ProxyUser) {
 	if pu == nil {
 		return
@@ -137,6 +138,34 @@ func writeSubHeaders(c *gin.Context, pu *models.ProxyUser) {
 	c.Header("Subscription-Userinfo",
 		"upload="+itoa(upload)+"; download="+itoa(download)+"; total="+itoa(total)+"; expire="+itoa(expire))
 	c.Header("Profile-Update-Interval", "12")
+	title := strings.TrimSpace(pu.Remark)
+	if title == "" {
+		title = strings.TrimSpace(pu.Username)
+	}
+	if title == "" {
+		title = "3m-ui"
+	}
+	// base64 profile title is widely understood by Clash Meta / Hiddify / v2rayNG.
+	c.Header("Profile-Title", "base64:"+base64.StdEncoding.EncodeToString([]byte(title)))
+	c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(title)+`.yaml"`)
+}
+
+func sanitizeFilename(s string) string {
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+			return r
+		default:
+			return '_'
+		}
+	}, s)
+	if s == "" {
+		return "subscription"
+	}
+	if len(s) > 64 {
+		return s[:64]
+	}
+	return s
 }
 
 func itoa(n int64) string {
