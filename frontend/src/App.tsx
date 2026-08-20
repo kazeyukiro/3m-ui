@@ -1,7 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp, theme } from 'antd';
-import { I18nProvider } from './i18n';
+import zhCN from 'antd/locale/zh_CN';
+import enUS from 'antd/locale/en_US';
+import { I18nProvider, useI18n } from './i18n';
 import { useThemeStore } from './stores/themeStore';
 import AppLayout from './components/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -20,8 +22,12 @@ import RoutingPage from './pages/Routing';
 
 const ThemedApp: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDark);
+  const { locale } = useI18n();
   return (
-    <ConfigProvider theme={{ algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+    <ConfigProvider
+      locale={locale === 'zh' ? zhCN : enUS}
+      theme={{ algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm }}
+    >
       <AntApp>
         <BrowserRouter>
           <Routes>

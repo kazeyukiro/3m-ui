@@ -9,7 +9,8 @@ const translations: Record<Locale, Translations> = { en, zh };
 
 interface I18nContextType {
   locale: Locale;
-  t: (key: string) => string;
+  /** Resolve a dotted key. Optional fallback is used when the key is missing. */
+  t: (key: string, fallback?: string) => string;
   setLocale: (locale: Locale) => void;
 }
 
@@ -28,17 +29,17 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const t = useCallback(
-    (key: string) => {
+    (key: string, fallback?: string) => {
       const keys = key.split('.');
       let value: any = translations[locale];
       for (const k of keys) {
         if (value && typeof value === 'object' && k in value) {
           value = value[k];
         } else {
-          return key;
+          return fallback ?? key;
         }
       }
-      return typeof value === 'string' ? value : key;
+      return typeof value === 'string' ? value : (fallback ?? key);
     },
     [locale]
   );
