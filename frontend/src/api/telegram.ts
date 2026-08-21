@@ -10,8 +10,10 @@ export interface TelegramSettings {
   notify_on_expiry: boolean;
   notify_on_traffic?: boolean;
   notify_daily_digest: boolean;
+  notify_on_cpu?: boolean;
   traffic_warn_pct?: number;
   expiry_warn_hours?: number;
+  cpu_warn_pct?: number;
 }
 
 export const fetchTelegramSettings = () =>
