@@ -1,10 +1,13 @@
 package cluster
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,7 +24,13 @@ func NewService(db *gorm.DB) *Service {
 	return &Service{
 		db: db,
 		httpClient: &http.Client{
-			Timeout: 8 * time.Second,
+			Timeout: 12 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return fmt.Errorf("too many redirects")
+				}
+				return nil
+			},
 		},
 	}
 }
@@ -57,9 +66,12 @@ func (s *Service) List() ([]models.RemoteServer, error) {
 
 func (s *Service) Create(in CreateInput) (*models.RemoteServer, error) {
 	name := strings.TrimSpace(in.Name)
-	base := strings.TrimRight(strings.TrimSpace(in.BaseURL), "/")
-	if name == "" || base == "" {
-		return nil, fmt.Errorf("name and base_url are required")
+	base, err := normalizeBaseURL(in.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if name == "" {
+		return nil, fmt.Errorf("name is required")
 	}
 	enabled := true
 	if in.Enabled != nil {
@@ -75,9 +87,7 @@ func (s *Service) Create(in CreateInput) (*models.RemoteServer, error) {
 	if err := s.db.Create(row).Error; err != nil {
 		return nil, err
 	}
-	row.APITokenSet = row.APIToken != ""
-	row.APIToken = ""
-	return row, nil
+	return sanitize(row), nil
 }
 
 func (s *Service) Update(id uint, in UpdateInput) (*models.RemoteServer, error) {
@@ -89,7 +99,11 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.RemoteServer, error) 
 		row.Name = strings.TrimSpace(in.Name)
 	}
 	if strings.TrimSpace(in.BaseURL) != "" {
-		row.BaseURL = strings.TrimRight(strings.TrimSpace(in.BaseURL), "/")
+		base, err := normalizeBaseURL(in.BaseURL)
+		if err != nil {
+			return nil, err
+		}
+		row.BaseURL = base
 	}
 	if !in.KeepToken && strings.TrimSpace(in.APIToken) != "" {
 		row.APIToken = strings.TrimSpace(in.APIToken)
@@ -101,9 +115,7 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.RemoteServer, error) 
 	if err := s.db.Save(&row).Error; err != nil {
 		return nil, err
 	}
-	row.APITokenSet = row.APIToken != ""
-	row.APIToken = ""
-	return &row, nil
+	return sanitize(&row), nil
 }
 
 func (s *Service) Delete(id uint) error {
@@ -115,7 +127,34 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 	if err := s.db.First(&row, id).Error; err != nil {
 		return nil, err
 	}
-	url := row.BaseURL + "/api/v1/health"
+	return s.runHealth(&row)
+}
+
+// HealthCheckAll probes every enabled remote panel and persists status.
+func (s *Service) HealthCheckAll() ([]models.RemoteServer, error) {
+	var rows []models.RemoteServer
+	if err := s.db.Where("enabled = ?", true).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]models.RemoteServer, 0, len(rows))
+	for i := range rows {
+		r, err := s.runHealth(&rows[i])
+		if err != nil {
+			continue
+		}
+		out = append(out, *r)
+	}
+	// Also return disabled servers without probing.
+	var disabled []models.RemoteServer
+	_ = s.db.Where("enabled = ?", false).Find(&disabled).Error
+	for i := range disabled {
+		out = append(out, *sanitize(&disabled[i]))
+	}
+	return out, nil
+}
+
+func (s *Service) runHealth(row *models.RemoteServer) (*models.RemoteServer, error) {
+	url := strings.TrimRight(row.BaseURL, "/") + "/api/v1/health"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -128,13 +167,9 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		row.LastStatus = "down"
-		row.LastError = err.Error()
-		if saveErr := s.db.Save(&row).Error; saveErr != nil {
-			return nil, fmt.Errorf("health check result could not be saved: %w", saveErr)
-		}
-		row.APITokenSet = row.APIToken != ""
-		row.APIToken = ""
-		return &row, nil
+		row.LastError = truncateErr(err.Error())
+		_ = s.db.Save(row).Error
+		return sanitize(row), nil
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
@@ -145,45 +180,89 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 		row.LastStatus = "error"
 		row.LastError = fmt.Sprintf("HTTP %d", resp.StatusCode)
 	}
-	if saveErr := s.db.Save(&row).Error; saveErr != nil {
+	if saveErr := s.db.Save(row).Error; saveErr != nil {
 		return nil, fmt.Errorf("health check result could not be saved: %w", saveErr)
 	}
-	row.APITokenSet = row.APIToken != ""
-	row.APIToken = ""
-	return &row, nil
+	return sanitize(row), nil
 }
 
 func (s *Service) FetchRemoteNodes(id uint) (json.RawMessage, error) {
-	var row models.RemoteServer
-	if err := s.db.First(&row, id).Error; err != nil {
-		return nil, err
-	}
-	if !row.Enabled {
-		return nil, fmt.Errorf("remote server is disabled")
-	}
-	url := strings.TrimRight(row.BaseURL, "/") + "/api/v1/nodes"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	status, raw, err := s.ProxyRemote(id, http.MethodGet, "/api/v1/nodes", nil)
 	if err != nil {
 		return nil, err
 	}
-	if row.APIToken != "" {
-		req.Header.Set("Authorization", "Bearer "+row.APIToken)
+	if status >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", status, strings.TrimSpace(string(raw)))
 	}
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("remote HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	return json.RawMessage(body), nil
+	return json.RawMessage(raw), nil
 }
 
+func (s *Service) FetchDashboard(id uint) (json.RawMessage, error) {
+	status, raw, err := s.ProxyRemote(id, http.MethodGet, "/api/v1/dashboard", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", status, strings.TrimSpace(string(raw)))
+	}
+	return json.RawMessage(raw), nil
+}
+
+func (s *Service) FetchUsers(id uint) (json.RawMessage, error) {
+	status, raw, err := s.ProxyRemote(id, http.MethodGet, "/api/v1/users", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", status, strings.TrimSpace(string(raw)))
+	}
+	return json.RawMessage(raw), nil
+}
+
+func (s *Service) RestartCore(id uint) (json.RawMessage, error) {
+	status, raw, err := s.ProxyRemote(id, http.MethodPost, "/api/v1/mihomo/restart", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", status, strings.TrimSpace(string(raw)))
+	}
+	if len(raw) == 0 {
+		return json.RawMessage(`{"status":"ok"}`), nil
+	}
+	return json.RawMessage(raw), nil
+}
+
+func (s *Service) StartCore(id uint) (json.RawMessage, error) {
+	status, raw, err := s.ProxyRemote(id, http.MethodPost, "/api/v1/mihomo/start", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", status, strings.TrimSpace(string(raw)))
+	}
+	if len(raw) == 0 {
+		return json.RawMessage(`{"status":"ok"}`), nil
+	}
+	return json.RawMessage(raw), nil
+}
+
+func (s *Service) StopCore(id uint) (json.RawMessage, error) {
+	status, raw, err := s.ProxyRemote(id, http.MethodPost, "/api/v1/mihomo/stop", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 300 {
+		return nil, fmt.Errorf("remote HTTP %d: %s", status, strings.TrimSpace(string(raw)))
+	}
+	if len(raw) == 0 {
+		return json.RawMessage(`{"status":"ok"}`), nil
+	}
+	return json.RawMessage(raw), nil
+}
+
+// ProxyRemote forwards a request to a registered remote panel.
+// Path is restricted to an allowlist under /api/v1/ to avoid open-proxy abuse.
 func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, []byte, error) {
 	var row models.RemoteServer
 	if err := s.db.First(&row, id).Error; err != nil {
@@ -192,19 +271,16 @@ func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, [
 	if !row.Enabled {
 		return 0, nil, fmt.Errorf("remote server is disabled")
 	}
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return 0, nil, fmt.Errorf("path is required")
+	path, err := sanitizeProxyPath(path)
+	if err != nil {
+		return 0, nil, err
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	url := strings.TrimRight(row.BaseURL, "/") + path
+	full := strings.TrimRight(row.BaseURL, "/") + path
 	var rdr io.Reader
 	if len(body) > 0 {
-		rdr = strings.NewReader(string(body))
+		rdr = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, url, rdr)
+	req, err := http.NewRequest(method, full, rdr)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -224,4 +300,97 @@ func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, [
 		return resp.StatusCode, nil, err
 	}
 	return resp.StatusCode, raw, nil
+}
+
+func sanitize(row *models.RemoteServer) *models.RemoteServer {
+	if row == nil {
+		return nil
+	}
+	row.APITokenSet = row.APIToken != ""
+	row.APIToken = ""
+	return row
+}
+
+func truncateErr(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 500 {
+		return s[:500]
+	}
+	return s
+}
+
+func normalizeBaseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("base_url is required")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid base_url: %w", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("base_url must use http or https")
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("base_url host is required")
+	}
+	// Reject obvious local file / unix sockets.
+	host := u.Hostname()
+	if host == "" {
+		return "", fmt.Errorf("base_url host is required")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsUnspecified() {
+			// Allow loopback for lab setups; operators manage their own network trust.
+		}
+	}
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawQuery = ""
+	u.Fragment = ""
+	return strings.TrimRight(u.String(), "/"), nil
+}
+
+// allowed path prefixes for remote control proxy.
+var allowedPrefixes = []string{
+	"/api/v1/health",
+	"/api/v1/dashboard",
+	"/api/v1/nodes",
+	"/api/v1/listeners",
+	"/api/v1/users",
+	"/api/v1/mihomo",
+	"/api/v1/system",
+	"/api/v1/traffic",
+}
+
+func sanitizeProxyPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if strings.Contains(path, "..") || strings.Contains(path, "://") || strings.ContainsAny(path, " \t\r\n") {
+		return "", fmt.Errorf("invalid path")
+	}
+	// Strip query for allowlist check; re-attach if needed by caller via path.
+	pathOnly := path
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		pathOnly = path[:i]
+	}
+	ok := false
+	for _, p := range allowedPrefixes {
+		if pathOnly == p || strings.HasPrefix(pathOnly, p+"/") {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return "", fmt.Errorf("path not allowed for remote proxy")
+	}
+	return path, nil
 }

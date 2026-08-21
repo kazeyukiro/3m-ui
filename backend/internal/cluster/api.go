@@ -20,13 +20,20 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.List)
 	rg.POST("", h.Create)
+	rg.POST("/health-all", h.HealthAll)
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
 	rg.POST("/:id/health", h.Health)
+	rg.GET("/:id/dashboard", h.RemoteDashboard)
+	rg.GET("/:id/users", h.RemoteUsers)
 	rg.GET("/:id/nodes", h.RemoteNodes)
 	rg.POST("/:id/nodes", h.RemoteCreateNode)
 	rg.PUT("/:id/nodes/:nodeId", h.RemoteUpdateNode)
 	rg.DELETE("/:id/nodes/:nodeId", h.RemoteDeleteNode)
+	rg.POST("/:id/mihomo/start", h.RemoteStart)
+	rg.POST("/:id/mihomo/stop", h.RemoteStop)
+	rg.POST("/:id/mihomo/restart", h.RemoteRestart)
+	rg.POST("/:id/proxy", h.Proxy)
 }
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -112,6 +119,15 @@ func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, row)
 }
 
+func (h *Handler) HealthAll(c *gin.Context) {
+	rows, err := h.svc.HealthCheckAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, rows)
+}
+
 func (h *Handler) RemoteNodes(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -119,11 +135,33 @@ func (h *Handler) RemoteNodes(c *gin.Context) {
 	}
 	raw, err := h.svc.FetchRemoteNodes(id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-			return
-		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		writeRemoteErr(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteDashboard(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	raw, err := h.svc.FetchDashboard(id)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteUsers(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	raw, err := h.svc.FetchUsers(id)
+	if err != nil {
+		writeRemoteErr(c, err)
 		return
 	}
 	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
@@ -141,11 +179,7 @@ func (h *Handler) RemoteCreateNode(c *gin.Context) {
 	}
 	status, raw, err := h.svc.ProxyRemote(id, http.MethodPost, "/api/v1/nodes", body)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-			return
-		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		writeRemoteErr(c, err)
 		return
 	}
 	c.Data(status, "application/json; charset=utf-8", raw)
@@ -164,11 +198,7 @@ func (h *Handler) RemoteUpdateNode(c *gin.Context) {
 	}
 	status, raw, err := h.svc.ProxyRemote(id, http.MethodPut, "/api/v1/nodes/"+nodeID, body)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-			return
-		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		writeRemoteErr(c, err)
 		return
 	}
 	c.Data(status, "application/json; charset=utf-8", raw)
@@ -182,11 +212,7 @@ func (h *Handler) RemoteDeleteNode(c *gin.Context) {
 	nodeID := c.Param("nodeId")
 	status, raw, err := h.svc.ProxyRemote(id, http.MethodDelete, "/api/v1/nodes/"+nodeID, nil)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-			return
-		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		writeRemoteErr(c, err)
 		return
 	}
 	if len(raw) == 0 {
@@ -195,3 +221,82 @@ func (h *Handler) RemoteDeleteNode(c *gin.Context) {
 	}
 	c.Data(status, "application/json; charset=utf-8", raw)
 }
+
+func (h *Handler) RemoteStart(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	raw, err := h.svc.StartCore(id)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteStop(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	raw, err := h.svc.StopCore(id)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+}
+
+func (h *Handler) RemoteRestart(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	raw, err := h.svc.RestartCore(id)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+}
+
+// Proxy is a restricted generic forwarder (allowlisted paths only).
+func (h *Handler) Proxy(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		Method string `json:"method"`
+		Path   string `json:"path"`
+		Body   string `json:"body"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "method and path required"})
+		return
+	}
+	method := body.Method
+	if method == "" {
+		method = http.MethodGet
+	}
+	var payload []byte
+	if body.Body != "" {
+		payload = []byte(body.Body)
+	}
+	status, raw, err := h.svc.ProxyRemote(id, method, body.Path, payload)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.Data(status, "application/json; charset=utf-8", raw)
+}
+
+func writeRemoteErr(c *gin.Context, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+}
+

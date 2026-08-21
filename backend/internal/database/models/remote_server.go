@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// RemoteServer registers an external 3m-ui / Mihomo host managed from this panel.
+// RemoteServer registers an external 3m-ui panel managed from this host.
 type RemoteServer struct {
 	BaseModel
 
