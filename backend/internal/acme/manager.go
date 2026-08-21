@@ -25,8 +25,8 @@ type Settings struct {
 	Domain     string `json:"domain"`
 	Email      string `json:"email"`
 	CacheDir   string `json:"cache_dir"`
-	CertFile   string `json:"cert_file"` // optional manual cert (PEM)
-	KeyFile    string `json:"key_file"`  // optional manual key (PEM)
+	CertFile   string `json:"cert_file"`   // optional manual cert (PEM)
+	KeyFile    string `json:"key_file"`    // optional manual key (PEM)
 	ListenHTTP string `json:"listen_http"` // e.g. ":80" for ACME HTTP-01 + redirect
 	ListenTLS  string `json:"listen_tls"`  // e.g. ":443"
 }

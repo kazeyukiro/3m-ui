@@ -21,8 +21,8 @@ type Settings struct {
 	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
 	NotifyOnTraffic   bool     `json:"notify_on_traffic"` // warn when usage >= TrafficWarnPct
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
-	TrafficWarnPct    int      `json:"traffic_warn_pct"`   // default 80
-	ExpiryWarnHours   int      `json:"expiry_warn_hours"`  // default 72
+	TrafficWarnPct    int      `json:"traffic_warn_pct"`  // default 80
+	ExpiryWarnHours   int      `json:"expiry_warn_hours"` // default 72
 	NotifyOnCPU       bool     `json:"notify_on_cpu"`
 	CPUWarnPct        int      `json:"cpu_warn_pct"` // default 0 = disabled; e.g. 80
 }
@@ -53,14 +53,14 @@ func normalizeChatIDList(ids []string) []string {
 
 func DefaultSettings() Settings {
 	return Settings{
-		NotifyOnBlock:    true,
-		NotifyOnUnblock:  true,
-		NotifyOnExpiry:   true,
-		NotifyOnTraffic:  true,
-		TrafficWarnPct:   80,
-		ExpiryWarnHours:  72,
-		NotifyOnCPU:      false,
-		CPUWarnPct:       0,
+		NotifyOnBlock:   true,
+		NotifyOnUnblock: true,
+		NotifyOnExpiry:  true,
+		NotifyOnTraffic: true,
+		TrafficWarnPct:  80,
+		ExpiryWarnHours: 72,
+		NotifyOnCPU:     false,
+		CPUWarnPct:      0,
 	}
 }
 

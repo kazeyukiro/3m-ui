@@ -22,7 +22,7 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port      int    `yaml:"port"`
+	Port int `yaml:"port"`
 	// Listen is the bind address for the panel HTTP server.
 	// Empty / "0.0.0.0" / "::" → dual-stack friendly ":port" (Linux).
 	// Use a concrete IPv4 or IPv6 to force a family (e.g. "127.0.0.1", "::1").

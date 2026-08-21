@@ -215,7 +215,6 @@ func markSetting(db *gorm.DB, key, value string) error {
 	return db.Save(&row).Error
 }
 
-
 func (n *Notifier) emitCPUWarning(client *Client, settings Settings) {
 	if client == nil || !settings.NotifyOnCPU || settings.CPUWarnPct <= 0 {
 		return

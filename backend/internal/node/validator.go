@@ -1,9 +1,9 @@
 package node
 
 import (
-	"net"
 	"encoding/json"
 	"fmt"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"

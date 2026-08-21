@@ -299,4 +299,3 @@ func writeRemoteErr(c *gin.Context, err error) {
 	}
 	c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 }
-

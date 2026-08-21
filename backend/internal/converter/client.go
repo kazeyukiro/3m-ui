@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"golang.org/x/crypto/curve25519"
 	"gopkg.in/yaml.v3"

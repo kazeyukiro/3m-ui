@@ -60,8 +60,8 @@ func (h *Handler) PutSettings(c *gin.Context) {
 		NotifyOnBlock: body.NotifyOnBlock, NotifyOnUnblock: body.NotifyOnUnblock,
 		NotifyOnExpiry: body.NotifyOnExpiry, NotifyOnTraffic: body.NotifyOnTraffic,
 		NotifyDailyDigest: body.NotifyDailyDigest,
-		NotifyOnCPU: body.NotifyOnCPU,
-		TrafficWarnPct: body.TrafficWarnPct, ExpiryWarnHours: body.ExpiryWarnHours,
+		NotifyOnCPU:       body.NotifyOnCPU,
+		TrafficWarnPct:    body.TrafficWarnPct, ExpiryWarnHours: body.ExpiryWarnHours,
 		CPUWarnPct: body.CPUWarnPct,
 	}
 	if body.KeepToken || s.BotToken == "" || strings.Contains(s.BotToken, "…") || strings.Contains(s.BotToken, "...") {

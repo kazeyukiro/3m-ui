@@ -64,8 +64,8 @@ func (h *Handler) Put(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"message": "SSL settings saved. Restart the panel process for ListenTLS / autocert changes to take effect.",
+		"status":   "ok",
+		"message":  "SSL settings saved. Restart the panel process for ListenTLS / autocert changes to take effect.",
 		"settings": in,
 	})
 }

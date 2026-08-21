@@ -12,9 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
-	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
-	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/node"
+	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
@@ -129,7 +129,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				c.Header("Content-Disposition", "attachment; filename=3m-ui.yaml")
 			}
 			c.Header("Cache-Control", "no-store")
-			
+
 			c.Data(http.StatusOK, "text/yaml; charset=utf-8", raw)
 			return
 		}
@@ -293,14 +293,14 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 			"expire_time":    expire,
 			"ip_limit":       pu.IPLimit,
 			"links": gin.H{
-				"mihomo":  base,
-				"clash":   base + "?target=clash",
-				"v2ray":   base + "?target=v2ray",
-				"singbox": base + "?target=singbox",
-				"json":    scheme + "://" + c.Request.Host + "/api/v1/client/json/" + url.PathEscape(tok),
+				"mihomo":     base,
+				"clash":      base + "?target=clash",
+				"v2ray":      base + "?target=v2ray",
+				"singbox":    base + "?target=singbox",
+				"json":       scheme + "://" + c.Request.Host + "/api/v1/client/json/" + url.PathEscape(tok),
 				"clash_path": scheme + "://" + c.Request.Host + "/api/v1/client/clash/" + url.PathEscape(tok),
-				"html":    base + "?html=1",
-				"info":    base + "?format=info",
+				"html":       base + "?html=1",
+				"info":       base + "?format=info",
 			},
 		})
 		return

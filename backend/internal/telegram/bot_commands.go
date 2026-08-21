@@ -198,7 +198,6 @@ func formatBytes(n int64) string {
 	return fmt.Sprintf("%.2f %s", v, units[i])
 }
 
-
 func (b *Bot) cmdRestart() string {
 	if b.mihomo == nil {
 		return "Mihomo 服务未初始化。"
@@ -248,7 +247,6 @@ func (b *Bot) cmdSearch(q string) string {
 	}
 	return bld.String()
 }
-
 
 func (b *Bot) cmdBackup() string {
 	return strings.TrimSpace(`📦 <b>Backup</b>

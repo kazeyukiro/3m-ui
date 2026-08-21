@@ -121,7 +121,6 @@ func (h *Handler) ACME(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"command": ACMECommand(req.Domain, req.Email, req.Webroot)})
 }
 
-
 // UpdateGeoFiles downloads MetaCubeX GeoIP/GeoSite databases next to the Mihomo config .
 func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 	dir := filepath.Dir(h.mihomoCfg)
@@ -135,7 +134,6 @@ func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"dir": dir, "files": result})
 }
-
 
 // WARP returns a Mihomo WireGuard fragment for Cloudflare WARP .
 func (h *Handler) WARP(c *gin.Context) {

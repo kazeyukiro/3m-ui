@@ -16,47 +16,47 @@ import (
 )
 
 const (
-	settingKeyThemeDir   = "sub_theme_dir"
-	settingKeyTitle      = "sub_title"
-	settingKeySupport    = "sub_support_url"
-	settingKeyAnnounce   = "sub_announce"
-	settingKeyWebPage    = "sub_web_page_url"
-	settingKeyUpdates    = "sub_updates"
-	settingKeyEncrypt    = "sub_encrypt"
+	settingKeyThemeDir = "sub_theme_dir"
+	settingKeyTitle    = "sub_title"
+	settingKeySupport  = "sub_support_url"
+	settingKeyAnnounce = "sub_announce"
+	settingKeyWebPage  = "sub_web_page_url"
+	settingKeyUpdates  = "sub_updates"
+	settingKeyEncrypt  = "sub_encrypt"
 )
 
 // ViewModel is the data passed to custom / built-in subscription HTML templates
 // (custom subscription page theme).
 type ViewModel struct {
-	Username    string
-	Remark      string
-	Enabled     bool
-	Online      bool
-	TrafficUsed int64
-	TrafficLimit int64
-	UploadBytes  int64
+	Username      string
+	Remark        string
+	Enabled       bool
+	Online        bool
+	TrafficUsed   int64
+	TrafficLimit  int64
+	UploadBytes   int64
 	DownloadBytes int64
-	ExpireTime  string
-	IPLimit     int
-	SubURL      string
-	SubJSONURL  string
-	SubClashURL string
-	SubV2RayURL string
-	SubTitle    string
+	ExpireTime    string
+	IPLimit       int
+	SubURL        string
+	SubJSONURL    string
+	SubClashURL   string
+	SubV2RayURL   string
+	SubTitle      string
 	SubSupportURL string
-	IsOnline    bool
-	Links       []string
+	IsOnline      bool
+	Links         []string
 }
 
 // Settings holds subscription page branding options stored in PanelSetting.
 type Settings struct {
-	ThemeDir     string `json:"theme_dir"`
-	Title        string `json:"title"`
-	SupportURL   string `json:"support_url"`
-	Announce     string `json:"announce"`
-	WebPageURL   string `json:"web_page_url"`
-	UpdateHours  int    `json:"update_hours"`  // Profile-Update-Interval
-	Encrypt      bool   `json:"encrypt"`       // base64-encode raw URI list
+	ThemeDir    string `json:"theme_dir"`
+	Title       string `json:"title"`
+	SupportURL  string `json:"support_url"`
+	Announce    string `json:"announce"`
+	WebPageURL  string `json:"web_page_url"`
+	UpdateHours int    `json:"update_hours"` // Profile-Update-Interval
+	Encrypt     bool   `json:"encrypt"`      // base64-encode raw URI list
 }
 
 func LoadPageSettings(db *gorm.DB) Settings {
