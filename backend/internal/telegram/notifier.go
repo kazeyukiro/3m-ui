@@ -237,11 +237,13 @@ func (n *Notifier) emitCPUWarning(client *Client, settings Settings) {
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	if errors.Is(n.db.Where("key = ?", key).First(&row).Error, gorm.ErrRecordNotFound) {
+	var existing models.PanelSetting
+	err := n.db.Where("key = ?", key).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		_ = n.db.Create(&models.PanelSetting{Key: key, Value: now}).Error
-	} else {
-		row.Value = now
-		_ = n.db.Save(&row).Error
+	} else if err == nil {
+		existing.Value = now
+		_ = n.db.Save(&existing).Error
 	}
 }
 

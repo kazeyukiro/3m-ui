@@ -192,8 +192,14 @@ func writeSubHeaders(c *gin.Context, db *gorm.DB, pu *models.ProxyUser) {
 		c.Header("Profile-Web-Page-Url", wp)
 	} else {
 		// Fall back to HTML info page for this token.
-		scheme := requestScheme(c)
-		c.Header("Profile-Web-Page-Url", scheme+"://"+c.Request.Host+"/api/v1/client/sub/"+url.PathEscape(pu.SubToken)+"?html=1")
+		tok := strings.TrimSpace(pu.SubToken)
+		if tok == "" {
+			tok = strings.TrimSpace(c.Param("token"))
+		}
+		if tok != "" {
+			scheme := requestScheme(c)
+			c.Header("Profile-Web-Page-Url", scheme+"://"+c.Request.Host+"/api/v1/client/sub/"+url.PathEscape(tok)+"?html=1")
+		}
 	}
 	c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(title)+`.yaml"`)
 }
