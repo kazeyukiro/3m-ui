@@ -4,7 +4,7 @@
 
 3m-ui is a web management panel for Mihomo Core.
 
-The goal is to provide a simple and powerful VPS management interface similar to 3x-ui, but based on Mihomo Core instead of Xray.
+The goal is to provide a simple and powerful VPS management interface based on Mihomo Core.
 
 Main functions:
 
