@@ -16,9 +16,13 @@ import (
 )
 
 const (
-	settingKeyThemeDir = "sub_theme_dir"
-	settingKeyTitle    = "sub_title"
-	settingKeySupport  = "sub_support_url"
+	settingKeyThemeDir   = "sub_theme_dir"
+	settingKeyTitle      = "sub_title"
+	settingKeySupport    = "sub_support_url"
+	settingKeyAnnounce   = "sub_announce"
+	settingKeyWebPage    = "sub_web_page_url"
+	settingKeyUpdates    = "sub_updates"
+	settingKeyEncrypt    = "sub_encrypt"
 )
 
 // ViewModel is the data passed to custom / built-in subscription HTML templates
@@ -46,13 +50,17 @@ type ViewModel struct {
 
 // Settings holds subscription page branding options stored in PanelSetting.
 type Settings struct {
-	ThemeDir   string `json:"theme_dir"`
-	Title      string `json:"title"`
-	SupportURL string `json:"support_url"`
+	ThemeDir     string `json:"theme_dir"`
+	Title        string `json:"title"`
+	SupportURL   string `json:"support_url"`
+	Announce     string `json:"announce"`
+	WebPageURL   string `json:"web_page_url"`
+	UpdateHours  int    `json:"update_hours"`  // Profile-Update-Interval
+	Encrypt      bool   `json:"encrypt"`       // base64-encode raw URI list
 }
 
 func LoadPageSettings(db *gorm.DB) Settings {
-	s := Settings{Title: "3m-ui Subscription"}
+	s := Settings{Title: "3m-ui Subscription", UpdateHours: 12, Encrypt: true}
 	if db == nil {
 		return s
 	}
@@ -61,6 +69,17 @@ func LoadPageSettings(db *gorm.DB) Settings {
 		s.Title = t
 	}
 	s.SupportURL = getSetting(db, settingKeySupport)
+	s.Announce = getSetting(db, settingKeyAnnounce)
+	s.WebPageURL = getSetting(db, settingKeyWebPage)
+	if v := getSetting(db, settingKeyUpdates); v != "" {
+		var n int
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
+			s.UpdateHours = n
+		}
+	}
+	if v := getSetting(db, settingKeyEncrypt); v != "" {
+		s.Encrypt = v == "1" || strings.EqualFold(v, "true")
+	}
 	return s
 }
 
@@ -68,10 +87,21 @@ func SavePageSettings(db *gorm.DB, s Settings) error {
 	if db == nil {
 		return fmt.Errorf("database is not configured")
 	}
+	if s.UpdateHours <= 0 {
+		s.UpdateHours = 12
+	}
+	enc := "true"
+	if !s.Encrypt {
+		enc = "false"
+	}
 	for _, kv := range []struct{ k, v string }{
 		{settingKeyThemeDir, strings.TrimSpace(s.ThemeDir)},
 		{settingKeyTitle, strings.TrimSpace(s.Title)},
 		{settingKeySupport, strings.TrimSpace(s.SupportURL)},
+		{settingKeyAnnounce, strings.TrimSpace(s.Announce)},
+		{settingKeyWebPage, strings.TrimSpace(s.WebPageURL)},
+		{settingKeyUpdates, fmt.Sprintf("%d", s.UpdateHours)},
+		{settingKeyEncrypt, enc},
 	} {
 		if err := upsertSetting(db, kv.k, kv.v); err != nil {
 			return err
@@ -121,7 +151,7 @@ func RenderHTML(db *gorm.DB, pu models.ProxyUser, subBase string, links []string
 		ExpireTime:    expire,
 		IPLimit:       pu.IPLimit,
 		SubURL:        base,
-		SubJSONURL:    base + "?target=json",
+		SubJSONURL:    base + "?target=singbox",
 		SubClashURL:   base + "?target=clash",
 		SubV2RayURL:   base + "?target=v2ray",
 		SubTitle:      page.Title,

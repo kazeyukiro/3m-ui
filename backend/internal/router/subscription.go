@@ -81,7 +81,19 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 					return
 				}
-				writeSubHeaders(c, &pu)
+				page := subpage.LoadPageSettings(db)
+				encrypt := page.Encrypt
+				if q := strings.ToLower(c.Query("encrypt")); q == "0" || q == "false" {
+					encrypt = false
+				} else if q == "1" || q == "true" {
+					encrypt = true
+				}
+				if !encrypt {
+					if decoded, decErr := base64.StdEncoding.DecodeString(string(raw)); decErr == nil {
+						raw = decoded
+					}
+				}
+				writeSubHeaders(c, db, &pu)
 				c.Header("Cache-Control", "no-store")
 				c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(pu.Username)+`.txt"`)
 				c.Data(http.StatusOK, "text/plain; charset=utf-8", raw)
@@ -94,7 +106,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 					return
 				}
-				writeSubHeaders(c, &pu)
+				writeSubHeaders(c, db, &pu)
 				c.Header("Cache-Control", "no-store")
 				c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(pu.Username)+`.json"`)
 				c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
@@ -112,12 +124,12 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 
 		if c.Query("raw") == "true" || target == "" || target == "mihomo" || target == "clash" || target == "meta" {
 			if isProxyUser {
-				writeSubHeaders(c, &pu)
+				writeSubHeaders(c, db, &pu)
 			} else {
 				c.Header("Content-Disposition", "attachment; filename=3m-ui.yaml")
 			}
 			c.Header("Cache-Control", "no-store")
-			c.Header("Profile-Update-Interval", "24")
+			
 			c.Data(http.StatusOK, "text/yaml; charset=utf-8", raw)
 			return
 		}
@@ -128,7 +140,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 		if isProxyUser {
-			writeSubHeaders(c, &pu)
+			writeSubHeaders(c, db, &pu)
 		}
 		c.Header("Cache-Control", "no-store")
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", converted)
@@ -138,7 +150,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 // writeSubHeaders emits the standard subscription response headers that
 // compatible clients (v2rayNG, Hiddify, Clash, …) read for traffic / expiry.
 // Profile-Title / support-url / announce mirror common client subscription metadata.
-func writeSubHeaders(c *gin.Context, pu *models.ProxyUser) {
+func writeSubHeaders(c *gin.Context, db *gorm.DB, pu *models.ProxyUser) {
 	if pu == nil {
 		return
 	}
@@ -151,16 +163,38 @@ func writeSubHeaders(c *gin.Context, pu *models.ProxyUser) {
 	}
 	c.Header("Subscription-Userinfo",
 		"upload="+itoa(upload)+"; download="+itoa(download)+"; total="+itoa(total)+"; expire="+itoa(expire))
-	c.Header("Profile-Update-Interval", "12")
-	title := strings.TrimSpace(pu.Remark)
+	page := subpage.LoadPageSettings(db)
+	hours := page.UpdateHours
+	if hours <= 0 {
+		hours = 12
+	}
+	c.Header("Profile-Update-Interval", itoa(int64(hours)))
+	title := strings.TrimSpace(page.Title)
+	if title == "" {
+		title = strings.TrimSpace(pu.Remark)
+	}
 	if title == "" {
 		title = strings.TrimSpace(pu.Username)
 	}
 	if title == "" {
 		title = "3m-ui"
 	}
-	// base64 profile title is widely understood by Clash Meta / Hiddify / v2rayNG.
 	c.Header("Profile-Title", "base64:"+base64.StdEncoding.EncodeToString([]byte(title)))
+	if su := strings.TrimSpace(page.SupportURL); su != "" {
+		c.Header("Support-Url", su)
+		c.Header("support-url", su)
+	}
+	if an := strings.TrimSpace(page.Announce); an != "" {
+		c.Header("Announce", an)
+		c.Header("announce", an)
+	}
+	if wp := strings.TrimSpace(page.WebPageURL); wp != "" {
+		c.Header("Profile-Web-Page-Url", wp)
+	} else {
+		// Fall back to HTML info page for this token.
+		scheme := requestScheme(c)
+		c.Header("Profile-Web-Page-Url", scheme+"://"+c.Request.Host+"/api/v1/client/sub/"+url.PathEscape(pu.SubToken)+"?html=1")
+	}
 	c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(title)+`.yaml"`)
 }
 
@@ -193,6 +227,24 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 	handler := subscriptionHandler(db, cfg)
 	api.GET("/client/sub/:token", handler)
 	api.GET("/client/sub/:token/", handler)
+	// Path-based formats (docs.sanaei.dev style /sub /json /clash).
+	api.GET("/client/json/:token", forcedTargetHandler(db, cfg, "singbox"))
+	api.GET("/client/json/:token/", forcedTargetHandler(db, cfg, "singbox"))
+	api.GET("/client/clash/:token", forcedTargetHandler(db, cfg, "clash"))
+	api.GET("/client/clash/:token/", forcedTargetHandler(db, cfg, "clash"))
+	api.GET("/client/v2ray/:token", forcedTargetHandler(db, cfg, "v2ray"))
+	api.GET("/client/v2ray/:token/", forcedTargetHandler(db, cfg, "v2ray"))
+}
+
+// forcedTargetHandler serves a subscription with a fixed target format.
+func forcedTargetHandler(db *gorm.DB, cfg *config.Config, target string) gin.HandlerFunc {
+	inner := subscriptionHandler(db, cfg)
+	return func(c *gin.Context) {
+		q := c.Request.URL.Query()
+		q.Set("target", target)
+		c.Request.URL.RawQuery = q.Encode()
+		inner(c)
+	}
 }
 
 // RegisterLegacySubscriptionRoutes keeps subscription links generated by
@@ -201,6 +253,10 @@ func RegisterLegacySubscriptionRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Co
 	handler := subscriptionHandler(db, cfg)
 	r.GET("/sub/:token", handler)
 	r.GET("/sub/:token/", handler)
+	r.GET("/json/:token", forcedTargetHandler(db, cfg, "singbox"))
+	r.GET("/json/:token/", forcedTargetHandler(db, cfg, "singbox"))
+	r.GET("/clash/:token", forcedTargetHandler(db, cfg, "clash"))
+	r.GET("/clash/:token/", forcedTargetHandler(db, cfg, "clash"))
 	r.GET("/api/client/sub/:token", handler)
 	r.GET("/api/client/sub/:token/", handler)
 }
@@ -235,6 +291,8 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 				"clash":   base + "?target=clash",
 				"v2ray":   base + "?target=v2ray",
 				"singbox": base + "?target=singbox",
+				"json":    scheme + "://" + c.Request.Host + "/api/v1/client/json/" + url.PathEscape(tok),
+				"clash_path": scheme + "://" + c.Request.Host + "/api/v1/client/clash/" + url.PathEscape(tok),
 				"html":    base + "?html=1",
 				"info":    base + "?format=info",
 			},

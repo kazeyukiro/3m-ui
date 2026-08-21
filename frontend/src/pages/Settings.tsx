@@ -140,6 +140,8 @@ const Settings: React.FC = () => {
               bot_token: values.bot_token,
               chat_ids: String(values.chat_ids || '').split(',').map((x: string) => x.trim()).filter(Boolean),
               notify_on_login: !!values.notify_on_login,
+              notify_on_cpu: !!values.notify_on_cpu,
+              cpu_warn_pct: Number(values.cpu_warn_pct || 0),
               notify_on_block: !!values.notify_on_block,
               notify_on_unblock: !!values.notify_on_unblock,
               notify_on_expiry: !!values.notify_on_expiry,
@@ -156,6 +158,8 @@ const Settings: React.FC = () => {
           <Form.Item name="bot_token" label={t('settings.botToken')}><Input.Password /></Form.Item>
           <Form.Item name="chat_ids" label={t('settings.chatIds')} tooltip={t('settings.chatIdsHint')}><Input placeholder="123456789, -100123..." /></Form.Item>
           <Form.Item name="notify_on_login" label={t('settings.notifyLogin') || 'Notify on panel login'} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="notify_on_cpu" label={t('settings.notifyCPU') || 'Notify on high CPU'} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="cpu_warn_pct" label={t('settings.cpuWarnPct') || 'CPU warn %'} initialValue={0}><Input type="number" min={0} max={100} /></Form.Item>
           <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_unblock" label={t('settings.notifyUnblock')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="notify_on_expiry" label={t('settings.notifyExpiry')} valuePropName="checked"><Switch /></Form.Item>
@@ -216,6 +220,10 @@ const Settings: React.FC = () => {
               theme_dir: values.theme_dir || '',
               title: values.title || '',
               support_url: values.support_url || '',
+              announce: values.announce || '',
+              web_page_url: values.web_page_url || '',
+              update_hours: Number(values.update_hours || 12),
+              encrypt: values.encrypt !== false,
             });
             message.success(t('common.saved'));
           } catch (e: any) { message.error(e.message || t('common.error')); }
@@ -223,6 +231,10 @@ const Settings: React.FC = () => {
           <Form.Item name="theme_dir" label={t('settings.subThemeDir') || 'Theme directory'}><Input placeholder="/var/lib/3m-ui/sub-theme" /></Form.Item>
           <Form.Item name="title" label={t('settings.subTitle') || 'Page title'}><Input placeholder="My VPN Subscription" /></Form.Item>
           <Form.Item name="support_url" label={t('settings.subSupportUrl') || 'Support URL'}><Input placeholder="https://t.me/support" /></Form.Item>
+          <Form.Item name="announce" label={t('settings.subAnnounce') || 'Announce'}><Input placeholder="optional announcement" /></Form.Item>
+          <Form.Item name="web_page_url" label={t('settings.subWebPage') || 'Profile web page URL'}><Input placeholder="https://..." /></Form.Item>
+          <Form.Item name="update_hours" label={t('settings.subUpdates') || 'Update interval (hours)'} initialValue={12}><Input type="number" min={1} /></Form.Item>
+          <Form.Item name="encrypt" label={t('settings.subEncrypt') || 'Base64 encrypt URI list'} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
           <Space>
             <Button type="primary" htmlType="submit">{t('common.save')}</Button>
             <Button onClick={async () => {

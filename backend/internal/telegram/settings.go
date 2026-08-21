@@ -23,6 +23,8 @@ type Settings struct {
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
 	TrafficWarnPct    int      `json:"traffic_warn_pct"`   // default 80
 	ExpiryWarnHours   int      `json:"expiry_warn_hours"`  // default 72
+	NotifyOnCPU       bool     `json:"notify_on_cpu"`
+	CPUWarnPct        int      `json:"cpu_warn_pct"` // default 0 = disabled; e.g. 80
 }
 
 // normalizeChatIDList accepts values like "123", "-100123", "123,456" or multiline.
@@ -57,6 +59,8 @@ func DefaultSettings() Settings {
 		NotifyOnTraffic:  true,
 		TrafficWarnPct:   80,
 		ExpiryWarnHours:  72,
+		NotifyOnCPU:      false,
+		CPUWarnPct:       0,
 	}
 }
 

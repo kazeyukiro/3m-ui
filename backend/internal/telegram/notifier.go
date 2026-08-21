@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -84,6 +85,7 @@ func (n *Notifier) CheckAndNotify() {
 		}
 	}
 	n.emitThresholdWarnings(client, settings, users, now)
+	n.emitCPUWarning(client, settings)
 	if settings.NotifyDailyDigest {
 		today := now.Format("2006-01-02")
 		if !dailyDigestSent(n.db, today) {
@@ -211,4 +213,42 @@ func markSetting(db *gorm.DB, key, value string) error {
 	}
 	row.Value = value
 	return db.Save(&row).Error
+}
+
+
+func (n *Notifier) emitCPUWarning(client *Client, settings Settings) {
+	if client == nil || !settings.NotifyOnCPU || settings.CPUWarnPct <= 0 {
+		return
+	}
+	stats := systemStatsCPU()
+	if stats < float64(settings.CPUWarnPct) {
+		return
+	}
+	key := "telegram_cpu_warn_last"
+	var row models.PanelSetting
+	if err := n.db.Where("key = ?", key).First(&row).Error; err == nil {
+		if ts, err := time.Parse(time.RFC3339, row.Value); err == nil && time.Since(ts) < time.Hour {
+			return
+		}
+	}
+	msg := fmt.Sprintf("🔥 <b>CPU high</b>\nusage: <code>%.1f%%</code> (threshold %d%%)", stats, settings.CPUWarnPct)
+	if err := client.SendText(msg); err != nil {
+		log.Printf("telegram: cpu warning failed: %v", err)
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if errors.Is(n.db.Where("key = ?", key).First(&row).Error, gorm.ErrRecordNotFound) {
+		_ = n.db.Create(&models.PanelSetting{Key: key, Value: now}).Error
+	} else {
+		row.Value = now
+		_ = n.db.Save(&row).Error
+	}
+}
+
+func systemStatsCPU() float64 {
+	percents, err := cpuPercentSample()
+	if err != nil || len(percents) == 0 {
+		return 0
+	}
+	return percents[0]
 }
