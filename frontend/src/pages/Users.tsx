@@ -11,6 +11,7 @@ import {
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { useI18n } from '../i18n';
+import { copyText } from '../utils/clipboard';
 
 const formatBytes = (n?: number) => {
   const bytes = n || 0;
@@ -469,10 +470,11 @@ const Users: React.FC = () => {
                   size="small"
                   icon={<CopyOutlined />}
                   disabled={!shareUrl}
-                  onClick={() => {
+                  onClick={async () => {
                     if (!shareUrl) return;
-                    navigator.clipboard.writeText(shareUrl);
-                    message.success(t('common.copied') || 'Copied');
+                    const ok = await copyText(shareUrl);
+                    if (ok) message.success(t('common.copied') || 'Copied');
+                    else message.error(t('common.copyFailed') || 'Copy failed — select and copy manually');
                   }}
                 />
               }
@@ -489,10 +491,11 @@ const Users: React.FC = () => {
                     type="text"
                     size="small"
                     icon={<CopyOutlined />}
-                    onClick={() => {
+                    onClick={async () => {
                       const u = `${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=v2ray`;
-                      navigator.clipboard.writeText(u);
-                      message.success(t('common.copied') || 'Copied');
+                      const ok = await copyText(u);
+                      if (ok) message.success(t('common.copied') || 'Copied');
+                      else message.error(t('common.copyFailed') || 'Copy failed — select and copy manually');
                     }}
                   />
                 }
@@ -510,10 +513,11 @@ const Users: React.FC = () => {
                     type="text"
                     size="small"
                     icon={<CopyOutlined />}
-                    onClick={() => {
+                    onClick={async () => {
                       const u = `${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=singbox`;
-                      navigator.clipboard.writeText(u);
-                      message.success(t('common.copied') || 'Copied');
+                      const ok = await copyText(u);
+                      if (ok) message.success(t('common.copied') || 'Copied');
+                      else message.error(t('common.copyFailed') || 'Copy failed — select and copy manually');
                     }}
                   />
                 }

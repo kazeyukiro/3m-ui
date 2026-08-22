@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Button, Space, Typography, Tag, message, Upload, Form, Input, Switch, Select, InputNumber } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
+import { copyText } from '../utils/clipboard';
 import { useThemeStore } from '../stores/themeStore';
 import { LockOutlined, GlobalOutlined, BgColorsOutlined, InfoCircleOutlined, CloudDownloadOutlined, CloudUploadOutlined, ApiOutlined } from '@ant-design/icons';
 import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
@@ -268,7 +269,7 @@ const Settings: React.FC = () => {
           <div style={{ marginTop: 12 }}>
             <Text type="secondary">{t('settings.acmeHint')}</Text>
             <Input.TextArea style={{ marginTop: 8 }} rows={3} value={acmeCmd} readOnly />
-            <Button style={{ marginTop: 8 }} onClick={() => { navigator.clipboard.writeText(acmeCmd); message.success(t('common.copied')); }}>{t('common.copy')}</Button>
+            <Button style={{ marginTop: 8 }} onClick={async () => { const ok = await copyText(acmeCmd); if (ok) message.success(t('common.copied')); else message.error(t('common.copyFailed') || 'Copy failed'); }}>{t('common.copy')}</Button>
           </div>
         )}
       </Card>

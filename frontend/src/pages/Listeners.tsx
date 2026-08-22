@@ -10,6 +10,7 @@ import {
   ListenerTemplate, ListenerVersion,
 } from '../api/listeners';
 import { useI18n } from '../i18n';
+import { copyText } from '../utils/clipboard';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
@@ -156,7 +157,7 @@ const columns = [
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space style={{ width: '100%' }}>
                 <Input value={uri} readOnly />
-                <Button icon={<CopyOutlined />} onClick={() => { navigator.clipboard.writeText(uri); message.success(t('common.copy')); }} />
+                <Button icon={<CopyOutlined />} onClick={async () => { const ok = await copyText(uri); if (ok) message.success(t('common.copied') || t('common.copy')); else message.error(t('common.copyFailed') || 'Copy failed'); }} />
               </Space>
               <div style={{ textAlign: 'center' }}>
                 <img alt="qr" width={160} height={160} src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(uri)}`} />
