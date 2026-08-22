@@ -712,7 +712,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
               <Radio.Button value="raw">TCP</Radio.Button>
               <Radio.Button value="ws">WebSocket</Radio.Button>
               <Radio.Button value="grpc">gRPC</Radio.Button>
-              {protocol === 'vless' && <Radio.Button value="xhttp">XHTTP</Radio.Button>}
+              <Radio.Button value="xhttp">XHTTP</Radio.Button>
             </Radio.Group>
           </Form.Item>
         </>
@@ -800,19 +800,6 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
                   <Form.Item name="grpc-service-name" label={t('listeners.grpcServiceName')} tooltip={t('listeners.grpcHint')} rules={[{ required: true }]}>
                     <Input placeholder="GunService" />
                   </Form.Item>
-                )}
-                {layer === 'xhttp' && protocol === 'vless' && (
-                  <>
-                    <Form.Item name="xhttp_path" label="XHTTP Path" rules={[{ required: true }]}>
-                      <Input placeholder="/" />
-                    </Form.Item>
-                    <Form.Item name="xhttp_host" label="XHTTP Host">
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="xhttp_mode" label="XHTTP Mode">
-                      <Select allowClear options={['auto', 'stream-one', 'stream-up', 'packet-up'].map((v) => ({ value: v, label: v }))} />
-                    </Form.Item>
-                  </>
                 )}
               </>
             );
@@ -1008,82 +995,72 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
         </>
       )}
 
-      {/* ---- TLS / Reality: only show fields for the selected security_layer ---- */}
-      {(TLS_PROTOCOLS.has(protocol) || REALITY_PROTOCOLS.has(protocol)) && (
-        <Form.Item noStyle shouldUpdate={(a, b) => a.security_layer !== b.security_layer}>
-          {({ getFieldValue }) => {
-            const sec = getFieldValue('security_layer') || 'none';
-            if (sec === 'tls' && TLS_PROTOCOLS.has(protocol)) {
-              return (
-                <>
-                  <Divider titlePlacement="start" plain>{t('listeners.sectionTLS')}</Divider>
-                  <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                    {t('listeners.tlsPairHint')}
-                  </Text>
-                  <Form.Item name="certificate" label={t('listeners.certificate')}>
-                    <Input.TextArea rows={2} placeholder="./server.crt" />
-                  </Form.Item>
-                  <Form.Item name="private-key" label={t('listeners.privateKey')}>
-                    <Input.TextArea rows={2} placeholder="./server.key" />
-                  </Form.Item>
-                  <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')}>
-                    <Select
-                      allowClear
-                      options={['request', 'require-any', 'verify-if-given', 'require-and-verify'].map((v) => ({
-                        value: v,
-                        label: v,
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')}>
-                    <Input.TextArea rows={2} />
-                  </Form.Item>
-                  <Form.Item name="ech-key" label={t('listeners.echKey')}>
-                    <Input.TextArea rows={2} />
-                  </Form.Item>
-                  {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
-                    <Form.Item
-                      name="allow-insecure"
-                      label={t('listeners.allowInsecure')}
-                      valuePropName="checked"
-                      tooltip={t('listeners.allowInsecureHint')}
-                    >
-                      <Switch />
-                    </Form.Item>
-                  )}
-                </>
-              );
-            }
-            if (sec === 'reality' && REALITY_PROTOCOLS.has(protocol)) {
-              return (
-                <>
-                  <Divider titlePlacement="start" plain>{t('listeners.sectionReality')}</Divider>
-                  <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                    {t('listeners.realityExclusiveHint')}
-                  </Text>
-                  <Form.Item name="reality_dest" label={t('listeners.realityDest')} rules={[{ required: true }]}>
-                    <Input placeholder="www.example.com:443" />
-                  </Form.Item>
-                  <Form.Item
-                    name="reality_private_key"
-                    label={t('listeners.realityPrivateKey')}
-                    rules={[{ required: true }]}
-                    tooltip={t('listeners.realityKeyHint')}
-                  >
-                    <Input.Password />
-                  </Form.Item>
-                  <Form.Item name="reality_short_id" label={t('listeners.realityShortId')}>
-                    <Select mode="tags" placeholder="0123456789abcdef" tokenSeparators={[',']} />
-                  </Form.Item>
-                  <Form.Item name="reality_server_names" label={t('listeners.realityServerNames')}>
-                    <Select mode="tags" placeholder="www.example.com" tokenSeparators={[',']} />
-                  </Form.Item>
-                </>
-              );
-            }
-            return null;
-          }}
-        </Form.Item>
+      {/* ---- TLS certificates ---- */}
+      {TLS_PROTOCOLS.has(protocol) && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionTLS')}</Divider>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            {t('listeners.tlsPairHint')}
+          </Text>
+          <Form.Item name="certificate" label={t('listeners.certificate')}>
+            <Input.TextArea rows={2} placeholder="./server.crt" />
+          </Form.Item>
+          <Form.Item name="private-key" label={t('listeners.privateKey')}>
+            <Input.TextArea rows={2} placeholder="./server.key" />
+          </Form.Item>
+          <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')}>
+            <Select
+              allowClear
+              options={['request', 'require-any', 'verify-if-given', 'require-and-verify'].map((v) => ({
+                value: v,
+                label: v,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="ech-key" label={t('listeners.echKey')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
+            <Form.Item
+              name="allow-insecure"
+              label={t('listeners.allowInsecure')}
+              valuePropName="checked"
+              tooltip={t('listeners.allowInsecureHint')}
+            >
+              <Switch />
+            </Form.Item>
+          )}
+        </>
+      )}
+
+      {/* ---- Reality ---- */}
+      {REALITY_PROTOCOLS.has(protocol) && (
+        <EnableSection
+          name="reality_enabled"
+          label={t('listeners.sectionReality')}
+          hint={t('listeners.realityExclusiveHint')}
+        >
+          <Form.Item name="reality_dest" label={t('listeners.realityDest')} rules={[{ required: true }]}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item
+            name="reality_private_key"
+            label={t('listeners.realityPrivateKey')}
+            rules={[{ required: true }]}
+            tooltip={t('listeners.realityKeyHint')}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="reality_short_id" label={t('listeners.realityShortId')}>
+            <Select mode="tags" placeholder="0123456789abcdef" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="reality_server_names" label={t('listeners.realityServerNames')}>
+            <Select mode="tags" placeholder="www.example.com" tokenSeparators={[',']} />
+          </Form.Item>
+        </EnableSection>
       )}
 
       {/* ---- simple-obfs (SS) ---- */}
