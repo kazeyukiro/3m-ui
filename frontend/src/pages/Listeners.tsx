@@ -172,11 +172,7 @@ const columns = [
         ))}
       </Space>
     </Modal>
-  </div>;
-};
-
-
-      <Modal
+<Modal
         open={quickOpen}
         title={t('listeners.quickSetup') || 'Quick setup'}
         onCancel={() => { setQuickOpen(false); setQuickHints(null); }}
@@ -247,10 +243,12 @@ const columns = [
         {quickHints && (
           <Card size="small" title={t('listeners.quickHints') || 'Generated'} style={{ marginTop: 12 }}>
             {Object.entries(quickHints).map(([k, v]) => (
-              <div key={k} style={{ fontSize: 12, marginBottom: 4 }}><b>{k}</b>: <code>{v}</code></div>
+              <div key={k} style={{ fontSize: 12, marginBottom: 4 }}><b>{k}</b>: <code>{String(v)}</code></div>
             ))}
           </Card>
         )}
       </Modal>
+  </div>;
+};
 
 export default Listeners;
