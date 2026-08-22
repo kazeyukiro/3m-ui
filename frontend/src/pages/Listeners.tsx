@@ -134,7 +134,7 @@ const columns = [
   return <div>
     <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button onClick={() => { setQuickHints(null); quickForm.resetFields(); quickForm.setFieldsValue({ preset: 'vless-reality', bind_address: '0.0.0.0', enabled: true, sni: 'www.microsoft.com' }); setQuickOpen(true); }}>{t('listeners.quickSetup') || 'Quick setup'}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}><Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" /></Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
     <Modal open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 720} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
-      <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
+      <Form form={form} layout="vertical" onFinish={onSubmit} preserve={false}>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
         <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
         <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" /></Form.Item>
@@ -144,10 +144,18 @@ const columns = [
         <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
         <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>
         <Form.Item name="public_port" label={t('settings.publicPort')}><Input placeholder="443" /></Form.Item>
-        <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
-        <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome"><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
-        <Form.Item name="access_alpn" label={t('listeners.alpn')}><Input placeholder="h2,http/1.1" /></Form.Item>
-        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} />}
+        {protocol && ['vmess','vless','trojan','hysteria2','tuic','anytls','trusttunnel'].includes(protocol) && (
+          <>
+            <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
+            <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome"><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
+            <Form.Item name="access_alpn" label={t('listeners.alpn')}><Input placeholder="h2,http/1.1" /></Form.Item>
+          </>
+        )}
+        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? (
+          <CapabilityFormFields key={protocol || 'none'} protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} />
+        ) : (
+          <ListenerConfigFields key={protocol || 'none'} protocol={protocol} />
+        )}
       </Form>
     </Modal>
     <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
