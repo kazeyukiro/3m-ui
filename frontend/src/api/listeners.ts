@@ -31,3 +31,6 @@ export const batchSetListenersEnabled = (ids: number[], enabled: boolean) => cli
 export const listListenerVersions = (id: number) => client.get<ListenerVersion[]>(`/nodes/${id}/versions`).then(r => r.data);
 export const diffListenerVersion = (id: number, version: number) => client.get<string>(`/nodes/${id}/versions/${version}/diff`, { responseType: 'text' }).then(r => r.data);
 export const rollbackListenerVersion = (id: number, version: number) => client.post(`/nodes/${id}/versions/${version}/rollback`).then(r => r.data);
+
+export const quickSetupListener = (payload: Record<string, unknown>) =>
+  client.post<{ listener: Listener; hints: Record<string, string> }>('/nodes/quick-setup', payload).then((r) => r.data);
