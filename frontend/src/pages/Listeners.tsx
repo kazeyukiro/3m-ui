@@ -287,5 +287,7 @@ const columns = [
         )}
       </Modal>
 
+  </div>;
+};
 
 export default Listeners;
