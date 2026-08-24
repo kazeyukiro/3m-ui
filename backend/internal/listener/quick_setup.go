@@ -96,6 +96,7 @@ func (s *Service) QuickSetup(in QuickSetupInput) (*QuickSetupResult, error) {
 		if sid == "" {
 			sid = randomHex(8)
 		}
+		// Official mihomo RealityConfig: short-id is []string; public-key is client-only.
 		cfg = map[string]interface{}{
 			"users": []map[string]interface{}{
 				{"username": "default", "uuid": uid, "flow": flow},
@@ -103,8 +104,7 @@ func (s *Service) QuickSetup(in QuickSetupInput) (*QuickSetupResult, error) {
 			"reality-config": map[string]interface{}{
 				"dest":         sni + ":443",
 				"private-key":  priv,
-				"public-key":   pub,
-				"short-id":     sid,
+				"short-id":     []string{sid},
 				"server-names": []string{sni},
 			},
 		}
@@ -123,7 +123,7 @@ func (s *Service) QuickSetup(in QuickSetupInput) (*QuickSetupResult, error) {
 		}
 		pass := strings.TrimSpace(in.Password)
 		if pass == "" {
-			pass = randomPassword(16)
+			pass = ssPasswordForCipher(method)
 		}
 		cfg = map[string]interface{}{
 			"cipher":   method,
@@ -175,8 +175,7 @@ func (s *Service) QuickSetup(in QuickSetupInput) (*QuickSetupResult, error) {
 			"reality-config": map[string]interface{}{
 				"dest":         sni + ":443",
 				"private-key":  priv,
-				"public-key":   pub,
-				"short-id":     sid,
+				"short-id":     []string{sid},
 				"server-names": []string{sni},
 			},
 		}
@@ -312,4 +311,23 @@ func randomPassword(n int) string {
 		out[i] = alphabet[int(b[i])%len(alphabet)]
 	}
 	return string(out)
+}
+
+// ssPasswordForCipher generates a password matching MetaCubeX SS docs:
+// 2022-blake3-aes-128-gcm → 16 random bytes base64;
+// 2022-blake3-aes-256-gcm / 2022-blake3-chacha20-poly1305 → 32 random bytes base64;
+// other ciphers → arbitrary string.
+func ssPasswordForCipher(method string) string {
+	n := 0
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "2022-blake3-aes-128-gcm":
+		n = 16
+	case "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305":
+		n = 32
+	default:
+		return randomPassword(16)
+	}
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return base64.StdEncoding.EncodeToString(b)
 }
