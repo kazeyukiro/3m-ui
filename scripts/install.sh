@@ -19,11 +19,22 @@ INSTALL_MIHOMO=1
 STATIC="${THREE_M_UI_STATIC:-1}"
 REQUESTED_VERSION=""
 RELEASE_TAG=""
+TMP_FILES=""
 
 say(){ printf '%s\n' "$*"; }
 err(){ say "Error: $*" >&2; exit 1; }
 command_exists(){ command -v "$1" >/dev/null 2>&1; }
 need_root(){ [ "$(id -u)" -eq 0 ] || err "Please run this script as root."; }
+
+cleanup_tmp(){
+  # shellcheck disable=SC2086
+  [ -n "$TMP_FILES" ] && rm -f $TMP_FILES 2>/dev/null || true
+}
+trap cleanup_tmp EXIT INT TERM
+
+track_tmp(){
+  TMP_FILES="$TMP_FILES $1"
+}
 
 usage(){ cat <<EOF
 3m-ui installer
@@ -81,21 +92,22 @@ init_system(){ if [ -d /run/systemd/system ] && command_exists systemctl; then e
 
 install_deps(){
   missing=""
-  for x in curl ca-certificates gzip tar sed install; do command_exists "$x" || missing="$missing $x"; done
+  for x in curl ca-certificates gzip tar sed; do command_exists "$x" || missing="$missing $x"; done
   [ -z "$missing" ] && return
   case "$(os_id)" in
-    alpine) apk add --no-cache curl ca-certificates gzip tar sed;;
-    debian|ubuntu|linuxmint|raspbian|pop|elementary|zorin|kali|parrot) apt-get update && apt-get install -y curl ca-certificates gzip tar sed;;
-    fedora|rhel|centos|rocky|almalinux|oracle|amzn|ol) if command_exists dnf; then dnf install -y curl ca-certificates gzip tar sed; else yum install -y curl ca-certificates gzip tar sed; fi;;
-    arch|manjaro|endeavouros|garuda|artix) pacman -Sy --noconfirm curl ca-certificates gzip tar sed;;
-    opensuse*|sles) zypper --non-interactive install curl ca-certificates gzip tar sed;;
-    void) xbps-install -Sy curl ca-certificates gzip tar sed;;
-    gentoo) emerge --ask=n net-misc/curl app-arch/gzip app-arch/tar sys-apps/sed || err "emerge failed; install curl gzip tar sed manually";;
+    alpine) apk add --no-cache curl ca-certificates gzip tar sed coreutils;;
+    debian|ubuntu|linuxmint|raspbian|pop|elementary|zorin|kali|parrot) apt-get update && apt-get install -y curl ca-certificates gzip tar sed coreutils;;
+    fedora|rhel|centos|rocky|almalinux|oracle|amzn|ol) if command_exists dnf; then dnf install -y curl ca-certificates gzip tar sed coreutils; else yum install -y curl ca-certificates gzip tar sed coreutils; fi;;
+    arch|manjaro|endeavouros|garuda|artix) pacman -Sy --noconfirm curl ca-certificates gzip tar sed coreutils;;
+    opensuse*|sles) zypper --non-interactive install curl ca-certificates gzip tar sed coreutils;;
+    void) xbps-install -Sy curl ca-certificates gzip tar sed coreutils;;
+    gentoo) emerge --ask=n net-misc/curl app-arch/gzip app-arch/tar sys-apps/sed sys-apps/coreutils || err "emerge failed; install curl gzip tar sed coreutils manually";;
     *) err "Cannot install dependencies automatically on $(os_id):$missing. Install curl ca-certificates gzip tar sed, then re-run.";;
   esac
 }
 
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
+
 latest_tag(){
   tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${1}/releases/latest" 2>/dev/null | sed 's#.*/##; s/[[:space:][:cntrl:]]*$//')" || true
   case "$tag" in
@@ -106,7 +118,49 @@ latest_tag(){
       ;;
   esac
 }
+
 random_hex(){ dd if=/dev/urandom bs=1 count="${1:-32}" 2>/dev/null | od -An -tx1 | tr -d ' \n'; }
+
+# Compute SHA-256 of a file; empty string if no hasher available.
+file_sha256(){
+  f="$1"
+  if command_exists sha256sum; then
+    sha256sum "$f" | awk '{print $1}'
+  elif command_exists shasum; then
+    shasum -a 256 "$f" | awk '{print $1}'
+  elif command_exists openssl; then
+    openssl dgst -sha256 "$f" | awk '{print $NF}'
+  else
+    printf ''
+  fi
+}
+
+# Verify file against release SHA256SUMS when present (soft-fail if sums missing).
+verify_release_sha256(){
+  tag="$1"
+  asset="$2"
+  path="$3"
+  sums_tmp="$(mktemp)"
+  track_tmp "$sums_tmp"
+  if ! download "https://github.com/$REPO/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
+    say "Note: SHA256SUMS not published for $tag; skipping checksum verification."
+    return 0
+  fi
+  expected="$(awk -v a="$asset" '$2==a {print $1; exit}' "$sums_tmp")"
+  if [ -z "$expected" ]; then
+    say "Note: $asset not listed in SHA256SUMS; skipping checksum verification."
+    return 0
+  fi
+  actual="$(file_sha256 "$path")"
+  if [ -z "$actual" ]; then
+    say "Warning: no sha256 tool available; cannot verify $asset."
+    return 0
+  fi
+  if [ "$actual" != "$expected" ]; then
+    err "Checksum mismatch for $asset (expected $expected, got $actual)"
+  fi
+  say "Checksum OK: $asset"
+}
 
 write_config(){
   mkdir -p "$CONFIG_DIR" "$DATA_DIR/mihomo" "$LOG_DIR"
@@ -137,25 +191,31 @@ mihomo_asset(){
     i386|i486|i586|i686|x86) echo mihomo-linux-386;;
     riscv64) echo mihomo-linux-riscv64;;
     loongarch64|loong64) echo mihomo-linux-loong64-abi2.0;;
-    *) err "Unsupported CPU architecture for Mihomo: $(uname -m)";;
+    *) echo "";;
   esac
 }
 
 install_mihomo(){
   [ "$INSTALL_MIHOMO" -eq 1 ] || { say "Mihomo installation skipped."; return; }
   if [ -x "$MIHOMO_BIN" ] && "$MIHOMO_BIN" -v >/dev/null 2>&1; then say "Existing Mihomo detected: $MIHOMO_BIN"; return; fi
+  asset="$(mihomo_asset)"
+  if [ -z "$asset" ]; then
+    say "Warning: no official Mihomo binary for $(uname -m). Install Mihomo manually or re-run with --no-mihomo."
+    return 0
+  fi
   tag="$(latest_tag https://github.com/MetaCubeX/mihomo)"; [ -n "$tag" ] || err "Unable to determine latest Mihomo release."
-  tmp="$(mktemp)"; trap 'rm -f "$tmp" "$tmp.gz"' EXIT INT TERM
-  url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/$(mihomo_asset)-${tag}.gz"
-  say "Downloading Mihomo $tag..."; download "$url" "$tmp.gz"; gzip -dc "$tmp.gz" > "$tmp"; chmod 0755 "$tmp"
+  tmp="$(mktemp)"; gz="$tmp.gz"
+  track_tmp "$tmp"; track_tmp "$gz"
+  url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${asset}-${tag}.gz"
+  say "Downloading Mihomo $tag..."; download "$url" "$gz"; gzip -dc "$gz" > "$tmp"; chmod 0755 "$tmp"
   "$tmp" -v >/dev/null 2>&1 || err "Downloaded Mihomo failed validation."
   install -m 0755 "$tmp" "$MIHOMO_BIN"
-  rm -f "$tmp" "$tmp.gz"; trap - EXIT INT TERM
+  rm -f "$tmp" "$gz"
 }
 
 install_release_asset(){
   tag="$1"; file="$2"; destination="$3"
-  tmp="$(mktemp)"
+  tmp="$(mktemp)"; track_tmp "$tmp"
   if download "https://github.com/$REPO/releases/download/${tag}/${file}" "$tmp" 2>/dev/null; then :; else
     say "Release $tag does not contain $file; using the matching main-branch management script."
     rm -f "$tmp"
@@ -182,7 +242,7 @@ install_panel(){
   # Fall back to legacy *-static name for older tags if needed.
   cpu="$(arch)"
   asset="3m-ui-linux-${cpu}"
-  tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT INT TERM
+  tmp="$(mktemp)"; track_tmp "$tmp"
   url="https://github.com/$REPO/releases/download/${RELEASE_TAG}/${asset}"
   say "Downloading 3m-ui $RELEASE_TAG ($asset)..."
   if ! download "$url" "$tmp" 2>/dev/null; then
@@ -191,13 +251,14 @@ install_panel(){
     say "Retrying legacy asset name: $asset"
     download "$url" "$tmp"
   fi
+  verify_release_sha256 "$RELEASE_TAG" "$asset" "$tmp"
   chmod 0755 "$tmp"
   "$tmp" --version >/dev/null 2>&1 || err "Downloaded 3m-ui failed executable validation."
   install -m 0755 "$tmp" "$APP_BIN"
   printf '%s\n' "$RELEASE_TAG" > "$VERSION_FILE"
   printf '%s\n' "$([ "$STATIC" = "1" ] && echo static || echo dynamic)" > "$MODE_FILE"
   chmod 0600 "$VERSION_FILE" "$MODE_FILE"
-  rm -f "$tmp"; trap - EXIT INT TERM
+  rm -f "$tmp"
 }
 
 write_systemd(){ cat > /etc/systemd/system/$SERVICE_NAME.service <<EOF

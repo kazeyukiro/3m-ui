@@ -97,8 +97,23 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: List artifacts
-        run: find artifacts -type f | sort
+      - name: Flatten artifacts & generate SHA256SUMS
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+          # download-artifact may nest by job; collect every binary/tarball
+          find artifacts -type f \( -name '3m-ui-linux-*' -o -name 'SHA256SUMS' \) -print0 |
+            while IFS= read -r -d '' f; do
+              cp -a "$f" "release-files/$(basename "$f")"
+            done
+          cd release-files
+          # Only hash primary binaries and tarballs (not nested dirs)
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
+            sort -z |
+            xargs -0 sha256sum > SHA256SUMS
+          echo "=== SHA256SUMS ==="
+          cat SHA256SUMS
+          ls -la
       - name: Resolve tag
         id: meta
         run: |
@@ -123,6 +138,8 @@ jobs:
             All binaries are **pure-Go static** (`CGO_ENABLED=0` + `modernc` SQLite):
             run on glibc *and* musl (Alpine), without system `libsqlite3`.
 
+            Integrity: download `SHA256SUMS` and verify with `sha256sum -c SHA256SUMS`.
+
             | Artifact | Architecture |
             |---|---|
             | `3m-ui-linux-amd64` | x86_64 (GOAMD64=v1) |
@@ -137,4 +154,4 @@ jobs:
 
             Each arch is also published as `.tar.gz`.
           files: |
-            artifacts/3m-ui-linux-*
+            release-files/*
