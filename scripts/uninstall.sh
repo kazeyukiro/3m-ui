@@ -31,9 +31,18 @@ if [ "$YES" -ne 1 ]; then
   echo "  Command: $ENTRY"
   echo "  Application: $APP_BIN"
   echo "  Config: $CONFIG_DIR"
-  if [ "$PURGE" -eq 1 ]; then echo "  Data: $DATA_DIR [WILL BE DELETED]"; else echo "  Data: $DATA_DIR [KEPT]"; fi
+  if [ "$PURGE" -eq 1 ]; then
+    echo "  Data: $DATA_DIR [WILL BE DELETED — irreversible]"
+  else
+    echo "  Data: $DATA_DIR [KEPT]"
+  fi
   printf 'Continue? [y/N] '; read -r answer
   case "$answer" in y|Y|yes|YES) ;; *) echo "Aborted."; exit 0;; esac
+  if [ "$PURGE" -eq 1 ]; then
+    printf 'Type PURGE to confirm deleting all application data: '
+    read -r confirm
+    [ "$confirm" = "PURGE" ] || { echo "Aborted (confirmation mismatch)."; exit 0; }
+  fi
 fi
 
 case "$(init_system)" in
