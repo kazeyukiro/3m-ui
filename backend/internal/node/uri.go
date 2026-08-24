@@ -199,6 +199,8 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		// Client URI uses encryption (not server-side decryption).
 		if encryption, _ := cfg["encryption"].(string); encryption != "" {
 			params["encryption"] = encryption
+		} else {
+			params["encryption"] = "none"
 		}
 		if reality, ok := cfg["reality-config"].(map[string]interface{}); ok {
 			params["security"] = "reality"
@@ -207,11 +209,14 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 				return nil, err
 			}
 			params["pbk"] = publicKey
-			if sid, ok := reality["short-id"].(string); ok && sid != "" {
+			if sid := realityShortID(reality); sid != "" {
 				params["sid"] = sid
 			}
 			if sni, ok := firstString(reality["server-names"]); ok {
 				params["sni"] = sni
+			}
+			if params["fp"] == "" {
+				params["fp"] = "chrome"
 			}
 		}
 		for k, v := range transportParams(cfg) {
@@ -254,14 +259,21 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 			obj["path"] = grpc
 		}
 		if reality, ok := cfg["reality-config"].(map[string]interface{}); ok {
-			obj["tls"] = "tls"
+			// Share-link convention: mark Reality (not plain TLS).
+			obj["tls"] = "reality"
 			publicKey, err := realityPublicKey(reality)
 			if err != nil {
 				return nil, err
 			}
 			obj["pbk"] = publicKey
-			if sid, ok := reality["short-id"].(string); ok {
+			if sid := realityShortID(reality); sid != "" {
 				obj["sid"] = sid
+			}
+			if sni, ok := firstString(reality["server-names"]); ok {
+				obj["sni"] = sni
+			}
+			if obj["fp"] == "" {
+				obj["fp"] = "chrome"
 			}
 		}
 		data, err := json.Marshal(obj)
@@ -295,8 +307,16 @@ func trojanURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 				return nil, err
 			}
 			params["pbk"] = publicKey
-			if sid, ok := reality["short-id"].(string); ok {
+			if sid := realityShortID(reality); sid != "" {
 				params["sid"] = sid
+			}
+			if params["sni"] == "" {
+				if sni, ok := firstString(reality["server-names"]); ok {
+					params["sni"] = sni
+				}
+			}
+			if params["fp"] == "" {
+				params["fp"] = "chrome"
 			}
 		}
 		result = append(result, addName(query("trojan://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
@@ -360,7 +380,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 				params[out] = v
 			}
 		}
-		if v, ok := cfg["alpn"].(string); ok && v != "" {
+		if v, ok := firstString(cfg["alpn"]); ok {
 			params["alpn"] = v
 		}
 		if v, ok := cfg["sni"].(string); ok && v != "" {
@@ -436,6 +456,14 @@ func realityPublicKey(cfg map[string]interface{}) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(public), nil
 }
 
+// realityShortID returns the first short-id for client URI (official field is []string).
+func realityShortID(reality map[string]interface{}) string {
+	if s, ok := firstString(reality["short-id"]); ok {
+		return s
+	}
+	return ""
+}
+
 func firstString(v interface{}) (string, bool) {
 	if s, ok := v.(string); ok {
 		return s, s != ""
@@ -444,8 +472,12 @@ func firstString(v interface{}) (string, bool) {
 		s, _ := a[0].(string)
 		return s, s != ""
 	}
+	if a, ok := v.([]string); ok && len(a) > 0 {
+		return a[0], a[0] != ""
+	}
 	return "", false
 }
+
 func stringValue(v interface{}, fallback string) string {
 	if s, ok := v.(string); ok && s != "" {
 		return s
