@@ -21,8 +21,15 @@ REQUESTED_VERSION=""
 RELEASE_TAG=""
 TMP_FILES=""
 
+red='\033[0;31m'
+green='\033[0;32m'
+yellow='\033[0;33m'
+plain='\033[0m'
+
 say(){ printf '%s\n' "$*"; }
-err(){ say "Error: $*" >&2; exit 1; }
+ok(){ printf "%b\n" "${green}$*${plain}"; }
+warn(){ printf "%b\n" "${yellow}$*${plain}"; }
+err(){ printf "%b\n" "${red}Error: $*${plain}" >&2; exit 1; }
 command_exists(){ command -v "$1" >/dev/null 2>&1; }
 need_root(){ [ "$(id -u)" -eq 0 ] || err "Please run this script as root."; }
 
@@ -37,9 +44,12 @@ track_tmp(){
 }
 
 usage(){ cat <<EOF
-3m-ui installer
+3m-ui installer (s-ui style one-liner friendly)
 
-Usage: $0 [VERSION] [options]
+Usage:
+  bash <(curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/install.sh) -s -- [VERSION] [options]
+  # or
+  curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sh -s -- [VERSION] [options]
 
 Options:
   -y, --yes          Non-interactive installation
@@ -48,11 +58,11 @@ Options:
       --dynamic      Legacy no-op (releases are static pure-Go only)
   -h, --help         Show this help
 
-Environment:
-  THREE_M_UI_STATIC=1  Prefer static build (default)
+Examples:
+  sh install.sh -y
+  sh install.sh v0.1-rc37 -y
 
-Supported CPU: x86_64, aarch64, armv7, armv6, i386/i686, riscv64, loongarch64, ppc64le, s390x
-Supported OS: Alpine, Debian/Ubuntu, RHEL/Fedora/CentOS/Rocky/Alma, Arch, openSUSE, Gentoo, Void, …
+After install, run:  3m-ui
 EOF
 }
 
@@ -121,7 +131,6 @@ latest_tag(){
 
 random_hex(){ dd if=/dev/urandom bs=1 count="${1:-32}" 2>/dev/null | od -An -tx1 | tr -d ' \n'; }
 
-# Compute SHA-256 of a file; empty string if no hasher available.
 file_sha256(){
   f="$1"
   if command_exists sha256sum; then
@@ -135,7 +144,6 @@ file_sha256(){
   fi
 }
 
-# Verify file against release SHA256SUMS when present (soft-fail if sums missing).
 verify_release_sha256(){
   tag="$1"
   asset="$2"
@@ -232,14 +240,15 @@ install_helpers(){
   install_release_asset "$tag" install.sh "$BASE/install.sh"
   install_release_asset "$tag" update.sh "$BASE/update.sh"
   install_release_asset "$tag" uninstall.sh "$BASE/uninstall.sh"
+  # Prefer latest management menu from main (s-ui style UX), fall back to release asset.
   install_release_asset "$tag" 3m-ui "$ENTRY"
+  download "https://raw.githubusercontent.com/$REPO/main/scripts/3m-ui" "$ENTRY.tmp" 2>/dev/null && install -m 0755 "$ENTRY.tmp" "$ENTRY" || true
+  rm -f "$ENTRY.tmp" 2>/dev/null || true
 }
 
 install_panel(){
   RELEASE_TAG="${REQUESTED_VERSION:-$(latest_tag https://github.com/$REPO)}"
   [ -n "$RELEASE_TAG" ] || err "Unable to determine latest 3m-ui release."
-  # Official releases are pure-Go static binaries named 3m-ui-linux-<arch>.
-  # Fall back to legacy *-static name for older tags if needed.
   cpu="$(arch)"
   asset="3m-ui-linux-${cpu}"
   tmp="$(mktemp)"; track_tmp "$tmp"
@@ -275,7 +284,6 @@ WorkingDirectory=$DATA_DIR
 Restart=always
 RestartSec=5
 KillMode=control-group
-# Allow binding privileged ports (80/443) for optional panel ACME/SSL.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
@@ -305,6 +313,33 @@ EOF
 
 install_service(){ case "$(init_system)" in systemd) write_systemd;; openrc) write_openrc;; *) err "Unsupported init system. Supported: systemd and OpenRC.";; esac; }
 
+finish_banner(){
+  port=8080
+  if [ -f "$CONFIG_DIR/config.yaml" ]; then
+    p="$(sed -n 's/^[[:space:]]*port:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$CONFIG_DIR/config.yaml" | head -n1)"
+    [ -n "$p" ] && port="$p"
+  fi
+  say ""
+  ok "3m-ui ${RELEASE_TAG} installed successfully — service is up."
+  say "────────────────────────────────────────"
+  say " Management:  3m-ui"
+  say " Config:      $CONFIG_DIR/config.yaml"
+  say " Data:        $DATA_DIR"
+  say "────────────────────────────────────────"
+  say " Panel URL(s):"
+  printf "   %b\n" "${green}http://127.0.0.1:${port}/${plain}"
+  ip=""
+  if command_exists hostname; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')" || true
+  fi
+  if [ -n "$ip" ]; then
+    printf "   %b\n" "${green}http://${ip}:${port}/${plain}"
+  fi
+  say "────────────────────────────────────────"
+  warn "Default admin credentials follow panel defaults; change password on first login."
+  say "Tip: run ${green}3m-ui${plain} for the interactive management menu."
+}
+
 main(){
   need_root; install_deps
   mkdir -p "$BASE" "$CONFIG_DIR" "$DATA_DIR/mihomo" "$LOG_DIR"
@@ -321,10 +356,6 @@ main(){
   install_mihomo
   install_helpers "$RELEASE_TAG"
   install_service
-  say ""
-  say "3m-ui installed successfully."
-  say "Command: 3m-ui"
-  say "Panel: http://SERVER_IP:8080/"
-  say "Default administrator credentials are unchanged; first login requires a password change."
+  finish_banner
 }
 main "$@"
