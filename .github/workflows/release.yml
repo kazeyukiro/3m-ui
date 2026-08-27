@@ -93,6 +93,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -106,11 +107,20 @@ jobs:
             while IFS= read -r -d '' f; do
               cp -a "$f" "release-files/$(basename "$f")"
             done
+          # Ship management scripts with the release (install.sh falls back to main if missing)
+          if [ -d scripts ]; then
+            for s in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do
+              [ -f "scripts/$s" ] && cp -a "scripts/$s" "release-files/$s"
+            done
+          fi
           cd release-files
-          # Only hash primary binaries and tarballs (not nested dirs)
-          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
-            sort -z |
-            xargs -0 sha256sum > SHA256SUMS
+          # Hash with bare filenames (no ./ prefix) so installers can match assets
+          : > SHA256SUMS
+          for f in $(ls -1 | sort); do
+            [ -f "$f" ] || continue
+            [ "$f" = SHA256SUMS ] && continue
+            sha256sum "$f" >> SHA256SUMS
+          done
           echo "=== SHA256SUMS ==="
           cat SHA256SUMS
           ls -la
