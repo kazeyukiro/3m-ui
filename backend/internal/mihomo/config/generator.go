@@ -42,6 +42,9 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil {
 			return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err)
 		}
+		// Listeners are owned by the panel DB; fragments must not inject them
+		// or Mihomo will report duplicate listener names after merge.
+		delete(fragMap, "listeners")
 		for k, v := range fragMap {
 			merged[k] = v
 		}
@@ -73,10 +76,19 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 }
 
 func validateListenerEndpoints(listeners []models.Listener) error {
+	seenNames := make(map[string]struct{}, len(listeners))
 	for i := range listeners {
 		if err := validateListenerEndpoint(&listeners[i]); err != nil {
 			return err
 		}
+		name := strings.TrimSpace(listeners[i].Name)
+		if name == "" {
+			return fmt.Errorf("listener id=%d has empty name", listeners[i].ID)
+		}
+		if _, ok := seenNames[name]; ok {
+			return fmt.Errorf("duplicate listener name %q — rename or delete the extra entry in 节点管理", name)
+		}
+		seenNames[name] = struct{}{}
 		for j := i + 1; j < len(listeners); j++ {
 			if !portsOverlap(listeners[i].Port, listeners[j].Port) {
 				continue
