@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -139,7 +140,29 @@ func (s *Service) Delete(id uint) error {
 	return nil
 }
 
+func (s *Service) ensureUniqueName(candidate *models.Listener) error {
+	name := strings.TrimSpace(candidate.Name)
+	if name == "" {
+		return fmt.Errorf("listener name is required")
+	}
+	var count int64
+	q := s.db.Model(&models.Listener{}).Where("name = ?", name)
+	if candidate.ID != 0 {
+		q = q.Where("id <> ?", candidate.ID)
+	}
+	if err := q.Count(&count).Error; err != nil {
+		return fmt.Errorf("check listener name uniqueness: %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("listener name %q already exists", name)
+	}
+	return nil
+}
+
 func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
+	if err := s.ensureUniqueName(candidate); err != nil {
+		return err
+	}
 	var listeners []models.Listener
 	if err := s.db.Where("enabled = ? AND id <> ?", true, candidate.ID).Find(&listeners).Error; err != nil {
 		return fmt.Errorf("check listener endpoint conflicts: %w", err)
