@@ -1,9 +1,14 @@
 #!/bin/sh
-# 3m-ui unified management entrypoint.
+# 3m-ui management entrypoint (inspired by s-ui's s-ui.sh menu UX).
 # Installed as /usr/local/bin/3m-ui.
-# The actual Go application binary is /usr/local/lib/3m-ui/3m-ui-bin.
+# Application binary: /usr/local/lib/3m-ui/3m-ui-bin
 
 set -eu
+
+red='\033[0;31m'
+green='\033[0;32m'
+yellow='\033[0;33m'
+plain='\033[0m'
 
 BASE="/usr/local/lib/3m-ui"
 MANAGER="$BASE/3m-ui.sh"
@@ -11,125 +16,268 @@ INSTALLER="$BASE/install.sh"
 UPDATER="$BASE/update.sh"
 UNINSTALLER="$BASE/uninstall.sh"
 APP_BIN="$BASE/3m-ui-bin"
+CONFIG_DIR="/etc/3m-ui"
+SERVICE="3m-ui"
+REPO_RAW="https://raw.githubusercontent.com/kazeyukiro/3m-ui/main"
 
-run_script() {
-    script="$1"
-    shift
-    [ -x "$script" ] || {
-        printf '%s\n' "3m-ui management script is missing: $script" >&2
-        exit 1
-    }
-    exec "$script" "$@"
-}
+LOGI() { printf "%b\n" "${green}[INF] $*${plain}"; }
+LOGE() { printf "%b\n" "${red}[ERR] $*${plain}" >&2; }
+LOGW() { printf "%b\n" "${yellow}[WRN] $*${plain}"; }
 
-menu() {
-    while :; do
-        printf '\n'
-        printf '%s\n' '╭────────────────────────────────────╮'
-        printf '%s\n' '│          3m-ui 管理控制台          │'
-        printf '%s\n' '│     Mihomo Core Management UI      │'
-        printf '%s\n' '╰────────────────────────────────────╯'
-        printf '\n'
-        printf '%s\n' '  1. 安装 / 修复 3m-ui'
-        printf '%s\n' '  2. 更新 3m-ui'
-        printf '%s\n' '  3. 查看运行状态'
-        printf '%s\n' '  4. 启动 3m-ui'
-        printf '%s\n' '  5. 重启 3m-ui'
-        printf '%s\n' '  6. 停止 3m-ui'
-        printf '%s\n' '  7. 查看日志'
-        printf '%s\n' '  8. 查看版本'
-        printf '%s\n' '  9. 卸载 3m-ui'
-        printf '%s\n' '  0. 退出'
-        printf '\n请选择 [0-9]: '
-        IFS= read -r choice || exit 0
-        case "$choice" in
-            1) run_script "$INSTALLER" ;;
-            2) run_script "$UPDATER" ;;
-            3) run_script "$MANAGER" status ;;
-            4) run_script "$MANAGER" start ;;
-            5) run_script "$MANAGER" restart ;;
-            6) run_script "$MANAGER" stop ;;
-            7) run_script "$MANAGER" logs ;;
-            8) run_script "$MANAGER" version ;;
-            9) run_script "$UNINSTALLER" ;;
-            0) exit 0 ;;
-            *) printf '%s\n' '无效选择，请重新输入。' ;;
-        esac
-    done
+need_root() {
+  [ "$(id -u)" -eq 0 ] || { LOGE "Please run as root."; exit 1; }
 }
 
 init_system() {
-    if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
-        printf '%s' systemd
-    elif command -v rc-service >/dev/null 2>&1; then
-        printf '%s' openrc
+  if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+    printf '%s' systemd
+  elif command -v rc-service >/dev/null 2>&1; then
+    printf '%s' openrc
+  else
+    printf '%s' unsupported
+  fi
+}
+
+svc() {
+  action="$1"
+  case "$(init_system)" in
+    systemd) systemctl "$action" "$SERVICE" ;;
+    openrc) rc-service "$SERVICE" "$action" ;;
+    *) LOGE "No supported init system (need systemd or OpenRC)."; return 1 ;;
+  esac
+}
+
+check_status() {
+  case "$(init_system)" in
+    systemd)
+      [ -f "/etc/systemd/system/${SERVICE}.service" ] || return 2
+      systemctl is-active --quiet "$SERVICE" && return 0
+      return 1
+      ;;
+    openrc)
+      [ -f "/etc/init.d/$SERVICE" ] || return 2
+      rc-service "$SERVICE" status >/dev/null 2>&1 && return 0
+      return 1
+      ;;
+    *) return 2 ;;
+  esac
+}
+
+show_status_line() {
+  check_status
+  case $? in
+    0) printf "%b\n" "Service: ${green}Running${plain}" ;;
+    1) printf "%b\n" "Service: ${yellow}Stopped${plain}" ;;
+    2) printf "%b\n" "Service: ${red}Not installed${plain}" ;;
+  esac
+  if [ -x "$APP_BIN" ]; then
+    ver="$("$APP_BIN" --version 2>/dev/null || true)"
+    [ -n "$ver" ] || ver="$(cat "$BASE/VERSION" 2>/dev/null || echo unknown)"
+    printf '%s\n' "Binary:  $APP_BIN"
+    printf '%s\n' "Version: $ver"
+  fi
+}
+
+panel_urls() {
+  port=8080
+  if [ -f "$CONFIG_DIR/config.yaml" ]; then
+    p="$(sed -n 's/^[[:space:]]*port:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$CONFIG_DIR/config.yaml" | head -n1)"
+    [ -n "$p" ] && port="$p"
+  fi
+  LOGI "Panel URL candidates (replace with public IP/domain if needed):"
+  printf '%s\n' "  http://127.0.0.1:${port}/"
+  if command -v hostname >/dev/null 2>&1; then
+    h="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$h" ] && printf '%s\n' "  http://${h}:${port}/"
+  fi
+  printf '%s\n' "  Config: $CONFIG_DIR/config.yaml"
+}
+
+run_remote_install() {
+  ver="${1:-}"
+  LOGI "Fetching installer from GitHub..."
+  if [ -n "$ver" ]; then
+    sh -c "curl -fsSL '$REPO_RAW/scripts/install.sh' | sh -s -- $ver -y"
+  else
+    sh -c "curl -fsSL '$REPO_RAW/scripts/install.sh' | sh -s -- -y"
+  fi
+}
+
+cmd_install() {
+  if [ -x "$INSTALLER" ]; then
+    "$INSTALLER" -y
+  else
+    run_remote_install
+  fi
+  panel_urls
+}
+
+cmd_update() {
+  if [ -x "$UPDATER" ]; then
+    "$UPDATER" -y
+  else
+    run_remote_install
+  fi
+  panel_urls
+}
+
+cmd_update_version() {
+  printf 'Enter version tag (e.g. v0.1-rc37): '
+  IFS= read -r ver || true
+  ver="$(printf '%s' "$ver" | tr -d '[:space:]')"
+  [ -n "$ver" ] || { LOGE "Version cannot be empty."; return 1; }
+  if [ -x "$UPDATER" ]; then
+    "$UPDATER" "$ver" -y
+  elif [ -x "$INSTALLER" ]; then
+    "$INSTALLER" "$ver" -y
+  else
+    run_remote_install "$ver"
+  fi
+  panel_urls
+}
+
+cmd_logs() {
+  case "$(init_system)" in
+    systemd) journalctl -u "$SERVICE" -n 100 --no-pager -e ;;
+    openrc) tail -n 100 /var/log/3m-ui/3m-ui.log 2>/dev/null || LOGW "No log file found." ;;
+    *) LOGE "Unsupported init system." ;;
+  esac
+}
+
+cmd_enable() {
+  case "$(init_system)" in
+    systemd) systemctl enable "$SERVICE" && LOGI "Enabled autostart." ;;
+    openrc) rc-update add "$SERVICE" default && LOGI "Enabled autostart." ;;
+    *) LOGE "Unsupported init system." ;;
+  esac
+}
+
+cmd_disable() {
+  case "$(init_system)" in
+    systemd) systemctl disable "$SERVICE" && LOGI "Disabled autostart." ;;
+    openrc) rc-update del "$SERVICE" default && LOGI "Disabled autostart." ;;
+    *) LOGE "Unsupported init system." ;;
+  esac
+}
+
+confirm() {
+  prompt="$1"
+  def="${2:-n}"
+  printf '%s [%s]: ' "$prompt" "$def"
+  IFS= read -r ans || ans=""
+  [ -z "$ans" ] && ans="$def"
+  case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+cmd_uninstall() {
+  if confirm "Uninstall 3m-ui (data kept unless you purge later)?" n; then
+    if [ -x "$UNINSTALLER" ]; then
+      "$UNINSTALLER" --yes
     else
-        printf '%s' unsupported
+      LOGE "Uninstaller missing at $UNINSTALLER"
     fi
+  else
+    LOGW "Cancelled."
+  fi
 }
 
-service_action() {
-    action="$1"
-    case "$(init_system)" in
-        systemd) systemctl "$action" 3m-ui ;;
-        openrc) rc-service 3m-ui "$action" ;;
-        *) printf '%s\n' '未检测到 systemd 或 OpenRC。' >&2; exit 1 ;;
-    esac
+press_enter() {
+  printf '%b' "${yellow}Press Enter to continue...${plain}"
+  IFS= read -r _ || true
 }
 
-status() {
-    case "$(init_system)" in
-        systemd) systemctl --no-pager --full status 3m-ui || true ;;
-        openrc) rc-service 3m-ui status || true ;;
-        *) printf '%s\n' 'init: unsupported' ;;
-    esac
+menu() {
+  while :; do
     printf '\n'
-    if [ -x "$APP_BIN" ]; then
-        printf '%s\n' "应用程序: $APP_BIN"
-        "$APP_BIN" --version 2>/dev/null || true
-    else
-        printf '%s\n' '应用程序二进制不存在。'
-    fi
-}
-
-logs() {
-    case "$(init_system)" in
-        systemd) journalctl -u 3m-ui -n 100 --no-pager ;;
-        openrc) tail -n 100 /var/log/3m-ui/3m-ui.log 2>/dev/null || printf '%s\n' '未找到日志文件。' ;;
-        *) printf '%s\n' '未找到可用的日志系统。' ;;
+    printf '%s\n' '╭────────────────────────────────────────╮'
+    printf '%s\n' '│         3m-ui Management Menu         │'
+    printf '%s\n' '│      Mihomo Core · Panel Control      │'
+    printf '%s\n' '╰────────────────────────────────────────╯'
+    printf '\n'
+    show_status_line
+    printf '\n'
+    printf '%s\n' "  ${green}1${plain}. Install / Repair"
+    printf '%s\n' "  ${green}2${plain}. Update (latest)"
+    printf '%s\n' "  ${green}3${plain}. Update to specific version"
+    printf '%s\n' "  ${green}4${plain}. Status"
+    printf '%s\n' "  ${green}5${plain}. Start"
+    printf '%s\n' "  ${green}6${plain}. Restart"
+    printf '%s\n' "  ${green}7${plain}. Stop"
+    printf '%s\n' "  ${green}8${plain}. Logs"
+    printf '%s\n' "  ${green}9${plain}. Enable autostart"
+    printf '%s\n' " ${green}10${plain}. Disable autostart"
+    printf '%s\n' " ${green}11${plain}. Show panel URL"
+    printf '%s\n' " ${green}12${plain}. Uninstall"
+    printf '%s\n' "  ${green}0${plain}. Exit"
+    printf '\nChoose [0-12]: '
+    IFS= read -r choice || exit 0
+    case "$choice" in
+      1) cmd_install; press_enter ;;
+      2) cmd_update; press_enter ;;
+      3) cmd_update_version; press_enter ;;
+      4) show_status_line; press_enter ;;
+      5) svc start && LOGI "Started." || true; press_enter ;;
+      6) svc restart && LOGI "Restarted." || true; press_enter ;;
+      7) svc stop && LOGI "Stopped." || true; press_enter ;;
+      8) cmd_logs; press_enter ;;
+      9) cmd_enable; press_enter ;;
+      10) cmd_disable; press_enter ;;
+      11) panel_urls; press_enter ;;
+      12) cmd_uninstall; press_enter ;;
+      0) exit 0 ;;
+      *) LOGW "Invalid choice." ;;
     esac
+  done
 }
 
-version() {
-    if [ -x "$APP_BIN" ]; then
-        "$APP_BIN" --version
-    else
-        printf '%s\n' '3m-ui 未安装。' >&2
-        exit 1
-    fi
-}
+usage() {
+  cat <<EOF
+Usage: 3m-ui [command]
 
-need_root() {
-    [ "$(id -u)" -eq 0 ] || { printf '%s\n' '请使用 root 运行 3m-ui 管理命令。' >&2; exit 1; }
+Commands:
+  install          Install or repair 3m-ui
+  update [TAG]     Update to latest or specific tag (e.g. v0.1-rc37)
+  status           Service + binary status
+  start|stop|restart
+  logs             Recent logs
+  enable|disable   Autostart
+  url              Show panel URL hints
+  uninstall        Remove panel (data kept by default)
+  help             This help
+
+No arguments: open interactive menu (s-ui style).
+
+One-liner install:
+  bash <(curl -fsSL $REPO_RAW/scripts/install.sh) -s -- -y
+EOF
 }
 
 main() {
-    need_root
-    cmd=${1:-}
-    case "$cmd" in
-        status) status ;;
-        start) service_action start ;;
-        restart) service_action restart ;;
-        stop) service_action stop ;;
-        logs) logs ;;
-        version) version ;;
-        help|-h|--help)
-            printf '%s\n' '用法: 3m-ui [status|start|restart|stop|logs|version|help]'
-            printf '%s\n' '不带参数直接运行 3m-ui 将进入交互式管理菜单。'
-            ;;
-        '') menu ;;
-        *) printf '%s\n' "未知命令: $cmd" >&2; exit 2 ;;
-    esac
+  need_root
+  cmd=${1:-}
+  case "$cmd" in
+    install) shift; cmd_install ;;
+    update)
+      shift
+      if [ -n "${1:-}" ]; then
+        if [ -x "$UPDATER" ]; then "$UPDATER" "$1" -y; else run_remote_install "$1"; fi
+      else
+        cmd_update
+      fi
+      ;;
+    status) show_status_line ;;
+    start) svc start && LOGI "Started." ;;
+    stop) svc stop && LOGI "Stopped." ;;
+    restart) svc restart && LOGI "Restarted." ;;
+    logs) cmd_logs ;;
+    enable) cmd_enable ;;
+    disable) cmd_disable ;;
+    url) panel_urls ;;
+    uninstall) cmd_uninstall ;;
+    help|-h|--help) usage ;;
+    '') menu ;;
+    *) LOGE "Unknown command: $cmd"; usage; exit 2 ;;
+  esac
 }
 
 main "$@"
