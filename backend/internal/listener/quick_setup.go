@@ -1,13 +1,20 @@
 package listener
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -23,7 +30,7 @@ type QuickSetupInput struct {
 	BindAddress string `json:"bind_address"`
 	PublicHost  string `json:"public_host"`
 	PublicPort  string `json:"public_port"`
-	SNI         string `json:"sni"` // Reality dest / server-names
+	SNI         string `json:"sni"` // Reality dest / server-names / Hy2 cert CN
 	UUID        string `json:"uuid"`
 	Password    string `json:"password"`
 	PrivateKey  string `json:"private_key"`
@@ -140,15 +147,32 @@ func (s *Service) QuickSetup(in QuickSetupInput) (*QuickSetupResult, error) {
 		if pass == "" {
 			pass = randomPassword(16)
 		}
+		host := strings.TrimSpace(in.SNI)
+		if host == "" {
+			host = strings.TrimSpace(in.PublicHost)
+		}
+		if host == "" {
+			host = "localhost"
+		}
+		certPEM, keyPEM, err := generateSelfSignedTLS(host)
+		if err != nil {
+			return nil, fmt.Errorf("generate hysteria2 TLS: %w", err)
+		}
+		// Self-signed cert is enough for lab / private use; clients need skip-cert-verify.
+		// Replace with ACME or real certs for production public endpoints.
 		cfg = map[string]interface{}{
 			"users": map[string]interface{}{
 				"default": pass,
 			},
-			// Operators should attach real certs later; allow-insecure for lab only.
+			"certificate":              certPEM,
+			"private-key":              keyPEM,
+			"alpn":                     []string{"h3"},
 			"ignore-client-bandwidth": true,
 		}
 		hints["password"] = pass
-		hints["note"] = "Hysteria2 skeleton. Add certificate + private-key (or TLS via reverse proxy) before production use."
+		hints["sni"] = host
+		hints["skip_cert_verify"] = "true"
+		hints["note"] = "Hysteria2 with auto self-signed TLS. Clients must enable skip-cert-verify (or pin the cert). For production, replace certificate/private-key with ACME or a real cert."
 
 	case "trojan-reality":
 		protocol = "trojan"
@@ -330,4 +354,41 @@ func ssPasswordForCipher(method string) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+// generateSelfSignedTLS returns PEM-encoded certificate and ECDSA private key
+// for the given host (used as CN and DNS SAN). Suitable for Hysteria2 lab use.
+func generateSelfSignedTLS(host string) (certPEM, keyPEM string, err error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		host = "localhost"
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return "", "", err
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: host, Organization: []string{"3m-ui"}},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{host},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return "", "", err
+	}
+	certOut := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return "", "", err
+	}
+	keyOut := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	return string(certOut), string(keyOut), nil
 }
