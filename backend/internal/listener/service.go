@@ -36,7 +36,8 @@ func (s *Service) Create(l *models.Listener) error {
 		return fmt.Errorf("failed to create listener: %w", err)
 	}
 	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
+		// Hard-delete: soft-delete would keep UNIQUE(name) occupied and block retries.
+		if rollbackErr := s.db.Unscoped().Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
 			return fmt.Errorf("%v; rollback newly created listener failed: %w", err, rollbackErr)
 		}
 		return err
@@ -44,7 +45,7 @@ func (s *Service) Create(l *models.Listener) error {
 	if err := s.SaveVersion(l.ID, "create"); err != nil {
 		// Version history is part of the create contract: do not report a
 		// failed create while leaving a listener that the caller cannot account for.
-		if rollbackErr := s.db.Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
+		if rollbackErr := s.db.Unscoped().Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
 			return fmt.Errorf("save listener history: %v; rollback created listener failed: %w", err, rollbackErr)
 		}
 		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
