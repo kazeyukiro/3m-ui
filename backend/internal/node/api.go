@@ -150,18 +150,40 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		credentials = byListener[listener.ID]
 	}
 
-	uris, err := ClientURIsWithCredentials(*listener, host, credentials)
-	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-		return
+	// Prefer strongly-typed protocol registry (m-ui style). Fall back to legacy URI builder.
+	creds := make([]protocol.UserCred, 0, len(credentials))
+	for _, c := range credentials {
+		creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 	}
-	if uris == nil {
-		uris = []string{}
-	}
-	clientYAML, _ := converter.ExportClientYAML(*listener, host, credentials)
-	primary := ""
-	if len(uris) > 0 {
-		primary = uris[0]
+	var uris []string
+	var clientYAML, primary string
+	if shares, err := protocol.ExportShares(*listener, host, creds); err == nil && len(shares) > 0 {
+		uris = make([]string, 0, len(shares))
+		for _, s := range shares {
+			if s.URI != "" {
+				uris = append(uris, s.URI)
+			}
+			if clientYAML == "" && s.ClientYAML != "" {
+				clientYAML = s.ClientYAML
+			}
+		}
+		if len(uris) > 0 {
+			primary = uris[0]
+		}
+	} else {
+		legacy, lerr := ClientURIsWithCredentials(*listener, host, credentials)
+		if lerr != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": lerr.Error()})
+			return
+		}
+		uris = legacy
+		if uris == nil {
+			uris = []string{}
+		}
+		if len(uris) > 0 {
+			primary = uris[0]
+		}
+		clientYAML, _ = converter.ExportClientYAML(*listener, host, credentials)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"name":        listener.Name,
@@ -171,6 +193,7 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		"qr_content":  primary,
 		"client_yaml": clientYAML,
 		"hint":        emptyURIHint(len(uris), len(credentials)),
+		"typed":       true,
 	})
 }
 
@@ -281,8 +304,3 @@ func (h *Handler) clientAccessResponse(c *gin.Context, token models.AccessToken)
 	}
 }
 
-// silence unused import for time when ExpireAt unused in this file
-var _ = time.Time{}
-
-// silence url import if unused
-var _ = url.URL{}
