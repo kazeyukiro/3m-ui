@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
+	"github.com/kazeyukiro/3m-ui/backend/internal/mui"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
@@ -150,40 +151,59 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		credentials = byListener[listener.ID]
 	}
 
-	// Prefer strongly-typed protocol registry (m-ui style). Fall back to legacy URI builder.
-	creds := make([]protocol.UserCred, 0, len(credentials))
-	for _, c := range credentials {
-		creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
-	}
+	// Prefer full m-ui protocol port; fall back to 3m-ui registry then legacy URIs.
 	var uris []string
 	var clientYAML, primary string
-	if shares, err := protocol.ExportShares(*listener, host, creds); err == nil && len(shares) > 0 {
+	muiCreds := make([]mui.Cred, 0, len(credentials))
+	for _, c := range credentials {
+		muiCreds = append(muiCreds, mui.Cred{Username: c.Username, Password: c.Password, UUID: c.UUID})
+	}
+	if shares, err := mui.BuildShares(*listener, host, muiCreds); err == nil && len(shares) > 0 {
 		uris = make([]string, 0, len(shares))
 		for _, s := range shares {
 			if s.URI != "" {
 				uris = append(uris, s.URI)
 			}
-			if clientYAML == "" && s.ClientYAML != "" {
-				clientYAML = s.ClientYAML
+			if clientYAML == "" && len(s.ClientYAML) > 0 {
+				clientYAML = string(s.ClientYAML)
 			}
 		}
 		if len(uris) > 0 {
 			primary = uris[0]
 		}
 	} else {
-		legacy, lerr := ClientURIsWithCredentials(*listener, host, credentials)
-		if lerr != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": lerr.Error()})
-			return
+		creds := make([]protocol.UserCred, 0, len(credentials))
+		for _, c := range credentials {
+			creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 		}
-		uris = legacy
-		if uris == nil {
-			uris = []string{}
+		if shares, err := protocol.ExportShares(*listener, host, creds); err == nil && len(shares) > 0 {
+			uris = make([]string, 0, len(shares))
+			for _, s := range shares {
+				if s.URI != "" {
+					uris = append(uris, s.URI)
+				}
+				if clientYAML == "" && s.ClientYAML != "" {
+					clientYAML = s.ClientYAML
+				}
+			}
+			if len(uris) > 0 {
+				primary = uris[0]
+			}
+		} else {
+			legacy, lerr := ClientURIsWithCredentials(*listener, host, credentials)
+			if lerr != nil {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": lerr.Error()})
+				return
+			}
+			uris = legacy
+			if uris == nil {
+				uris = []string{}
+			}
+			if len(uris) > 0 {
+				primary = uris[0]
+			}
+			clientYAML, _ = converter.ExportClientYAML(*listener, host, credentials)
 		}
-		if len(uris) > 0 {
-			primary = uris[0]
-		}
-		clientYAML, _ = converter.ExportClientYAML(*listener, host, credentials)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"name":        listener.Name,
