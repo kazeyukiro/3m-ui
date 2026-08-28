@@ -1,6 +1,9 @@
 package cluster
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestNormalizeBaseURL(t *testing.T) {
 	u, err := normalizeBaseURL("https://panel.example.com:2053/")
@@ -10,9 +13,20 @@ func TestNormalizeBaseURL(t *testing.T) {
 	if _, err := normalizeBaseURL("ftp://x"); err == nil {
 		t.Fatal("expected scheme error")
 	}
-	u, err = normalizeBaseURL("panel.local:8080")
-	if err != nil || u != "http://panel.local:8080" {
+	u, err = normalizeBaseURL("panel.example.com:8080")
+	if err != nil || u != "http://panel.example.com:8080" {
 		t.Fatalf("got %q %v", u, err)
+	}
+	_ = os.Unsetenv("THREE_M_UI_CLUSTER_ALLOW_PRIVATE")
+	if _, err := normalizeBaseURL("http://127.0.0.1:8080"); err == nil {
+		t.Fatal("expected private/loopback rejection")
+	}
+	if _, err := normalizeBaseURL("http://10.0.0.1:8080"); err == nil {
+		t.Fatal("expected private IP rejection")
+	}
+	t.Setenv("THREE_M_UI_CLUSTER_ALLOW_PRIVATE", "1")
+	if _, err := normalizeBaseURL("http://127.0.0.1:8080"); err != nil {
+		t.Fatalf("lab allow should pass: %v", err)
 	}
 }
 
