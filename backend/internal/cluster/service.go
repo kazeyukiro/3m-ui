@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -338,15 +337,12 @@ func normalizeBaseURL(raw string) (string, error) {
 	if u.Host == "" {
 		return "", fmt.Errorf("base_url host is required")
 	}
-	// Reject obvious local file / unix sockets.
 	host := u.Hostname()
 	if host == "" {
 		return "", fmt.Errorf("base_url host is required")
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		if ip.IsLoopback() || ip.IsUnspecified() {
-			// Allow loopback for lab setups; operators manage their own network trust.
-		}
+	if err := assertClusterHostAllowed(host); err != nil {
+		return "", err
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 	u.RawQuery = ""
