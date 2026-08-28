@@ -78,3 +78,55 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 		return nil, fmt.Errorf("URI export is not supported for listener protocol %q", listener.Protocol)
 	}
 }
+
+func decodeURIConfig(raw string) (map[string]interface{}, error) {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]interface{}{}, nil
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return nil, fmt.Errorf("invalid listener configuration: %w", err)
+	}
+	if cfg == nil {
+		return map[string]interface{}{}, nil
+	}
+	return cfg, nil
+}
+
+func userMap(cfg map[string]interface{}) map[string]interface{} {
+	if users, ok := cfg["users"].(map[string]interface{}); ok {
+		return users
+	}
+	return nil
+}
+
+func userRows(cfg map[string]interface{}) []map[string]interface{} {
+	users, _ := cfg["users"].([]interface{})
+	rows := make([]map[string]interface{}, 0, len(users))
+	for _, raw := range users {
+		if row, ok := raw.(map[string]interface{}); ok {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+func query(base string, values map[string]string) string {
+	q := url.Values{}
+	for k, v := range values {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	if encoded := q.Encode(); encoded != "" {
+		return base + "?" + encoded
+	}
+	return base
+}
+
+func addName(uri, name string) string {
+	if name == "" {
+		return uri
+	}
+	return uri + "#" + url.QueryEscape(name)
+}
