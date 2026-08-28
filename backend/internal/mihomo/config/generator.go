@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/mui"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
@@ -213,6 +214,19 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 				Password: c.Password,
 				UUID:     c.UUID,
 			})
+		}
+
+		// Prefer m-ui protocol Compile for the five strongly-typed protocols.
+		switch protocolName {
+		case "vless", "vmess", "trojan", "shadowsocks", "hysteria2":
+			muiCreds := make([]mui.Cred, 0, len(listenerCreds))
+			for _, c := range listenerCreds {
+				muiCreds = append(muiCreds, mui.Cred{Username: c.Username, Password: c.Password, UUID: c.UUID})
+			}
+			if muiMap, muiErr := mui.CompileListener(l, muiCreds); muiErr == nil && muiMap != nil {
+				result = append(result, muiMap)
+				continue
+			}
 		}
 
 		in := protocol.CompileInput{
