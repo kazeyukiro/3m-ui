@@ -27,16 +27,17 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sqlite database: %w", err)
 	}
-	if err := os.Chmod(dbPath, 0600); err != nil {
-		return nil, fmt.Errorf("failed to secure database file: %w", err)
+	// Best-effort: file may not exist yet on brand-new installs until first write.
+	if _, statErr := os.Stat(dbPath); statErr == nil {
+		_ = os.Chmod(dbPath, 0600)
 	}
 
-	// Resolve collisions before unique indexes are applied by AutoMigrate.
+	// Resolve collisions (including soft-deleted rows) before unique indexes.
 	if err := dedupeListenerNames(db); err != nil {
 		return nil, fmt.Errorf("dedupe listener names: %w", err)
 	}
-	if err := fillEmptySubTokens(db); err != nil {
-		return nil, fmt.Errorf("fill empty sub tokens: %w", err)
+	if err := ensureUniqueSubTokens(db); err != nil {
+		return nil, fmt.Errorf("ensure unique sub tokens: %w", err)
 	}
 
 	err = db.AutoMigrate(
@@ -45,20 +46,31 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		&models.ProxyUser{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run database auto-migration: %w", err)
+		// One more cleanup pass then retry — soft-deleted collisions are the usual cause.
+		_ = dedupeListenerNames(db)
+		_ = ensureUniqueSubTokens(db)
+		if retryErr := db.AutoMigrate(
+			&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
+			&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
+			&models.ProxyUser{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{},
+		); retryErr != nil {
+			return nil, fmt.Errorf("failed to run database auto-migration: %w (after dedupe retry)", retryErr)
+		}
 	}
 
 	GlobalDB = db
 	return db, nil
 }
 
-// dedupeListenerNames renames later duplicates so AutoMigrate can add uniqueIndex on name.
+// dedupeListenerNames renames later duplicates (including soft-deleted) so
+// AutoMigrate can create uniqueIndex on name without failing panel boot.
 func dedupeListenerNames(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&models.Listener{}) {
 		return nil
 	}
 	var rows []models.Listener
-	if err := db.Order("id asc").Find(&rows).Error; err != nil {
+	// Must include soft-deleted rows: UNIQUE indexes cover the whole table.
+	if err := db.Unscoped().Order("id asc").Find(&rows).Error; err != nil {
 		return err
 	}
 	seen := map[string]uint{}
@@ -66,7 +78,7 @@ func dedupeListenerNames(db *gorm.DB) error {
 		name := row.Name
 		if name == "" {
 			name = fmt.Sprintf("listener-%d", row.ID)
-			if err := db.Model(&models.Listener{}).Where("id = ?", row.ID).Update("name", name).Error; err != nil {
+			if err := db.Unscoped().Model(&models.Listener{}).Where("id = ?", row.ID).Update("name", name).Error; err != nil {
 				return err
 			}
 			seen[name] = row.ID
@@ -74,7 +86,7 @@ func dedupeListenerNames(db *gorm.DB) error {
 		}
 		if prev, ok := seen[name]; ok && prev != row.ID {
 			newName := fmt.Sprintf("%s-%d", name, row.ID)
-			if err := db.Model(&models.Listener{}).Where("id = ?", row.ID).Update("name", newName).Error; err != nil {
+			if err := db.Unscoped().Model(&models.Listener{}).Where("id = ?", row.ID).Update("name", newName).Error; err != nil {
 				return err
 			}
 			seen[newName] = row.ID
@@ -85,23 +97,41 @@ func dedupeListenerNames(db *gorm.DB) error {
 	return nil
 }
 
-// fillEmptySubTokens assigns unique tokens so uniqueIndex on sub_token can be created.
-func fillEmptySubTokens(db *gorm.DB) error {
+// ensureUniqueSubTokens fills empty tokens and renames duplicate tokens across
+// all rows (including soft-deleted) so uniqueIndex on sub_token can be created.
+func ensureUniqueSubTokens(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&models.ProxyUser{}) {
 		return nil
 	}
 	var rows []models.ProxyUser
-	if err := db.Where("sub_token = ? OR sub_token IS NULL", "").Find(&rows).Error; err != nil {
+	if err := db.Unscoped().Order("id asc").Find(&rows).Error; err != nil {
 		return err
 	}
+	seen := map[string]uint{}
 	for _, row := range rows {
-		tok, err := randomHexToken(16)
-		if err != nil {
-			return err
+		tok := row.SubToken
+		needNew := tok == ""
+		if !needNew {
+			if prev, ok := seen[tok]; ok && prev != row.ID {
+				needNew = true
+			}
 		}
-		if err := db.Model(&models.ProxyUser{}).Where("id = ?", row.ID).Update("sub_token", tok).Error; err != nil {
-			return err
+		if needNew {
+			var err error
+			for attempt := 0; attempt < 8; attempt++ {
+				tok, err = randomHexToken(16)
+				if err != nil {
+					return err
+				}
+				if _, clash := seen[tok]; !clash {
+					break
+				}
+			}
+			if err := db.Unscoped().Model(&models.ProxyUser{}).Where("id = ?", row.ID).Update("sub_token", tok).Error; err != nil {
+				return err
+			}
 		}
+		seen[tok] = row.ID
 	}
 	return nil
 }
