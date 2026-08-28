@@ -1,0 +1,304 @@
+package mui
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/mui/domain"
+	muiprotocol "github.com/kazeyukiro/3m-ui/backend/internal/mui/protocol"
+)
+
+// Cred is a panel-side credential used when adapting Listeners to m-ui nodes.
+type Cred struct {
+	Username string
+	Password string
+	UUID     string
+	Flow     string
+}
+
+// ListenerToNode adapts a 3m-ui Listener + credentials into an m-ui domain.Node.
+func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
+	cfg := map[string]interface{}{}
+	if strings.TrimSpace(l.Config) != "" {
+		if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
+			return domain.Node{}, fmt.Errorf("listener config: %w", err)
+		}
+	}
+	proto := domain.ProtocolKind(strings.ToLower(strings.TrimSpace(l.Protocol)))
+	nodeID := fmt.Sprintf("%d", l.ID)
+	node := domain.Node{
+		ID:            nodeID,
+		Name:          l.Name,
+		Enabled:       l.Enabled,
+		ListenAddress: firstNonEmpty(l.Listen, l.BindAddress, "0.0.0.0"),
+		Port:          firstNonEmpty(strings.TrimSpace(l.PublicPort), strings.TrimSpace(l.Port)),
+		Protocol:      proto,
+		SchemaVersion: domain.NodeSchemaVersion,
+	}
+
+	// Access profile
+	pubPort := uint16(0)
+	if p := firstNonEmpty(l.PublicPort, l.Port); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 && n < 65536 {
+			pubPort = uint16(n)
+		}
+	}
+	profile := domain.AccessProfile{
+		ID:          nodeID + "-default",
+		NodeID:      nodeID,
+		Name:        "default",
+		Default:     true,
+		PublicHost:  strings.TrimSpace(l.PublicHost),
+		PublicPort:  pubPort,
+		ServerName:  strings.TrimSpace(l.AccessSNI),
+		Fingerprint: strings.TrimSpace(l.ClientFingerprint),
+		AllowInsecure: boolCfg(cfg, "skip-cert-verify"),
+	}
+	if profile.ServerName == "" {
+		profile.ServerName = strCfg(cfg, "sni", "servername")
+	}
+	if profile.Fingerprint == "" {
+		profile.Fingerprint = strCfg(cfg, "client-fingerprint", "fingerprint")
+	}
+	if profile.Fingerprint == "" {
+		profile.Fingerprint = domain.ClientFingerprint
+	}
+	node.AccessProfiles = []domain.AccessProfile{profile}
+
+	// Users from panel credentials
+	for i, c := range creds {
+		u := domain.NodeUser{
+			ID:      fmt.Sprintf("%s-u%d", nodeID, i+1),
+			NodeID:  nodeID,
+			Name:    firstNonEmpty(c.Username, fmt.Sprintf("user-%d", i+1)),
+			Enabled: true,
+		}
+		switch proto {
+		case domain.ProtocolVLESS:
+			u.VLESS = &domain.VLESSCredential{UUID: c.UUID, Flow: c.Flow}
+		case domain.ProtocolVMess:
+			u.VMess = &domain.VMessCredential{UUID: c.UUID, Cipher: "auto"}
+		case domain.ProtocolTrojan:
+			u.Trojan = &domain.TrojanCredential{Password: c.Password}
+		case domain.ProtocolHysteria2:
+			u.Hysteria2 = &domain.Hysteria2Credential{Password: c.Password}
+		case domain.ProtocolShadowsocks:
+			u.Shadowsocks = &domain.ShadowsocksCredential{Password: c.Password}
+		}
+		node.Users = append(node.Users, u)
+	}
+
+	// Protocol specs from flat Mihomo listener JSON
+	switch proto {
+	case domain.ProtocolVLESS:
+		node.VLESS = decodeVLESS(cfg, l.TLS)
+	case domain.ProtocolVMess:
+		node.VMess = decodeVMess(cfg, l.TLS)
+	case domain.ProtocolTrojan:
+		node.Trojan = decodeTrojan(cfg, l.TLS)
+	case domain.ProtocolShadowsocks:
+		node.Shadowsocks = decodeSS(cfg)
+	case domain.ProtocolHysteria2:
+		node.Hysteria2 = decodeHy2(cfg)
+	default:
+		return domain.Node{}, fmt.Errorf("protocol %q is not supported by m-ui port", proto)
+	}
+	return node, nil
+}
+
+// BuildShare adapts a listener and builds an m-ui share for the first/default user,
+// or for all users when building URI lists.
+func BuildShares(l models.Listener, publicHost string, creds []Cred) ([]muiprotocol.Share, error) {
+	node, err := ListenerToNode(l, creds)
+	if err != nil {
+		return nil, err
+	}
+	if publicHost != "" {
+		for i := range node.AccessProfiles {
+			if node.AccessProfiles[i].Default {
+				node.AccessProfiles[i].PublicHost = publicHost
+			}
+		}
+	}
+	profile, ok := node.DefaultAccessProfile()
+	if !ok {
+		return nil, fmt.Errorf("access profile missing")
+	}
+	if profile.PublicHost == "" {
+		profile.PublicHost = publicHost
+	}
+	state := domain.DesiredState{AsOf: time.Now().UTC(), PublicHost: profile.PublicHost}
+	reg := muiprotocol.DefaultRegistry()
+	out := make([]muiprotocol.Share, 0, len(node.Users))
+	for _, user := range node.Users {
+		// Ensure user/profile node id match for registry checks.
+		user.NodeID = node.ID
+		profile.NodeID = node.ID
+		s, err := reg.BuildShare(state, node, user, profile)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// CompileListener compiles a listener via m-ui protocol modules into a YAML-ready map.
+func CompileListener(l models.Listener, creds []Cred) (map[string]interface{}, error) {
+	node, err := ListenerToNode(l, creds)
+	if err != nil {
+		return nil, err
+	}
+	compiled, err := muiprotocol.DefaultRegistry().Compile(context.Background(), node, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(compiled)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func decodeVLESS(cfg map[string]interface{}, tls bool) *domain.VLESSSpec {
+	spec := &domain.VLESSSpec{
+		Decryption: strCfg(cfg, "encryption", "decryption"),
+		Handler:    decodeHandler(cfg),
+		Security:   decodeSecurity(cfg, tls),
+	}
+	if spec.Decryption == "" {
+		spec.Decryption = "none"
+	}
+	return spec
+}
+
+func decodeVMess(cfg map[string]interface{}, tls bool) *domain.VMessSpec {
+	return &domain.VMessSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls)}
+}
+
+func decodeTrojan(cfg map[string]interface{}, tls bool) *domain.TrojanSpec {
+	return &domain.TrojanSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls)}
+}
+
+func decodeSS(cfg map[string]interface{}) *domain.ShadowsocksSpec {
+	return &domain.ShadowsocksSpec{
+		Cipher:   strCfg(cfg, "cipher"),
+		Password: strCfg(cfg, "password"),
+	}
+}
+
+func decodeHy2(cfg map[string]interface{}) *domain.Hysteria2Spec {
+	return &domain.Hysteria2Spec{
+		Certificate:    strCfg(cfg, "certificate"),
+		PrivateKey:     strCfg(cfg, "private-key"),
+		Up:             strCfg(cfg, "up"),
+		Down:           strCfg(cfg, "down"),
+		Obfs:           strCfg(cfg, "obfs"),
+		ObfsPassword:   strCfg(cfg, "obfs-password"),
+		SkipCertVerify: boolCfg(cfg, "skip-cert-verify"),
+	}
+}
+
+func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {
+	h := domain.VLESSHandlerSpec{Type: domain.VLESSHandlerRaw}
+	if path := strCfg(cfg, "ws-path"); path != "" {
+		h.Type = domain.VLESSHandlerWebSocket
+		h.WebSocket = &domain.WebSocketSpec{Path: path}
+	}
+	if svc := strCfg(cfg, "grpc-service-name"); svc != "" {
+		h.Type = domain.VLESSHandlerGRPC
+		h.GRPC = &domain.GRPCSpec{ServiceName: svc}
+	}
+	if xhttp, ok := cfg["xhttp-config"].(map[string]interface{}); ok {
+		h.Type = domain.VLESSHandlerXHTTP
+		h.XHTTP = &domain.XHTTPConfig{Path: strMap(xhttp, "path"), Host: strMap(xhttp, "host"), Mode: strMap(xhttp, "mode")}
+	}
+	return h
+}
+
+func decodeSecurity(cfg map[string]interface{}, tlsFlag bool) domain.VLESSSecuritySpec {
+	if raw, ok := cfg["reality-config"].(map[string]interface{}); ok && raw != nil {
+		shortIDs := []string{}
+		if s, ok := raw["short-id"].(string); ok && s != "" {
+			shortIDs = []string{s}
+		} else if arr, ok := raw["short-id"].([]interface{}); ok {
+			for _, v := range arr {
+				if s, ok := v.(string); ok {
+					shortIDs = append(shortIDs, s)
+				}
+			}
+		}
+		names := []string{}
+		if arr, ok := raw["server-names"].([]interface{}); ok {
+			for _, v := range arr {
+				if s, ok := v.(string); ok {
+					names = append(names, s)
+				}
+			}
+		}
+		return domain.VLESSSecuritySpec{
+			Type: domain.VLESSSecurityReality,
+			Reality: &domain.RealityConfig{
+				PrivateKey:  strMap(raw, "private-key"),
+				PublicKey:   strMap(raw, "public-key"),
+				ShortIDs:    shortIDs,
+				ServerNames: names,
+				Destination: strMap(raw, "dest"),
+			},
+		}
+	}
+	if tlsFlag || strCfg(cfg, "certificate") != "" {
+		return domain.VLESSSecuritySpec{
+			Type: domain.VLESSSecurityTLS,
+			TLS: &domain.TLSConfig{
+				Certificate:    strCfg(cfg, "certificate"),
+				PrivateKey:     strCfg(cfg, "private-key"),
+				ServerName:     strCfg(cfg, "sni", "servername"),
+				SkipCertVerify: boolCfg(cfg, "skip-cert-verify"),
+			},
+		}
+	}
+	return domain.VLESSSecuritySpec{Type: domain.VLESSSecurityNone}
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func strCfg(cfg map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := cfg[k].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func strMap(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
+func boolCfg(cfg map[string]interface{}, key string) bool {
+	b, _ := cfg[key].(bool)
+	return b
+}
