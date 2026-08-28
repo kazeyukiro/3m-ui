@@ -84,7 +84,8 @@ verify_release_sha256(){
     rm -f "$sums_tmp"
     return 0
   fi
-  expected="$(awk -v a="$asset" '$2==a {print $1; exit}' "$sums_tmp")"
+  # SHA256SUMS may list "./3m-ui-linux-amd64" or "3m-ui-linux-amd64"
+  expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
   rm -f "$sums_tmp"
   if [ -z "$expected" ]; then
     echo "Note: $asset not listed in SHA256SUMS; skipping checksum verification."
