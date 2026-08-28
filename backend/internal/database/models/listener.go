@@ -2,7 +2,7 @@ package models
 
 type Listener struct {
 	BaseModel
-	Name        string `gorm:"not null" json:"name"`
+	Name        string `gorm:"not null;uniqueIndex" json:"name"`
 	Protocol    string `gorm:"type:varchar(50);not null;default:'shadowsocks'" json:"protocol"`
 	Type        string `gorm:"type:varchar(50)" json:"type"`
 	Port        string `gorm:"type:varchar(50);not null;default:'0'" json:"port"`
