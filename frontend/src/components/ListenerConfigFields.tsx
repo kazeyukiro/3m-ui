@@ -728,7 +728,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Alert type="info" showIcon message={t('listeners.usersHint')} />
-      <Alert type="success" showIcon message={t('listeners.autoGenerateHint') || 'Empty password / REALITY key / short-id will be auto-generated on save. Use Generate buttons to fill now.'} />
+      <Alert type="success" showIcon message={t('listeners.autoGenerateHint') || 'Auto on save if empty: REALITY private-key + short-id + dest/server-names; SS password (by cipher); Snell PSK; password-protocol users; Hy2 self-signed cert. Public-key is client-only (derived for share URI). Click Generate to fill now.'} />
 
       {TRANSPORT_PROTOCOLS.has(protocol) && (
         <>
@@ -763,7 +763,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="cipher" label={t('listeners.cipher')} initialValue="aes-128-gcm">
             <Select options={SS_CIPHERS.map((c) => ({ value: c, label: c }))} showSearch />
           </Form.Item>
-          <Form.Item name="password" label={t('listeners.password')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty to auto-generate'}>
+          <Form.Item name="password" label={t('listeners.password')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty → auto-generate on save (SS / password protocols).'}>
             <Input.Password placeholder={t('listeners.passwordOptionalPlaceholder') || 'auto'} addonAfter={<Button type="link" size="small" onClick={() => gen('ss-password', form.getFieldValue('cipher'))}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
         </>
@@ -772,7 +772,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {protocol === 'snell' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="psk" label={t('listeners.psk')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty to auto-generate'}>
+          <Form.Item name="psk" label={t('listeners.psk')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty → auto-generate on save (SS / password protocols).'}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
           <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={3}>
@@ -1075,7 +1075,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item
             name="reality_private_key"
             label={t('listeners.realityPrivateKey')}
-            tooltip={t('listeners.realityKeyHint') || 'Leave empty to auto-generate on save'}
+            tooltip={t('listeners.realityKeyHint') || 'Server private-key only. Leave empty → auto-generate on save. Client pbk is derived for share links (not stored).'}
           >
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('reality')}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
