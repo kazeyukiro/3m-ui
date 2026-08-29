@@ -124,13 +124,23 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 		),
 	},
 	"hysteria2": {
-		Protocol:     "hysteria2",
-		Fields:       listenerFields("users", "up", "down", "ignore-client-bandwidth", "obfs", "obfs-password", "obfs-min-packet-size", "obfs-max-packet-size", "masquerade", "realm-opts", "bbr-profile", "max-idle-time", "handshake-timeout", "alpn", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key"),
-		NestedFields: listenerNested("realm-opts.enable", "realm-opts.server-url", "realm-opts.token", "realm-opts.realm-id", "realm-opts.stun-servers", "realm-opts.proxy", "realm-opts.skip-cert-verify", "realm-opts.fingerprint", "realm-opts.certificate", "realm-opts.private-key", "realm-opts.alpn", "realm-opts.name-cert-verify"),
+		Protocol: "hysteria2",
+		Fields: listenerFields(
+			"users", "up", "down", "ignore-client-bandwidth", "obfs", "obfs-password", "obfs-min-packet-size", "obfs-max-packet-size", "masquerade", "realm-opts", "bbr-profile", "max-idle-time", "handshake-timeout", "alpn", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "mux-option",
+		),
+		NestedFields: listenerNested(
+			"realm-opts.enable", "realm-opts.server-url", "realm-opts.token", "realm-opts.realm-id", "realm-opts.stun-servers", "realm-opts.proxy", "realm-opts.skip-cert-verify", "realm-opts.fingerprint", "realm-opts.certificate", "realm-opts.private-key", "realm-opts.alpn", "realm-opts.name-cert-verify",
+			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+		),
 	},
 	"tuic": {
 		Protocol: "tuic",
-		Fields:   listenerFields("users", "token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size"),
+		Fields: listenerFields(
+			"users", "token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "mux-option",
+		),
+		NestedFields: listenerNested(
+			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+		),
 	},
 	"shadowquic": {
 		Protocol:     "shadowquic",

@@ -121,7 +121,7 @@ func (Hysteria2Compiler) Capability() ProtocolCapability { return hysteria2Capab
 func (Hysteria2Compiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	users := asUsersMap(in.Config, in.Users, in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}
@@ -150,6 +150,41 @@ func (ShadowQUICCompiler) Compile(in CompileInput) (map[string]interface{}, erro
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
 	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type AnyTLSCompiler struct{}
+
+func (AnyTLSCompiler) Kind() string { return "anytls" }
+func (AnyTLSCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: "anytls", Label: "anytls"}
+}
+func (AnyTLSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	users := asUsersMap(in.Config, in.Users, in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type MieruCompiler struct{}
+
+func (MieruCompiler) Kind() string { return "mieru" }
+func (MieruCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: "mieru", Label: "mieru"}
+}
+func (MieruCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersMap(in.Config, in.Users, in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
 	}

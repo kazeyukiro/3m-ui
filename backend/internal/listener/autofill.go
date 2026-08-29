@@ -42,8 +42,15 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		if err := autofillUUIDUsers(cfg); err != nil {
 			return err
 		}
-	case "trojan", "hysteria2", "anytls", "mieru", "tuic", "shadowquic", "sudoku", "trusttunnel":
-		autofillPasswordUsers(cfg)
+	case "hysteria2", "anytls", "mieru":
+		// map form users (username -> password)
+		autofillUsersMap(cfg)
+	case "trojan", "shadowquic", "trusttunnel":
+		// array form users [{username, password}]
+		autofillUsersArray(cfg)
+	case "tuic":
+		// TUIC v4 uses token (array of strings); v5 uses users [{username, password}].
+		autofillTUICUsers(cfg)
 	case "shadowsocks":
 		cipher, _ := cfg["cipher"].(string)
 		if cipher == "" {
@@ -172,27 +179,48 @@ func autofillUUIDUsers(cfg map[string]interface{}) error {
 	return nil
 }
 
-func autofillPasswordUsers(cfg map[string]interface{}) {
-	// map form users (username -> password)
-	if um, ok := cfg["users"].(map[string]interface{}); ok {
-		for k, v := range um {
-			if s, ok := v.(string); !ok || strings.TrimSpace(s) == "" {
-				um[k] = randomPassword(16)
-			}
+// autofillUsersMap fills credentials for protocols whose users field is a
+// map of username -> password (hysteria2, anytls, mieru).
+func autofillUsersMap(cfg map[string]interface{}) {
+	users, ok := cfg["users"].(map[string]interface{})
+	if !ok || len(users) == 0 {
+		cfg["users"] = map[string]interface{}{"default": randomPassword(16)}
+		return
+	}
+	for k, v := range users {
+		if s, ok := v.(string); !ok || strings.TrimSpace(s) == "" {
+			users[k] = randomPassword(16)
 		}
-		if len(um) == 0 {
-			cfg["users"] = map[string]interface{}{"default": randomPassword(16)}
-		} else {
-			cfg["users"] = um
+	}
+	cfg["users"] = users
+}
+
+// autofillUsersArray fills credentials for protocols whose users field is an
+// array of {username, password} objects (trojan, shadowquic, trusttunnel).
+func autofillUsersArray(cfg map[string]interface{}) {
+	users := normalizeUsersSlice(cfg["users"])
+	if len(users) == 0 {
+		cfg["users"] = []map[string]interface{}{{"username": "default", "password": randomPassword(16)}}
+		return
+	}
+	for _, u := range users {
+		if pass, _ := u["password"].(string); strings.TrimSpace(pass) == "" {
+			u["password"] = randomPassword(16)
 		}
+	}
+	cfg["users"] = users
+}
+
+// autofillTUICUsers fills credentials for TUIC listeners. TUIC v4 uses a token
+// array (left untouched when set); TUIC v5 uses an array of {username, password}
+// objects. When neither is present we default to the v5 array form.
+func autofillTUICUsers(cfg map[string]interface{}) {
+	if _, hasToken := cfg["token"]; hasToken {
 		return
 	}
 	users := normalizeUsersSlice(cfg["users"])
 	if len(users) == 0 {
-		// single password field
-		if pass, _ := cfg["password"].(string); strings.TrimSpace(pass) == "" {
-			cfg["password"] = randomPassword(16)
-		}
+		cfg["users"] = []map[string]interface{}{{"username": "default", "password": randomPassword(16)}}
 		return
 	}
 	for _, u := range users {
