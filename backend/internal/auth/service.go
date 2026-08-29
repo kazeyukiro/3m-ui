@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -53,8 +54,9 @@ func Login(db *gorm.DB, jwtSecret string, input LoginInput) (*LoginResult, error
 
 // EnsureAdmin creates the first administrator only when the database has no
 // administrator. An explicit THREE_M_UI_ADMIN_PASSWORD is preferred.
-// Otherwise a random password is written to the database directory so the
-// installer/operator can retrieve it once.
+// When THREE_M_UI_ADMIN_PASSWORD is unset, the initial password is "admin".
+// RequireAuth forces a password change on first login (MustChangePassword=true)
+// before any other API can be used. Change it immediately on first login.
 func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password string, err error) {
 	var count int64
 	if err := db.Model(&models.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil {
@@ -80,6 +82,8 @@ func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password s
 	if err := db.Create(&models.User{Username: username, PasswordHash: hash, Role: "admin", MustChangePassword: true, SessionVersion: 1}).Error; err != nil {
 		return false, "", "", fmt.Errorf("create initial admin: %w", err)
 	}
+
+	log.Printf("[SECURITY] Initial administrator created: %s. Password is 'admin' (or THREE_M_UI_ADMIN_PASSWORD). Change it immediately on first login.", username)
 
 	return true, username, password, nil
 }

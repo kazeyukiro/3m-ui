@@ -26,20 +26,45 @@ var loginLimiter = struct {
 	items map[string]loginAttempt
 }{items: make(map[string]loginAttempt)}
 
+var passwordChangeLimiter = struct {
+	sync.Mutex
+	items map[string]loginAttempt
+}{items: make(map[string]loginAttempt)}
+
 const (
-	loginWindow     = 15 * time.Minute
-	loginMaxAttempt = 8
+	loginWindow              = 15 * time.Minute
+	loginMaxAttempt          = 8
+	passwordChangeWindow     = 15 * time.Minute
+	passwordChangeMaxAttempt = 3
 )
 
 // clientIdentifier returns a stable identifier for rate-limiting.
+//
+// By default the direct RemoteAddr IP is used so that a client cannot rotate
+// arbitrary IPs via a spoofed X-Forwarded-For header. As a pragmatic
+// improvement, when the direct connection originates from a loopback /
+// private / link-local address (the typical case for a same-host reverse
+// proxy such as nginx or caddy) we DO trust the right-most valid IP in
+// X-Forwarded-For. This restores per-client rate-limiting granularity when
+// deployed behind a local trusted proxy while still rejecting client-supplied
+// XFF values on direct (public) exposure.
 func clientIdentifier(c *gin.Context) string {
-	// Never trust a client-supplied X-Forwarded-For value for authentication
-	// rate limiting. A proxy can be configured to restore the real client IP
-	// at the Gin layer, but accepting the raw header here lets an attacker
-	// rotate arbitrary IPs and bypass the limiter.
 	remote, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-	if err == nil && net.ParseIP(remote) != nil {
-		return remote
+	if err == nil {
+		if ip := net.ParseIP(remote); ip != nil {
+			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+				if xff := strings.TrimSpace(c.GetHeader("X-Forwarded-For")); xff != "" {
+					parts := strings.Split(xff, ",")
+					for i := len(parts) - 1; i >= 0; i-- {
+						candidate := strings.TrimSpace(parts[i])
+						if p := net.ParseIP(candidate); p != nil {
+							return p.String()
+						}
+					}
+				}
+			}
+			return ip.String()
+		}
 	}
 	if ip := net.ParseIP(strings.TrimSpace(c.Request.RemoteAddr)); ip != nil {
 		return ip.String()
@@ -80,6 +105,46 @@ func resetLoginLimit(ip string) {
 	loginLimiter.Lock()
 	delete(loginLimiter.items, ip)
 	loginLimiter.Unlock()
+}
+
+// allowPasswordChange applies a per-client throttle to the password-change
+// endpoint. The bound is intentionally tight (3 attempts / 15 min) because the
+// caller is already authenticated, so the only legitimate traffic is a single
+// user choosing a new password. Anything beyond that pattern is brute-forcing
+// the current_password field or probing for hash collisions.
+func allowPasswordChange(ip string) bool {
+	now := time.Now()
+	passwordChangeLimiter.Lock()
+	defer passwordChangeLimiter.Unlock()
+
+	for key, attempt := range passwordChangeLimiter.items {
+		if now.Sub(attempt.last) > passwordChangeWindow {
+			delete(passwordChangeLimiter.items, key)
+		}
+	}
+
+	attempt := passwordChangeLimiter.items[ip]
+	if !attempt.blocked.IsZero() && now.Before(attempt.blocked) {
+		return false
+	}
+	if attempt.last.IsZero() || now.Sub(attempt.last) > passwordChangeWindow {
+		attempt.count = 0
+	}
+	attempt.last = now
+	if attempt.count >= passwordChangeMaxAttempt {
+		attempt.blocked = now.Add(passwordChangeWindow)
+		passwordChangeLimiter.items[ip] = attempt
+		return false
+	}
+	attempt.count++
+	passwordChangeLimiter.items[ip] = attempt
+	return true
+}
+
+func resetPasswordChangeLimit(ip string) {
+	passwordChangeLimiter.Lock()
+	delete(passwordChangeLimiter.items, ip)
+	passwordChangeLimiter.Unlock()
 }
 
 type Handler struct {
@@ -134,6 +199,12 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 func (h *Handler) ChangePassword(c *gin.Context) {
+	clientID := clientIdentifier(c)
+	if !allowPasswordChange(clientID) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many password change attempts; try again later"})
+		return
+	}
+
 	claims, ok := ClaimsFromContext(c)
 	if !ok {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
@@ -183,6 +254,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save password"})
 		return
 	}
+	resetPasswordChangeLimit(clientID)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "password changed successfully"})
 }
