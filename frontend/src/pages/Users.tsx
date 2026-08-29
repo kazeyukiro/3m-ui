@@ -7,25 +7,13 @@ import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
-  fetchUserNodes, bindUserNodes, fetchUserSubscription, rotateUserSubscription, ProxyUser,
+  fetchUserNodes, bindUserNodes, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { useI18n } from '../i18n';
 import { useNavigate } from 'react-router-dom';
 import { copyText } from '../utils/clipboard';
-
-const formatBytes = (n?: number) => {
-  const bytes = n || 0;
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let v = bytes / 1024;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(2)} ${units[i]}`;
-};
+import { formatBytes } from '../utils/format';
 
 const Users: React.FC = () => {
   const navigate = useNavigate();
@@ -43,11 +31,6 @@ const Users: React.FC = () => {
   const [allNodes, setAllNodes] = useState<Listener[]>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<number[]>([]);
   const [bindLoading, setBindLoading] = useState(false);
-
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareUser, setShareUser] = useState<ProxyUser | null>(null);
-  const [shareUrl, setShareUrl] = useState('');
-  const [shareLoading, setShareLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -182,21 +165,6 @@ const Users: React.FC = () => {
 
   const openShare = async (record: ProxyUser) => {
     navigate(`/share?user=${record.id}`);
-  };
-
-  const onRotateShare = async () => {
-    if (!shareUser) return;
-    setShareLoading(true);
-    try {
-      const res = await rotateUserSubscription(shareUser.id);
-      setShareUrl(res.url);
-      message.success(t('users.subRotated') || 'Subscription rotated');
-      load();
-    } catch (e: any) {
-      message.error(e.message || t('common.error'));
-    } finally {
-      setShareLoading(false);
-    }
   };
 
   const onDeleteDepleted = async () => {
@@ -441,97 +409,6 @@ const Users: React.FC = () => {
         />
       </Modal>
 
-      <Modal
-        open={shareOpen}
-        title={(t('users.shareTitle') || 'Subscription') + (shareUser ? ` — ${shareUser.username}` : '')}
-        onCancel={() => { setShareOpen(false); setShareUser(null); setShareUrl(''); }}
-        footer={null}
-        width={560}
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <div>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>{t('users.subMihomo') || 'Mihomo / Clash YAML'}</div>
-            <Input
-              value={shareUrl}
-              readOnly
-              placeholder={shareLoading ? t('common.loading') : ''}
-              addonAfter={
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  disabled={!shareUrl}
-                  onClick={async () => {
-                    if (!shareUrl) return;
-                    const ok = await copyText(shareUrl);
-                    if (ok) message.success(t('common.copied') || 'Copied');
-                    else message.error(t('common.copyFailed') || 'Copy failed — select and copy manually');
-                  }}
-                />
-              }
-            />
-          </div>
-          {shareUrl && (
-            <div>
-              <div style={{ marginBottom: 4, fontWeight: 500 }}>{t('users.subV2ray') || 'V2Ray / Base64 (v2rayNG / Hiddify)'}</div>
-              <Input
-                value={`${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=v2ray`}
-                readOnly
-                addonAfter={
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={async () => {
-                      const u = `${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=v2ray`;
-                      const ok = await copyText(u);
-                      if (ok) message.success(t('common.copied') || 'Copied');
-                      else message.error(t('common.copyFailed') || 'Copy failed — select and copy manually');
-                    }}
-                  />
-                }
-              />
-            </div>
-          )}
-          {shareUrl && (
-            <div>
-              <div style={{ marginBottom: 4, fontWeight: 500 }}>{t('users.subSingbox') || 'Sing-box JSON'}</div>
-              <Input
-                value={`${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=singbox`}
-                readOnly
-                addonAfter={
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={async () => {
-                      const u = `${shareUrl}${shareUrl.includes('?') ? '&' : '?'}target=singbox`;
-                      const ok = await copyText(u);
-                      if (ok) message.success(t('common.copied') || 'Copied');
-                      else message.error(t('common.copyFailed') || 'Copy failed — select and copy manually');
-                    }}
-                  />
-                }
-              />
-            </div>
-          )}
-          {shareUrl && (
-            <div style={{ textAlign: 'center' }}>
-              <img
-                alt="qr"
-                style={{ width: 180, height: 180 }}
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`}
-              />
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-                {t('users.qrHint') || 'QR = default (Mihomo). Paste the V2Ray URL into classic clients.'}
-              </div>
-            </div>
-          )}
-          <Button loading={shareLoading} onClick={onRotateShare} block>
-            {t('users.rotateSub') || 'Rotate subscription token'}
-          </Button>
-        </Space>
-      </Modal>
     </div>
   );
 };

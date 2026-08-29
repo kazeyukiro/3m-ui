@@ -14,6 +14,7 @@ import { copyText } from '../utils/clipboard';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
+import QRCode from '../components/QRCode';
 
 const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
@@ -152,7 +153,7 @@ const columns = [
                 <Button icon={<CopyOutlined />} onClick={async () => { const ok = await copyText(uri); if (ok) message.success(t('common.copied') || t('common.copy')); else message.error(t('common.copyFailed') || 'Copy failed'); }} />
               </Space>
               <div style={{ textAlign: 'center' }}>
-                <img alt="qr" width={160} height={160} src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(uri)}`} />
+                <QRCode value={uri} size={160} />
               </div>
             </Space>
           </Card>

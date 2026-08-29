@@ -3,15 +3,8 @@ import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, message } from
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { useI18n } from '../i18n';
+import { formatBytes } from '../utils/format';
 
-const formatBytes = (bytes: number) => {
-  const n = Number(bytes);
-  if (!Number.isFinite(n) || n <= 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  const i = Math.min(Math.floor(Math.log(n) / Math.log(k)), sizes.length - 1);
-  return `${(n / Math.pow(k, i)).toFixed(i === 0 ? 0 : 2)} ${sizes[i]}`;
-};
 const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
 const clampPct = (v: unknown) => {
   const n = Number(v);
