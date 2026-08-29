@@ -412,7 +412,7 @@ func realityPublicKey(cfg map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to derive Reality public key: %w", err)
 	}
-	return base64.RawStdEncoding.EncodeToString(public), nil
+	return base64.RawURLEncoding.EncodeToString(public), nil
 }
 
 func realityShortID(reality map[string]interface{}) string {
