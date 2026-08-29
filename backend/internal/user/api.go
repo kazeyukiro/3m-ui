@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -72,7 +73,8 @@ func (h *Handler) List(c *gin.Context) {
 	}
 	users, err := h.svc.ListFiltered(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("user list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	out := make([]SafeUser, 0, len(users))
@@ -124,7 +126,8 @@ func (h *Handler) Get(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Printf("user get failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
@@ -187,7 +190,8 @@ func (h *Handler) GetListeners(c *gin.Context) {
 	}
 	list, err := h.svc.GetListeners(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("user get-listeners failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	type nodeDTO struct {
@@ -230,7 +234,8 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 	}
 	token, err := h.svc.EnsureSubToken(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		log.Printf("user ensure-sub-token failed: %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 	scheme := "http"
@@ -283,7 +288,8 @@ func (h *Handler) RotateSubscription(c *gin.Context) {
 func (h *Handler) DeleteDepleted(c *gin.Context) {
 	n, err := h.svc.DeleteDepleted()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("user delete-depleted failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": n})

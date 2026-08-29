@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -48,7 +49,8 @@ func parseID(c *gin.Context) (uint, bool) {
 func (h *Handler) List(c *gin.Context) {
 	rows, err := h.svc.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("cluster list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, rows)
@@ -113,7 +115,8 @@ func (h *Handler) Health(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("cluster health check failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, row)
@@ -122,7 +125,8 @@ func (h *Handler) Health(c *gin.Context) {
 func (h *Handler) HealthAll(c *gin.Context) {
 	rows, err := h.svc.HealthCheckAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("cluster health-check-all failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, rows)
@@ -297,5 +301,6 @@ func writeRemoteErr(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
-	c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+	log.Printf("cluster remote operation failed: %v", err)
+	c.JSON(http.StatusBadGateway, gin.H{"error": "upstream cluster operation failed"})
 }

@@ -3,8 +3,10 @@ package node
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -53,7 +55,8 @@ func (h *Handler) RegisterClientRoutes(rg *gin.RouterGroup) {
 func (h *Handler) ListNodes(c *gin.Context) {
 	list, err := h.svc.GetAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("node list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -138,12 +141,22 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 	host = netutil.NormalizeHost(host)
 	host = normalizeExportHostPrefer(host, listener.BindAddress, listener.Listen, publicURL)
 	host = netutil.NormalizeHost(host)
+	// If publicURL was explicitly resolved (config / access profile / listener
+	// PublicHost), it is authoritative and must override any client-controlled
+	// Host header (X-Forwarded-Host / Request.Host) used above. This prevents
+	// share links from advertising an attacker-supplied host.
+	if publicURL != "" {
+		if u, perr := url.Parse(publicURL); perr == nil && u.Host != "" {
+			host = netutil.NormalizeHost(u.Host)
+		}
+	}
 
 	credentials := []user.Credential{}
 	if h.user != nil {
 		byListener, err := h.user.ActiveCredentialsByListener()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load active credentials: " + err.Error()})
+			log.Printf("export-node-uri load credentials failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
 		credentials = byListener[listener.ID]
@@ -301,7 +314,8 @@ func (h *Handler) CreateClientAccess(c *gin.Context) {
 	}
 	token := models.AccessToken{Name: name, Token: hex.EncodeToString(buf), Enabled: true, ListenerID: listener.ID}
 	if err := db.Create(&token).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("node client-access create failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusCreated, h.clientAccessResponse(c, token))
