@@ -42,7 +42,7 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		if err := autofillUUIDUsers(cfg); err != nil {
 			return err
 		}
-	case "trojan", "hysteria2", "anytls", "mieru", "tuic":
+	case "trojan", "hysteria2", "anytls", "mieru", "tuic", "shadowquic", "sudoku", "trusttunnel":
 		autofillPasswordUsers(cfg)
 	case "shadowsocks":
 		cipher, _ := cfg["cipher"].(string)
@@ -84,7 +84,7 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		}
 	}
 
-	sanitizeServerRealityConfig(cfg)
+	sanitizeServerConfig(cfg)
 
 	raw, err := json.Marshal(cfg)
 	if err != nil {
@@ -94,17 +94,19 @@ func AutofillListenerDefaults(l *models.Listener) error {
 	return nil
 }
 
-// sanitizeServerRealityConfig drops client-only keys from listener reality-config.
-func sanitizeServerRealityConfig(cfg map[string]interface{}) {
-	raw, ok := cfg["reality-config"].(map[string]interface{})
-	if !ok || raw == nil {
-		return
+// sanitizeServerConfig drops panel-only and client-only keys that must not
+// reach Mihomo listener validation / config generation.
+func sanitizeServerConfig(cfg map[string]interface{}) {
+	delete(cfg, "security_layer")
+	delete(cfg, "transport_layer")
+	delete(cfg, "access_profile")
+	delete(cfg, "sni") // client/export hint; server uses reality dest / cert SNI separately
+	if raw, ok := cfg["reality-config"].(map[string]interface{}); ok && raw != nil {
+		delete(raw, "public-key")
+		delete(raw, "public_key")
+		cfg["reality-config"] = raw
 	}
-	delete(raw, "public-key")
-	delete(raw, "public_key")
-	cfg["reality-config"] = raw
 }
-
 
 func needsReality(cfg map[string]interface{}) bool {
 	if _, ok := cfg["reality-config"]; ok {
@@ -122,14 +124,17 @@ func autofillReality(cfg map[string]interface{}) error {
 		raw = map[string]interface{}{}
 	}
 	priv, _ := raw["private-key"].(string)
-	pub, _ := raw["public-key"].(string)
-	priv, _, err := resolveRealityKeys(priv, pub)
+	// public-key may be present from older clients; only use it to skip re-derive, never persist.
+	pubHint, _ := raw["public-key"].(string)
+	priv, _, err := resolveRealityKeys(priv, pubHint)
 	if err != nil {
 		return err
 	}
 	raw["private-key"] = priv
-	// public-key is client-only; Mihomo listener schema rejects it on the server side.
+	// Server listener schema (MetaCubeX): private-key, short-id, server-names, dest, limit-fallback-*.
+	// public-key is client-only and rejected by ValidateListenerConfig.
 	delete(raw, "public-key")
+	delete(raw, "public_key")
 	if dest, _ := raw["dest"].(string); strings.TrimSpace(dest) == "" {
 		if sni, _ := cfg["sni"].(string); strings.TrimSpace(sni) != "" {
 			raw["dest"] = strings.TrimSpace(sni) + ":443"
