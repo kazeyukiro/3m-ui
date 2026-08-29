@@ -172,6 +172,47 @@ verify_release_sha256(){
   say "Checksum OK: $asset"
 }
 
+# Verify the SHA256SUMS file itself with cosign keyless OIDC (authenticity).
+# OPT-IN: only runs when THREE_M_UI_VERIFY_COSIGN=1 AND cosign is installed.
+# SHA256SUMS integrity is already enforced by verify_release_sha256 (fail-closed).
+# This adds PROVENANCE: proves the sums file was produced by this repo's
+# release.yml workflow at the given tag (not a CDN compromise).
+verify_release_cosign(){
+  tag="$1"; repo="$2"
+  if [ "${THREE_M_UI_VERIFY_COSIGN:-0}" != "1" ]; then
+    return 0
+  fi
+  if ! command_exists cosign; then
+    say "Warning: THREE_M_UI_VERIFY_COSIGN=1 set but cosign not installed; skipping signature verification."
+    say "         Install cosign: https://github.com/sigstore/cosign/releases"
+    return 0
+  fi
+  pem_tmp="$(mktemp)"; sig_tmp="$(mktemp)"; sums_tmp="$(mktemp)"
+  track_tmp "$pem_tmp" "$sig_tmp" "$sums_tmp"
+  base="https://github.com/${repo}/releases/download/${tag}"
+  if ! download "$base/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
+    say "Warning: SHA256SUMS not available for $tag; cannot verify cosign signature."
+    return 0
+  fi
+  if ! download "$base/SHA256SUMS.sig" "$sig_tmp" 2>/dev/null || \
+     ! download "$base/SHA256SUMS.pem" "$pem_tmp" 2>/dev/null; then
+    say "Warning: cosign signature artifacts (SHA256SUMS.sig / .pem) not published for $tag."
+    say "         Releases before cosign signing was enabled are unsigned."
+    return 0
+  fi
+  identity="https://github.com/${repo}/.github/workflows/release.yml@refs/tags/${tag}"
+  if cosign verify-blob \
+       --certificate "$pem_tmp" \
+       --signature "$sig_tmp" \
+       --certificate-identity "$identity" \
+       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+       "$sums_tmp" >/dev/null 2>&1; then
+    say "Cosign signature OK: SHA256SUMS verified against $identity"
+  else
+    err "Cosign signature verification FAILED for $tag. The SHA256SUMS file may have been tampered with or produced by an untrusted source. Refusing to continue (set THREE_M_UI_INSECURE=1 to bypass, NOT recommended)."
+  fi
+}
+
 # Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
 # MetaCubeX/mihomo (C-3). Best-effort: if Mihomo did not publish SHA256SUMS for
 # a release, print a loud warning and return non-zero so the caller can decide
@@ -314,6 +355,9 @@ install_panel(){
     download "$url" "$tmp"
   fi
   verify_release_sha256 "$RELEASE_TAG" "$asset" "$tmp"
+  # Provenance: verify the release's SHA256SUMS was signed by this repo's
+  # release.yml workflow (cosign keyless). OPT-IN via THREE_M_UI_VERIFY_COSIGN=1.
+  verify_release_cosign "$RELEASE_TAG" "$REPO"
   chmod 0755 "$tmp"
   # Smoke-test the binary is a Linux ELF — do NOT execute it as root (C-5).
   # verify_release_sha256 already attests to integrity.
