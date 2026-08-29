@@ -95,6 +95,37 @@ func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
 		node.Users = append(node.Users, u)
 	}
 
+	// Fall back to users embedded in listener config JSON when no panel credentials.
+	if len(node.Users) == 0 {
+		if rawUsers, ok := cfg["users"].([]interface{}); ok {
+			for i, item := range rawUsers {
+				m, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				u := domain.NodeUser{
+					ID:      fmt.Sprintf("%s-cfg%d", nodeID, i+1),
+					NodeID:  nodeID,
+					Name:    firstNonEmpty(strMap(m, "username"), strMap(m, "name"), fmt.Sprintf("user-%d", i+1)),
+					Enabled: true,
+				}
+				switch proto {
+				case domain.ProtocolVLESS:
+					u.VLESS = &domain.VLESSCredential{UUID: strMap(m, "uuid"), Flow: strMap(m, "flow")}
+				case domain.ProtocolVMess:
+					u.VMess = &domain.VMessCredential{UUID: strMap(m, "uuid"), Cipher: "auto"}
+				case domain.ProtocolTrojan:
+					u.Trojan = &domain.TrojanCredential{Password: strMap(m, "password")}
+				case domain.ProtocolHysteria2:
+					u.Hysteria2 = &domain.Hysteria2Credential{Password: strMap(m, "password")}
+				case domain.ProtocolShadowsocks:
+					u.Shadowsocks = &domain.ShadowsocksCredential{Password: strMap(m, "password")}
+				}
+				node.Users = append(node.Users, u)
+			}
+		}
+	}
+
 	if proto == domain.ProtocolShadowsocks && len(node.Users) == 0 {
 		if pass := strCfg(cfg, "password"); pass != "" {
 			node.Users = append(node.Users, domain.NodeUser{
