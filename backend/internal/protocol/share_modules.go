@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -269,34 +270,53 @@ func realityPublicKeyFromSpec(r *RealitySpec) (string, error) {
 	if r == nil {
 		return "", fmt.Errorf("reality config required")
 	}
-	if strings.TrimSpace(r.PublicKey) != "" {
-		return r.PublicKey, nil
+	publicRaw, publicSet, err := decodeRealityKey(r.PublicKey)
+	if err != nil {
+		return "", fmt.Errorf("invalid Reality public key: %w", err)
 	}
 	private := strings.TrimSpace(r.PrivateKey)
-	if private == "" {
+	if private == "" && !publicSet {
 		return "", fmt.Errorf("reality public-key or private-key required")
 	}
-	var raw []byte
-	var err error
+	if private != "" {
+		privateRaw, err := decodeRealityKey(private)
+		if err != nil {
+			return "", fmt.Errorf("invalid Reality private key: %w", err)
+		}
+		pub, err := curve25519.X25519(privateRaw, curve25519.Basepoint)
+		if err != nil {
+			return "", err
+		}
+		if publicSet && !bytes.Equal(publicRaw, pub) {
+			return "", fmt.Errorf("Reality public key does not match private key")
+		}
+		publicRaw = pub
+	}
+	return base64.RawURLEncoding.EncodeToString(publicRaw), nil
+}
+
+func decodeRealityKey(value string) ([]byte, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, false, nil
+	}
+	var lastErr error
 	for _, decode := range []func(string) ([]byte, error){
-		base64.RawStdEncoding.DecodeString,
-		base64.StdEncoding.DecodeString,
 		base64.RawURLEncoding.DecodeString,
 		base64.URLEncoding.DecodeString,
+		base64.RawStdEncoding.DecodeString,
+		base64.StdEncoding.DecodeString,
 	} {
-		raw, err = decode(private)
-		if err == nil && len(raw) == 32 {
-			break
+		raw, err := decode(value)
+		if err == nil {
+			if len(raw) != 32 {
+				return nil, true, fmt.Errorf("must decode to 32 bytes")
+			}
+			return raw, true, nil
 		}
+		lastErr = err
 	}
-	if len(raw) != 32 {
-		return "", fmt.Errorf("invalid Reality private key")
-	}
-	pub, err := curve25519.X25519(raw, curve25519.Basepoint)
-	if err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(pub), nil
+	return nil, true, lastErr
 }
 
 func realityOptsYAML(r *RealitySpec) map[string]interface{} {
@@ -320,7 +340,9 @@ func clientYAMLProxy(typ, host, port string, in ShareInput, extra map[string]int
 		"type":   typ,
 		"server": host,
 		"port":   portValue(port),
-		"udp":    true,
+	}
+	if in.Node.UDP {
+		p["udp"] = true
 	}
 	for k, v := range extra {
 		if v == nil {
