@@ -200,17 +200,21 @@ verify_release_cosign(){
     say "         Releases before cosign signing was enabled are unsigned."
     return 0
   fi
-  identity="https://github.com/${repo}/.github/workflows/release.yml@refs/tags/${tag}"
-  if cosign verify-blob \
-       --certificate "$pem_tmp" \
-       --signature "$sig_tmp" \
-       --certificate-identity "$identity" \
-       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-       "$sums_tmp" >/dev/null 2>&1; then
-    say "Cosign signature OK: SHA256SUMS verified against $identity"
-  else
-    err "Cosign signature verification FAILED for $tag. The SHA256SUMS file may have been tampered with or produced by an untrusted source. Refusing to continue (set THREE_M_UI_INSECURE=1 to bypass, NOT recommended)."
-  fi
+  # Try both tag-ref (normal tag-push release) and main-branch (workflow_dispatch
+  # back-fill) identities, since older releases may have been signed via dispatch.
+  base_id="https://github.com/${repo}/.github/workflows/release.yml"
+  for identity in "${base_id}@refs/tags/${tag}" "${base_id}@refs/heads/main"; do
+    if cosign verify-blob \
+         --certificate "$pem_tmp" \
+         --signature "$sig_tmp" \
+         --certificate-identity "$identity" \
+         --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+         "$sums_tmp" >/dev/null 2>&1; then
+      say "Cosign signature OK: SHA256SUMS verified against $identity"
+      return 0
+    fi
+  done
+  err "Cosign signature verification FAILED for $tag. The SHA256SUMS file may have been tampered with or produced by an untrusted source. Refusing to continue (set THREE_M_UI_INSECURE=1 to bypass, NOT recommended)."
 }
 
 # Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
