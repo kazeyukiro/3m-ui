@@ -64,6 +64,23 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		if psk, _ := cfg["psk"].(string); strings.TrimSpace(psk) == "" {
 			cfg["psk"] = randomPassword(16)
 		}
+		// Mihomo requires a valid snell version (1-4). Default to 4 when unset
+		// so listeners created from the panel are not rejected by mihomo.
+		// Stored as a JSON number (int) so it round-trips to YAML `version: 4`
+		// and passes the numeric() validator in node.ValidateListenerConfig.
+		if !versionIsSet(cfg["version"]) {
+			cfg["version"] = 4
+		}
+	case "sudoku":
+		// Sudoku uses top-level `key` for authentication (no `users`).
+		if k, _ := cfg["key"].(string); strings.TrimSpace(k) == "" {
+			b := make([]byte, 32)
+			_, _ = rand.Read(b)
+			cfg["key"] = base64.StdEncoding.EncodeToString(b)
+		}
+		if m, _ := cfg["aead-method"].(string); strings.TrimSpace(m) == "" {
+			cfg["aead-method"] = "chacha20-poly1305"
+		}
 	}
 
 	// REALITY material when security uses reality-config or panel layer is reality.
@@ -212,23 +229,42 @@ func autofillUsersArray(cfg map[string]interface{}) {
 }
 
 // autofillTUICUsers fills credentials for TUIC listeners. TUIC v4 uses a token
-// array (left untouched when set); TUIC v5 uses an array of {username, password}
-// objects. When neither is present we default to the v5 array form.
+// array (left untouched when set); TUIC v5 uses a `users` map keyed by UUID /
+// username (matching the Mihomo TUIC compiler `asUsersMapUUID`, which reads
+// `cfg["users"]` as a map - never as an array). When neither token nor a users
+// map is present we default to the v5 map form with a single `default` user.
 func autofillTUICUsers(cfg map[string]interface{}) {
+	// TUIC v4 uses `token` (array of strings); v5 uses `users` as map{UUID: PASSWORD}.
+	// If token is set, leave it (v4). Otherwise default to v5 map form.
 	if _, hasToken := cfg["token"]; hasToken {
 		return
 	}
-	users := normalizeUsersSlice(cfg["users"])
-	if len(users) == 0 {
-		cfg["users"] = []map[string]interface{}{{"username": "default", "password": randomPassword(16)}}
+	// If users already exists as a map, fill empty passwords.
+	if users, ok := cfg["users"].(map[string]interface{}); ok && len(users) > 0 {
+		for k, v := range users {
+			if s, ok := v.(string); !ok || strings.TrimSpace(s) == "" {
+				users[k] = randomPassword(16)
+			}
+		}
+		cfg["users"] = users
 		return
 	}
-	for _, u := range users {
-		if pass, _ := u["password"].(string); strings.TrimSpace(pass) == "" {
-			u["password"] = randomPassword(16)
+	// Also handle map[interface{}]interface{} (from YAML/JSON decode)
+	if users, ok := cfg["users"].(map[interface{}]interface{}); ok && len(users) > 0 {
+		out := make(map[string]interface{}, len(users))
+		for k, v := range users {
+			key := fmt.Sprint(k)
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				out[key] = s
+			} else {
+				out[key] = randomPassword(16)
+			}
 		}
+		cfg["users"] = out
+		return
 	}
-	cfg["users"] = users
+	// No users map exists - create default v5 map form.
+	cfg["users"] = map[string]interface{}{"default": randomPassword(16)}
 }
 
 func normalizeUsersSlice(v interface{}) []map[string]interface{} {
@@ -245,6 +281,25 @@ func normalizeUsersSlice(v interface{}) []map[string]interface{} {
 		return users
 	default:
 		return nil
+	}
+}
+
+// versionIsSet reports whether the snell `version` field is meaningfully set.
+// It accepts both string ("4") and numeric (int/float64) representations
+// produced by the panel or by json.Unmarshal. An empty string or absent key
+// counts as unset so the autofill can apply a safe default.
+func versionIsSet(v interface{}) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(t) != ""
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	case float64:
+		return true
+	default:
+		return false
 	}
 }
 

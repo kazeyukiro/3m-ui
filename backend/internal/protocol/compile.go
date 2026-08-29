@@ -124,8 +124,12 @@ func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]stru
 		if _, ok := skip[k]; ok {
 			continue
 		}
-		// strip panel-only / client-export-only keys
-		if strings.HasPrefix(k, "_") || k == "access_profile" || k == "encryption" ||
+		// strip panel-only / client-export-only keys.
+		// NOTE: "encryption" is intentionally NOT stripped — it is a legitimate
+		// top-level VLESS server field (paired with "decryption") per the
+		// official Mihomo schema. Stripping it silently breaks VLESS listeners
+		// that rely on it.
+		if strings.HasPrefix(k, "_") || k == "access_profile" ||
 			k == "transport_layer" || k == "security_layer" {
 			continue
 		}
