@@ -125,5 +125,6 @@ func addName(uri, name string) string {
 	if name == "" {
 		return uri
 	}
-	return uri + "#" + url.QueryEscape(name)
+	// Remark fragment; PathEscape matches common panel clients (incl. 3x-ui style).
+	return uri + "#" + url.PathEscape(name)
 }
