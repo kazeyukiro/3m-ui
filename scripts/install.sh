@@ -166,9 +166,19 @@ verify_release_sha256(){
 write_config(){
   mkdir -p "$CONFIG_DIR" "$DATA_DIR/mihomo" "$LOG_DIR"
   [ -f "$CONFIG_DIR/config.yaml" ] && { chmod 0600 "$CONFIG_DIR/config.yaml"; return; }
+  # NAT-friendly: PANEL_PORT / THREE_M_UI_PORT (default 8080), optional PANEL_LISTEN / PUBLIC_URL
+  panel_port="${PANEL_PORT:-${THREE_M_UI_PORT:-8080}}"
+  case "$panel_port" in
+    ''|*[!0-9]*) panel_port=8080;;
+  esac
+  if [ "$panel_port" -lt 1 ] || [ "$panel_port" -gt 65535 ]; then panel_port=8080; fi
+  panel_listen="${PANEL_LISTEN:-${THREE_M_UI_LISTEN:-}}"
+  public_url="${PUBLIC_URL:-${THREE_M_UI_PUBLIC_URL:-}}"
   cat > "$CONFIG_DIR/config.yaml" <<EOF
 server:
-  port: 8080
+  port: ${panel_port}
+  listen: "${panel_listen}"
+  public_url: "${public_url}"
   mode: release
 database:
   path: "$DATA_DIR/3m-ui.db"
@@ -325,7 +335,9 @@ main(){
   say ""
   say "3m-ui installed successfully."
   say "Command: 3m-ui"
-  say "Panel: http://SERVER_IP:8080/"
+  panel_port="${PANEL_PORT:-${THREE_M_UI_PORT:-8080}}"
+  say "Panel: http://SERVER_IP:${panel_port}/"
+  say "Custom port: PANEL_PORT=8443 curl ... | bash   or edit server.port in $CONFIG_DIR/config.yaml"
   say "Default administrator credentials are unchanged; first login requires a password change."
 }
 main "$@"
