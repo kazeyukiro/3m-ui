@@ -46,6 +46,7 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 		params["allowInsecure"] = "1"
 	}
 	applyTransportParams(params, spec.Transport)
+	applyALPNParams(params, spec.ALPN)
 	if spec.Reality != nil {
 		params["security"] = "reality"
 		pbk, err := realityPublicKeyFromSpec(spec.Reality)
@@ -69,12 +70,19 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 		shareQuery("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params),
 		in.Node.Name,
 	)
-	yamlDoc, _ := clientYAMLProxy("vless", host, port, in, map[string]interface{}{
+	extra := map[string]interface{}{
 		"uuid": uuid, "flow": strOr(in.User.Flow, spec.Flow), "tls": params["security"] != "",
 		"servername": params["sni"], "client-fingerprint": params["fp"],
 		"reality-opts": realityOptsYAML(spec.Reality),
 		"network":      params["type"],
-	})
+	}
+	if len(spec.ALPN) > 0 {
+		extra["alpn"] = append([]string(nil), spec.ALPN...)
+	}
+	yamlDoc, err := clientYAMLProxy("vless", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
 	return Share{URI: uri, QRContent: uri, ClientYAML: yamlDoc}, nil
 }
 
@@ -103,6 +111,9 @@ func (VMessCompiler) BuildShare(in ShareInput) (Share, error) {
 	}
 	if spec.Transport.Network == "grpc" {
 		obj["path"] = spec.Transport.GRPCService
+	}
+	if len(spec.ALPN) > 0 {
+		obj["alpn"] = strings.Join(spec.ALPN, ",")
 	}
 	if spec.Reality != nil {
 		obj["tls"] = "reality"
@@ -153,6 +164,7 @@ func (TrojanCompiler) BuildShare(in ShareInput) (Share, error) {
 		params["allowInsecure"] = "1"
 	}
 	applyTransportParams(params, spec.Transport)
+	applyALPNParams(params, spec.ALPN)
 	if spec.Reality != nil {
 		params["security"] = "reality"
 		pbk, err := realityPublicKeyFromSpec(spec.Reality)
@@ -234,6 +246,7 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	if spec.Down != "" {
 		params["down"] = spec.Down
 	}
+	applyALPNParams(params, spec.ALPN)
 	uri := shareName(
 		shareQuery("hysteria2://"+url.PathEscape(pass)+"@"+netutil.JoinHostPort(host, port), params),
 		in.Node.Name,
@@ -263,6 +276,18 @@ func applyTransportParams(params map[string]string, t TransportSpec) {
 		if t.XHTTPPath != "" {
 			params["path"] = t.XHTTPPath
 		}
+	}
+}
+
+func applyALPNParams(params map[string]string, alpn []string) {
+	clean := make([]string, 0, len(alpn))
+	for _, value := range alpn {
+		if value = strings.TrimSpace(value); value != "" {
+			clean = append(clean, value)
+		}
+	}
+	if len(clean) > 0 {
+		params["alpn"] = strings.Join(clean, ",")
 	}
 }
 
