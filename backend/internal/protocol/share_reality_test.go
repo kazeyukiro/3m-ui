@@ -178,3 +178,69 @@ func TestHysteria2SharePreservesALPN(t *testing.T) {
 		t.Fatalf("Hysteria2 URI lost ALPN: %s", share.URI)
 	}
 }
+
+func TestVLESSShareClientYAMLUsesMihomoWSOptions(t *testing.T) {
+	node := NodeModel{
+		Name:       "vless-ws",
+		Protocol:   "vless",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		VLESS: &VLESSSpec{Transport: TransportSpec{
+			Network: "ws", WSPath: "/vless", WSHost: "cdn.example.com",
+		}},
+	}
+	share, err := (VLESSCompiler{}).BuildShare(ShareInput{Node: node, User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(share.ClientYAML, "ws-opts:") || !strings.Contains(share.ClientYAML, "path: /vless") || !strings.Contains(share.ClientYAML, "Host: cdn.example.com") {
+		t.Fatalf("Mihomo WS options missing: %s", share.ClientYAML)
+	}
+	if strings.Contains(share.ClientYAML, "serviceName:") || strings.Contains(share.ClientYAML, "host: cdn.example.com") {
+		t.Fatalf("URI-only transport fields leaked into Mihomo YAML: %s", share.ClientYAML)
+	}
+}
+
+func TestVLESSShareClientYAMLUsesMihomoGRPCOptions(t *testing.T) {
+	node := NodeModel{
+		Name:       "vless-grpc",
+		Protocol:   "vless",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		VLESS: &VLESSSpec{Transport: TransportSpec{
+			Network: "grpc", GRPCService: "grpc-service",
+		}},
+	}
+	share, err := (VLESSCompiler{}).BuildShare(ShareInput{Node: node, User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(share.ClientYAML, "grpc-opts:") || !strings.Contains(share.ClientYAML, "grpc-service-name: grpc-service") {
+		t.Fatalf("Mihomo gRPC options missing: %s", share.ClientYAML)
+	}
+	if strings.Contains(share.ClientYAML, "serviceName:") {
+		t.Fatalf("URI-only serviceName leaked into Mihomo YAML: %s", share.ClientYAML)
+	}
+}
+
+func TestVLESSShareClientYAMLUsesMihomoXHTTPOptions(t *testing.T) {
+	node := NodeModel{
+		Name:       "vless-xhttp",
+		Protocol:   "vless",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		VLESS: &VLESSSpec{Transport: TransportSpec{
+			Network: "xhttp", XHTTPPath: "/xhttp",
+		}},
+	}
+	share, err := (VLESSCompiler{}).BuildShare(ShareInput{Node: node, User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(share.ClientYAML, "xhttp-opts:") || !strings.Contains(share.ClientYAML, "path: /xhttp") {
+		t.Fatalf("Mihomo XHTTP options missing: %s", share.ClientYAML)
+	}
+}
