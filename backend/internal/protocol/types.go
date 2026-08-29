@@ -50,6 +50,7 @@ type VLESSSpec struct {
 	SkipCert    bool
 	SNI         string
 	Fingerprint string
+	ALPN        []string
 }
 
 type VMessSpec struct {
@@ -60,6 +61,7 @@ type VMessSpec struct {
 	SkipCert    bool
 	SNI         string
 	Fingerprint string
+	ALPN        []string
 }
 
 type TrojanSpec struct {
@@ -68,6 +70,7 @@ type TrojanSpec struct {
 	SkipCert    bool
 	SNI         string
 	Fingerprint string
+	ALPN        []string
 }
 
 type ShadowsocksSpec struct {
@@ -83,6 +86,7 @@ type Hysteria2Spec struct {
 	ObfsPassword string
 	Up           string
 	Down         string
+	ALPN         []string
 }
 
 // Share is the m-ui style share payload.
