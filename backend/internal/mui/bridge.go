@@ -2,10 +2,9 @@ package mui
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
-
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +12,8 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mui/domain"
 	muiprotocol "github.com/kazeyukiro/3m-ui/backend/internal/mui/protocol"
+	"golang.org/x/crypto/curve25519"
+	"gopkg.in/yaml.v3"
 )
 
 // Cred is a panel-side credential used when adapting Listeners to m-ui nodes.
@@ -38,7 +39,8 @@ func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
 		Name:          l.Name,
 		Enabled:       l.Enabled,
 		ListenAddress: firstNonEmpty(l.Listen, l.BindAddress, "0.0.0.0"),
-		Port:          firstNonEmpty(strings.TrimSpace(l.PublicPort), strings.TrimSpace(l.Port)),
+		// Listen port must come from the listener bind port, not PublicPort (NAT map).
+		Port:          firstNonEmpty(strings.TrimSpace(l.Port), "0"),
 		Protocol:      proto,
 		SchemaVersion: domain.NodeSchemaVersion,
 	}
@@ -174,6 +176,8 @@ func BuildShares(l models.Listener, publicHost string, creds []Cred) ([]muiproto
 	if profile.PublicHost == "" {
 		profile.PublicHost = publicHost
 	}
+	enrichAccessProfileFromNode(&profile, node, l)
+	flowDefault := listenerFlowHint(l)
 	state := domain.DesiredState{AsOf: time.Now().UTC(), PublicHost: profile.PublicHost}
 	reg := muiprotocol.DefaultRegistry()
 	out := make([]muiprotocol.Share, 0, len(node.Users))
@@ -181,6 +185,9 @@ func BuildShares(l models.Listener, publicHost string, creds []Cred) ([]muiproto
 		// Ensure user/profile node id match for registry checks.
 		user.NodeID = node.ID
 		profile.NodeID = node.ID
+		if user.VLESS != nil && strings.TrimSpace(user.VLESS.Flow) == "" && flowDefault != "" {
+			user.VLESS.Flow = flowDefault
+		}
 		s, err := reg.BuildShare(state, node, user, profile)
 		if err != nil {
 			return nil, err
@@ -287,11 +294,18 @@ func decodeSecurity(cfg map[string]interface{}, tlsFlag bool) domain.VLESSSecuri
 				}
 			}
 		}
+		priv := strMap(raw, "private-key")
+		pub := strMap(raw, "public-key")
+		if pub == "" && priv != "" {
+			if derived, err := deriveRealityPublicKey(priv); err == nil {
+				pub = derived
+			}
+		}
 		return domain.VLESSSecuritySpec{
 			Type: domain.VLESSSecurityReality,
 			Reality: &domain.RealityConfig{
-				PrivateKey:  strMap(raw, "private-key"),
-				PublicKey:   strMap(raw, "public-key"),
+				PrivateKey:  priv,
+				PublicKey:   pub,
 				ShortIDs:    shortIDs,
 				ServerNames: names,
 				Destination: strMap(raw, "dest"),
