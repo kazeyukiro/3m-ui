@@ -9,6 +9,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
+
 func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	host = netutil.NormalizeHost(host)
 	if host == "" {
