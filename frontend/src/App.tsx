@@ -19,6 +19,7 @@ import Settings from './pages/Settings';
 import TrafficPage from './pages/Traffic';
 import ClusterPage from './pages/Cluster';
 import RoutingPage from './pages/Routing';
+import SharePage from './pages/Share';
 
 const ThemedApp: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDark);
@@ -40,6 +41,7 @@ const ThemedApp: React.FC = () => {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/listeners" element={<Listeners />} />
                     <Route path="/users" element={<Users />} />
+                    <Route path="/share" element={<SharePage />} />
                     <Route path="/traffic" element={<TrafficPage />} />
                     <Route path="/cluster" element={<ClusterPage />} />
                     <Route path="/routing" element={<RoutingPage />} />
