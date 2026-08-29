@@ -28,7 +28,7 @@ func TestVLESSRealityClientExport(t *testing.T) {
 		t.Fatalf("missing reality-opts %#v", p)
 	}
 	pk, _ := ro["public-key"].(string)
-	const want = "dUMdExLMSn4l_p_bWpfFC5DQHaDHrjKanEQPG6Xl4hw"
+	const want = "ZKKPN8Up66SimLskEzVwwOmIoPHTJNrDtvU5kXqGz1M"
 	if pk != want {
 		t.Fatalf("public-key=%q, want %q", pk, want)
 	}

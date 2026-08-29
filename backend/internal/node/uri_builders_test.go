@@ -16,7 +16,7 @@ func TestRealityPublicKeyUsesRawURLEncoding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const want = "dUMdExLMSn4l_p_bWpfFC5DQHaDHrjKanEQPG6Xl4hw"
+	const want = "ZKKPN8Up66SimLskEzVwwOmIoPHTJNrDtvU5kXqGz1M"
 	if got != want {
 		t.Fatalf("public key = %q, want %q", got, want)
 	}

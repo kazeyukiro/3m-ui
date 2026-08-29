@@ -69,7 +69,7 @@ func TestBindListenersIsReplacement(t *testing.T) {
 	}
 	var listeners []models.Listener
 	for i := 0; i < 3; i++ {
-		l := models.Listener{Name: "n", Protocol: "trojan", Port: fmt.Sprintf("%d", 10000+i), Enabled: true}
+		l := models.Listener{Name: fmt.Sprintf("n-%d", i), Protocol: "trojan", Port: fmt.Sprintf("%d", 10000+i), Enabled: true}
 		if err := db.Create(&l).Error; err != nil {
 			t.Fatal(err)
 		}

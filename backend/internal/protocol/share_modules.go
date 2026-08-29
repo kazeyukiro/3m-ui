@@ -1,3 +1,30 @@
+package protocol
+
+import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"golang.org/x/crypto/curve25519"
+	"gopkg.in/yaml.v3"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
+)
+
+// --- Trojan ---
+
+func (TrojanCompiler) BuildShare(in ShareInput) (Share, error) {
+	spec := in.Node.Trojan
+	if spec == nil {
+		return Share{}, fmt.Errorf("trojan spec missing")
+	}
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	pass := in.User.Password
 	if pass == "" {
 		return Share{}, fmt.Errorf("trojan share requires password")
 	}
@@ -35,6 +62,159 @@
 		in.Node.Name,
 	)
 	return Share{URI: uri, QRContent: uri}, nil
+}
+
+// --- VLESS ---
+
+func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
+	spec := in.Node.VLESS
+	if spec == nil {
+		return Share{}, fmt.Errorf("vless spec missing")
+	}
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	uuid := in.User.UUID
+	if uuid == "" {
+		return Share{}, fmt.Errorf("vless share requires uuid")
+	}
+	params := map[string]string{"type": strOr(spec.Transport.Network, "tcp")}
+	if spec.Encryption != "" {
+		params["encryption"] = spec.Encryption
+	} else {
+		params["encryption"] = "none"
+	}
+	if spec.Flow != "" {
+		params["flow"] = spec.Flow
+	}
+	if spec.SNI != "" {
+		params["sni"] = spec.SNI
+	}
+	if spec.Fingerprint != "" {
+		params["fp"] = spec.Fingerprint
+	}
+	if spec.SkipCert {
+		params["allowInsecure"] = "1"
+	}
+	applyTransportParams(params, spec.Transport)
+	applyALPNParams(params, spec.ALPN)
+	if spec.Reality != nil {
+		params["security"] = "reality"
+		pbk, err := realityPublicKeyFromSpec(spec.Reality)
+		if err != nil {
+			return Share{}, err
+		}
+		params["pbk"] = pbk
+		if spec.Reality.ShortID != "" {
+			params["sid"] = spec.Reality.ShortID
+		}
+		if params["sni"] == "" {
+			params["sni"] = spec.Reality.ServerName
+		}
+		if params["fp"] == "" {
+			params["fp"] = "chrome"
+		}
+	}
+	uri := shareName(
+		shareQuery("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params),
+		in.Node.Name,
+	)
+	yamlOut, err := vlessClientYAML(in.Node, host, port, uuid, spec)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
+}
+
+func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (string, error) {
+	p := map[string]interface{}{
+		"name":   node.Name,
+		"type":   "vless",
+		"server": host,
+		"port":   portValue(port),
+		"uuid":   uuid,
+	}
+	if node.UDP {
+		p["udp"] = true
+	}
+	if spec.Flow != "" {
+		p["flow"] = spec.Flow
+	}
+	// tls / reality
+	if spec.Reality != nil {
+		// reality implies tls; mihomo expects tls:true plus reality-opts
+		p["tls"] = true
+		if ro := realityOptsYAML(spec.Reality); ro != nil {
+			p["reality-opts"] = ro
+		}
+		if spec.SNI != "" {
+			p["servername"] = spec.SNI
+		} else if spec.Reality.ServerName != "" {
+			p["servername"] = spec.Reality.ServerName
+		}
+		if spec.Fingerprint != "" {
+			p["client-fingerprint"] = spec.Fingerprint
+		} else {
+			p["client-fingerprint"] = "chrome"
+		}
+	} else if node.TLS {
+		p["tls"] = true
+		if spec.SNI != "" {
+			p["servername"] = spec.SNI
+		}
+		if spec.Fingerprint != "" {
+			p["client-fingerprint"] = spec.Fingerprint
+		}
+	}
+	if spec.SkipCert {
+		p["skip-cert-verify"] = true
+	}
+	if len(spec.ALPN) > 0 {
+		clean := make([]string, 0, len(spec.ALPN))
+		for _, a := range spec.ALPN {
+			if a = strings.TrimSpace(a); a != "" {
+				clean = append(clean, a)
+			}
+		}
+		if len(clean) > 0 {
+			p["alpn"] = clean
+		}
+	}
+	switch spec.Transport.Network {
+	case "ws":
+		ws := map[string]interface{}{}
+		if spec.Transport.WSPath != "" {
+			ws["path"] = spec.Transport.WSPath
+		}
+		if spec.Transport.WSHost != "" {
+			ws["Host"] = spec.Transport.WSHost
+		}
+		if len(ws) > 0 {
+			p["ws-opts"] = ws
+		}
+	case "grpc":
+		grpc := map[string]interface{}{}
+		if spec.Transport.GRPCService != "" {
+			grpc["grpc-service-name"] = spec.Transport.GRPCService
+		}
+		if len(grpc) > 0 {
+			p["grpc-opts"] = grpc
+		}
+	case "xhttp":
+		xh := map[string]interface{}{}
+		if spec.Transport.XHTTPPath != "" {
+			xh["path"] = spec.Transport.XHTTPPath
+		}
+		if len(xh) > 0 {
+			p["xhttp-opts"] = xh
+		}
+	}
+	raw, err := yaml.Marshal(map[string]interface{}{"proxies": []map[string]interface{}{p}})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 // --- Shadowsocks ---
@@ -152,7 +332,7 @@ func realityPublicKeyFromSpec(r *RealitySpec) (string, error) {
 		return "", fmt.Errorf("reality public-key or private-key required")
 	}
 	if private != "" {
-		privateRaw, err := decodeRealityKey(private)
+		privateRaw, _, err := decodeRealityKey(private)
 		if err != nil {
 			return "", fmt.Errorf("invalid Reality private key: %w", err)
 		}
