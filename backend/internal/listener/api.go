@@ -15,7 +15,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.ListListeners)
 	rg.POST("", h.CreateListener)
-	rg.POST("/quick-setup", h.QuickSetup)
+	rg.POST("/generate", h.GenerateMaterial)
 	rg.GET("/templates", h.ListTemplates)
 	rg.POST("/templates", h.CreateTemplate)
 	rg.GET("/templates/:id", h.GetTemplate)
@@ -296,16 +296,19 @@ func (h *Handler) InstantiateTemplate(c *gin.Context) {
 	c.JSON(201, l)
 }
 
-func (h *Handler) QuickSetup(c *gin.Context) {
-	var in QuickSetupInput
-	if err := c.ShouldBindJSON(&in); err != nil {
+func (h *Handler) GenerateMaterial(c *gin.Context) {
+	var body struct {
+		Kind   string `json:"kind"`
+		Cipher string `json:"cipher"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	res, err := h.svc.QuickSetup(in)
+	out, err := GenerateMaterial(body.Kind, body.Cipher)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, res)
+	c.JSON(http.StatusOK, out)
 }
