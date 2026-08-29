@@ -296,7 +296,7 @@ func realityPublicKeyFromSpec(r *RealitySpec) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawStdEncoding.EncodeToString(pub), nil
+	return base64.RawURLEncoding.EncodeToString(pub), nil
 }
 
 func realityOptsYAML(r *RealitySpec) map[string]interface{} {
