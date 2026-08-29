@@ -7,7 +7,6 @@ import {
 import {
   listListenerTemplates, createListenerTemplate, deleteListenerTemplate, instantiateListenerTemplate,
   cloneListener, batchSetListenersEnabled, listListenerVersions, diffListenerVersion, rollbackListenerVersion,
-  quickSetupListener,
   ListenerTemplate, ListenerVersion,
 } from '../api/listeners';
 import { useI18n } from '../i18n';
@@ -29,11 +28,6 @@ const Listeners: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [templateLoading, setTemplateLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [quickLoading, setQuickLoading] = useState(false);
-  const [quickForm] = Form.useForm();
-  const [quickHints, setQuickHints] = useState<Record<string, string> | null>(null);
-  const quickPreset = Form.useWatch('preset', quickForm);
   const [editing, setEditing] = useState<Listener | null>(null);
   const [form] = Form.useForm();
   const [templateForm] = Form.useForm();
@@ -133,7 +127,7 @@ const columns = [
     { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
   return <div>
-    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button onClick={() => { setQuickHints(null); quickForm.resetFields(); quickForm.setFieldsValue({ preset: 'vless-reality', bind_address: '0.0.0.0', enabled: true, sni: 'www.microsoft.com' }); setQuickOpen(true); }}>{t('listeners.quickSetup') || 'Quick setup'}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}><Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" /></Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}><Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" /></Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
     <Modal open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={typeof window !== 'undefined' && window.innerWidth < 768 ? '100%' : 720} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
       <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
@@ -173,119 +167,6 @@ const columns = [
         ))}
       </Space>
     </Modal>
-
-      <Modal
-        open={quickOpen}
-        title={t('listeners.quickSetup') || 'Quick setup'}
-        onCancel={() => { setQuickOpen(false); setQuickHints(null); }}
-        onOk={() => quickForm.submit()}
-        confirmLoading={quickLoading}
-        width={560}
-        destroyOnClose
-      >
-        <p style={{ opacity: 0.7, marginBottom: 12 }}>
-          {t('listeners.quickSetupHint') || 'One-click inbound. Fields change with the selected preset.'}
-        </p>
-        <Form
-          form={quickForm}
-          layout="vertical"
-          onFinish={async (values) => {
-            setQuickLoading(true);
-            try {
-              const res = await quickSetupListener({
-                preset: values.preset,
-                name: values.name || undefined,
-                port: values.port ? Number(values.port) : 0,
-                bind_address: values.bind_address || '0.0.0.0',
-                public_host: values.public_host || '',
-                public_port: values.public_port || '',
-                sni: values.sni || '',
-                uuid: values.uuid || '',
-                password: values.password || '',
-                private_key: values.private_key || '',
-                public_key: values.public_key || '',
-                short_id: values.short_id || '',
-                flow: values.flow || '',
-                method: values.method || '',
-                enabled: values.enabled !== false,
-              });
-              setQuickHints(res.hints || {});
-              message.success(t('listeners.created'));
-              await load(false);
-            } catch (e: any) {
-              message.error(e.response?.data?.error || e.message || t('common.error'));
-            } finally {
-              setQuickLoading(false);
-            }
-          }}
-        >
-          <Form.Item name="preset" label={t('listeners.preset') || 'Preset'} rules={[{ required: true }]}>
-            <Select
-              options={[
-                { value: 'vless-reality', label: 'VLESS + REALITY + Vision' },
-                { value: 'trojan-reality', label: 'Trojan + REALITY' },
-                { value: 'shadowsocks', label: 'Shadowsocks 2022' },
-                { value: 'hysteria2', label: 'Hysteria2 (skeleton)' },
-              ]}
-              onChange={(preset: string) => {
-                const keep = quickForm.getFieldsValue(['name', 'port', 'bind_address', 'public_host', 'public_port', 'enabled']);
-                quickForm.resetFields();
-                const next: Record<string, unknown> = { ...keep, preset, enabled: keep.enabled !== false };
-                if (preset === 'vless-reality' || preset === 'trojan-reality') next.sni = 'www.microsoft.com';
-                if (preset === 'vless-reality') next.flow = 'xtls-rprx-vision';
-                if (preset === 'shadowsocks') next.method = '2022-blake3-aes-128-gcm';
-                quickForm.setFieldsValue(next);
-                setQuickHints(null);
-              }}
-            />
-          </Form.Item>
-          <Form.Item name="name" label={t('common.name')}><Input placeholder="quick-node" /></Form.Item>
-          <Form.Item name="port" label={t('common.port')} tooltip={t('listeners.portAuto') || 'Leave empty for auto'}><Input placeholder="auto" /></Form.Item>
-          <Form.Item name="bind_address" label={t('listeners.bind')}><Input /></Form.Item>
-          <Form.Item name="public_host" label={t('listeners.publicHost') || 'Public host'}><Input placeholder="optional" /></Form.Item>
-          <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
-
-          {(quickPreset === 'vless-reality' || quickPreset === 'trojan-reality') && (
-            <>
-              <Divider>{t('listeners.sectionReality') || 'REALITY'}</Divider>
-              <Form.Item name="sni" label="SNI / dest host"><Input placeholder="www.microsoft.com" /></Form.Item>
-              <Form.Item name="private_key" label="Reality private key"><Input.Password placeholder="auto" /></Form.Item>
-              <Form.Item name="public_key" label="Reality public key"><Input placeholder="auto" /></Form.Item>
-              <Form.Item name="short_id" label="Short ID"><Input placeholder="auto" /></Form.Item>
-            </>
-          )}
-          {quickPreset === 'vless-reality' && (
-            <>
-              <Form.Item name="uuid" label="UUID"><Input placeholder="auto" /></Form.Item>
-              <Form.Item name="flow" label="Flow"><Input placeholder="xtls-rprx-vision" /></Form.Item>
-            </>
-          )}
-          {quickPreset === 'trojan-reality' && (
-            <Form.Item name="password" label={t('common.password')}><Input.Password placeholder="auto" /></Form.Item>
-          )}
-          {quickPreset === 'shadowsocks' && (
-            <>
-              <Divider>{t('listeners.sectionProtocol') || 'Shadowsocks'}</Divider>
-              <Form.Item name="method" label={t('listeners.cipher') || 'Method'}><Input placeholder="2022-blake3-aes-128-gcm" /></Form.Item>
-              <Form.Item name="password" label={t('common.password')}><Input.Password placeholder="auto" /></Form.Item>
-            </>
-          )}
-          {quickPreset === 'hysteria2' && (
-            <>
-              <Divider>Hysteria2</Divider>
-              <Form.Item name="password" label={t('common.password')}><Input.Password placeholder="auto" /></Form.Item>
-              <p style={{ fontSize: 12, opacity: 0.65 }}>{t('listeners.hy2QuickHint') || 'Skeleton only — add certificate/private-key in node edit before production.'}</p>
-            </>
-          )}
-        </Form>
-        {quickHints && (
-          <Card size="small" title={t('listeners.quickHints') || 'Generated'} style={{ marginTop: 12 }}>
-            {Object.entries(quickHints).map(([k, v]) => (
-              <div key={k} style={{ fontSize: 12, marginBottom: 4 }}><b>{k}</b>: <code>{String(v)}</code></div>
-            ))}
-          </Card>
-        )}
-      </Modal>
 
   </div>;
 };
