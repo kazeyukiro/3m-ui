@@ -301,7 +301,7 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
 const FORM_OWNED_KEYS = new Set([
   'cipher', 'password', 'psk', 'version', 'alterId', 'flow', 'decryption', 'encryption',
   'ws-path', 'grpc-service-name', 'ss-option',
-  'up', 'down', 'ignore-client-bandwidth', 'obfs', 'obfs-password', 'obfs-min-packet-size', 'obfs-max-packet-size',
+  'up', 'down', 'ignore-client-bandwidth', 'obfs', 'obfs-password',
   'masquerade', 'alpn', 'max-idle-time', 'handshake-timeout', 'token', 'congestion-controller',
   'authentication-timeout', 'max-udp-relay-packet-size', 'zero-rtt', 'padding-scheme', 'transport',
   'key', 'aead-method', 'padding-min', 'padding-max', 'table-type', 'enable-pure-downlink',
@@ -406,8 +406,6 @@ export function formValuesToConfig(
       if (values['ignore-client-bandwidth'] === true) cfg['ignore-client-bandwidth'] = true;
       set('obfs', values.obfs);
       set('obfs-password', values['obfs-password']);
-      set('obfs-min-packet-size', values['obfs-min-packet-size']);
-      set('obfs-max-packet-size', values['obfs-max-packet-size']);
       set('masquerade', values.masquerade);
       set('alpn', values.alpn);
       set('max-idle-time', values['max-idle-time']);
@@ -738,7 +736,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
               <Radio.Button value="raw">TCP</Radio.Button>
               <Radio.Button value="ws">WebSocket</Radio.Button>
               <Radio.Button value="grpc">gRPC</Radio.Button>
-              <Radio.Button value="xhttp">XHTTP</Radio.Button>
+              {XHTTP_PROTOCOLS.has(protocol) && <Radio.Button value="xhttp">XHTTP</Radio.Button>}
             </Radio.Group>
           </Form.Item>
         </>
@@ -864,12 +862,6 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           </Form.Item>
           <Form.Item name="obfs-password" label={t('listeners.obfsPassword')}>
             <Input.Password />
-          </Form.Item>
-          <Form.Item name="obfs-min-packet-size" label={t('listeners.obfsMinPacketSize')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="obfs-max-packet-size" label={t('listeners.obfsMaxPacketSize')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="masquerade" label={t('listeners.masquerade')}>
             <Input placeholder="https://www.example.com" />
