@@ -203,7 +203,6 @@ func intFrom(cfg map[string]interface{}, key string) int {
 	}
 }
 
-
 func firstString(v interface{}) (string, bool) {
 	if s, ok := v.(string); ok {
 		return s, s != ""
