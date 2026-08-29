@@ -79,6 +79,33 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if len(spec.ALPN) > 0 {
 		extra["alpn"] = append([]string(nil), spec.ALPN...)
 	}
+	// Mihomo keeps transport-specific client options in nested *-opts maps.
+	// Do not leak URI-only path/host/serviceName fields into the proxy object.
+	switch spec.Transport.Network {
+	case "ws":
+		ws := map[string]interface{}{}
+		if spec.Transport.WSPath != "" {
+			ws["path"] = spec.Transport.WSPath
+		}
+		if spec.Transport.WSHost != "" {
+			ws["headers"] = map[string]interface{}{"Host": spec.Transport.WSHost}
+		}
+		if len(ws) > 0 {
+			extra["ws-opts"] = ws
+		}
+	case "grpc":
+		if spec.Transport.GRPCService != "" {
+			extra["grpc-opts"] = map[string]interface{}{"grpc-service-name": spec.Transport.GRPCService}
+		}
+	case "xhttp":
+		xhttp := map[string]interface{}{}
+		if spec.Transport.XHTTPPath != "" {
+			xhttp["path"] = spec.Transport.XHTTPPath
+		}
+		if len(xhttp) > 0 {
+			extra["xhttp-opts"] = xhttp
+		}
+	}
 	yamlDoc, err := clientYAMLProxy("vless", host, port, in, extra)
 	if err != nil {
 		return Share{}, err
