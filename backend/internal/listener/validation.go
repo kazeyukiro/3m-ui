@@ -1,6 +1,7 @@
 package listener
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -41,6 +42,11 @@ func ValidateModel(l *models.Listener) error {
 			return fmt.Errorf("listener %q has invalid bind address %q; use an IPv4 or IPv6 address", l.Name, address)
 		}
 		l.BindAddress = address
+	}
+
+	// Drop client-only REALITY fields that Mihomo rejects on listeners.
+	if err := sanitizeListenerConfigJSON(l); err != nil {
+		return err
 	}
 	if err := dbconfig.ValidateListenerConfig(protocol, l.Config); err != nil {
 		return fmt.Errorf("listener %q: %w", l.Name, err)
@@ -156,4 +162,30 @@ func AddressesConflict(a, b string) bool {
 		return ia.IsUnspecified() || ib.IsUnspecified()
 	}
 	return false
+}
+
+
+func sanitizeListenerConfigJSON(l *models.Listener) error {
+	if l == nil || strings.TrimSpace(l.Config) == "" {
+		return nil
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
+		return fmt.Errorf("invalid config json: %w", err)
+	}
+	if raw, ok := cfg["reality-config"].(map[string]interface{}); ok && raw != nil {
+		delete(raw, "public-key")
+		delete(raw, "public_key")
+		cfg["reality-config"] = raw
+	}
+	// Also drop panel-only keys that must never reach Mihomo.
+	delete(cfg, "security_layer")
+	delete(cfg, "transport_layer")
+	delete(cfg, "access_profile")
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	l.Config = string(b)
+	return nil
 }
