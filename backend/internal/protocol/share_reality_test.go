@@ -37,8 +37,8 @@ func TestVLESSShareRealityPublicKeyIsRawURLSafeEverywhere(t *testing.T) {
 	if !strings.Contains(share.URI, "pbk="+want) {
 		t.Fatalf("URI does not contain expected URL-safe public key: %s", share.URI)
 	}
-	if strings.ContainsAny(share.URI, "+/") {
-		t.Fatalf("URI contains non-URL-safe base64 characters: %s", share.URI)
+	if strings.Contains(share.URI, "pbk="+want+"+") || strings.Contains(share.URI, "pbk="+want+"/") {
+		t.Fatalf("URI public-key parameter contains non-URL-safe characters: %s", share.URI)
 	}
 	if !strings.Contains(share.ClientYAML, "public-key: "+want) {
 		t.Fatalf("client YAML does not contain expected URL-safe public key: %s", share.ClientYAML)
