@@ -32,5 +32,5 @@ export const listListenerVersions = (id: number) => client.get<ListenerVersion[]
 export const diffListenerVersion = (id: number, version: number) => client.get<string>(`/nodes/${id}/versions/${version}/diff`, { responseType: 'text' }).then(r => r.data);
 export const rollbackListenerVersion = (id: number, version: number) => client.post(`/nodes/${id}/versions/${version}/rollback`).then(r => r.data);
 
-export const quickSetupListener = (payload: Record<string, unknown>) =>
-  client.post<{ listener: Listener; hints: Record<string, string> }>('/nodes/quick-setup', payload).then((r) => r.data);
+export const generateMaterial = (payload: { kind: string; cipher?: string }) =>
+  client.post('/listeners/generate', payload).then((r) => r.data as Record<string, string>);
