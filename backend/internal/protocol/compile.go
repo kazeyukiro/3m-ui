@@ -150,8 +150,6 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 			case "uuid":
 				if c.UUID != "" {
 					u["uuid"] = c.UUID
-				} else if c.Password != "" {
-					u["uuid"] = c.Password
 				}
 				if c.Flow != "" {
 					u["flow"] = c.Flow
