@@ -164,7 +164,9 @@ func (VLESSModule) BuildShare(
 	}
 	port := int(profile.PublicPort)
 	if port <= 0 {
-		port = int(node.Port)
+		if n, err := strconv.Atoi(strings.TrimSpace(node.Port)); err == nil && n > 0 {
+			port = n
+		}
 	}
 	uri := (&url.URL{
 		Scheme:   "vless",
@@ -535,4 +537,35 @@ func encodeClientYAML(value any) ([]byte, error) {
 		return nil, err
 	}
 	return output.Bytes(), nil
+}
+
+
+// deriveShareRealityPublicKey produces the X25519 public key for share URIs (pbk).
+func deriveShareRealityPublicKey(private string) (string, error) {
+	private = strings.TrimSpace(private)
+	if private == "" {
+		return "", fmt.Errorf("empty private key")
+	}
+	var raw []byte
+	var err error
+	for _, decode := range []func(string) ([]byte, error){
+		base64.RawURLEncoding.DecodeString,
+		base64.URLEncoding.DecodeString,
+		base64.RawStdEncoding.DecodeString,
+		base64.StdEncoding.DecodeString,
+	} {
+		raw, err = decode(private)
+		if err == nil && len(raw) == 32 {
+			break
+		}
+		raw = nil
+	}
+	if len(raw) != 32 {
+		return "", fmt.Errorf("invalid Reality private key")
+	}
+	pub, err := curve25519.X25519(raw, curve25519.Basepoint)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(pub), nil
 }
