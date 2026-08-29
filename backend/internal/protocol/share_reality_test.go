@@ -127,3 +127,54 @@ func TestShareClientYAMLReflectsNodeUDP(t *testing.T) {
 		t.Fatalf("UDP-enabled node must export udp: true: %s", share.ClientYAML)
 	}
 }
+
+func TestVLESSSharePreservesALPNInURIAndYAML(t *testing.T) {
+	node := NodeModel{
+		Name:       "vless-alpn",
+		Protocol:   "vless",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		VLESS: &VLESSSpec{
+			SNI:  "example.com",
+			ALPN: []string{"h2", "http/1.1"},
+		},
+	}
+	share, err := (VLESSCompiler{}).BuildShare(ShareInput{
+		Node: node,
+		User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(share.URI, "alpn=h2%2Chttp%2F1.1") {
+		t.Fatalf("URI lost ALPN: %s", share.URI)
+	}
+	if !strings.Contains(share.ClientYAML, "alpn:") || !strings.Contains(share.ClientYAML, "- h2") || !strings.Contains(share.ClientYAML, "- http/1.1") {
+		t.Fatalf("client YAML lost ALPN: %s", share.ClientYAML)
+	}
+}
+
+func TestHysteria2SharePreservesALPN(t *testing.T) {
+	node := NodeModel{
+		Name:       "hy2-alpn",
+		Protocol:   "hysteria2",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		Hysteria2: &Hysteria2Spec{
+			SNI:  "example.com",
+			ALPN: []string{"h3"},
+		},
+	}
+	share, err := (Hysteria2Compiler{}).BuildShare(ShareInput{
+		Node: node,
+		User: UserCred{Password: "secret"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(share.URI, "alpn=h3") {
+		t.Fatalf("Hysteria2 URI lost ALPN: %s", share.URI)
+	}
+}
