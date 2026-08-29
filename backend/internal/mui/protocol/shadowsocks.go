@@ -79,7 +79,7 @@ func (ShadowsocksModule) BuildShare(state domain.DesiredState, node domain.Node,
 	}).String()
 	uri = "ss://" + userinfo + "@" + strings.TrimPrefix(uri, "ss://")
 	client := shadowsocksClientDocument{Proxies: []shadowsocksClientProxy{{
-		Name: node.Name + " - " + user.Name, Type: "ss", Server: host, Port: profile.PublicPort,
+		Name: node.Name + " - " + user.Name, Type: "ss", Server: host, Port: uint16(port),
 		Cipher: node.Shadowsocks.Cipher, Password: user.Shadowsocks.Password, UDP: node.Shadowsocks.UDP,
 		Plugin: plugin, PluginOptions: pluginOptions, ClientFingerprint: profile.Fingerprint,
 	}}}
