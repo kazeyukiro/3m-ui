@@ -50,3 +50,80 @@ func TestVLESSShareRealityPublicKeyIsRawURLSafeEverywhere(t *testing.T) {
 		t.Fatalf("expected a valid 32-byte raw URL-safe public key: %v", err)
 	}
 }
+
+func TestRealityShareRejectsMismatchedPublicAndPrivateKeys(t *testing.T) {
+	node := NodeModel{
+		Name:       "vless-reality-mismatch",
+		Protocol:   "vless",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		VLESS: &VLESSSpec{
+			Reality: &RealitySpec{
+				PrivateKey: "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
+				PublicKey:  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			},
+		},
+	}
+
+	_, err := (VLESSCompiler{}).BuildShare(ShareInput{
+		Node: node,
+		User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not match private key") {
+		t.Fatalf("expected Reality key mismatch error, got %v", err)
+	}
+}
+
+func TestRealityShareNormalizesStandardBase64PublicKey(t *testing.T) {
+	const privateKey = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0"
+	const wantURL = "dUMdExLMSn4l_p_bWpfFC5DQHaDHrjKanEQPG6Xl4hw"
+
+	raw, err := base64.RawURLEncoding.DecodeString(wantURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	standard := base64.RawStdEncoding.EncodeToString(raw)
+
+	got, err := realityPublicKeyFromSpec(&RealitySpec{PrivateKey: privateKey, PublicKey: standard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != wantURL {
+		t.Fatalf("expected normalized URL-safe public key %q, got %q", wantURL, got)
+	}
+}
+
+func TestShareClientYAMLReflectsNodeUDP(t *testing.T) {
+	baseNode := NodeModel{
+		Name:       "vless-tcp",
+		Protocol:   "vless",
+		PublicHost: "example.com",
+		Port:       "443",
+		Enabled:    true,
+		VLESS:      &VLESSSpec{},
+	}
+
+	share, err := (VLESSCompiler{}).BuildShare(ShareInput{
+		Node: baseNode,
+		User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(share.ClientYAML, "udp: true") {
+		t.Fatalf("TCP-only node must not export udp: true: %s", share.ClientYAML)
+	}
+
+	baseNode.UDP = true
+	share, err = (VLESSCompiler{}).BuildShare(ShareInput{
+		Node: baseNode,
+		User: UserCred{UUID: "9d0cb9d0-964f-4ef6-897d-6c6b3ccf9e68"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(share.ClientYAML, "udp: true") {
+		t.Fatalf("UDP-enabled node must export udp: true: %s", share.ClientYAML)
+	}
+}
