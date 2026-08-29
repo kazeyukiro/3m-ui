@@ -12,6 +12,9 @@ import client from '../api/client';
 const { Text } = Typography;
 
 const Settings: React.FC = () => {
+  const [panelServer, setPanelServer] = useState<{ port?: number; listen?: string; public_url?: string; config_path?: string; hint?: string }>({});
+  const [panelForm] = Form.useForm();
+
   const { t, locale, setLocale } = useI18n();
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
@@ -27,6 +30,15 @@ const Settings: React.FC = () => {
   const [sslStatus, setSslStatus] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
+    client.get('/system/panel-server').then((r) => {
+      setPanelServer(r.data || {});
+      panelForm.setFieldsValue({
+        port: r.data?.port ?? 8080,
+        listen: r.data?.listen || '',
+        public_url: r.data?.public_url || '',
+      });
+    }).catch(() => {});
+
     client.get('/panel-settings').then((r) => {
       const day = Number(r.data?.traffic_reset_day || 0);
       if (!Number.isNaN(day)) setResetDay(day);
@@ -61,6 +73,34 @@ const Settings: React.FC = () => {
     <div>
       <h2>{t('settings.title')}</h2>
       <p style={{ color: 'rgba(0,0,0,0.45)' }}>{t('settings.subtitle')}</p>
+      <Card title={t('settings.panelServer') || 'Panel / NAT'} style={{ marginBottom: 16 }} extra={<span style={{ fontSize: 12, opacity: 0.65 }}>{panelServer.config_path || ''}</span>}>
+        <Form form={panelForm} layout="vertical" onFinish={async (values) => {
+          try {
+            const res = await client.put('/system/panel-server', {
+              port: Number(values.port),
+              listen: values.listen || '',
+              public_url: values.public_url || '',
+            });
+            message.success(res.data?.message || t('common.saved') || 'Saved — restart service to apply port');
+            setPanelServer((s) => ({ ...s, ...res.data }));
+          } catch (e: any) {
+            message.error(e?.response?.data?.error || e.message);
+          }
+        }}>
+          <Form.Item name="port" label={t('settings.panelPort') || 'Panel port'} rules={[{ required: true }]} extra={t('settings.panelPortHint') || 'NAT: map this host port to the WAN. Restart 3m-ui after change.'}>
+            <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="listen" label={t('settings.panelListen') || 'Listen address'} extra={t('settings.panelListenHint') || 'Empty = all interfaces (IPv4/IPv6). Use 127.0.0.1 for reverse-proxy only.'}>
+            <Input placeholder="0.0.0.0 or :: or 127.0.0.1" />
+          </Form.Item>
+          <Form.Item name="public_url" label={t('settings.panelPublicURL') || 'Public panel URL'} extra={t('settings.panelPublicURLHint') || 'Used in subscription links behind NAT, e.g. https://panel.example.com:8443'}>
+            <Input placeholder="https://your-domain:port" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit">{t('common.save') || 'Save'}</Button>
+          <p style={{ marginTop: 8, fontSize: 12, opacity: 0.65 }}>{panelServer.hint}</p>
+        </Form>
+      </Card>
+
       <Card title={<><GlobalOutlined /> {t('settings.language')}</>} style={{ marginBottom: 16 }}>
         <Space>
           <Button type={locale === 'zh' ? 'primary' : 'default'} onClick={() => setLocale('zh')}>中文</Button>
