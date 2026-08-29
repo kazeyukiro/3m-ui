@@ -98,7 +98,7 @@ func (Hysteria2Module) BuildShare(
 	}).String()
 	client := hysteria2ClientDocument{Proxies: []hysteria2ClientProxy{{
 		Name: node.Name + " - " + user.Name, Type: "hysteria2", Server: host,
-		Port: profile.PublicPort, Password: user.Hysteria2.Password,
+		Port: uint16(port), Password: user.Hysteria2.Password,
 		Up: node.Hysteria2.Up, Down: node.Hysteria2.Down, BBRProfile: node.Hysteria2.BBRProfile,
 		Obfs: node.Hysteria2.Obfs, ObfsPassword: node.Hysteria2.ObfsPassword,
 		ObfsMinPacketSize: node.Hysteria2.ObfsMinPacketSize, ObfsMaxPacketSize: node.Hysteria2.ObfsMaxPacketSize,
