@@ -39,6 +39,31 @@ func DefaultSettings() Settings {
 	}
 }
 
+// allowedCertKeyPrefixes constrains where manual cert_file / key_file may
+// reside. This blocks an administrator mistake (or a compromised admin
+// session) from pointing the panel TLS loader at arbitrary files such as
+// /etc/shadow or other secrets — only well-known TLS directories are
+// permitted.
+var allowedCertKeyPrefixes = []string{
+	"/etc/ssl/",
+	"/etc/3m-ui/",
+	"/var/lib/3m-ui/",
+	"/etc/letsencrypt/",
+	"/root/.acme.sh/",
+	"/etc/nginx/ssl/",
+	"/etc/caddy/certs/",
+}
+
+func isAllowedCertKeyPath(p string) bool {
+	clean := filepath.Clean(p)
+	for _, prefix := range allowedCertKeyPrefixes {
+		if strings.HasPrefix(clean, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func LoadSettings(db *gorm.DB) (Settings, error) {
 	s := DefaultSettings()
 	if db == nil {
@@ -116,7 +141,11 @@ func NewManager(s Settings) (*Manager, error) {
 func (m *Manager) configure() error {
 	s := m.settings
 	if s.CertFile != "" && s.KeyFile != "" {
-		// Manual PEM pair — no autocert.
+		// Manual PEM pair — no autocert. Restrict to allowlisted directories so
+		// the loader cannot be pointed at arbitrary sensitive files.
+		if !isAllowedCertKeyPath(s.CertFile) || !isAllowedCertKeyPath(s.KeyFile) {
+			return fmt.Errorf("panel SSL: cert_file/key_file must be under an allowed directory")
+		}
 		return nil
 	}
 	if s.Domain == "" {
@@ -144,6 +173,9 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 		return nil, nil
 	}
 	if s.CertFile != "" && s.KeyFile != "" {
+		if !isAllowedCertKeyPath(s.CertFile) || !isAllowedCertKeyPath(s.KeyFile) {
+			return nil, fmt.Errorf("panel SSL: cert_file/key_file must be under an allowed directory")
+		}
 		cert, err := tls.LoadX509KeyPair(s.CertFile, s.KeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("load manual cert: %w", err)
