@@ -66,8 +66,15 @@ func (ShadowsocksModule) BuildShare(state domain.DesiredState, node domain.Node,
 		query.Set("plugin", strings.Join(parts, ";"))
 	}
 	userinfo := base64.RawURLEncoding.EncodeToString([]byte(node.Shadowsocks.Cipher + ":" + user.Shadowsocks.Password))
+	port := int(profile.PublicPort)
+	if port <= 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(node.Port)); err == nil {
+			port = n
+		}
+	}
+	// SIP002: ss://BASE64URL(method:password)@host:port/?plugin=...#name
 	uri := (&url.URL{
-		Scheme: "ss", Host: net.JoinHostPort(host, strconv.Itoa(int(profile.PublicPort))),
+		Scheme: "ss", Host: net.JoinHostPort(host, strconv.Itoa(port)),
 		RawQuery: query.Encode(), Fragment: node.Name + " - " + user.Name,
 	}).String()
 	uri = "ss://" + userinfo + "@" + strings.TrimPrefix(uri, "ss://")
