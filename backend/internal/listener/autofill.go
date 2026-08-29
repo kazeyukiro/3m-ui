@@ -84,6 +84,8 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		}
 	}
 
+	sanitizeServerRealityConfig(cfg)
+
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -91,6 +93,18 @@ func AutofillListenerDefaults(l *models.Listener) error {
 	l.Config = string(raw)
 	return nil
 }
+
+// sanitizeServerRealityConfig drops client-only keys from listener reality-config.
+func sanitizeServerRealityConfig(cfg map[string]interface{}) {
+	raw, ok := cfg["reality-config"].(map[string]interface{})
+	if !ok || raw == nil {
+		return
+	}
+	delete(raw, "public-key")
+	delete(raw, "public_key")
+	cfg["reality-config"] = raw
+}
+
 
 func needsReality(cfg map[string]interface{}) bool {
 	if _, ok := cfg["reality-config"]; ok {
@@ -109,12 +123,13 @@ func autofillReality(cfg map[string]interface{}) error {
 	}
 	priv, _ := raw["private-key"].(string)
 	pub, _ := raw["public-key"].(string)
-	priv, pub, err := resolveRealityKeys(priv, pub)
+	priv, _, err := resolveRealityKeys(priv, pub)
 	if err != nil {
 		return err
 	}
 	raw["private-key"] = priv
-	raw["public-key"] = pub
+	// public-key is client-only; Mihomo listener schema rejects it on the server side.
+	delete(raw, "public-key")
 	if dest, _ := raw["dest"].(string); strings.TrimSpace(dest) == "" {
 		if sni, _ := cfg["sni"].(string); strings.TrimSpace(sni) != "" {
 			raw["dest"] = strings.TrimSpace(sni) + ":443"
