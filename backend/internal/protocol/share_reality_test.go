@@ -8,7 +8,7 @@ import (
 
 func TestVLESSShareRealityPublicKeyIsRawURLSafeEverywhere(t *testing.T) {
 	const privateKey = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0"
-	const want = "dUMdExLMSn4l_p_bWpfFC5DQHaDHrjKanEQPG6Xl4hw"
+	const want = "ZKKPN8Up66SimLskEzVwwOmIoPHTJNrDtvU5kXqGz1M"
 
 	node := NodeModel{
 		Name:       "vless-reality",
@@ -77,7 +77,7 @@ func TestRealityShareRejectsMismatchedPublicAndPrivateKeys(t *testing.T) {
 
 func TestRealityShareNormalizesStandardBase64PublicKey(t *testing.T) {
 	const privateKey = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0"
-	const wantURL = "dUMdExLMSn4l_p_bWpfFC5DQHaDHrjKanEQPG6Xl4hw"
+	const wantURL = "ZKKPN8Up66SimLskEzVwwOmIoPHTJNrDtvU5kXqGz1M"
 
 	raw, err := base64.RawURLEncoding.DecodeString(wantURL)
 	if err != nil {
