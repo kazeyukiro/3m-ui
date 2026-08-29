@@ -1,6 +1,7 @@
 package router
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -17,12 +18,13 @@ func registerPanelSettingsRoutes(api *gin.RouterGroup, d Deps) {
 		}
 		var rows []models.PanelSetting
 		if err := db.Find(&rows).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Printf("panel-settings list failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
 		out := map[string]string{}
 		for _, r := range rows {
-			if strings.Contains(strings.ToLower(r.Key), "token") || strings.Contains(strings.ToLower(r.Key), "secret") {
+			if isSensitiveSettingKey(r.Key) {
 				continue
 			}
 			out[r.Key] = r.Value
@@ -42,24 +44,47 @@ func registerPanelSettingsRoutes(api *gin.RouterGroup, d Deps) {
 		}
 		for k, v := range body {
 			k = strings.TrimSpace(k)
-			if k == "" || strings.Contains(strings.ToLower(k), "token") {
+			if isSensitiveSettingKey(k) {
 				continue
 			}
 			var row models.PanelSetting
 			err := db.Where("key = ?", k).First(&row).Error
 			if err != nil {
 				if createErr := db.Create(&models.PanelSetting{Key: k, Value: v}).Error; createErr != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": createErr.Error()})
+					log.Printf("panel-settings create %q failed: %v", k, createErr)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
 			} else {
 				row.Value = v
 				if saveErr := db.Save(&row).Error; saveErr != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": saveErr.Error()})
+					log.Printf("panel-settings save %q failed: %v", k, saveErr)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+}
+
+// isSensitiveSettingKey reports whether a panel setting key holds a secret that
+// must never be returned in bulk reads nor written through the generic PUT
+// endpoint. The match is case-insensitive substring on a curated keyword list
+// plus a small set of exact keys whose values are inherently sensitive.
+func isSensitiveSettingKey(key string) bool {
+	k := strings.ToLower(strings.TrimSpace(key))
+	if k == "" {
+		return true
+	}
+	switch k {
+	case "telegram", "panel_ssl":
+		return true
+	}
+	for _, s := range []string{"token", "secret", "credential", "password", "private", "bot"} {
+		if strings.Contains(k, s) {
+			return true
+		}
+	}
+	return false
 }
