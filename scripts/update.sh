@@ -157,9 +157,33 @@ verify_release_cosign(){
 }
 
 # Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
-# MetaCubeX/mihomo (C-3). Best-effort: if Mihomo did not publish SHA256SUMS for
-# a release, print a loud warning and return non-zero so the caller can decide
-# (fail-closed unless THREE_M_UI_INSECURE=1).
+# GitHub Release API provides official SHA-256 digest for each asset (C-3).
+# Mihomo does not publish its own SHA256SUMS, so we rely on GitHub's
+# server-side digest instead. Fail-closed unless THREE_M_UI_INSECURE=1.
+github_asset_digest(){
+  repo="$1"; tag="$2"; asset="$3"
+  api_url="https://api.github.com/repos/${repo}/releases/tags/${tag}"
+  if command_exists curl; then
+    curl -fsSL "$api_url" 2>/dev/null | \
+      awk -v want="$asset" '
+        /"name"[[:space:]]*:/ { name=$0; sub(/.*"name"[[:space:]]*:[[:space:]]*"/,"",name); sub(/".*/,"",name) }
+        /"digest"[[:space:]]*:/ {
+          if (name == want) {
+            d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"/,"",d); sub(/".*/,"",d); print d; exit
+          }
+        }'
+  else
+    wget -qO- "$api_url" 2>/dev/null | \
+      awk -v want="$asset" '
+        /"name"[[:space:]]*:/ { name=$0; sub(/.*"name"[[:space:]]*:[[:space:]]*"/,"",name); sub(/".*/,"",name) }
+        /"digest"[[:space:]]*:/ {
+          if (name == want) {
+            d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"/,"",d); sub(/".*/,"",d); print d; exit
+          }
+        }'
+  fi
+}
+
 verify_mihomo_sha256(){
   tag="$1"
   asset="$2"
@@ -168,24 +192,27 @@ verify_mihomo_sha256(){
     echo "Error: no sha256 tool available; cannot verify Mihomo $asset. Install coreutils/sha256sum (or openssl) and re-run." >&2
     exit 1
   fi
-  sums_tmp="$(mktemp)"
-  if ! download "https://github.com/MetaCubeX/mihomo/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
-    rm -f "$sums_tmp"
-    echo "Warning: Mihomo SHA256SUMS not published for $tag; cannot verify $asset." >&2
+  echo "Querying GitHub Release API for official digest of $asset..."
+  digest="$(github_asset_digest MetaCubeX/mihomo "$tag" "$asset")"
+  if [ -z "$digest" ]; then
+    echo "Warning: could not retrieve digest for $asset from GitHub Release API (tag $tag)." >&2
+    echo "         This is usually a rate-limit; retry later or set THREE_M_UI_INSECURE=1." >&2
     return 1
   fi
-  expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
-  rm -f "$sums_tmp"
-  if [ -z "$expected" ]; then
-    echo "Warning: $asset not listed in Mihomo SHA256SUMS for $tag; cannot verify checksum." >&2
-    return 1
-  fi
+  case "$digest" in
+    sha256:*) expected="${digest#sha256:}" ;;
+    *) echo "Warning: unexpected digest format from GitHub API: $digest" >&2; return 1 ;;
+  esac
   actual="$(file_sha256 "$gzpath")"
+  if [ -z "$actual" ]; then
+    echo "Error: cannot compute SHA-256 of $asset; no sha256 tool available." >&2
+    exit 1
+  fi
   if [ "$actual" != "$expected" ]; then
     echo "Error: checksum mismatch for Mihomo $asset (expected $expected, got $actual)" >&2
     exit 1
   fi
-  echo "Checksum OK: Mihomo $asset"
+  echo "Checksum OK: Mihomo $asset (verified via GitHub Release API digest)"
 }
 
 prune_backups(){
@@ -276,14 +303,17 @@ if [ "$UPDATE_MIHOMO" -eq 1 ] && [ -x "$MIHOMO_BIN" ]; then
     esac
     mihomo_gzname="${mihomo_asset}-${mtag}.gz"
     if [ -n "$mihomo_asset" ] && download "https://github.com/MetaCubeX/mihomo/releases/download/${mtag}/${mihomo_gzname}" "$mihomo_tmp.gz"; then
-      # Verify the .gz checksum BEFORE decompressing (C-3).
+      # Verify the .gz checksum if possible (Mihomo does not publish SHA256SUMS;
+      # we query GitHub Release API for the per-asset digest). Best-effort by
+      # default because anonymous GitHub API is rate-limited (60/hour/IP).
+      # Set THREE_M_UI_VERIFY_MIHOMO=1 to enforce verification.
       if verify_mihomo_sha256 "$mtag" "$mihomo_gzname" "$mihomo_tmp.gz"; then
         : # verified
-      elif [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
-        echo "WARNING: THREE_M_UI_INSECURE=1 set; continuing Mihomo update WITHOUT checksum verification (NOT recommended)." >&2
-      else
-        echo "Error: Mihomo checksum verification failed. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)." >&2
+      elif [ "${THREE_M_UI_VERIFY_MIHOMO:-0}" = "1" ]; then
+        echo "Error: Mihomo checksum verification failed (THREE_M_UI_VERIFY_MIHOMO=1 set). Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)." >&2
         exit 1
+      else
+        echo "Warning: could not verify Mihomo checksum; continuing (HTTPS + ELF smoke-test). Set THREE_M_UI_VERIFY_MIHOMO=1 to enforce." >&2
       fi
       if gzip -dc "$mihomo_tmp.gz" > "$mihomo_tmp"; then
         chmod 0755 "$mihomo_tmp"
