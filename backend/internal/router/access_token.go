@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +55,8 @@ func (h *AccessTokenHandler) List(c *gin.Context) {
 	}
 	var tokens []models.AccessToken
 	if err := h.db.Order("id desc").Find(&tokens).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("access-token list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	out := make([]accessTokenResponse, 0, len(tokens))
@@ -86,7 +88,8 @@ func (h *AccessTokenHandler) Create(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "listener not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Printf("access-token create lookup listener failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
@@ -105,7 +108,8 @@ func (h *AccessTokenHandler) Create(c *gin.Context) {
 	}
 	token := models.AccessToken{Name: name, Token: hex.EncodeToString(buf), Enabled: true, ExpireAt: in.ExpireAt, ListenerID: l.ID}
 	if err := h.db.Create(&token).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("access-token create save failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"id": token.ID, "name": token.Name, "token": token.Token, "enabled": token.Enabled, "expire_at": token.ExpireAt, "listener_id": token.ListenerID, "mihomo_link": converter.GetSubscriptionURL(h.cfg, c.Request, token.Token, "mihomo"), "clash_link": converter.GetSubscriptionURL(h.cfg, c.Request, token.Token, "clash"), "singbox_link": converter.GetSubscriptionURL(h.cfg, c.Request, token.Token, "singbox"), "shadowrocket_link": converter.GetSubscriptionURL(h.cfg, c.Request, token.Token, "shadowrocket")})
@@ -130,7 +134,8 @@ func (h *AccessTokenHandler) Update(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "access token not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Printf("access-token update lookup failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
@@ -158,7 +163,8 @@ func (h *AccessTokenHandler) Update(c *gin.Context) {
 	}
 	if len(updates) > 0 {
 		if err := h.db.Model(&t).Updates(updates).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Printf("access-token update save failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
 	}
@@ -176,7 +182,8 @@ func (h *AccessTokenHandler) Delete(c *gin.Context) {
 	}
 	result := h.db.Delete(&models.AccessToken{}, uint(id))
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		log.Printf("access-token delete failed: %v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	if result.RowsAffected == 0 {

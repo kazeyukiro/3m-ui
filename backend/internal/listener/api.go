@@ -1,6 +1,7 @@
 package listener
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -43,7 +44,8 @@ func parseID(c *gin.Context, key string) (uint, bool) {
 func (h *Handler) ListListeners(c *gin.Context) {
 	list, err := h.svc.GetAll()
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		log.Printf("listener list failed: %v", err)
+		c.JSON(500, gin.H{"error": "internal server error"})
 		return
 	}
 	// search across inbound name / protocol / port / bind.
@@ -147,7 +149,8 @@ func (h *Handler) ReloadListener(c *gin.Context) {
 		return
 	}
 	if err := h.svc.RegenerateConfig(); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		log.Printf("listener reload failed: %v", err)
+		c.JSON(500, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(200, gin.H{"status": "ok"})
@@ -179,7 +182,8 @@ func (h *Handler) ListVersions(c *gin.Context) {
 	}
 	v, err := h.svc.ListVersions(id)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		log.Printf("listener list-versions failed: %v", err)
+		c.JSON(500, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(200, v)
@@ -235,7 +239,8 @@ func (h *Handler) BatchEnabled(c *gin.Context) {
 func (h *Handler) ListTemplates(c *gin.Context) {
 	t, err := h.svc.ListTemplates()
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		log.Printf("listener list-templates failed: %v", err)
+		c.JSON(500, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(200, t)
