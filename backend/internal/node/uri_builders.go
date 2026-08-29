@@ -192,6 +192,14 @@ func trojanURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		for k, v := range transportParams(cfg) {
 			params[k] = v
 		}
+		if params["security"] == "" {
+			if _, ok := cfg["certificate"].(string); ok {
+				params["security"] = "tls"
+			}
+		}
+		if params["type"] == "" {
+			params["type"] = "tcp"
+		}
 		if reality, ok := cfg["reality-config"].(map[string]interface{}); ok {
 			params["security"] = "reality"
 			publicKey, err := realityPublicKey(reality)
@@ -217,6 +225,32 @@ func trojanURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 }
 
 func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
+	if rows := userRows(cfg); len(rows) > 0 {
+		result := make([]string, 0, len(rows))
+		for _, row := range rows {
+			password, _ := row["password"].(string)
+			if password == "" {
+				continue
+			}
+			params := map[string]string{}
+			if v, ok := cfg["sni"].(string); ok && v != "" {
+				params["sni"] = v
+			}
+			if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+				params["insecure"] = "1"
+			}
+			if v, ok := cfg["obfs"].(string); ok && v != "" {
+				params["obfs"] = v
+			}
+			if v, ok := cfg["obfs-password"].(string); ok && v != "" {
+				params["obfs-password"] = v
+			}
+			result = append(result, addName(query("hysteria2://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
+		}
+		if len(result) > 0 {
+			return result, nil
+		}
+	}
 	users := userMap(cfg)
 	if len(users) == 0 {
 		return nil, fmt.Errorf("hysteria2 listener requires at least one user for URI export")
@@ -255,6 +289,39 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
 	if token, ok := cfg["token"].(string); ok && strings.TrimSpace(token) != "" {
 		return []string{addName("tuic://"+url.PathEscape(token)+"@"+netutil.JoinHostPort(host, port), name)}, nil
+	}
+	// Support both map users and array rows {uuid,password} from panel credentials.
+	if rows := userRows(cfg); len(rows) > 0 {
+		result := make([]string, 0, len(rows))
+		for _, row := range rows {
+			uuid, _ := row["uuid"].(string)
+			if uuid == "" {
+				uuid, _ = row["username"].(string)
+			}
+			password, _ := row["password"].(string)
+			if uuid == "" || password == "" {
+				continue
+			}
+			params := map[string]string{}
+			for key, out := range map[string]string{"congestion-controller": "congestion_control", "bbr-profile": "bbr_profile", "udp-relay-mode": "udp_relay_mode"} {
+				if v, ok := cfg[key].(string); ok && v != "" {
+					params[out] = v
+				}
+			}
+			if v, ok := firstString(cfg["alpn"]); ok {
+				params["alpn"] = v
+			}
+			if v, ok := cfg["sni"].(string); ok && v != "" {
+				params["sni"] = v
+			}
+			if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+				params["allow_insecure"] = "1"
+			}
+			result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
+		}
+		if len(result) > 0 {
+			return result, nil
+		}
 	}
 	users := userMap(cfg)
 	if len(users) == 0 {
