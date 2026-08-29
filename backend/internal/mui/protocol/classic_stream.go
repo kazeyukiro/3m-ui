@@ -307,9 +307,15 @@ type classicClientProxy struct {
 }
 
 func compileClassicClient(node domain.Node, user domain.NodeUser, profile domain.AccessProfile, host string) ([]byte, error) {
+	port := profile.PublicPort
+	if port == 0 {
+		if n, err := strconv.ParseUint(strings.TrimSpace(node.Port), 10, 16); err == nil {
+			port = uint16(n)
+		}
+	}
 	proxy := classicClientProxy{
 		Name: node.Name + " - " + user.Name, Type: string(node.Protocol), Server: host,
-		Port: profile.PublicPort, UDP: true,
+		Port: port, UDP: true,
 		ClientFingerprint: profile.Fingerprint, SkipCertVerify: profile.AllowInsecure,
 	}
 	var handler domain.VLESSHandlerSpec
@@ -369,10 +375,26 @@ func applyClassicClientSecurity(proxy *classicClientProxy, security domain.VLESS
 		proxy.SkipCertVerify = proxy.SkipCertVerify || security.TLS.AllowInsecure
 	case domain.VLESSSecurityReality:
 		shortID := ""
-		if len(security.Reality.ShortIDs) > 0 {
-			shortID = security.Reality.ShortIDs[0]
+		pbk := ""
+		if security.Reality != nil {
+			if len(security.Reality.ShortIDs) > 0 {
+				shortID = security.Reality.ShortIDs[0]
+			}
+			pbk = security.Reality.PublicKey
+			if pbk == "" && security.Reality.PrivateKey != "" {
+				if derived, err := deriveShareRealityPublicKey(security.Reality.PrivateKey); err == nil {
+					pbk = derived
+				}
+			}
+			if proxy.ServerName == "" && proxy.SNI == "" && len(security.Reality.ServerNames) > 0 {
+				proxy.ServerName = security.Reality.ServerNames[0]
+				proxy.SNI = security.Reality.ServerNames[0]
+			}
 		}
-		proxy.Reality = &vlessClientReality{PublicKey: security.Reality.PublicKey, ShortID: shortID}
+		if proxy.ClientFingerprint == "" {
+			proxy.ClientFingerprint = "chrome"
+		}
+		proxy.Reality = &vlessClientReality{PublicKey: pbk, ShortID: shortID}
 	case domain.VLESSSecurityShadowTLS:
 		password := security.ShadowTLS.Password
 		if security.ShadowTLS.Version == 3 && len(security.ShadowTLS.Users) > 0 {
