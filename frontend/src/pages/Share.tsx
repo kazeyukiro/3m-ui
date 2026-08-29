@@ -163,7 +163,7 @@ const SharePage: React.FC = () => {
           <CopyField label={t('users.subMihomo') || 'Mihomo / Clash YAML'} value={shareUrl} qr />
           <CopyField label={t('users.subV2ray') || 'V2Ray / Base64'} value={withTarget(shareUrl, 'v2ray')} />
           <CopyField label={t('users.subSingbox') || 'Sing-box JSON'} value={withTarget(shareUrl, 'singbox')} />
-          <CopyField label={t('share.subHtml') || 'Subscription info page (HTML)'} value={withTarget(shareUrl, 'html')} />
+          <CopyField label={t('share.subHtml') || 'Subscription info page (HTML)'} value={`${shareUrl}${shareUrl.includes('?') ? '&' : '?'}html=1`} />
           <Button icon={<ReloadOutlined />} onClick={onRotate} loading={subLoading}>
             {t('users.rotateSub') || 'Rotate subscription token'}
           </Button>
