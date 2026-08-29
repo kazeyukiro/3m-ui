@@ -11,6 +11,7 @@ import {
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { useI18n } from '../i18n';
+import { useNavigate } from 'react-router-dom';
 import { copyText } from '../utils/clipboard';
 
 const formatBytes = (n?: number) => {
@@ -27,6 +28,7 @@ const formatBytes = (n?: number) => {
 };
 
 const Users: React.FC = () => {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const [data, setData] = useState<ProxyUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -179,18 +181,7 @@ const Users: React.FC = () => {
   };
 
   const openShare = async (record: ProxyUser) => {
-    setShareUser(record);
-    setShareOpen(true);
-    setShareLoading(true);
-    setShareUrl('');
-    try {
-      const res = await fetchUserSubscription(record.id);
-      setShareUrl(res.url);
-    } catch (e: any) {
-      message.error(e.message || t('common.error'));
-    } finally {
-      setShareLoading(false);
-    }
+    navigate(`/share?user=${record.id}`);
   };
 
   const onRotateShare = async () => {
