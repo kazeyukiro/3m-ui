@@ -64,8 +64,8 @@ func DefaultCompileRegistry() Registry {
 		TUICCompiler{},
 		ShadowQUICCompiler{},
 		GenericCompiler{kind: "snell"},
-		GenericCompiler{kind: "anytls"},
-		GenericCompiler{kind: "mieru"},
+		AnyTLSCompiler{},
+		MieruCompiler{},
 		GenericCompiler{kind: "sudoku"},
 		GenericCompiler{kind: "trusttunnel"},
 	)
@@ -186,6 +186,38 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 		}
 	}
 	return out
+}
+
+// asUsersMap returns users as a map{username: password} for protocols whose
+// Mihomo listener schema expects that shape (hysteria2, anytls, mieru).
+func asUsersMap(cfg map[string]interface{}, fromCreds []UserCred, hasCredState bool) map[string]interface{} {
+	if len(fromCreds) > 0 {
+		out := make(map[string]interface{}, len(fromCreds))
+		for _, c := range fromCreds {
+			name := c.Username
+			if name == "" {
+				name = "default"
+			}
+			out[name] = c.Password
+		}
+		return out
+	}
+	if hasCredState {
+		return nil
+	}
+	if raw, ok := cfg["users"]; ok {
+		switch users := raw.(type) {
+		case map[string]interface{}:
+			return users
+		case map[interface{}]interface{}:
+			out := make(map[string]interface{}, len(users))
+			for k, v := range users {
+				out[fmt.Sprint(k)] = fmt.Sprint(v)
+			}
+			return out
+		}
+	}
+	return nil
 }
 
 func normalizeUsersValue(value interface{}) []map[string]interface{} {
