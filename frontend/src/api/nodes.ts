@@ -57,5 +57,5 @@ export const reloadListener = (id: number) => {
 export const exportNodeURI = (id: number) => {
   const nid = normalizeId(id);
   if (!nid) return Promise.reject(new Error('invalid node id'));
-  return client.get<{ uris: string[]; name?: string; protocol?: string; hint?: string }>(`/nodes/${nid}/uri`).then((r) => r.data);
+  return client.get<{ uri?: string; uris?: string[]; name?: string; protocol?: string; hint?: string; client_yaml?: string }>(`/nodes/${nid}/uri`).then((r) => r.data);
 };
