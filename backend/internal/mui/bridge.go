@@ -3,6 +3,8 @@ package mui
 import (
 	"context"
 	"encoding/json"
+
+	"gopkg.in/yaml.v3"
 	"fmt"
 	"strconv"
 	"strings"
@@ -167,12 +169,13 @@ func CompileListener(l models.Listener, creds []Cred) (map[string]interface{}, e
 	if err != nil {
 		return nil, err
 	}
-	raw, err := json.Marshal(compiled)
+	// m-ui listener structs use yaml tags; JSON would emit PascalCase field names.
+	raw, err := yaml.Marshal(compiled)
 	if err != nil {
 		return nil, err
 	}
 	var m map[string]interface{}
-	if err := json.Unmarshal(raw, &m); err != nil {
+	if err := yaml.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
 	return m, nil
