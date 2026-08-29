@@ -357,3 +357,110 @@ func boolCfg(cfg map[string]interface{}, key string) bool {
 	b, _ := cfg[key].(bool)
 	return b
 }
+
+
+func enrichAccessProfileFromNode(profile *domain.AccessProfile, node domain.Node, l models.Listener) {
+	if profile == nil {
+		return
+	}
+	if profile.Fingerprint == "" {
+		profile.Fingerprint = firstNonEmpty(strings.TrimSpace(l.ClientFingerprint), domain.ClientFingerprint)
+	}
+	if profile.ServerName == "" {
+		profile.ServerName = strings.TrimSpace(l.AccessSNI)
+	}
+	if profile.ServerName == "" && node.VLESS != nil && node.VLESS.Security.Reality != nil {
+		if names := node.VLESS.Security.Reality.ServerNames; len(names) > 0 {
+			profile.ServerName = names[0]
+		}
+	}
+	if profile.ServerName == "" && node.VMess != nil && node.VMess.Security.Reality != nil {
+		if names := node.VMess.Security.Reality.ServerNames; len(names) > 0 {
+			profile.ServerName = names[0]
+		}
+	}
+	if profile.ServerName == "" && node.Trojan != nil && node.Trojan.Security.Reality != nil {
+		if names := node.Trojan.Security.Reality.ServerNames; len(names) > 0 {
+			profile.ServerName = names[0]
+		}
+	}
+	ensureRealityPublicKey(node.VLESS)
+	ensureRealityPublicKeyVMess(node.VMess)
+	ensureRealityPublicKeyTrojan(node.Trojan)
+}
+
+func ensureRealityPublicKey(spec *domain.VLESSSpec) {
+	if spec == nil || spec.Security.Reality == nil {
+		return
+	}
+	r := spec.Security.Reality
+	if r.PublicKey == "" && r.PrivateKey != "" {
+		if pub, err := deriveRealityPublicKey(r.PrivateKey); err == nil {
+			r.PublicKey = pub
+		}
+	}
+}
+
+func ensureRealityPublicKeyVMess(spec *domain.VMessSpec) {
+	if spec == nil || spec.Security.Reality == nil {
+		return
+	}
+	r := spec.Security.Reality
+	if r.PublicKey == "" && r.PrivateKey != "" {
+		if pub, err := deriveRealityPublicKey(r.PrivateKey); err == nil {
+			r.PublicKey = pub
+		}
+	}
+}
+
+func ensureRealityPublicKeyTrojan(spec *domain.TrojanSpec) {
+	if spec == nil || spec.Security.Reality == nil {
+		return
+	}
+	r := spec.Security.Reality
+	if r.PublicKey == "" && r.PrivateKey != "" {
+		if pub, err := deriveRealityPublicKey(r.PrivateKey); err == nil {
+			r.PublicKey = pub
+		}
+	}
+}
+
+func listenerFlowHint(l models.Listener) string {
+	if strings.TrimSpace(l.Config) == "" {
+		return ""
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
+		return ""
+	}
+	return strCfg(cfg, "flow")
+}
+
+func deriveRealityPublicKey(private string) (string, error) {
+	private = strings.TrimSpace(private)
+	if private == "" {
+		return "", fmt.Errorf("empty private key")
+	}
+	var raw []byte
+	var err error
+	for _, decode := range []func(string) ([]byte, error){
+		base64.RawURLEncoding.DecodeString,
+		base64.URLEncoding.DecodeString,
+		base64.RawStdEncoding.DecodeString,
+		base64.StdEncoding.DecodeString,
+	} {
+		raw, err = decode(private)
+		if err == nil && len(raw) == 32 {
+			break
+		}
+		raw = nil
+	}
+	if len(raw) != 32 {
+		return "", fmt.Errorf("invalid Reality private key")
+	}
+	pub, err := curve25519.X25519(raw, curve25519.Basepoint)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(pub), nil
+}
