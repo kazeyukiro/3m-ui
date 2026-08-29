@@ -22,7 +22,7 @@ Main functions:
 ### Backend
 
 Language:
-- Go 1.24+
+- Go 1.25+
 
 Framework:
 - Gin

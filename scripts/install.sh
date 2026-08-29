@@ -49,7 +49,8 @@ Options:
   -h, --help         Show this help
 
 Environment:
-  THREE_M_UI_STATIC=1  Prefer static build (default)
+  THREE_M_UI_STATIC=1      Prefer static build (default)
+  THREE_M_UI_INSECURE=1    Bypass SHA256SUMS verification (NOT recommended; supply-chain risk)
 
 Supported CPU: x86_64, aarch64, armv7, armv6, i386/i686, riscv64, loongarch64, ppc64le, s390x
 Supported OS: Alpine, Debian/Ubuntu, RHEL/Fedora/CentOS/Rocky/Alma, Arch, openSUSE, Gentoo, Void, …
@@ -135,32 +136,68 @@ file_sha256(){
   fi
 }
 
-# Verify file against release SHA256SUMS when present (soft-fail if sums missing).
+# Verify file against release SHA256SUMS. Fail-closed (C-2): any integrity
+# failure aborts the install. Set THREE_M_UI_INSECURE=1 to bypass verification
+# when GitHub is unavailable (NOT recommended; prints a loud warning).
 verify_release_sha256(){
   tag="$1"
   asset="$2"
   path="$3"
+  # sha256 tooling is now a hard dependency for release verification.
+  if ! command_exists sha256sum && ! command_exists shasum && ! command_exists openssl; then
+    err "No sha256 tool available; cannot verify $asset. Install coreutils/sha256sum (or openssl) and re-run."
+  fi
   sums_tmp="$(mktemp)"
   track_tmp "$sums_tmp"
   if ! download "https://github.com/$REPO/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
-    say "Note: SHA256SUMS not published for $tag; skipping checksum verification."
-    return 0
+    if [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
+      say "WARNING: THREE_M_UI_INSECURE=1 set; SHA256SUMS not published for $tag; skipping checksum verification (NOT RECOMMENDED)."
+      return 0
+    fi
+    err "SHA256SUMS not published for $tag; cannot verify $asset. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)."
   fi
   # SHA256SUMS may list "./3m-ui-linux-amd64" or "3m-ui-linux-amd64"
   expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
   if [ -z "$expected" ]; then
-    say "Note: $asset not listed in SHA256SUMS; skipping checksum verification."
-    return 0
+    if [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
+      say "WARNING: THREE_M_UI_INSECURE=1 set; $asset not listed in SHA256SUMS; skipping verification (NOT RECOMMENDED)."
+      return 0
+    fi
+    err "$asset not listed in SHA256SUMS for $tag; cannot verify. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)."
   fi
   actual="$(file_sha256 "$path")"
-  if [ -z "$actual" ]; then
-    say "Warning: no sha256 tool available; cannot verify $asset."
-    return 0
-  fi
   if [ "$actual" != "$expected" ]; then
     err "Checksum mismatch for $asset (expected $expected, got $actual)"
   fi
   say "Checksum OK: $asset"
+}
+
+# Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
+# MetaCubeX/mihomo (C-3). Best-effort: if Mihomo did not publish SHA256SUMS for
+# a release, print a loud warning and return non-zero so the caller can decide
+# (fail-closed unless THREE_M_UI_INSECURE=1).
+verify_mihomo_sha256(){
+  tag="$1"
+  asset="$2"
+  gzpath="$3"
+  if ! command_exists sha256sum && ! command_exists shasum && ! command_exists openssl; then
+    err "No sha256 tool available; cannot verify Mihomo $asset. Install coreutils/sha256sum (or openssl) and re-run."
+  fi
+  sums_tmp="$(mktemp)"; track_tmp "$sums_tmp"
+  if ! download "https://github.com/MetaCubeX/mihomo/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
+    say "Warning: Mihomo SHA256SUMS not published for $tag; cannot verify checksum of $asset." >&2
+    return 1
+  fi
+  expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
+  if [ -z "$expected" ]; then
+    say "Warning: $asset not listed in Mihomo SHA256SUMS for $tag; cannot verify checksum." >&2
+    return 1
+  fi
+  actual="$(file_sha256 "$gzpath")"
+  if [ "$actual" != "$expected" ]; then
+    err "Checksum mismatch for Mihomo $asset (expected $expected, got $actual)"
+  fi
+  say "Checksum OK: Mihomo $asset"
 }
 
 write_config(){
@@ -208,7 +245,7 @@ mihomo_asset(){
 
 install_mihomo(){
   [ "$INSTALL_MIHOMO" -eq 1 ] || { say "Mihomo installation skipped."; return; }
-  if [ -x "$MIHOMO_BIN" ] && "$MIHOMO_BIN" -v >/dev/null 2>&1; then say "Existing Mihomo detected: $MIHOMO_BIN"; return; fi
+  if [ -x "$MIHOMO_BIN" ]; then say "Existing Mihomo detected: $MIHOMO_BIN"; return; fi
   asset="$(mihomo_asset)"
   if [ -z "$asset" ]; then
     say "Warning: no official Mihomo binary for $(uname -m). Install Mihomo manually or re-run with --no-mihomo."
@@ -217,9 +254,22 @@ install_mihomo(){
   tag="$(latest_tag https://github.com/MetaCubeX/mihomo)"; [ -n "$tag" ] || err "Unable to determine latest Mihomo release."
   tmp="$(mktemp)"; gz="$tmp.gz"
   track_tmp "$tmp"; track_tmp "$gz"
-  url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${asset}-${tag}.gz"
-  say "Downloading Mihomo $tag..."; download "$url" "$gz"; gzip -dc "$gz" > "$tmp"; chmod 0755 "$tmp"
-  "$tmp" -v >/dev/null 2>&1 || err "Downloaded Mihomo failed validation."
+  gzname="${asset}-${tag}.gz"
+  url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${gzname}"
+  say "Downloading Mihomo $tag..."; download "$url" "$gz"
+  # Verify the .gz checksum BEFORE decompressing (Mihomo sums cover the .gz asset) — C-3.
+  if ! verify_mihomo_sha256 "$tag" "$gzname" "$gz"; then
+    if [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
+      say "WARNING: THREE_M_UI_INSECURE=1 set; continuing Mihomo install WITHOUT checksum verification (NOT RECOMMENDED)."
+    else
+      err "Mihomo checksum verification failed. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)."
+    fi
+  fi
+  gzip -dc "$gz" > "$tmp"; chmod 0755 "$tmp"
+  # Smoke-test the decompressed binary without executing it as root (C-5).
+  if command_exists file; then
+    file "$tmp" | grep -q "ELF" || err "Downloaded Mihomo is not a valid ELF binary."
+  fi
   install -m 0755 "$tmp" "$MIHOMO_BIN"
   rm -f "$tmp" "$gz"
 }
@@ -227,11 +277,12 @@ install_mihomo(){
 install_release_asset(){
   tag="$1"; file="$2"; destination="$3"
   tmp="$(mktemp)"; track_tmp "$tmp"
-  if download "https://github.com/$REPO/releases/download/${tag}/${file}" "$tmp" 2>/dev/null; then :; else
-    say "Release $tag does not contain $file; using the matching main-branch management script."
-    rm -f "$tmp"
-    download "https://raw.githubusercontent.com/$REPO/main/scripts/$file" "$tmp"
+  # H-1: do NOT fall back to raw.githubusercontent.com — releases MUST contain
+  # all helper scripts. A missing release asset indicates an incomplete release.
+  if ! download "https://github.com/$REPO/releases/download/${tag}/${file}" "$tmp" 2>/dev/null; then
+    err "Release $tag does not contain $file. Refusing to fall back to raw.githubusercontent.com for supply-chain safety; use a complete release."
   fi
+  verify_release_sha256 "$tag" "$file" "$tmp"
   install -m 0755 "$tmp" "$destination"
   rm -f "$tmp"
 }
@@ -264,7 +315,11 @@ install_panel(){
   fi
   verify_release_sha256 "$RELEASE_TAG" "$asset" "$tmp"
   chmod 0755 "$tmp"
-  "$tmp" --version >/dev/null 2>&1 || err "Downloaded 3m-ui failed executable validation."
+  # Smoke-test the binary is a Linux ELF — do NOT execute it as root (C-5).
+  # verify_release_sha256 already attests to integrity.
+  if command_exists file; then
+    file "$tmp" | grep -q "ELF" || err "Downloaded 3m-ui is not a valid ELF binary."
+  fi
   install -m 0755 "$tmp" "$APP_BIN"
   printf '%s\n' "$RELEASE_TAG" > "$VERSION_FILE"
   printf '%s\n' "$([ "$STATIC" = "1" ] && echo static || echo dynamic)" > "$MODE_FILE"
@@ -286,11 +341,35 @@ WorkingDirectory=$DATA_DIR
 Restart=always
 RestartSec=5
 KillMode=control-group
-# Allow binding privileged ports (80/443) for optional panel ACME/SSL.
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+UMask=0077
+# Sandbox hardening (H-2). The service still runs as root because Mihomo TUN
+# mode requires CAP_NET_ADMIN, which is hard to delegate to a non-root user.
+# A future revision should add a dedicated 3m-ui system user with ambient
+# capabilities; for now we apply the full Protect*/Restrict*/SystemCallFilter
+# set, which is a meaningful improvement even for a root process.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ReadWritePaths=$CONFIG_DIR $DATA_DIR $LOG_DIR
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
 NoNewPrivileges=true
 LimitNOFILE=65535
+# Allow binding privileged ports (80/443) for optional panel ACME/SSL,
+# and CAP_NET_ADMIN for Mihomo TUN mode.
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_ADMIN
 
 [Install]
 WantedBy=multi-user.target
@@ -338,6 +417,6 @@ main(){
   panel_port="${PANEL_PORT:-${THREE_M_UI_PORT:-8080}}"
   say "Panel: http://SERVER_IP:${panel_port}/"
   say "Custom port: PANEL_PORT=8443 curl ... | bash   or edit server.port in $CONFIG_DIR/config.yaml"
-  say "Default administrator credentials are unchanged; first login requires a password change."
+  say "Initial administrator: admin / admin. You MUST change the password on first login."
 }
 main "$@"
