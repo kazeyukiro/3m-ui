@@ -60,7 +60,7 @@ const Listeners: React.FC = () => {
   const loadTemplates = async () => { setTemplateLoading(true); try { setTemplates(await listListenerTemplates()); } catch (e: any) { message.error(e.message); } finally { setTemplateLoading(false); } };
   useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
 
-  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, reality_dest: 'www.microsoft.com:443', client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
   const openEdit = (record: Listener) => { setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
     try {
@@ -68,19 +68,11 @@ const Listeners: React.FC = () => {
       const proto = String(values.protocol || '').trim();
       if (!proto) { message.error(t('listeners.selectProtocolFirst')); return; }
       if (!values.name || !String(values.port || '').trim()) { message.error(t('listeners.portHint')); return; }
+      // REALITY keys / dest: leave empty → backend AutofillListenerDefaults generates them.
       if (REALITY_PROTOCOLS.has(proto) && firstNonEmpty(values.security_layer) === 'reality') {
+        values.reality_enabled = true;
         const dest = firstNonEmpty(values.reality_dest, values['reality-config']?.dest, values['reality-config.dest']);
-        const privateKey = firstNonEmpty(values.reality_private_key, values['reality-config']?.['private-key'], values['reality-config.private-key']);
-        if (!dest || !privateKey) {
-          form.setFields([
-            { name: 'reality_dest', errors: dest ? [] : ['Dest is required'] },
-            { name: 'reality_private_key', errors: privateKey ? [] : ['Private Key is required'] },
-          ]);
-          message.error('Reality Dest / Private Key cannot be empty');
-          return;
-        }
-        values.reality_dest = dest;
-        values.reality_private_key = privateKey;
+        if (dest) values.reality_dest = dest;
       }
       const previous = editing ? parseConfig(editing.config) : null;
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
