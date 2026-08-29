@@ -18,12 +18,12 @@ type NodeModel struct {
 
 	Users []UserCred
 
-	VLESS        *VLESSSpec
-	VMess        *VMessSpec
-	Trojan       *TrojanSpec
-	Shadowsocks  *ShadowsocksSpec
-	Hysteria2    *Hysteria2Spec
-	Generic      map[string]interface{} // passthrough for less common protocols
+	VLESS       *VLESSSpec
+	VMess       *VMessSpec
+	Trojan      *TrojanSpec
+	Shadowsocks *ShadowsocksSpec
+	Hysteria2   *Hysteria2Spec
+	Generic     map[string]interface{} // passthrough for less common protocols
 }
 
 type RealitySpec struct {
@@ -43,22 +43,22 @@ type TransportSpec struct {
 }
 
 type VLESSSpec struct {
-	Encryption string
-	Flow       string // default flow applied when user flow empty
-	Transport  TransportSpec
-	Reality    *RealitySpec
-	SkipCert   bool
-	SNI        string
+	Encryption  string
+	Flow        string // default flow applied when user flow empty
+	Transport   TransportSpec
+	Reality     *RealitySpec
+	SkipCert    bool
+	SNI         string
 	Fingerprint string
 }
 
 type VMessSpec struct {
-	Cipher     string
-	AlterID    int
-	Transport  TransportSpec
-	Reality    *RealitySpec
-	SkipCert   bool
-	SNI        string
+	Cipher      string
+	AlterID     int
+	Transport   TransportSpec
+	Reality     *RealitySpec
+	SkipCert    bool
+	SNI         string
 	Fingerprint string
 }
 
