@@ -1,6 +1,20 @@
+  share: {
+    title: 'Share / Subscription',
+    subtitle: 'Unified view of subscription URLs and per-node share URIs for a user.',
+    selectUser: 'User',
+    tabSub: 'Subscription links',
+    tabUri: 'Node URIs',
+    noSub: 'No subscription URL',
+    noNodes: 'No nodes bound. Bind listeners under Users first.',
+    uri: 'URI',
+    loadUri: 'Load URI',
+    subHint: 'Paste into the client. Default (no target) is Mihomo YAML; target=v2ray is classic Base64 URI list.',
+    subHtml: 'Info page (HTML)',
+  },
+
 export default {
   app: { name: '3M-UI', title: 'Mihomo Core Management Console' },
-  nav: { dashboard: 'Dashboard', listeners: 'Nodes', users: 'Users', traffic: 'Traffic', cluster: 'Cluster', routing: 'Routing', core: 'Core', logs: 'Logs', config: 'Config', settings: 'Settings', logout: 'Logout' },
+  nav: { dashboard: 'Dashboard', listeners: 'Nodes', users: 'Users', traffic: 'Traffic', cluster: 'Cluster', routing: 'Routing', core: 'Core', logs: 'Logs', config: 'Config', share: 'Share', settings: 'Settings', logout: 'Logout' },
   common: {
     advanced: 'Advanced',
     prev: 'Previous',
