@@ -26,4 +26,9 @@ type ProxyUser struct {
 	// SubToken is the public subscription credential (client sub).
 	// Unique when set; empty legacy rows are filled during InitDB migration.
 	SubToken string `gorm:"size:64;uniqueIndex" json:"sub_token,omitempty"`
+	// TelegramID is the linked Telegram chat/user numeric ID (0 = not bound).
+	// Indexed so the bot can look up a proxy user from an incoming Telegram message.
+	TelegramID int64 `gorm:"index;default:0" json:"telegram_id,omitempty"`
+	// TelegramName is the display name of the linked Telegram account (best-effort cache).
+	TelegramName string `gorm:"size:64;default:''" json:"telegram_name,omitempty"`
 }

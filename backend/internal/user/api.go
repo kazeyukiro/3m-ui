@@ -27,6 +27,10 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	// Static path must be registered before /:id to avoid being captured as id.
 	rg.POST("/del-depleted", h.DeleteDepleted)
 	rg.POST("/batch", h.Batch)
+	// Telegram binding routes registered before /:id so the static segment is not captured.
+	rg.GET("/by-telegram/:tgid", h.GetByTelegram)
+	rg.PUT("/:id/telegram", h.BindTelegram)
+	rg.DELETE("/:id/telegram", h.UnbindTelegram)
 	rg.GET("/:id", h.Get)
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
@@ -293,4 +297,68 @@ func (h *Handler) DeleteDepleted(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": n})
+}
+
+// GetByTelegram looks up a proxy user by their linked Telegram chat/user ID.
+func (h *Handler) GetByTelegram(c *gin.Context) {
+	tgid, err := strconv.ParseInt(c.Param("tgid"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid telegram id"})
+		return
+	}
+	u, err := h.svc.GetByTelegramID(tgid)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		} else {
+			log.Printf("user get-by-telegram failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+// BindTelegram links a Telegram account to an existing proxy user.
+func (h *Handler) BindTelegram(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		TelegramID   int64  `json:"telegram_id" binding:"required"`
+		TelegramName string `json:"telegram_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.BindTelegram(id, req.TelegramID, req.TelegramName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	u, err := h.svc.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+// UnbindTelegram removes the Telegram account link from a proxy user.
+func (h *Handler) UnbindTelegram(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.UnbindTelegram(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	u, err := h.svc.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
 }

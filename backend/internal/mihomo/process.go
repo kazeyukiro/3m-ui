@@ -25,6 +25,11 @@ type ProcessManager struct {
 	logs        []string
 	desired     bool
 	external    bool
+	// crashHandler is invoked from waitProcess when the mihomo process exits
+	// with a non-zero status AND desired == true (i.e. the exit was not
+	// initiated by an admin-issued Stop). Wired in app/container.go to forward
+	// to telegram.NotifyCrash. May be nil — callers must guard.
+	crashHandler func(exitErr error)
 }
 
 var globalPM *ProcessManager
@@ -49,6 +54,16 @@ func NewProcessManager(binary, config string) *ProcessManager {
 		configPath: config,
 		logs:       make([]string, 0, 200),
 	}
+}
+
+// SetCrashHandler registers a callback invoked when the managed mihomo process
+// exits unexpectedly (non-zero exit code while desired == true). The handler
+// is called from the waitProcess goroutine, so callers must not block on
+// resources held by that goroutine (e.g. pm.mu). Pass nil to disable.
+func (pm *ProcessManager) SetCrashHandler(fn func(exitErr error)) {
+	pm.mu.Lock()
+	pm.crashHandler = fn
+	pm.mu.Unlock()
 }
 
 // productionAllowedBinaryPrefixes is the hard-coded allowlist used in
@@ -541,7 +556,19 @@ func (pm *ProcessManager) waitProcess(
 		pm.desired &&
 			pm.cmd == cmd
 
+	// Crash notification: only fire on a non-zero exit while desired == true
+	// (intentional Stop sets desired=false first). Captured inside the lock
+	// so the handler invocation is consistent with the exit verdict and does
+	// not race a concurrent Stop. Invoked outside the lock to avoid
+	// deadlocks if the handler calls back into pm.
+	crashed := err != nil && pm.desired
+	crashHandler := pm.crashHandler
+
 	pm.mu.Unlock()
+
+	if crashed && crashHandler != nil {
+		crashHandler(err)
+	}
 
 	if !restart {
 		return

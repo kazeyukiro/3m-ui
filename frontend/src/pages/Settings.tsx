@@ -6,7 +6,7 @@ import { copyText } from '../utils/clipboard';
 import { useThemeStore } from '../stores/themeStore';
 import { LockOutlined, GlobalOutlined, BgColorsOutlined, InfoCircleOutlined, CloudDownloadOutlined, CloudUploadOutlined, ApiOutlined } from '@ant-design/icons';
 import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
-import { fetchTelegramSettings, saveTelegramSettings, testTelegram, TelegramSettings } from '../api/telegram';
+import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
 
 const { Text } = Typography;
@@ -58,6 +58,14 @@ const Settings: React.FC = () => {
         traffic_warn_pct: s.traffic_warn_pct ?? 80,
         expiry_warn_hours: s.expiry_warn_hours ?? 72,
         notify_on_traffic: s.notify_on_traffic ?? true,
+        schedule: s.schedule || '@daily',
+        language: s.language || 'zh',
+        enabled_events: s.enabled_events ? s.enabled_events.split(',').map((x: string) => x.trim()).filter(Boolean) : ['login', 'cpu', 'crash'],
+        expiry_warn_days: s.expiry_warn_days ?? 0,
+        traffic_warn_gb: s.traffic_warn_gb ?? 0,
+        attach_backup: s.attach_backup ?? false,
+        proxy_url: s.proxy_url || '',
+        api_server: s.api_server || '',
       });
     }).catch((e: any) => { message.error(e.message || t('common.error')); });
     client.get('/system/ssl').then((r) => {
@@ -191,6 +199,14 @@ const Settings: React.FC = () => {
               notify_daily_digest: !!values.notify_daily_digest,
               traffic_warn_pct: Number(values.traffic_warn_pct || 80),
               expiry_warn_hours: Number(values.expiry_warn_hours || 72),
+              schedule: values.schedule || '@daily',
+              language: values.language || 'zh',
+              enabled_events: (values.enabled_events || []).join(','),
+              expiry_warn_days: Number(values.expiry_warn_days || 0),
+              traffic_warn_gb: Number(values.traffic_warn_gb || 0),
+              attach_backup: !!values.attach_backup,
+              proxy_url: values.proxy_url || '',
+              api_server: values.api_server || '',
               keep_token: !values.bot_token,
             });
             message.success(t('settings.telegramSaved'));
@@ -209,9 +225,31 @@ const Settings: React.FC = () => {
           <Form.Item name="notify_on_traffic" label={t('settings.notifyTraffic') || 'Traffic threshold warning'} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item name="traffic_warn_pct" label={t('settings.trafficWarnPct') || 'Traffic warn %'}><InputNumber min={1} max={100} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="expiry_warn_hours" label={t('settings.expiryWarnHours') || 'Expiry warn (hours)'}><InputNumber min={1} max={720} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="schedule" label={t('settings.tgSchedule') || 'Report schedule'} tooltip={t('settings.tgScheduleHint') || 'Cron expression like "0 9 * * *" or "@daily" / "@every 6h"'}><Input placeholder="@daily" /></Form.Item>
+          <Form.Item name="language" label={t('settings.tgLanguage') || 'Bot language'}><Select options={[{ value: 'zh', label: '中文' }, { value: 'en', label: 'English' }]} /></Form.Item>
+          <Form.Item name="enabled_events" label={t('settings.tgEvents') || 'Enabled events'}>
+            <Select mode="multiple" options={[
+              { value: 'login', label: '登录/Login' },
+              { value: 'cpu', label: 'CPU' },
+              { value: 'memory', label: '内存/Memory' },
+              { value: 'crash', label: '核心崩溃/Crash' },
+              { value: 'node_down', label: '节点下线/Node down' },
+              { value: 'node_up', label: '节点上线/Node up' },
+              { value: 'block', label: '用户封禁/Block' },
+              { value: 'unblock', label: '用户解封/Unblock' },
+              { value: 'expiry', label: '到期/Expiry' },
+              { value: 'traffic', label: '流量/Traffic' },
+            ]} placeholder="login,cpu,crash" />
+          </Form.Item>
+          <Form.Item name="expiry_warn_days" label={t('settings.tgExpiryDays') || 'Expiry warn (days)'} extra="0 = off"><InputNumber min={0} max={365} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="traffic_warn_gb" label={t('settings.tgTrafficGB') || 'Traffic warn (GB left)'} extra="0 = off"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="attach_backup" label={t('settings.tgAttachBackup') || 'Attach DB backup in report'} valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="proxy_url" label={t('settings.tgProxy') || 'Proxy URL'} tooltip="socks5://host:port or http://host:port"><Input placeholder="socks5://127.0.0.1:1080" /></Form.Item>
+          <Form.Item name="api_server" label={t('settings.tgApiServer') || 'Telegram API server'} tooltip="Empty = official https://api.telegram.org"><Input placeholder="https://api.telegram.org" /></Form.Item>
           <Space>
             <Button type="primary" htmlType="submit">{t('common.save')}</Button>
             <Button onClick={async () => { try { await testTelegram(); message.success(t('settings.telegramTestOk')); } catch (e: any) { message.error(e.message || t('common.error')); } }}>{t('settings.telegramTest')}</Button>
+            <Button onClick={async () => { try { await setTelegramCommands(); message.success(t('settings.tgCommandsSet') || 'Bot commands registered'); } catch (e: any) { message.error(e?.response?.data?.error || e.message); } }}>{t('settings.tgSetCommands') || 'Set bot commands'}</Button>
           </Space>
         </Form>
       </Card>

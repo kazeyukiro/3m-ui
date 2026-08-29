@@ -53,6 +53,8 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		ExpireTime:        expire,
 		Enabled:           enabled,
 		SubToken:          subTok,
+		TelegramID:        in.TelegramID,
+		TelegramName:      strings.TrimSpace(in.TelegramName),
 	}
 	if err := s.db.Create(u).Error; err != nil {
 		return nil, fmt.Errorf("create proxy user: %w", err)
@@ -94,6 +96,12 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	}
 	if in.Enabled != nil {
 		u.Enabled = *in.Enabled
+	}
+	if in.TelegramID != nil {
+		u.TelegramID = *in.TelegramID
+	}
+	if in.TelegramName != nil {
+		u.TelegramName = strings.TrimSpace(*in.TelegramName)
 	}
 	if err := s.db.Save(u).Error; err != nil {
 		return nil, fmt.Errorf("update proxy user: %w", err)

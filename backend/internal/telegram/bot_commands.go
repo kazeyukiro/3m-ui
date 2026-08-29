@@ -2,14 +2,19 @@ package telegram
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
 
-func (b *Bot) handleCommand(text string) string {
-	text = strings.TrimSpace(text)
+// handleCommand dispatches a /command from a Telegram message. The returned
+// string is sent as the reply. An empty string means the handler already sent
+// its reply (e.g. via sendWithKeyboard) and the loop should not send again.
+func (b *Bot) handleCommand(ctx commandContext) string {
+	text := strings.TrimSpace(ctx.Text)
 	parts := strings.Fields(text)
 	if len(parts) == 0 {
 		return helpText()
@@ -21,47 +26,271 @@ func (b *Bot) handleCommand(text string) string {
 	cmd = strings.TrimPrefix(cmd, "/")
 	switch cmd {
 	case "start", "help", "帮助":
-		return helpText()
+		return b.cmdStartHelp(ctx)
+	case "id":
+		return b.cmdID(ctx)
+	case "usage", "用量":
+		return b.cmdUsage(ctx)
 	case "status", "状态":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdStatus()
 	case "users", "用户":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdUsers()
 	case "online", "在线":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdOnline()
 	case "listeners", "nodes", "节点":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdListeners()
 	case "traffic", "流量":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdTraffic()
 	case "restart", "重启":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdRestart()
 	case "deldepleted", "清理":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdDelDepleted()
 	case "search", "查找":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		q := ""
 		if len(parts) > 1 {
 			q = strings.Join(parts[1:], " ")
 		}
 		return b.cmdSearch(q)
 	case "backup", "备份":
+		if !ctx.IsAdmin {
+			return permDeniedUserOnly
+		}
 		return b.cmdBackup()
 	default:
 		return "未知指令。发送 /help 查看可用命令。"
 	}
 }
 
+// permDeniedUserOnly is the reply sent to non-admin chats that try to invoke
+// an admin-only command. It tells them which commands they CAN use.
+const permDeniedUserOnly = "⛔ 此命令仅管理员可用 / Admin-only command.\n可用命令 / Available: /id  /usage  /help"
+
+// cmdStartHelp renders /start and /help. Admin chats receive the admin inline
+// keyboard; bound users receive the user menu; unbound chats (which cannot
+// reach this handler anyway) get the plain help text.
+func (b *Bot) cmdStartHelp(ctx commandContext) string {
+	help := helpText()
+	if !ctx.IsAdmin && !ctx.IsBound {
+		return help
+	}
+	if b.tgClient == nil {
+		return help
+	}
+	chatID := fmtInt64(ctx.ChatID)
+	if ctx.IsAdmin {
+		kb := buildAdminMenu()
+		if err := b.tgClient.sendWithKeyboard(chatID, help, kb); err != nil {
+			// Fall back to plain text on API failure (e.g. keyboard rejected).
+			return help
+		}
+		return ""
+	}
+	welcome := "👋 欢迎！点击下方按钮查看你的用量与订阅链接。\nWelcome! Tap a button below to view your usage & subscription."
+	if err := b.tgClient.sendWithKeyboard(chatID, welcome, buildUserMenu()); err != nil {
+		return welcome
+	}
+	return ""
+}
+
+// cmdID replies with the sender's Telegram user ID. Used by admins to discover
+// their own ID for the chat_ids allowlist, and by users to share their ID with
+// the admin for binding.
+func (b *Bot) cmdID(ctx commandContext) string {
+	return fmt.Sprintf("🆔 Your Telegram ID: <code>%d</code>", ctx.FromID)
+}
+
+// cmdUsage branches on caller role:
+//   - admin: /usage <keyword> searches proxy users (alias of /search)
+//   - bound user: /usage shows their own traffic / expiry / sub URL
+func (b *Bot) cmdUsage(ctx commandContext) string {
+	if ctx.IsAdmin {
+		parts := strings.Fields(ctx.Text)
+		q := ""
+		if len(parts) > 1 {
+			q = strings.Join(parts[1:], " ")
+		}
+		if strings.TrimSpace(q) == "" {
+			return "用法 / Usage: /usage &lt;关键字&gt; — 搜索代理用户 / search proxy users"
+		}
+		return b.cmdSearch(q)
+	}
+	return b.userUsageMessage(ctx.FromID)
+}
+
+// userUsageMessage renders the bound user's traffic / expiry / online status
+// and subscription URL. Returns a friendly "not bound" notice when the FromID
+// is not linked to any ProxyUser.
+func (b *Bot) userUsageMessage(fromID int64) string {
+	if fromID == 0 || b.userSvc == nil {
+		return notBoundMessage(fromID)
+	}
+	u, err := b.userSvc.GetByTelegramID(fromID)
+	if err != nil || u == nil {
+		return notBoundMessage(fromID)
+	}
+	return formatUserUsage(u)
+}
+
+// cmdMyUsage is the callback_query variant — always renders the bound user's
+// usage regardless of admin role, since admins tapping the user menu expect
+// their own bound-account view.
+func (b *Bot) cmdMyUsage(ctx commandContext) string {
+	return b.userUsageMessage(ctx.FromID)
+}
+
+// cmdMySub returns (and lazily ensures) the bound user's subscription URL.
+func (b *Bot) cmdMySub(ctx commandContext) string {
+	if ctx.FromID == 0 || b.userSvc == nil {
+		return notBoundMessage(ctx.FromID)
+	}
+	u, err := b.userSvc.GetByTelegramID(ctx.FromID)
+	if err != nil || u == nil {
+		return notBoundMessage(ctx.FromID)
+	}
+	token := u.SubToken
+	if strings.TrimSpace(token) == "" {
+		if t, err := b.userSvc.EnsureSubToken(u.ID); err == nil {
+			token = t
+		}
+	}
+	if strings.TrimSpace(token) == "" {
+		return "⚠️ 订阅链接生成失败, 请稍后重试 / Subscription token not available."
+	}
+	return fmt.Sprintf("🔗 <b>订阅链接 / Subscription URL</b>\n<code>%s</code>", buildSubURL(token))
+}
+
+func notBoundMessage(fromID int64) string {
+	return fmt.Sprintf(
+		"未绑定账户。请联系管理员将你的 Telegram ID (<code>%d</code>) 绑定到你的账户。\n/ Not bound. Ask admin to bind your Telegram ID.",
+		fromID,
+	)
+}
+
+// formatUserUsage builds the per-user usage report shown by /usage and the
+// my_usage callback.
+func formatUserUsage(u *models.ProxyUser) string {
+	var bld strings.Builder
+	bld.WriteString("📊 <b>账户用量 / My Usage</b>\n")
+	bld.WriteString(fmt.Sprintf("用户 / User: <code>%s</code>\n", escapeHTML(u.Username)))
+	used := formatBytes(u.TrafficUsed)
+	limit := "∞"
+	if u.TrafficLimit > 0 {
+		limit = formatBytes(u.TrafficLimit)
+	}
+	bld.WriteString(fmt.Sprintf("流量 / Traffic: %s / %s\n", used, limit))
+	bld.WriteString(fmt.Sprintf("上传 ↑ %s   下载 ↓ %s\n",
+		formatBytes(u.UploadBytes), formatBytes(u.DownloadBytes)))
+	if !u.ExpireTime.IsZero() {
+		bld.WriteString(fmt.Sprintf("到期 / Expires: <code>%s</code>\n", u.ExpireTime.Format("2006-01-02 15:04")))
+	} else {
+		bld.WriteString("到期 / Expires: 永不过期 / Never\n")
+	}
+	online := "离线 / Offline"
+	if u.Online {
+		online = "在线 / Online 🟢"
+	}
+	bld.WriteString(fmt.Sprintf("状态 / Status: %s\n", online))
+	if strings.TrimSpace(u.SubToken) != "" {
+		bld.WriteString(fmt.Sprintf("订阅 / Subscription:\n<code>%s</code>\n", buildSubURL(u.SubToken)))
+	} else {
+		bld.WriteString("订阅 / Subscription: 未生成 / Not generated (点击 /click my_sub 生成)\n")
+	}
+	return bld.String()
+}
+
+// buildSubURL constructs a public client subscription URL from the configured
+// server.public_url (env-overridden via ApplyEnvOverrides) or falls back to
+// localhost so the bot can resolve a URL outside any HTTP request context.
+func buildSubURL(token string) string {
+	base := "http://localhost:8080"
+	if config.GlobalConfig != nil && strings.TrimSpace(config.GlobalConfig.Server.PublicURL) != "" {
+		base = strings.TrimRight(strings.TrimSpace(config.GlobalConfig.Server.PublicURL), "/")
+	}
+	return fmt.Sprintf("%s/api/v1/client/sub/%s", base, url.PathEscape(token))
+}
+
+func fmtInt64(n int64) string {
+	return fmt.Sprintf("%d", n)
+}
+
+// handleCallback dispatches a callback_query.data string. Admin-only callbacks
+// (status/users/...) are gated by IsAdmin; my_usage/my_sub work for any
+// authorised chat (admin or bound user). Empty data → no-op.
+func (b *Bot) handleCallback(ctx commandContext, data string) string {
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return ""
+	}
+	// Admin-only callbacks
+	if ctx.IsAdmin {
+		switch data {
+		case "status":
+			return b.cmdStatus()
+		case "users":
+			return b.cmdUsers()
+		case "traffic":
+			return b.cmdTraffic()
+		case "online":
+			return b.cmdOnline()
+		case "listeners":
+			return b.cmdListeners()
+		case "deldepleted":
+			return b.cmdDelDepleted()
+		case "backup":
+			return b.cmdBackup()
+		case "restart":
+			return b.cmdRestart()
+		}
+	}
+	// User callbacks (also available to admins who happen to be bound)
+	switch data {
+	case "my_usage":
+		return b.cmdMyUsage(ctx)
+	case "my_sub":
+		return b.cmdMySub(ctx)
+	}
+	return "未知操作 / Unknown action."
+}
+
 func helpText() string {
 	return strings.TrimSpace(`
 🤖 <b>3m-ui Bot</b>
-/status — 核心与面板概览
-/users — 代理用户列表（含封禁）
-/online — 当前在线用户
-/listeners — 入站节点列表
-/traffic — 流量快照
-/restart — 重启 Mihomo 核心
-/deldepleted — 清理到期/超额用户
-/search &lt;关键字&gt; — 按用户名/备注搜索
-/backup — 备份提示
-/help — 本帮助
+/status — 核心与面板概览 / Panel & core overview
+/users — 代理用户列表 / Proxy user list
+/online — 当前在线用户 / Online users
+/listeners — 入站节点列表 / Inbound listeners
+/traffic — 流量快照 / Traffic snapshot
+/restart — 重启 Mihomo 核心 / Restart core
+/deldepleted — 清理到期/超额用户 / Delete depleted users
+/search &lt;关键字&gt; — 按用户名/备注搜索 / Search by username/remark
+/backup — 备份提示 / Backup hint
+/id — 显示你的 Telegram ID / Show your Telegram ID
+/usage — 查询用量 (用户) 或搜索 (管理员) / Usage (user) or search (admin)
+/help — 本帮助 / This help
 `)
 }
 
