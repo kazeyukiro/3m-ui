@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Form, Input, InputNumber, Select, Switch, Divider, Alert, Space, Typography, Button, Card, Radio,
 } from 'antd';
+import { generateMaterial } from '../api/listeners';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useI18n } from '../i18n';
 
@@ -694,6 +695,27 @@ type Props = { protocol?: string };
 
 const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
   const { t } = useI18n();
+  const form = Form.useFormInstance();
+  const gen = async (kind: string, cipher?: string) => {
+    try {
+      const data = await generateMaterial({ kind, cipher });
+      if (kind === 'reality') {
+        form.setFieldsValue({
+          reality_private_key: data.private_key,
+          reality_short_id: data.short_id ? [data.short_id] : undefined,
+        });
+      } else if (kind === 'uuid' && data.uuid) {
+        form.setFieldsValue({ uuid: data.uuid });
+      } else if ((kind === 'password' || kind === 'ss-password') && data.password) {
+        form.setFieldsValue({ password: data.password });
+      } else if (kind === 'short-id' && data.short_id) {
+        form.setFieldsValue({ reality_short_id: [data.short_id] });
+      }
+    } catch (e: any) {
+      // keep silent-ish; antd message may not be imported
+      console.error(e);
+    }
+  };
   if (!protocol) {
     return (
       <Alert type="info" showIcon message={t('listeners.selectProtocolFirst')} style={{ marginBottom: 16 }} />
@@ -737,8 +759,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="cipher" label={t('listeners.cipher')} rules={[{ required: true }]}>
             <Select options={SS_CIPHERS.map((c) => ({ value: c, label: c }))} showSearch />
           </Form.Item>
-          <Form.Item name="password" label={t('listeners.password')} tooltip={t('listeners.passwordOptionalHint')}>
-            <Input.Password placeholder={t('listeners.passwordOptionalPlaceholder')} />
+          <Form.Item name="password" label={t('listeners.password')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty to auto-generate'}>
+            <Input.Password placeholder={t('listeners.passwordOptionalPlaceholder') || 'auto'} addonAfter={<Button type="link" size="small" onClick={() => gen('ss-password', form.getFieldValue('cipher'))}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
         </>
       )}
@@ -1043,19 +1065,18 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           label={t('listeners.sectionReality')}
           hint={t('listeners.realityExclusiveHint')}
         >
-          <Form.Item name="reality_dest" label={t('listeners.realityDest')} rules={[{ required: true }]}>
-            <Input placeholder="www.example.com:443" />
+          <Form.Item name="reality_dest" label={t('listeners.realityDest')} tooltip="Default: www.microsoft.com:443">
+            <Input placeholder="www.microsoft.com:443" />
           </Form.Item>
           <Form.Item
             name="reality_private_key"
             label={t('listeners.realityPrivateKey')}
-            rules={[{ required: true }]}
-            tooltip={t('listeners.realityKeyHint')}
+            tooltip={t('listeners.realityKeyHint') || 'Leave empty to auto-generate on save'}
           >
-            <Input.Password />
+            <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('reality')}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
           <Form.Item name="reality_short_id" label={t('listeners.realityShortId')}>
-            <Select mode="tags" placeholder="0123456789abcdef" tokenSeparators={[',']} />
+            <Select mode="tags" placeholder="auto" tokenSeparators={[',']} />
           </Form.Item>
           <Form.Item name="reality_server_names" label={t('listeners.realityServerNames')}>
             <Select mode="tags" placeholder="www.example.com" tokenSeparators={[',']} />
