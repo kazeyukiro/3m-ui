@@ -1,9 +1,22 @@
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+/**
+ * Human-readable byte formatter (binary / 1024-based).
+ *
+ * Unified implementation used across Dashboard, Users, Traffic, etc.
+ * Handles: undefined / null / NaN (-> "0 B"), negative (clamped to "0 B"),
+ * 0, sub-KiB values, and scales up to PB.
+ */
+export function formatBytes(bytes?: number | null): string {
+  const n = Number(bytes ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(2)} ${units[i]}`;
 }
 
 export function formatDuration(seconds: number): string {

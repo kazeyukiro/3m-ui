@@ -11,6 +11,7 @@ import {
   ProxyUser, BoundNode,
 } from '../api/users';
 import { exportNodeURI } from '../api/nodes';
+import QRCode from '../components/QRCode';
 
 const { Title, Paragraph } = Typography;
 
@@ -44,12 +45,7 @@ const CopyField: React.FC<{ label: string; value: string; qr?: boolean }> = ({ l
       />
       {qr && (
         <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <img
-            alt="qr"
-            width={160}
-            height={160}
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(value)}`}
-          />
+          <QRCode value={value} size={160} />
         </div>
       )}
     </div>

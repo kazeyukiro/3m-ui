@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
     <meta name="theme-color" content="#07152d" />
+    <!--
+      Security headers.
+      Note: <meta http-equiv> CSP is a defense-in-depth baseline; the
+      authoritative policy should still be sent by the backend / reverse
+      proxy as a real HTTP `Content-Security-Policy` response header
+      (meta tags cannot express `frame-ancestors`, but we set
+      X-Frame-Options DENY here as a belt-and-braces fallback).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';" />
+    <meta name="referrer" content="same-origin" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="Referrer-Policy" content="same-origin" />
     <title>3m-ui · Mihomo Core Manager UI</title>
   </head>
   <body>

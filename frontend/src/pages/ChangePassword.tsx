@@ -25,7 +25,7 @@ const ChangePassword: React.FC = () => {
         <Title level={4}>{t('password.title')}</Title>
         <Form layout="vertical" onFinish={onFinish}>
           <Form.Item label={t('password.current')} name="current_password" rules={[{ required: true }]}><Input.Password /></Form.Item>
-          <Form.Item label={t('password.new')} name="new_password" rules={[{ required: true, min: 6 }]}><Input.Password /></Form.Item>
+          <Form.Item label={t('password.new')} name="new_password" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>
           <Form.Item label={t('password.confirm')} name="confirm" rules={[{ required: true }]}><Input.Password /></Form.Item>
           <Button type="primary" htmlType="submit" loading={loading}>{t('password.button')}</Button>
         </Form>

@@ -136,7 +136,8 @@ const Settings: React.FC = () => {
             try {
               const r = await client.post('/system/geofiles/update');
               message.success(t('settings.geofilesDone') || 'Geo files updated');
-              console.log(r.data);
+              // r.data kept for future use; no console leak
+              void r;
             } catch (e: any) {
               message.error(e.message || t('common.error'));
             }
@@ -190,7 +191,7 @@ const Settings: React.FC = () => {
               notify_daily_digest: !!values.notify_daily_digest,
               traffic_warn_pct: Number(values.traffic_warn_pct || 80),
               expiry_warn_hours: Number(values.expiry_warn_hours || 72),
-              keep_token: !values.bot_token || String(values.bot_token).includes('…'),
+              keep_token: !values.bot_token,
             });
             message.success(t('settings.telegramSaved'));
           } catch (e: any) { message.error(e.message || t('common.error')); }

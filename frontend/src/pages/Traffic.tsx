@@ -3,19 +3,7 @@ import { Card, Table, Tag, Space, Statistic, Row, Col, message, Button } from 'a
 import { ReloadOutlined } from '@ant-design/icons';
 import { fetchTrafficStatus, fetchTrafficUsers, fetchConnections, UserTraffic, ConnectionView, TrafficStatus } from '../api/traffic';
 import { useI18n } from '../i18n';
-
-const formatBytes = (n?: number) => {
-  const bytes = n || 0;
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let v = bytes / 1024;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(2)} ${units[i]}`;
-};
+import { formatBytes } from '../utils/format';
 
 const TrafficPage: React.FC = () => {
   const { t } = useI18n();
