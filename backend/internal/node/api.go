@@ -5,16 +5,14 @@ import (
 	"encoding/hex"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
-	"github.com/kazeyukiro/3m-ui/backend/internal/mui"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/mui"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
@@ -323,4 +321,3 @@ func (h *Handler) clientAccessResponse(c *gin.Context, token models.AccessToken)
 		"shadowrocket_link": converter.GetSubscriptionURL(cfg, c.Request, token.Token, "shadowrocket"),
 	}
 }
-
