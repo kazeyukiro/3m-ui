@@ -376,7 +376,6 @@ type Keypair struct {
 	PublicKey  string `json:"public_key"`
 }
 
-
 func (node Node) EffectiveUsers(asOf time.Time) []NodeUser {
 	users := make([]NodeUser, 0, len(node.Users))
 	for _, user := range node.Users {
