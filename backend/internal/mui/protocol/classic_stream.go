@@ -66,7 +66,7 @@ func (VMessModule) BuildShare(state domain.DesiredState, node domain.Node, user 
 	}
 	payload := map[string]any{
 		"v": "2", "ps": node.Name + " - " + user.Name, "add": host,
-		"port": strconv.Itoa(int(profile.PublicPort)), "id": user.VMess.UUID,
+		"port": sharePortString(profile, node.Port), "id": user.VMess.UUID,
 		"aid": strconv.Itoa(user.VMess.AlterID), "scy": defaultCipher(user.VMess.Cipher),
 		"net": network, "type": "none", "host": profile.ServerName, "path": path,
 		"tls": security, "sni": profile.ServerName, "fp": profile.Fingerprint,
@@ -79,15 +79,36 @@ func (VMessModule) BuildShare(state domain.DesiredState, node domain.Node, user 
 		payload["path"] = node.VMess.Handler.MKCP.Seed
 	}
 	if node.VMess.Security.Type == domain.VLESSSecurityReality && node.VMess.Security.Reality != nil {
-		payload["pbk"] = node.VMess.Security.Reality.PublicKey
-		if len(node.VMess.Security.Reality.ShortIDs) > 0 {
-			payload["sid"] = node.VMess.Security.Reality.ShortIDs[0]
+		r := node.VMess.Security.Reality
+		pbk := r.PublicKey
+		if pbk == "" && r.PrivateKey != "" {
+			if derived, err := deriveShareRealityPublicKey(r.PrivateKey); err == nil {
+				pbk = derived
+			}
 		}
+		if pbk != "" {
+			payload["pbk"] = pbk
+		}
+		if len(r.ShortIDs) > 0 {
+			payload["sid"] = r.ShortIDs[0]
+		}
+		if payload["sni"] == "" && len(r.ServerNames) > 0 {
+			payload["sni"] = r.ServerNames[0]
+		}
+		if payload["fp"] == "" || payload["fp"] == nil {
+			payload["fp"] = "chrome"
+		}
+		payload["tls"] = "reality"
+	}
+	// Standard VMess share uses decimal port string; fall back to node listen port.
+	if portStr, _ := payload["port"].(string); portStr == "" || portStr == "0" {
+		payload["port"] = sharePortString(profile, node.Port)
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return Share{}, fmt.Errorf("encode VMess share: %w", err)
 	}
+	// v2rayN accepts both Std and Raw; StdEncoding with padding is most widely compatible.
 	uri := "vmess://" + base64.StdEncoding.EncodeToString(encoded)
 	clientYAML, err := compileClassicClient(node, user, profile, host)
 	if err != nil {
@@ -153,7 +174,7 @@ func (TrojanModule) BuildShare(state domain.DesiredState, node domain.Node, user
 	}
 	uri := (&url.URL{
 		Scheme: "trojan", User: url.User(user.Trojan.Password),
-		Host:     net.JoinHostPort(host, strconv.Itoa(int(profile.PublicPort))),
+		Host:     net.JoinHostPort(host, sharePortString(profile, node.Port)),
 		RawQuery: query.Encode(), Fragment: node.Name + " - " + user.Name,
 	}).String()
 	clientYAML, err := compileClassicClient(node, user, profile, host)
@@ -382,22 +403,56 @@ func applyClassicClientSecurity(proxy *classicClientProxy, security domain.VLESS
 }
 
 func applySecurityQuery(query url.Values, security domain.VLESSSecuritySpec, profile domain.AccessProfile) {
-	query.Set("security", string(security.Type))
+	sec := string(security.Type)
+	if sec == "" || sec == string(domain.VLESSSecurityNone) {
+		// Trojan/VMess clients typically expect explicit tls when certificates are used.
+		if security.TLS != nil {
+			sec = "tls"
+		}
+	}
+	if sec != "" && sec != string(domain.VLESSSecurityNone) {
+		query.Set("security", sec)
+	}
 	if profile.ServerName != "" {
 		query.Set("sni", profile.ServerName)
 	}
 	if profile.Fingerprint != "" {
 		query.Set("fp", profile.Fingerprint)
+	} else if security.Type == domain.VLESSSecurityReality {
+		query.Set("fp", "chrome")
 	}
-	if security.Type == domain.VLESSSecurityTLS && (profile.AllowInsecure || security.TLS.AllowInsecure) {
+	if security.Type == domain.VLESSSecurityTLS && security.TLS != nil && (profile.AllowInsecure || security.TLS.AllowInsecure) {
 		query.Set("allowInsecure", "1")
 	}
 	if security.Type == domain.VLESSSecurityReality && security.Reality != nil {
-		query.Set("pbk", security.Reality.PublicKey)
-		if len(security.Reality.ShortIDs) > 0 {
-			query.Set("sid", security.Reality.ShortIDs[0])
+		r := security.Reality
+		pbk := r.PublicKey
+		if pbk == "" && r.PrivateKey != "" {
+			if derived, err := deriveShareRealityPublicKey(r.PrivateKey); err == nil {
+				pbk = derived
+			}
+		}
+		if pbk != "" {
+			query.Set("pbk", pbk)
+		}
+		if len(r.ShortIDs) > 0 {
+			query.Set("sid", r.ShortIDs[0])
+		}
+		if query.Get("sni") == "" && len(r.ServerNames) > 0 {
+			query.Set("sni", r.ServerNames[0])
 		}
 	}
+}
+
+// sharePortString returns the client-facing port for standard share URIs.
+func sharePortString(profile domain.AccessProfile, nodePort string) string {
+	if profile.PublicPort > 0 {
+		return strconv.Itoa(int(profile.PublicPort))
+	}
+	if p := strings.TrimSpace(nodePort); p != "" && p != "0" {
+		return p
+	}
+	return "0"
 }
 
 func shareHost(state domain.DesiredState, profile domain.AccessProfile) string {
