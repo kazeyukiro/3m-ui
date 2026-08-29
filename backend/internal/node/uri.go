@@ -1,7 +1,6 @@
 package node
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -9,10 +8,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
-	"golang.org/x/crypto/curve25519"
 )
-
-// ClientURIs builds share URIs for a listener. host is the public address clients connect to.
 func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	host = netutil.NormalizeHost(host)
 	if host == "" {
