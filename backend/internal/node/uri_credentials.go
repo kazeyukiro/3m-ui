@@ -21,6 +21,8 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 	if cfg == nil {
 		cfg = map[string]interface{}{}
 	}
+	// Prefer panel credentials; merge server-side flow for Vision when present.
+	flow, _ := cfg["flow"].(string)
 	if len(credentials) > 0 {
 		switch listener.Protocol {
 		case "anytls", "hysteria2", "mieru", "tuic":
@@ -34,7 +36,11 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 		default:
 			users := make([]interface{}, 0, len(credentials))
 			for _, credential := range credentials {
-				users = append(users, map[string]interface{}{"username": credential.Username, "password": credential.Password, "uuid": credential.UUID})
+				row := map[string]interface{}{"username": credential.Username, "password": credential.Password, "uuid": credential.UUID}
+				if flow != "" && (listener.Protocol == "vless" || listener.Protocol == "vmess") {
+					row["flow"] = flow
+				}
+				users = append(users, row)
 			}
 			cfg["users"] = users
 		}
