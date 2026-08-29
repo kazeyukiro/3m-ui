@@ -1,5 +1,5 @@
 import React from 'react';
-import {
+import { message,
   Form, Input, InputNumber, Select, Switch, Divider, Alert, Space, Typography, Button, Card, Radio,
 } from 'antd';
 import { generateMaterial } from '../api/listeners';
@@ -485,15 +485,18 @@ export function formValuesToConfig(
     values['grpc-service-name'] = undefined;
     values.xhttp_enabled = false;
   }
-  const realityOn = REALITY_PROTOCOLS.has(protocol) && !!values.reality_enabled;
+  const realityOn = REALITY_PROTOCOLS.has(protocol) && (!!values.reality_enabled || values.security_layer === 'reality');
   if (realityOn) {
-    const reality = cleanObj({
-      dest: values.reality_dest,
-      'private-key': values.reality_private_key,
-      'short-id': values.reality_short_id,
-      'server-names': values.reality_server_names,
-    });
-    if (reality) cfg['reality-config'] = reality;
+    // Always emit reality-config so backend Autofill can fill empty private-key / short-id.
+    const dest = (values.reality_dest && String(values.reality_dest).trim()) || 'www.microsoft.com:443';
+    const reality: Record<string, any> = { dest, 'private-key': values.reality_private_key || '' };
+    if (values.reality_short_id != null && values.reality_short_id !== '') {
+      reality['short-id'] = values.reality_short_id;
+    }
+    if (values.reality_server_names != null && values.reality_server_names !== '') {
+      reality['server-names'] = values.reality_server_names;
+    }
+    cfg['reality-config'] = reality;
   } else if (TLS_PROTOCOLS.has(protocol)) {
     set('certificate', values.certificate);
     set('private-key', values['private-key']);
@@ -711,9 +714,9 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       } else if (kind === 'short-id' && data.short_id) {
         form.setFieldsValue({ reality_short_id: [data.short_id] });
       }
+      message.success(t('common.generated') || 'Generated');
     } catch (e: any) {
-      // keep silent-ish; antd message may not be imported
-      console.error(e);
+      message.error(e?.message || 'generate failed');
     }
   };
   if (!protocol) {
@@ -725,6 +728,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Alert type="info" showIcon message={t('listeners.usersHint')} />
+      <Alert type="success" showIcon message={t('listeners.autoGenerateHint') || 'Empty password / REALITY key / short-id will be auto-generated on save. Use Generate buttons to fill now.'} />
 
       {TRANSPORT_PROTOCOLS.has(protocol) && (
         <>
@@ -756,7 +760,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {protocol === 'shadowsocks' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="cipher" label={t('listeners.cipher')} rules={[{ required: true }]}>
+          <Form.Item name="cipher" label={t('listeners.cipher')} initialValue="aes-128-gcm">
             <Select options={SS_CIPHERS.map((c) => ({ value: c, label: c }))} showSearch />
           </Form.Item>
           <Form.Item name="password" label={t('listeners.password')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty to auto-generate'}>
@@ -768,8 +772,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {protocol === 'snell' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="psk" label={t('listeners.psk')} rules={[{ required: true }]}>
-            <Input.Password />
+          <Form.Item name="psk" label={t('listeners.psk')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty to auto-generate'}>
+            <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
           <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={3}>
             <Select options={[1, 2, 3].map((v) => ({ value: v, label: String(v) }))} />
