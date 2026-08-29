@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/mui/domain"
@@ -82,9 +83,17 @@ func (Hysteria2Module) BuildShare(
 		query.Set("obfs", node.Hysteria2.Obfs)
 		query.Set("obfs-password", node.Hysteria2.ObfsPassword)
 	}
+	port := int(profile.PublicPort)
+	if port <= 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(node.Port)); err == nil {
+			port = n
+		}
+	}
+	// Official scheme: hysteria2://auth@host:port/?sni=&insecure=&obfs=&obfs-password=
+	// (hy2:// is accepted by many clients as an alias; we emit hysteria2://)
 	uri := (&url.URL{
 		Scheme: "hysteria2", User: url.User(user.Hysteria2.Password),
-		Host:     net.JoinHostPort(host, strconv.Itoa(int(profile.PublicPort))),
+		Host:     net.JoinHostPort(host, strconv.Itoa(port)),
 		RawQuery: query.Encode(), Fragment: node.Name + " - " + user.Name,
 	}).String()
 	client := hysteria2ClientDocument{Proxies: []hysteria2ClientProxy{{
