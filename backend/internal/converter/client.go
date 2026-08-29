@@ -574,7 +574,7 @@ func deriveRealityPublicKey(cfg map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(public), nil
+	return base64.RawStdEncoding.EncodeToString(public), nil
 }
 
 func firstStringValue(v interface{}) (string, bool) {
