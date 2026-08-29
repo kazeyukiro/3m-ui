@@ -155,6 +155,36 @@ chmod +x 3m-ui-${ARCH}
 ./3m-ui-${ARCH} --version
 ```
 
+## 四、Mihomo 核心的校验（说明）
+
+3M-UI 的二进制完整性已经 fail-closed 保护（`SHA256SUMS` + cosign），但安装器也会下载 Mihomo 核心二进制。Mihomo 的校验情况特殊：
+
+- **Mihomo 官方不发布 `SHA256SUMS` 文件**（已核实 v1.17.0 ~ v1.19.30 全部 404）。
+- 我们改用 **GitHub Release API 的 per-asset `digest` 字段**——GitHub 在上传资产时服务端计算 SHA-256，权威可信。
+- **匿名 GitHub API 限流 60 次/小时/IP**，共享 NAT 或多次重试可能耗尽。
+
+因此 Mihomo 校验采用**分层策略**：
+
+| 模式 | 行为 | 适用场景 |
+|------|------|---------|
+| 默认 | 校验失败仅警告，不中止 | 普通用户（已有 HTTPS 传输完整性 + ELF 格式校验兜底） |
+| `THREE_M_UI_VERIFY_MIHOMO=1` | 校验失败即中止（fail-closed） | 严格要求 Mihomo 真实性的场景（需 GitHub API 可达） |
+| `THREE_M_UI_INSECURE=1` | 完全跳过所有校验 | 仅紧急情况，**不推荐** |
+
+```bash
+# 默认安装（Mihomo 校验失败仅警告，3m-ui 二进制仍 fail-closed）
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | bash
+
+# 严格模式（Mihomo 也强制校验，需 GitHub API 可达）
+THREE_M_UI_VERIFY_MIHOMO=1 \
+  curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | bash
+```
+
+**威胁模型说明**：我们的核心责任是 3m-ui 二进制的真实性（已端到端保护）。Mihomo 是独立项目，其供应链应由 MetaCubeX 社区负责。即便 Mihomo 校验降级为 best-effort，仍受以下保护：
+1. HTTPS 下载到 GitHub（传输层完整性）
+2. 下载后 ELF 格式 smoke-test（捕获截断/错误文件）
+3. 可选的 `THREE_M_UI_VERIFY_MIHOMO=1` 严格模式
+
 ## 常见问题
 
 ### Q：旧版本 release 没有签名资产怎么办？
