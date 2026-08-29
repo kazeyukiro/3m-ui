@@ -59,6 +59,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 
 		registerDashboardRoute(apiV1, d)
 		registerPanelSettingsRoutes(apiV1, d)
+		registerPanelServerRoutes(apiV1, cfg)
 		protocol.RegisterRoutes(apiV1)
 
 		system.NewHandler(d.systemService()).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
