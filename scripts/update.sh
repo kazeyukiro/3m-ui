@@ -138,20 +138,22 @@ verify_release_cosign(){
     echo "Warning: cosign signature artifacts (SHA256SUMS.sig / .pem) not published for $tag." >&2
     return 0
   fi
-  identity="https://github.com/${repo}/.github/workflows/release.yml@refs/tags/${tag}"
-  if cosign verify-blob \
-       --certificate "$pem_tmp" \
-       --signature "$sig_tmp" \
-       --certificate-identity "$identity" \
-       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-       "$sums_tmp" >/dev/null 2>&1; then
-    echo "Cosign signature OK: SHA256SUMS verified against $identity"
-  else
-    echo "Error: cosign signature verification FAILED for $tag. Refusing to continue (set THREE_M_UI_INSECURE=1 to bypass, NOT recommended)." >&2
-    rm -f "$pem_tmp" "$sig_tmp" "$sums_tmp"
-    exit 1
-  fi
+  base_id="https://github.com/${repo}/.github/workflows/release.yml"
+  for identity in "${base_id}@refs/tags/${tag}" "${base_id}@refs/heads/main"; do
+    if cosign verify-blob \
+         --certificate "$pem_tmp" \
+         --signature "$sig_tmp" \
+         --certificate-identity "$identity" \
+         --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+         "$sums_tmp" >/dev/null 2>&1; then
+      echo "Cosign signature OK: SHA256SUMS verified against $identity"
+      rm -f "$pem_tmp" "$sig_tmp" "$sums_tmp"
+      return 0
+    fi
+  done
+  echo "Error: cosign signature verification FAILED for $tag. Refusing to continue (set THREE_M_UI_INSECURE=1 to bypass, NOT recommended)." >&2
   rm -f "$pem_tmp" "$sig_tmp" "$sums_tmp"
+  exit 1
 }
 
 # Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
