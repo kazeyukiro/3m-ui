@@ -447,11 +447,19 @@ type grpcClient struct {
 }
 
 func compileVLESSClient(node domain.Node, user domain.NodeUser, profile domain.AccessProfile, host string) ([]byte, error) {
+	port := profile.PublicPort
+	if port == 0 {
+		if n, err := strconv.ParseUint(strings.TrimSpace(node.Port), 10, 16); err == nil {
+			port = uint16(n)
+		}
+	}
+	sni := profile.ServerName
+	fp := profile.Fingerprint
 	proxy := vlessClientProxy{
-		Name: node.Name + " - " + user.Name, Type: "vless", Server: host, Port: profile.PublicPort,
+		Name: node.Name + " - " + user.Name, Type: "vless", Server: host, Port: port,
 		UDP: true, UUID: user.VLESS.UUID, Flow: user.VLESS.Flow,
-		PacketEncoding: profile.PacketEncoding, ServerName: profile.ServerName,
-		ClientFingerprint: profile.Fingerprint, SkipCertVerify: profile.AllowInsecure,
+		PacketEncoding: profile.PacketEncoding, ServerName: sni,
+		ClientFingerprint: fp, SkipCertVerify: profile.AllowInsecure,
 		Encryption: normalizedDecryption(node.VLESS.Decryption),
 	}
 	switch node.VLESS.Handler.Type {
@@ -475,10 +483,26 @@ func compileVLESSClient(node domain.Node, user domain.NodeUser, profile domain.A
 		proxy.TLS = true
 		reality := node.VLESS.Security.Reality
 		shortID := ""
-		if len(reality.ShortIDs) > 0 {
-			shortID = reality.ShortIDs[0]
+		pbk := ""
+		if reality != nil {
+			if len(reality.ShortIDs) > 0 {
+				shortID = reality.ShortIDs[0]
+			}
+			pbk = reality.PublicKey
+			// Server-side listeners store private-key only; clients need public-key for URLTest/HTTPS.
+			if pbk == "" && reality.PrivateKey != "" {
+				if derived, err := deriveShareRealityPublicKey(reality.PrivateKey); err == nil {
+					pbk = derived
+				}
+			}
+			if proxy.ServerName == "" && len(reality.ServerNames) > 0 {
+				proxy.ServerName = reality.ServerNames[0]
+			}
 		}
-		proxy.Reality = &vlessClientReality{PublicKey: reality.PublicKey, ShortID: shortID}
+		if proxy.ClientFingerprint == "" {
+			proxy.ClientFingerprint = "chrome"
+		}
+		proxy.Reality = &vlessClientReality{PublicKey: pbk, ShortID: shortID}
 	case domain.VLESSSecurityShadowTLS:
 		proxy.TLS = true
 		shadowTLS := node.VLESS.Security.ShadowTLS
