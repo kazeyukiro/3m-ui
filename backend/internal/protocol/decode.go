@@ -42,6 +42,10 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 	if fp == "" {
 		fp = strFrom(cfg, "client-fingerprint", "fingerprint")
 	}
+	alpn := splitCSV(n.AccessALPN)
+	if len(alpn) == 0 {
+		alpn = stringListFrom(cfg, "alpn")
+	}
 
 	switch n.Protocol {
 	case "vless":
@@ -53,6 +57,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			SkipCert:    boolFrom(cfg, "skip-cert-verify"),
 			SNI:         sni,
 			Fingerprint: fp,
+			ALPN:        alpn,
 		}
 	case "vmess":
 		n.VMess = &VMessSpec{
@@ -63,6 +68,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			SkipCert:    boolFrom(cfg, "skip-cert-verify"),
 			SNI:         sni,
 			Fingerprint: fp,
+			ALPN:        alpn,
 		}
 	case "trojan":
 		n.Trojan = &TrojanSpec{
@@ -71,6 +77,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			SkipCert:    boolFrom(cfg, "skip-cert-verify"),
 			SNI:         sni,
 			Fingerprint: fp,
+			ALPN:        alpn,
 		}
 	case "shadowsocks":
 		n.Shadowsocks = &ShadowsocksSpec{
@@ -86,6 +93,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			ObfsPassword: strFrom(cfg, "obfs-password"),
 			Up:           strFrom(cfg, "up"),
 			Down:         strFrom(cfg, "down"),
+			ALPN:         alpn,
 		}
 	default:
 		n.Generic = cfg
@@ -215,4 +223,43 @@ func firstString(v interface{}) (string, bool) {
 		return a[0], a[0] != ""
 	}
 	return "", false
+}
+
+func splitCSV(value string) []string {
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func stringListFrom(cfg map[string]interface{}, key string) []string {
+	v, ok := cfg[key]
+	if !ok {
+		return nil
+	}
+	switch a := v.(type) {
+	case []interface{}:
+		out := make([]string, 0, len(a))
+		for _, item := range a {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	case []string:
+		out := make([]string, 0, len(a))
+		for _, s := range a {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		return splitCSV(a)
+	default:
+		return nil
+	}
 }
