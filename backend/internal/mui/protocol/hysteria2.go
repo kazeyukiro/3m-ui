@@ -36,7 +36,6 @@ func (Hysteria2Module) Compile(
 	listener := hysteria2Listener{
 		Name: node.Name, Type: "hysteria2", Listen: node.ListenAddress, Port: node.Port,
 		Users: make(map[string]string), Obfs: spec.Obfs, ObfsPassword: spec.ObfsPassword,
-		ObfsMinPacketSize: spec.ObfsMinPacketSize, ObfsMaxPacketSize: spec.ObfsMaxPacketSize,
 		Certificate: spec.Certificate, PrivateKey: spec.PrivateKey,
 		ClientAuthType: spec.ClientAuthType, ClientAuthCert: spec.ClientAuthCert, ECHKey: spec.ECHKey,
 		MaxIdleTime: spec.MaxIdleTime, ALPN: append([]string(nil), spec.ALPN...), Up: spec.Up, Down: spec.Down,
@@ -101,7 +100,6 @@ func (Hysteria2Module) BuildShare(
 		Port: uint16(port), Password: user.Hysteria2.Password,
 		Up: node.Hysteria2.Up, Down: node.Hysteria2.Down, BBRProfile: node.Hysteria2.BBRProfile,
 		Obfs: node.Hysteria2.Obfs, ObfsPassword: node.Hysteria2.ObfsPassword,
-		ObfsMinPacketSize: node.Hysteria2.ObfsMinPacketSize, ObfsMaxPacketSize: node.Hysteria2.ObfsMaxPacketSize,
 		ServerName: profile.ServerName, SkipCertVerify: profile.AllowInsecure,
 		ALPN: append([]string(nil), node.Hysteria2.ALPN...), Realm: compileHysteria2Realm(hysteria2RealmOrZero(node.Hysteria2)),
 	}}}
@@ -120,8 +118,6 @@ type hysteria2Listener struct {
 	Users                          map[string]string     `yaml:"users,omitempty"`
 	Obfs                           string                `yaml:"obfs,omitempty"`
 	ObfsPassword                   string                `yaml:"obfs-password,omitempty"`
-	ObfsMinPacketSize              int                   `yaml:"obfs-min-packet-size,omitempty"`
-	ObfsMaxPacketSize              int                   `yaml:"obfs-max-packet-size,omitempty"`
 	Certificate                    string                `yaml:"certificate"`
 	PrivateKey                     string                `yaml:"private-key"`
 	ClientAuthType                 string                `yaml:"client-auth-type,omitempty"`
@@ -177,22 +173,20 @@ type hysteria2ClientDocument struct {
 	Proxies []hysteria2ClientProxy `yaml:"proxies"`
 }
 type hysteria2ClientProxy struct {
-	Name              string                `yaml:"name"`
-	Type              string                `yaml:"type"`
-	Server            string                `yaml:"server"`
-	Port              uint16                `yaml:"port"`
-	Password          string                `yaml:"password"`
-	Up                string                `yaml:"up,omitempty"`
-	Down              string                `yaml:"down,omitempty"`
-	BBRProfile        string                `yaml:"bbr-profile,omitempty"`
-	Obfs              string                `yaml:"obfs,omitempty"`
-	ObfsPassword      string                `yaml:"obfs-password,omitempty"`
-	ObfsMinPacketSize int                   `yaml:"obfs-min-packet-size,omitempty"`
-	ObfsMaxPacketSize int                   `yaml:"obfs-max-packet-size,omitempty"`
-	ServerName        string                `yaml:"sni,omitempty"`
-	SkipCertVerify    bool                  `yaml:"skip-cert-verify,omitempty"`
-	ALPN              []string              `yaml:"alpn,omitempty"`
-	Realm             *hysteria2RealmConfig `yaml:"realm-opts,omitempty"`
+	Name           string                `yaml:"name"`
+	Type           string                `yaml:"type"`
+	Server         string                `yaml:"server"`
+	Port           uint16                `yaml:"port"`
+	Password       string                `yaml:"password"`
+	Up             string                `yaml:"up,omitempty"`
+	Down           string                `yaml:"down,omitempty"`
+	BBRProfile     string                `yaml:"bbr-profile,omitempty"`
+	Obfs           string                `yaml:"obfs,omitempty"`
+	ObfsPassword   string                `yaml:"obfs-password,omitempty"`
+	ServerName     string                `yaml:"sni,omitempty"`
+	SkipCertVerify bool                  `yaml:"skip-cert-verify,omitempty"`
+	ALPN           []string              `yaml:"alpn,omitempty"`
+	Realm          *hysteria2RealmConfig `yaml:"realm-opts,omitempty"`
 }
 
 func hysteria2RealmOrZero(spec *domain.Hysteria2Spec) domain.Hysteria2RealmConfig {

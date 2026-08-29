@@ -331,8 +331,6 @@ type BrutalSpec struct {
 type Hysteria2Spec struct {
 	Obfs                           string                `json:"obfs,omitempty"`
 	ObfsPassword                   string                `json:"obfs_password,omitempty"`
-	ObfsMinPacketSize              int                   `json:"obfs_min_packet_size,omitempty"`
-	ObfsMaxPacketSize              int                   `json:"obfs_max_packet_size,omitempty"`
 	Certificate                    string                `json:"certificate"`
 	PrivateKey                     string                `json:"private_key"`
 	ClientAuthType                 string                `json:"client_auth_type,omitempty"`

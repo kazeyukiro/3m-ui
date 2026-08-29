@@ -2,8 +2,8 @@ package protocol
 
 import (
 	"bytes"
-	"encoding/base64"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -562,7 +562,6 @@ func encodeClientYAML(value any) ([]byte, error) {
 	}
 	return output.Bytes(), nil
 }
-
 
 // deriveShareRealityPublicKey produces the X25519 public key for share URIs (pbk).
 func deriveShareRealityPublicKey(private string) (string, error) {

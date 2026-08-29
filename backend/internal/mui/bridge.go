@@ -358,7 +358,6 @@ func boolCfg(cfg map[string]interface{}, key string) bool {
 	return b
 }
 
-
 func enrichAccessProfileFromNode(profile *domain.AccessProfile, node domain.Node, l models.Listener) {
 	if profile == nil {
 		return
