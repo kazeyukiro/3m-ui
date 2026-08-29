@@ -1,17 +1,3 @@
-  share: {
-    title: '分享 / 订阅',
-    subtitle: '统一查看用户订阅链接与已绑定节点的分享 URI。',
-    selectUser: '选择用户',
-    tabSub: '订阅链接',
-    tabUri: '节点 URI',
-    noSub: '暂无订阅地址',
-    noNodes: '该用户未绑定节点，请先在用户管理中绑定。',
-    uri: 'URI',
-    loadUri: '加载 URI',
-    subHint: '将链接粘贴到客户端。默认（无 target）为 Mihomo YAML；target=v2ray 为经典 Base64 URI 列表。',
-    subHtml: '订阅信息页 (HTML)',
-  },
-
 export default {
   app: { name: '3M-UI', title: 'Mihomo 核心管理控制台' },
   nav: { dashboard: '仪表盘', listeners: '节点管理', users: '用户管理', traffic: '流量监控', cluster: '多机节点', routing: '路由规则', core: '核心管理', logs: '运行日志', config: '配置引擎', share: '分享/订阅', settings: '系统设置', logout: '退出登录' },
@@ -45,4 +31,17 @@ export default {
     publicPort: '公网端口',
     clientFingerprint: '客户端指纹',
 telegram: 'Telegram 通知', botToken: 'Bot Token', chatIds: 'Chat IDs', telegramSaved: 'Telegram 设置已保存', telegramTest: '发送测试消息', telegramTestOk: '测试消息已发送', chatIdsHint: '多个 Chat ID 用逗号分隔', notifyLogin: '面板登录时通知', notifyBlock: '用户封禁时通知', notifyUnblock: '用户解封时通知', notifyExpiry: '用户过期时通知', notifyDailyDigest: '每天发送流量与用户摘要', templates: '证书与反代模板', proxyKind: '反代类型', domain: '域名', upstream: '上游地址', generateTemplate: '生成模板', templateGenerated: '模板已生成' , trafficReset: '流量重置', trafficResetDay: '每月重置日', certWizard: '证书申请向导', email: '邮箱', webroot: 'Webroot 路径', generateAcme: '生成 certbot 命令', acmeGenerated: '命令已生成', acmeHint: '在服务器上执行下列命令申请证书，再将路径填入 Listener TLS 配置', notifyTraffic: '流量阈值告警', trafficWarnPct: '流量告警阈值 (%)', expiryWarnHours: '到期提前提醒 (小时)', panelSSL: '面板 SSL（ACME）', panelSSLHint: '通过 Let’s Encrypt（autocert）或手动证书为面板启用 HTTPS。保存后需重启面板生效。', sslSaved: 'SSL 设置已保存 — 请重启面板生效', acmeCacheDir: 'ACME 缓存目录', manualCert: '手动证书文件（可选）', manualKey: '手动私钥文件（可选）', subPage: '订阅页模板', subPageHint: '自定义 HTML 模板目录（index.html 或 sub.html）。留空使用内置页面。浏览器以 Accept: text/html 访问订阅 URL 时将显示此页。', subThemeDir: '主题目录', subTitle: '页面标题', subSupportUrl: '支持链接', downloadDefaultTpl: '下载默认模板', geofiles: 'GeoIP / GeoSite', geofilesHint: '下载最新 MetaCubeX GeoIP/GeoSite 数据库到 Mihomo 数据目录。', updateGeofiles: '更新地理文件', geofilesDone: '地理文件已更新', subAnnounce: '订阅公告', subWebPage: '订阅网页 URL', subUpdates: '刷新间隔（小时）', subEncrypt: 'Base64 编码节点列表', notifyCPU: 'CPU 过高时通知', cpuWarnPct: 'CPU 告警阈值 (%)'},
+  share: {
+    title: '分享 / 订阅',
+    subtitle: '统一查看用户订阅链接与已绑定节点的分享 URI。',
+    selectUser: '选择用户',
+    tabSub: '订阅链接',
+    tabUri: '节点 URI',
+    noSub: '暂无订阅地址',
+    noNodes: '该用户未绑定节点，请先在用户管理中绑定。',
+    uri: 'URI',
+    loadUri: '加载 URI',
+    subHint: '将链接粘贴到客户端。默认（无 target）为 Mihomo YAML；target=v2ray 为经典 Base64 URI 列表。',
+    subHtml: '订阅信息页 (HTML)',
+  },
 };
