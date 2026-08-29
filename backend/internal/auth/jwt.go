@@ -112,8 +112,8 @@ func jwtInt64Claim(claims jwt.MapClaims, key string) (int64, bool) {
 }
 
 // TokenFromRequest extracts the Bearer token from Authorization. The HTTP
-authentication scheme is case-insensitive, so "bearer" and "BEARER" are
-accepted as well as the conventional "Bearer" spelling.
+// authentication scheme is case-insensitive, so "bearer" and "BEARER" are
+// accepted as well as the conventional "Bearer" spelling.
 func TokenFromRequest(authHeader string) string {
 	parts := strings.Fields(authHeader)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
