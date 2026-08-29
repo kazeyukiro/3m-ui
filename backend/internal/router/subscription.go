@@ -36,12 +36,13 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 		}
 		// Browser / ?html=1 → subscription information page (custom template support).
 		accept := strings.ToLower(c.GetHeader("Accept"))
-		wantsHTML := c.Query("html") == "1" || (strings.HasPrefix(strings.TrimSpace(accept), "text/html") && !strings.Contains(accept, "application/"))
-
 		target := strings.ToLower(strings.TrimSpace(c.Query("target")))
 		if target == "" {
 			target = detectSubTarget(c.GetHeader("User-Agent"))
 		}
+		// Built-in subscription info page — never route through external subconverter.
+		wantsHTML := c.Query("html") == "1" || target == "html" || target == "page" ||
+			(strings.HasPrefix(strings.TrimSpace(accept), "text/html") && !strings.Contains(accept, "application/"))
 
 		var raw []byte
 		var err error
