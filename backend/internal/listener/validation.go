@@ -43,8 +43,6 @@ func ValidateModel(l *models.Listener) error {
 		}
 		l.BindAddress = address
 	}
-
-	// Drop client-only REALITY fields that Mihomo rejects on listeners.
 	if err := sanitizeListenerConfigJSON(l); err != nil {
 		return err
 	}
@@ -164,7 +162,6 @@ func AddressesConflict(a, b string) bool {
 	return false
 }
 
-
 func sanitizeListenerConfigJSON(l *models.Listener) error {
 	if l == nil || strings.TrimSpace(l.Config) == "" {
 		return nil
@@ -173,15 +170,14 @@ func sanitizeListenerConfigJSON(l *models.Listener) error {
 	if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
 		return fmt.Errorf("invalid config json: %w", err)
 	}
+	delete(cfg, "security_layer")
+	delete(cfg, "transport_layer")
+	delete(cfg, "access_profile")
 	if raw, ok := cfg["reality-config"].(map[string]interface{}); ok && raw != nil {
 		delete(raw, "public-key")
 		delete(raw, "public_key")
 		cfg["reality-config"] = raw
 	}
-	// Also drop panel-only keys that must never reach Mihomo.
-	delete(cfg, "security_layer")
-	delete(cfg, "transport_layer")
-	delete(cfg, "access_profile")
 	b, err := json.Marshal(cfg)
 	if err != nil {
 		return err
