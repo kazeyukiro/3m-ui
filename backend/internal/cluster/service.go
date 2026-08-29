@@ -2,9 +2,11 @@ package cluster
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,17 +22,70 @@ type Service struct {
 }
 
 func NewService(db *gorm.DB) *Service {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: safeClusterDialContext(dialer),
+	}
 	return &Service{
 		db: db,
 		httpClient: &http.Client{
 			Timeout: 12 * time.Second,
+			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 3 {
 					return fmt.Errorf("too many redirects")
 				}
+				if req.URL == nil || req.URL.Hostname() == "" {
+					return fmt.Errorf("redirect target has no host")
+				}
+				if err := assertClusterHostAllowed(req.URL.Hostname()); err != nil {
+					return fmt.Errorf("redirect target blocked: %w", err)
+				}
 				return nil
 			},
 		},
+	}
+}
+
+// safeClusterDialContext binds SSRF validation to the actual TCP connection.
+// Hostname validation alone is vulnerable to DNS rebinding between validation
+// and connect time, so every resolved address is checked immediately before
+// dialing. Private/link-local/metadata addresses are never dialed unless the
+// explicit lab override is enabled; cloud metadata endpoints remain blocked.
+func safeClusterDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("invalid dial address %q: %w", address, err)
+		}
+		if ip := net.ParseIP(host); ip != nil {
+			if err := assertClusterIPAllowed(ip); err != nil {
+				return nil, err
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		}
+
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return nil, fmt.Errorf("resolve %q: %w", host, err)
+		}
+		var lastErr error
+		for _, ip := range ips {
+			if err := assertClusterIPAllowed(ip); err != nil {
+				lastErr = err
+				continue
+			}
+			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			lastErr = err
+		}
+		if lastErr != nil {
+			return nil, fmt.Errorf("connect to %q: %w", host, lastErr)
+		}
+		return nil, fmt.Errorf("no allowed addresses for %q", host)
 	}
 }
 
@@ -129,7 +184,6 @@ func (s *Service) HealthCheck(id uint) (*models.RemoteServer, error) {
 	return s.runHealth(&row)
 }
 
-// HealthCheckAll probes every enabled remote panel and persists status.
 func (s *Service) HealthCheckAll() ([]models.RemoteServer, error) {
 	var rows []models.RemoteServer
 	if err := s.db.Where("enabled = ?", true).Find(&rows).Error; err != nil {
@@ -143,7 +197,6 @@ func (s *Service) HealthCheckAll() ([]models.RemoteServer, error) {
 		}
 		out = append(out, *r)
 	}
-	// Also return disabled servers without probing.
 	var disabled []models.RemoteServer
 	_ = s.db.Where("enabled = ?", false).Find(&disabled).Error
 	for i := range disabled {
@@ -153,8 +206,8 @@ func (s *Service) HealthCheckAll() ([]models.RemoteServer, error) {
 }
 
 func (s *Service) runHealth(row *models.RemoteServer) (*models.RemoteServer, error) {
-	url := strings.TrimRight(row.BaseURL, "/") + "/api/v1/health"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	target := strings.TrimRight(row.BaseURL, "/") + "/api/v1/health"
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -260,8 +313,6 @@ func (s *Service) StopCore(id uint) (json.RawMessage, error) {
 	return json.RawMessage(raw), nil
 }
 
-// ProxyRemote forwards a request to a registered remote panel.
-// Path is restricted to an allowlist under /api/v1/ to avoid open-proxy abuse.
 func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, []byte, error) {
 	var row models.RemoteServer
 	if err := s.db.First(&row, id).Error; err != nil {
@@ -337,6 +388,9 @@ func normalizeBaseURL(raw string) (string, error) {
 	if u.Host == "" {
 		return "", fmt.Errorf("base_url host is required")
 	}
+	if u.User != nil {
+		return "", fmt.Errorf("base_url userinfo is not allowed")
+	}
 	host := u.Hostname()
 	if host == "" {
 		return "", fmt.Errorf("base_url host is required")
@@ -350,7 +404,6 @@ func normalizeBaseURL(raw string) (string, error) {
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
-// allowed path prefixes for remote control proxy.
 var allowedPrefixes = []string{
 	"/api/v1/health",
 	"/api/v1/dashboard",
@@ -373,7 +426,6 @@ func sanitizeProxyPath(path string) (string, error) {
 	if strings.Contains(path, "..") || strings.Contains(path, "://") || strings.ContainsAny(path, " \t\r\n") {
 		return "", fmt.Errorf("invalid path")
 	}
-	// Strip query for allowlist check; re-attach if needed by caller via path.
 	pathOnly := path
 	if i := strings.IndexByte(path, '?'); i >= 0 {
 		pathOnly = path[:i]
