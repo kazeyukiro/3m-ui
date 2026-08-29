@@ -2,15 +2,18 @@ package protocol
 
 import (
 	"bytes"
+	"encoding/base64"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/mui/domain"
+	"golang.org/x/crypto/curve25519"
 	"gopkg.in/yaml.v3"
 )
 
@@ -131,21 +134,42 @@ func (VLESSModule) BuildShare(
 	query.Set("security", string(node.VLESS.Security.Type))
 	switch node.VLESS.Security.Type {
 	case domain.VLESSSecurityReality:
+		query.Set("security", "reality")
 		reality := node.VLESS.Security.Reality
-		query.Set("pbk", reality.PublicKey)
-		if len(reality.ShortIDs) > 0 {
-			query.Set("sid", reality.ShortIDs[0])
+		if reality != nil {
+			pbk := reality.PublicKey
+			if pbk == "" && reality.PrivateKey != "" {
+				if derived, err := deriveShareRealityPublicKey(reality.PrivateKey); err == nil {
+					pbk = derived
+				}
+			}
+			if pbk != "" {
+				query.Set("pbk", pbk)
+			}
+			if len(reality.ShortIDs) > 0 {
+				query.Set("sid", reality.ShortIDs[0])
+			}
+			if query.Get("sni") == "" && len(reality.ServerNames) > 0 {
+				query.Set("sni", reality.ServerNames[0])
+			}
+			if query.Get("fp") == "" {
+				query.Set("fp", "chrome")
+			}
 		}
 	case domain.VLESSSecurityTLS:
 		query.Set("security", "tls")
-		if profile.AllowInsecure || node.VLESS.Security.TLS.AllowInsecure {
+		if profile.AllowInsecure || (node.VLESS.Security.TLS != nil && node.VLESS.Security.TLS.AllowInsecure) {
 			query.Set("allowInsecure", "1")
 		}
+	}
+	port := int(profile.PublicPort)
+	if port <= 0 {
+		port = int(node.Port)
 	}
 	uri := (&url.URL{
 		Scheme:   "vless",
 		User:     url.User(user.VLESS.UUID),
-		Host:     net.JoinHostPort(host, strconv.Itoa(int(profile.PublicPort))),
+		Host:     net.JoinHostPort(host, strconv.Itoa(port)),
 		RawQuery: query.Encode(),
 		Fragment: node.Name + " - " + user.Name,
 	}).String()
