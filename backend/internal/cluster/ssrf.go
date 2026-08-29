@@ -21,28 +21,32 @@ func assertClusterHostAllowed(host string) error {
 		return fmt.Errorf("base_url host %q is not allowed (set THREE_M_UI_CLUSTER_ALLOW_PRIVATE=1 for lab use)", host)
 	}
 	if ip := net.ParseIP(host); ip != nil {
-		// Always block cloud metadata endpoints.
-		if ip.Equal(net.ParseIP("169.254.169.254")) || ip.Equal(net.ParseIP("fd00:ec2::254")) {
-			return fmt.Errorf("base_url IP %s is blocked (cloud metadata)", ip)
-		}
-		if isBlockedClusterIP(ip) && !clusterAllowPrivate() {
-			return fmt.Errorf("base_url IP %s is private/loopback/link-local; set THREE_M_UI_CLUSTER_ALLOW_PRIVATE=1 to allow", ip)
-		}
-		return nil
+		return assertClusterIPAllowed(ip)
 	}
-	// Resolve hostnames and reject if any answer is private (SSRF hardening).
 	addrs, err := net.LookupIP(host)
 	if err != nil {
-		// Let connectivity checks surface DNS errors later; only enforce when we can resolve.
 		return nil
 	}
 	for _, ip := range addrs {
-		if ip.Equal(net.ParseIP("169.254.169.254")) || ip.Equal(net.ParseIP("fd00:ec2::254")) {
-			return fmt.Errorf("base_url host %q resolves to blocked metadata address", host)
+		if err := assertClusterIPAllowed(ip); err != nil {
+			return fmt.Errorf("base_url host %q: %w", host, err)
 		}
-		if isBlockedClusterIP(ip) && !clusterAllowPrivate() {
-			return fmt.Errorf("base_url host %q resolves to private/loopback address %s; set THREE_M_UI_CLUSTER_ALLOW_PRIVATE=1 to allow", host, ip)
-		}
+	}
+	return nil
+}
+
+// assertClusterIPAllowed is deliberately stricter than the URL parser. It is
+// also used immediately before dialing so DNS rebinding cannot turn an
+// already-validated hostname into a private or metadata endpoint.
+func assertClusterIPAllowed(ip net.IP) error {
+	if ip == nil {
+		return fmt.Errorf("base_url resolved to an invalid IP")
+	}
+	if ip.Equal(net.ParseIP("169.254.169.254")) || ip.Equal(net.ParseIP("fd00:ec2::254")) {
+		return fmt.Errorf("base_url IP %s is blocked (cloud metadata)", ip)
+	}
+	if isBlockedClusterIP(ip) && !clusterAllowPrivate() {
+		return fmt.Errorf("base_url IP %s is private/loopback/link-local; set THREE_M_UI_CLUSTER_ALLOW_PRIVATE=1 to allow", ip)
 	}
 	return nil
 }
