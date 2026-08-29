@@ -1,17 +1,3 @@
-  share: {
-    title: 'Share / Subscription',
-    subtitle: 'Unified view of subscription URLs and per-node share URIs for a user.',
-    selectUser: 'User',
-    tabSub: 'Subscription links',
-    tabUri: 'Node URIs',
-    noSub: 'No subscription URL',
-    noNodes: 'No nodes bound. Bind listeners under Users first.',
-    uri: 'URI',
-    loadUri: 'Load URI',
-    subHint: 'Paste into the client. Default (no target) is Mihomo YAML; target=v2ray is classic Base64 URI list.',
-    subHtml: 'Info page (HTML)',
-  },
-
 export default {
   app: { name: '3M-UI', title: 'Mihomo Core Management Console' },
   nav: { dashboard: 'Dashboard', listeners: 'Nodes', users: 'Users', traffic: 'Traffic', cluster: 'Cluster', routing: 'Routing', core: 'Core', logs: 'Logs', config: 'Config', share: 'Share', settings: 'Settings', logout: 'Logout' },
@@ -45,4 +31,17 @@ export default {
     publicPort: 'Public Port',
     clientFingerprint: 'Client Fingerprint',
 telegram: 'Telegram alerts', botToken: 'Bot Token', chatIds: 'Chat IDs', telegramSaved: 'Telegram settings saved', telegramTest: 'Send test message', telegramTestOk: 'Test message sent', chatIdsHint: 'Comma-separated chat IDs', notifyLogin: 'Notify on panel login', notifyBlock: 'Notify on user block', notifyUnblock: 'Notify on user unblock', notifyExpiry: 'Notify on user expiry', notifyDailyDigest: 'Send a daily traffic and user summary', templates: 'TLS & reverse-proxy templates', proxyKind: 'Proxy type', domain: 'Domain', upstream: 'Upstream', generateTemplate: 'Generate template', templateGenerated: 'Template generated' , trafficReset: 'Traffic reset', trafficResetDay: 'Monthly reset day', certWizard: 'Certificate wizard', email: 'Email', webroot: 'Webroot path', generateAcme: 'Generate certbot command', acmeGenerated: 'Command generated', acmeHint: 'Run the command on the server, then put cert paths into Listener TLS settings', notifyTraffic: 'Traffic threshold warning', trafficWarnPct: 'Traffic warn %', expiryWarnHours: 'Expiry warn (hours)', panelSSL: 'Panel SSL (ACME)', panelSSLHint: 'Enable HTTPS for the panel via Let\'s Encrypt (autocert) or a manual certificate. Restart the panel after saving.', sslSaved: 'SSL settings saved — restart panel to apply', acmeCacheDir: 'ACME cache dir', manualCert: 'Manual cert file (optional)', manualKey: 'Manual key file (optional)', subPage: 'Subscription page template', subPageHint: 'Custom HTML template directory (index.html or sub.html). Leave empty for the built-in page. Browsers hitting the subscription URL with Accept: text/html will see this page.', subThemeDir: 'Theme directory', subTitle: 'Page title', subSupportUrl: 'Support URL', downloadDefaultTpl: 'Download default template', geofiles: 'GeoIP / GeoSite', geofilesHint: 'Download latest MetaCubeX GeoIP/GeoSite databases into the Mihomo data directory .', updateGeofiles: 'Update geo files', geofilesDone: 'Geo files updated', subAnnounce: 'Subscription announce', subWebPage: 'Profile web page URL', subUpdates: 'Update interval (hours)', subEncrypt: 'Base64-encode URI list', notifyCPU: 'Notify on high CPU', cpuWarnPct: 'CPU warn threshold (%)'},
+  share: {
+    title: 'Share / Subscription',
+    subtitle: 'Unified view of subscription URLs and per-node share URIs for a user.',
+    selectUser: 'User',
+    tabSub: 'Subscription links',
+    tabUri: 'Node URIs',
+    noSub: 'No subscription URL',
+    noNodes: 'No nodes bound. Bind listeners under Users first.',
+    uri: 'URI',
+    loadUri: 'Load URI',
+    subHint: 'Paste into the client. Default (no target) is Mihomo YAML; target=v2ray is classic Base64 URI list.',
+    subHtml: 'Info page (HTML)',
+  },
 };
