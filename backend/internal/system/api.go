@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -76,7 +77,8 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 	}
 	defer f.Close()
 	if err := RestoreDatabase(h.dbPath, f); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("system restore-database failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -118,7 +120,12 @@ func (h *Handler) ACME(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"command": ACMECommand(req.Domain, req.Email, req.Webroot)})
+	cmd, err := ACMECommand(req.Domain, req.Email, req.Webroot)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"command": cmd})
 }
 
 // UpdateGeoFiles downloads MetaCubeX GeoIP/GeoSite databases next to the Mihomo config .
@@ -129,7 +136,8 @@ func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 	}
 	result, err := UpdateGeoFiles(dir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("system update-geofiles failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"dir": dir, "files": result})
@@ -143,5 +151,10 @@ func (h *Handler) WARP(c *gin.Context) {
 		Reserved   string `json:"reserved"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	c.JSON(http.StatusOK, gin.H{"yaml": WARPTemplate(body.PrivateKey, body.Address, body.Reserved)})
+	yaml, err := WARPTemplate(body.PrivateKey, body.Address, body.Reserved)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"yaml": yaml})
 }

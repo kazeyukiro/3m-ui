@@ -94,8 +94,12 @@ func SavePageSettings(db *gorm.DB, s Settings) error {
 	if !s.Encrypt {
 		enc = "false"
 	}
+	themeDir := sanitizeThemeDir(s.ThemeDir)
+	if strings.TrimSpace(s.ThemeDir) != "" && themeDir == "" {
+		return fmt.Errorf("theme_dir must be empty or under an allowed theme root")
+	}
 	for _, kv := range []struct{ k, v string }{
-		{settingKeyThemeDir, strings.TrimSpace(s.ThemeDir)},
+		{settingKeyThemeDir, themeDir},
 		{settingKeyTitle, strings.TrimSpace(s.Title)},
 		{settingKeySupport, strings.TrimSpace(s.SupportURL)},
 		{settingKeyAnnounce, strings.TrimSpace(s.Announce)},
@@ -171,8 +175,45 @@ func RenderHTML(db *gorm.DB, pu models.ProxyUser, subBase string, links []string
 	return buf.Bytes(), nil
 }
 
-func loadTemplate(themeDir string) (*template.Template, error) {
+// allowedThemeRoots enumerates the directories under which a custom subscription
+// page theme may live. Path-traversal outside these roots is rejected so an
+// attacker (or hijacked admin session) cannot point the HTML template loader at
+// arbitrary files on the host (e.g. /etc/passwd, database files).
+var allowedThemeRoots = []string{
+	"/var/lib/3m-ui/themes",
+	"/etc/3m-ui/themes",
+	"/usr/local/share/3m-ui/themes",
+}
+
+// sanitizeThemeDir returns the cleaned absolute theme directory if it lives
+// under one of the allowed roots, otherwise the empty string. An empty input
+// is allowed (falls back to the built-in default template).
+func sanitizeThemeDir(themeDir string) string {
 	themeDir = strings.TrimSpace(themeDir)
+	if themeDir == "" {
+		return ""
+	}
+	clean := filepath.Clean(themeDir)
+	if !filepath.IsAbs(clean) {
+		return ""
+	}
+	for _, root := range allowedThemeRoots {
+		rel, err := filepath.Rel(root, clean)
+		if err != nil {
+			continue
+		}
+		if rel == "." {
+			return clean
+		}
+		if !strings.HasPrefix(rel, "..") && !strings.Contains(rel, string(filepath.Separator)+"..") {
+			return clean
+		}
+	}
+	return ""
+}
+
+func loadTemplate(themeDir string) (*template.Template, error) {
+	themeDir = sanitizeThemeDir(themeDir)
 	if themeDir != "" {
 		for _, name := range []string{"index.html", "sub.html"} {
 			path := filepath.Join(themeDir, name)
@@ -247,13 +288,6 @@ const defaultHTML = `<!DOCTYPE html>
     <a href="{{.SubClashURL}}">Clash target</a>
     {{if .SubSupportURL}}<a href="{{.SubSupportURL}}" rel="noopener">Support</a>{{end}}
   </div>
-
-  {{if .SubURL}}
-  <div class="card qr">
-    <img width="180" height="180" alt="QR"
-      src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&amp;data={{.SubURL}}"/>
-  </div>
-  {{end}}
 
   <footer>Powered by 3m-ui · refresh client subscription to pick up changes</footer>
 </div>
