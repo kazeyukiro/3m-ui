@@ -1,6 +1,20 @@
+  share: {
+    title: '分享 / 订阅',
+    subtitle: '统一查看用户订阅链接与已绑定节点的分享 URI。',
+    selectUser: '选择用户',
+    tabSub: '订阅链接',
+    tabUri: '节点 URI',
+    noSub: '暂无订阅地址',
+    noNodes: '该用户未绑定节点，请先在用户管理中绑定。',
+    uri: 'URI',
+    loadUri: '加载 URI',
+    subHint: '将链接粘贴到客户端。默认（无 target）为 Mihomo YAML；target=v2ray 为经典 Base64 URI 列表。',
+    subHtml: '订阅信息页 (HTML)',
+  },
+
 export default {
   app: { name: '3M-UI', title: 'Mihomo 核心管理控制台' },
-  nav: { dashboard: '仪表盘', listeners: '节点管理', users: '用户管理', traffic: '流量监控', cluster: '多机节点', routing: '路由规则', core: '核心管理', logs: '运行日志', config: '配置引擎', settings: '系统设置', logout: '退出登录' },
+  nav: { dashboard: '仪表盘', listeners: '节点管理', users: '用户管理', traffic: '流量监控', cluster: '多机节点', routing: '路由规则', core: '核心管理', logs: '运行日志', config: '配置引擎', share: '分享/订阅', settings: '系统设置', logout: '退出登录' },
   common: {
     advanced: '高级选项',
     prev: '上一步',
