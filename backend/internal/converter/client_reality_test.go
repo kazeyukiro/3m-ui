@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -27,8 +28,15 @@ func TestVLESSRealityClientExport(t *testing.T) {
 		t.Fatalf("missing reality-opts %#v", p)
 	}
 	pk, _ := ro["public-key"].(string)
-	if strings.TrimSpace(pk) == "" {
-		t.Fatalf("empty public-key %#v", ro)
+	const want = "dUMdExLMSn4l_p_bWpfFC5DQHaDHrjKanEQPG6Xl4hw"
+	if pk != want {
+		t.Fatalf("public-key=%q, want %q", pk, want)
+	}
+	if strings.ContainsAny(pk, "+/=") {
+		t.Fatalf("public-key is not raw URL-safe base64: %q", pk)
+	}
+	if raw, err := base64.RawURLEncoding.DecodeString(pk); err != nil || len(raw) != 32 {
+		t.Fatalf("public-key is not a valid 32-byte raw URL-safe base64 value: %q", pk)
 	}
 	if p["client-fingerprint"] != "chrome" {
 		t.Fatalf("fp=%v", p["client-fingerprint"])
