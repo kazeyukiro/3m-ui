@@ -1,6 +1,9 @@
 package user
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -36,6 +39,8 @@ type CreateInput struct {
 	Remark       string     `json:"remark"`
 	ExpireTime   *time.Time `json:"expire_time"`
 	Enabled      *bool      `json:"enabled"`
+	TelegramID   int64      `json:"telegram_id"`
+	TelegramName string     `json:"telegram_name"`
 }
 
 type UpdateInput struct {
@@ -47,6 +52,8 @@ type UpdateInput struct {
 	Remark       *string    `json:"remark"`
 	ExpireTime   *time.Time `json:"expire_time"`
 	Enabled      *bool      `json:"enabled"`
+	TelegramID   *int64     `json:"telegram_id"`
+	TelegramName *string    `json:"telegram_name"`
 }
 
 type Credential struct{ Username, Password, UUID string }
@@ -85,4 +92,47 @@ func IsCredentialActive(u models.ProxyUser) bool {
 		return false
 	}
 	return true
+}
+
+// BindTelegram links a Telegram account (numeric chat/user ID + display name) to a proxy user.
+func (s *Service) BindTelegram(userID uint, tgID int64, tgName string) error {
+	if tgID == 0 {
+		return errors.New("telegram id is required")
+	}
+	u, err := s.GetByID(userID)
+	if err != nil {
+		return err
+	}
+	u.TelegramID = tgID
+	u.TelegramName = strings.TrimSpace(tgName)
+	if err := s.db.Save(u).Error; err != nil {
+		return fmt.Errorf("bind telegram: %w", err)
+	}
+	return nil
+}
+
+// UnbindTelegram removes the Telegram account link from a proxy user.
+func (s *Service) UnbindTelegram(userID uint) error {
+	u, err := s.GetByID(userID)
+	if err != nil {
+		return err
+	}
+	u.TelegramID = 0
+	u.TelegramName = ""
+	if err := s.db.Save(u).Error; err != nil {
+		return fmt.Errorf("unbind telegram: %w", err)
+	}
+	return nil
+}
+
+// GetByTelegramID looks up a proxy user by their linked Telegram chat/user ID.
+func (s *Service) GetByTelegramID(tgID int64) (*models.ProxyUser, error) {
+	if tgID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var u models.ProxyUser
+	if err := s.db.Where("telegram_id = ?", tgID).First(&u).Error; err != nil {
+		return nil, err
+	}
+	return &u, nil
 }

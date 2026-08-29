@@ -24,6 +24,17 @@ func NewService(cfg *config.Config) *Service {
 	}
 	return &Service{pm: NewProcessManager(cfg.Mihomo.Binary, cfg.Mihomo.Config), cm: NewConfigManager(cfg.Mihomo.Config)}
 }
+
+// SetCrashHandler forwards a crash-notification callback to the underlying
+// ProcessManager. Safe to call before Start(); a nil service or pm is a
+// no-op so callers (e.g. app/container.go) can wire unconditionally after
+// NewService without guarding against the cfg==nil degenerate service.
+func (s *Service) SetCrashHandler(fn func(exitErr error)) {
+	if s == nil || s.pm == nil {
+		return
+	}
+	s.pm.SetCrashHandler(fn)
+}
 func (s *Service) StartMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")

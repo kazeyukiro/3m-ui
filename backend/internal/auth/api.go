@@ -189,6 +189,11 @@ func (h *Handler) Login(c *gin.Context) {
 		if err.Error() != "invalid username or password" {
 			status = http.StatusInternalServerError
 		}
+		// Fire-and-forget: a failed login is worth a Telegram alert even when
+		// the success path is muted. NotifyLoginFailed self-gates via
+		// settings.EventEnabled("login") and silently no-ops if Telegram is
+		// disabled, misconfigured, or the DB is unreachable.
+		go telegram.NotifyLoginFailed(h.db, input.Username, clientID)
 		c.JSON(status, gin.H{"error": "invalid username or password"})
 		return
 	}

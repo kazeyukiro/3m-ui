@@ -15,6 +15,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/settings", h.GetSettings)
 	rg.PUT("/settings", h.PutSettings)
 	rg.POST("/test", h.Test)
+	rg.POST("/set-my-commands", h.SetMyCommands)
+	rg.GET("/bot-info", h.BotInfo)
 }
 
 func (h *Handler) GetSettings(c *gin.Context) {
@@ -44,6 +46,14 @@ type putSettingsBody struct {
 	TrafficWarnPct    int      `json:"traffic_warn_pct"`
 	ExpiryWarnHours   int      `json:"expiry_warn_hours"`
 	CPUWarnPct        int      `json:"cpu_warn_pct"`
+	Schedule          string   `json:"schedule"`
+	AttachBackup      bool     `json:"attach_backup"`
+	Language          string   `json:"language"`
+	EnabledEvents     string   `json:"enabled_events"`
+	ExpiryWarnDays    int      `json:"expiry_warn_days"`
+	TrafficWarnGB     int      `json:"traffic_warn_gb"`
+	ProxyURL          string   `json:"proxy_url"`
+	APIServer         string   `json:"api_server"`
 	KeepToken         bool     `json:"keep_token"`
 }
 
@@ -62,7 +72,15 @@ func (h *Handler) PutSettings(c *gin.Context) {
 		NotifyDailyDigest: body.NotifyDailyDigest,
 		NotifyOnCPU:       body.NotifyOnCPU,
 		TrafficWarnPct:    body.TrafficWarnPct, ExpiryWarnHours: body.ExpiryWarnHours,
-		CPUWarnPct: body.CPUWarnPct,
+		CPUWarnPct:     body.CPUWarnPct,
+		Schedule:       strings.TrimSpace(body.Schedule),
+		AttachBackup:   body.AttachBackup,
+		Language:       strings.TrimSpace(body.Language),
+		EnabledEvents:  strings.TrimSpace(body.EnabledEvents),
+		ExpiryWarnDays: body.ExpiryWarnDays,
+		TrafficWarnGB:  body.TrafficWarnGB,
+		ProxyURL:       strings.TrimSpace(body.ProxyURL),
+		APIServer:      strings.TrimSpace(body.APIServer),
 	}
 	if body.KeepToken || s.BotToken == "" || strings.Contains(s.BotToken, "…") || strings.Contains(s.BotToken, "...") {
 		s.BotToken = current.BotToken
@@ -112,4 +130,63 @@ func maskToken(token string) string {
 		return "********"
 	}
 	return token[:6] + "…" + token[len(token)-4:]
+}
+
+// defaultBotCommands returns the command menu registered with Telegram via setMyCommands.
+// Descriptions are bilingual (zh/en) to match the bot's existing reply style.
+func defaultBotCommands() []BotCommand {
+	return []BotCommand{
+		{Command: "start", Description: "开始 / Start & help"},
+		{Command: "help", Description: "查看可用命令 / Show commands"},
+		{Command: "status", Description: "面板与核心概览 / Panel & core overview"},
+		{Command: "id", Description: "显示当前 Telegram Chat ID / Show chat ID"},
+		{Command: "usage", Description: "查询当前账号用量 / Show my usage"},
+		{Command: "users", Description: "代理用户列表 / List proxy users"},
+		{Command: "online", Description: "当前在线用户 / Online users"},
+		{Command: "listeners", Description: "入站节点列表 / Inbound listeners"},
+		{Command: "traffic", Description: "流量快照 / Traffic snapshot"},
+		{Command: "restart", Description: "重启 Mihomo 核心 / Restart core"},
+		{Command: "backup", Description: "下载/发送备份 / Backup"},
+		{Command: "search", Description: "按用户名/备注搜索 / Search users"},
+	}
+}
+
+// SetMyCommands registers the 3m-ui command menu with Telegram via setMyCommands.
+func (h *Handler) SetMyCommands(c *gin.Context) {
+	s, err := LoadSettings(h.db)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(s.BotToken) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Telegram bot token is not configured"})
+		return
+	}
+	client := NewClient(s.BotToken, s.ChatIDs, s.ProxyURL, s.APIServer)
+	resp, err := client.SetMyCommands(defaultBotCommands())
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// BotInfo calls Telegram getMe and returns {username, first_name, id}.
+func (h *Handler) BotInfo(c *gin.Context) {
+	s, err := LoadSettings(h.db)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(s.BotToken) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Telegram bot token is not configured"})
+		return
+	}
+	client := NewClient(s.BotToken, s.ChatIDs, s.ProxyURL, s.APIServer)
+	info, err := client.GetMe()
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, info)
 }

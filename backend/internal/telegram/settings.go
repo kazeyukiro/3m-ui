@@ -25,6 +25,23 @@ type Settings struct {
 	ExpiryWarnHours   int      `json:"expiry_warn_hours"` // default 72
 	NotifyOnCPU       bool     `json:"notify_on_cpu"`
 	CPUWarnPct        int      `json:"cpu_warn_pct"` // default 0 = disabled; e.g. 80
+	// Schedule is a cron-like spec or @daily / @every 6h controlling periodic report delivery.
+	Schedule string `json:"schedule"`
+	// AttachBackup attaches the panel backup file to the scheduled report message.
+	AttachBackup bool `json:"attach_backup"`
+	// Language selects the bot/notification language ("zh" or "en").
+	Language string `json:"language"`
+	// EnabledEvents is a comma-separated allowlist of event names that may fire notifications
+	// (e.g. "login,cpu,crash"). Use EventEnabled(name) to test membership.
+	EnabledEvents string `json:"enabled_events"`
+	// ExpiryWarnDays warns N days before a proxy user expires (0 = disabled).
+	ExpiryWarnDays int `json:"expiry_warn_days"`
+	// TrafficWarnGB warns when remaining traffic drops below this many GB (0 = disabled).
+	TrafficWarnGB int `json:"traffic_warn_gb"`
+	// ProxyURL routes Telegram API traffic through an http(s):// or socks5:// proxy.
+	ProxyURL string `json:"proxy_url"`
+	// APIServer overrides the Telegram API base URL (empty = https://api.telegram.org).
+	APIServer string `json:"api_server"`
 }
 
 // normalizeChatIDList accepts values like "123", "-100123", "123,456" or multiline.
@@ -61,6 +78,9 @@ func DefaultSettings() Settings {
 		ExpiryWarnHours: 72,
 		NotifyOnCPU:     false,
 		CPUWarnPct:      0,
+		Schedule:        "@daily",
+		Language:        "zh",
+		EnabledEvents:   "login,cpu,crash",
 	}
 }
 
@@ -89,6 +109,15 @@ func LoadSettings(db *gorm.DB) (Settings, error) {
 	}
 	if s.ExpiryWarnHours <= 0 {
 		s.ExpiryWarnHours = 72
+	}
+	if strings.TrimSpace(s.Schedule) == "" {
+		s.Schedule = "@daily"
+	}
+	if strings.TrimSpace(s.Language) == "" {
+		s.Language = "zh"
+	}
+	if strings.TrimSpace(s.EnabledEvents) == "" {
+		s.EnabledEvents = "login,cpu,crash"
 	}
 	return s, nil
 }
@@ -120,5 +149,20 @@ func NewClientFromDB(db *gorm.DB) (*Client, Settings, error) {
 	if !s.Enabled || s.BotToken == "" || len(s.ChatIDs) == 0 {
 		return nil, s, nil
 	}
-	return NewClient(s.BotToken, s.ChatIDs), s, nil
+	return NewClient(s.BotToken, s.ChatIDs, s.ProxyURL, s.APIServer), s, nil
+}
+
+// EventEnabled reports whether the named event is in the EnabledEvents allowlist.
+// EnabledEvents is a comma-separated list (e.g. "login,cpu,crash"). Empty name returns false.
+func (s Settings) EventEnabled(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return false
+	}
+	for _, ev := range strings.Split(s.EnabledEvents, ",") {
+		if strings.ToLower(strings.TrimSpace(ev)) == name {
+			return true
+		}
+	}
+	return false
 }
