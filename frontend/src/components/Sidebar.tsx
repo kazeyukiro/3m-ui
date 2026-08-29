@@ -2,7 +2,7 @@ import React from 'react';
 import { Layout, Menu } from 'antd';
 import {
   DashboardOutlined, NodeIndexOutlined, UserOutlined, SettingOutlined,
-  CodeOutlined, FileTextOutlined, ApiOutlined, LogoutOutlined, LineChartOutlined, CloudServerOutlined, BranchesOutlined,
+  CodeOutlined, FileTextOutlined, ApiOutlined, LogoutOutlined, LineChartOutlined, CloudServerOutlined, BranchesOutlined, ShareAltOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -20,6 +20,7 @@ export function useSidebarMenuItems(onNavigate?: () => void) {
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
     { key: '/listeners', icon: <NodeIndexOutlined />, label: t('nav.listeners') },
     { key: '/users', icon: <UserOutlined />, label: t('nav.users') },
+    { key: '/share', icon: <ShareAltOutlined />, label: t('nav.share') },
     { key: '/traffic', icon: <LineChartOutlined />, label: t('nav.traffic') },
     { key: '/cluster', icon: <CloudServerOutlined />, label: t('nav.cluster') },
     { key: '/routing', icon: <BranchesOutlined />, label: t('nav.routing') },
