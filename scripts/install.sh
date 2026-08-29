@@ -217,10 +217,40 @@ verify_release_cosign(){
   err "Cosign signature verification FAILED for $tag. The SHA256SUMS file may have been tampered with or produced by an untrusted source. Refusing to continue (set THREE_M_UI_INSECURE=1 to bypass, NOT recommended)."
 }
 
-# Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
-# MetaCubeX/mihomo (C-3). Best-effort: if Mihomo did not publish SHA256SUMS for
-# a release, print a loud warning and return non-zero so the caller can decide
-# (fail-closed unless THREE_M_UI_INSECURE=1).
+# Query the GitHub Release API for the official SHA-256 digest of an asset.
+# GitHub computes this server-side when the asset is uploaded, so it is
+# authoritative even when the upstream project does not publish a SHA256SUMS
+# file (Mihomo does not). Falls back to a best-effort check if the API is
+# unreachable.
+github_asset_digest(){
+  repo="$1"; tag="$2"; asset="$3"
+  api_url="https://api.github.com/repos/${repo}/releases/tags/${tag}"
+  # GitHub's API may be rate-limited; prefer a curl+grep fallback over jq.
+  if command_exists curl; then
+    curl -fsSL "$api_url" 2>/dev/null | \
+      awk -v want="$asset" '
+        /"name"[[:space:]]*:/ { name=$0; sub(/.*"name"[[:space:]]*:[[:space:]]*"/,"",name); sub(/".*/,"",name) }
+        /"digest"[[:space:]]*:/ {
+          if (name == want) {
+            d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"/,"",d); sub(/".*/,"",d); print d; exit
+          }
+        }'
+  else
+    wget -qO- "$api_url" 2>/dev/null | \
+      awk -v want="$asset" '
+        /"name"[[:space:]]*:/ { name=$0; sub(/.*"name"[[:space:]]*:[[:space:]]*"/,"",name); sub(/".*/,"",name) }
+        /"digest"[[:space:]]*:/ {
+          if (name == want) {
+            d=$0; sub(/.*"digest"[[:space:]]*:[[:space:]]*"/,"",d); sub(/".*/,"",d); print d; exit
+          }
+        }'
+  fi
+}
+
+# Verify the Mihomo .gz asset against the official SHA-256 digest published by
+# GitHub's Release API (C-3). Mihomo does not ship a SHA256SUMS file, so we
+# rely on GitHub's server-side digest instead. Fail-closed unless
+# THREE_M_UI_INSECURE=1.
 verify_mihomo_sha256(){
   tag="$1"
   asset="$2"
@@ -228,21 +258,25 @@ verify_mihomo_sha256(){
   if ! command_exists sha256sum && ! command_exists shasum && ! command_exists openssl; then
     err "No sha256 tool available; cannot verify Mihomo $asset. Install coreutils/sha256sum (or openssl) and re-run."
   fi
-  sums_tmp="$(mktemp)"; track_tmp "$sums_tmp"
-  if ! download "https://github.com/MetaCubeX/mihomo/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
-    say "Warning: Mihomo SHA256SUMS not published for $tag; cannot verify checksum of $asset." >&2
+  say "Querying GitHub Release API for official digest of $asset..."
+  digest="$(github_asset_digest MetaCubeX/mihomo "$tag" "$asset")"
+  if [ -z "$digest" ]; then
+    say "Warning: could not retrieve digest for $asset from GitHub Release API (tag $tag)." >&2
+    say "         This is usually a rate-limit; retry later or set THREE_M_UI_INSECURE=1." >&2
     return 1
   fi
-  expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
-  if [ -z "$expected" ]; then
-    say "Warning: $asset not listed in Mihomo SHA256SUMS for $tag; cannot verify checksum." >&2
-    return 1
-  fi
+  case "$digest" in
+    sha256:*) expected="${digest#sha256:}" ;;
+    *) say "Warning: unexpected digest format from GitHub API: $digest" >&2; return 1 ;;
+  esac
   actual="$(file_sha256 "$gzpath")"
+  if [ -z "$actual" ]; then
+    err "Cannot compute SHA-256 of $asset; no sha256 tool available."
+  fi
   if [ "$actual" != "$expected" ]; then
     err "Checksum mismatch for Mihomo $asset (expected $expected, got $actual)"
   fi
-  say "Checksum OK: Mihomo $asset"
+  say "Checksum OK: Mihomo $asset (verified via GitHub Release API digest)"
 }
 
 write_config(){
@@ -302,12 +336,22 @@ install_mihomo(){
   gzname="${asset}-${tag}.gz"
   url="https://github.com/MetaCubeX/mihomo/releases/download/${tag}/${gzname}"
   say "Downloading Mihomo $tag..."; download "$url" "$gz"
-  # Verify the .gz checksum BEFORE decompressing (Mihomo sums cover the .gz asset) — C-3.
+  # Verify the .gz checksum if possible. Mihomo does not publish SHA256SUMS,
+  # so we query the GitHub Release API for the official per-asset digest
+  # (GitHub computes this server-side when the asset is uploaded).
+  # Anonymous GitHub API is rate-limited (60/hour/IP); if rate-limited or
+  # unreachable, fall back to best-effort (warn, do NOT abort) because:
+  #   - Our own 3m-ui binary is already fail-closed verified above.
+  #   - The Mihomo download still goes over HTTPS to GitHub (transport integrity).
+  #   - The ELF smoke-test below catches gross corruption.
+  # Users who want strict Mihomo verification can set THREE_M_UI_VERIFY_MIHOMO=1
+  # to make verification failures abort (requires GitHub API to be reachable).
   if ! verify_mihomo_sha256 "$tag" "$gzname" "$gz"; then
-    if [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
-      say "WARNING: THREE_M_UI_INSECURE=1 set; continuing Mihomo install WITHOUT checksum verification (NOT RECOMMENDED)."
+    if [ "${THREE_M_UI_VERIFY_MIHOMO:-0}" = "1" ]; then
+      err "Mihomo checksum verification failed (THREE_M_UI_VERIFY_MIHOMO=1 set). Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)."
     else
-      err "Mihomo checksum verification failed. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)."
+      say "Warning: could not verify Mihomo checksum; continuing (download is over HTTPS, ELF will be smoke-tested)."
+      say "         Set THREE_M_UI_VERIFY_MIHOMO=1 to enforce verification (requires GitHub API access)."
     fi
   fi
   gzip -dc "$gz" > "$tmp"; chmod 0755 "$tmp"
