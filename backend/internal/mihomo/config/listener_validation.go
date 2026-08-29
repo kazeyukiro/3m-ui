@@ -59,13 +59,34 @@ func validateListenerObject(schema ListenerSchema, values map[string]interface{}
 		}
 
 		if _, hasChildren := schema.NestedFields[path]; hasChildren {
-			child, ok := value.(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("field %q must be a JSON object", path)
+			switch children := value.(type) {
+			case map[string]interface{}:
+				if err := validateListenerObject(schema, children, path, reserved); err != nil {
+					return err
+				}
+			case []interface{}:
+				// Array of nested objects (e.g. shadow-tls.users: [{name, password}]).
+				// Validate each element against the same nested schema.
+				for i, elem := range children {
+					child, ok := elem.(map[string]interface{})
+					if !ok {
+						return fmt.Errorf("field %q element %d must be a JSON object", path, i)
+					}
+					if err := validateListenerObject(schema, child, path, reserved); err != nil {
+						return err
+					}
+				}
+			case []map[string]interface{}:
+				// Same handling for programmatically constructed arrays.
+				for _, elem := range children {
+					if err := validateListenerObject(schema, elem, path, reserved); err != nil {
+						return err
+					}
+				}
+			default:
+				return fmt.Errorf("field %q must be a JSON object or array", path)
 			}
-			if err := validateListenerObject(schema, child, path, reserved); err != nil {
-				return err
-			}
+			continue
 		}
 	}
 	return nil

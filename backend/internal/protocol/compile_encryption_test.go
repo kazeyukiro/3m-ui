@@ -2,7 +2,13 @@ package protocol
 
 import "testing"
 
-func TestVLESSCompileStripsClientEncryption(t *testing.T) {
+// TestVLESSCompilePreservesServerEncryption verifies that the top-level
+// "encryption" field is preserved on VLESS listener output. Per the official
+// Mihomo schema, "encryption" is a legitimate server-side field paired with
+// "decryption"; stripping it silently breaks VLESS listeners that rely on it.
+// Panel-only / client-export-only keys (transport_layer, security_layer,
+// access_profile, _-prefixed) must still be stripped.
+func TestVLESSCompilePreservesServerEncryption(t *testing.T) {
 	reg := DefaultCompileRegistry()
 	in := CompileInput{
 		Name:     "vless-enc",
@@ -12,7 +18,7 @@ func TestVLESSCompileStripsClientEncryption(t *testing.T) {
 		Config: map[string]interface{}{
 			"flow":            "xtls-rprx-vision",
 			"decryption":      "server-decryption",
-			"encryption":      "client-only-must-strip",
+			"encryption":      "none",
 			"transport_layer": "raw",
 			"security_layer":  "none",
 		},
@@ -25,10 +31,13 @@ func TestVLESSCompileStripsClientEncryption(t *testing.T) {
 	if m["decryption"] != "server-decryption" {
 		t.Fatalf("decryption missing: %#v", m["decryption"])
 	}
-	if _, ok := m["encryption"]; ok {
-		t.Fatalf("encryption must not appear on server listener: %#v", m["encryption"])
+	if m["encryption"] != "none" {
+		t.Fatalf("encryption must be preserved on server listener: %#v", m["encryption"])
 	}
 	if _, ok := m["transport_layer"]; ok {
 		t.Fatalf("transport_layer panel key leaked")
+	}
+	if _, ok := m["security_layer"]; ok {
+		t.Fatalf("security_layer panel key leaked")
 	}
 }
