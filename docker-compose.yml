@@ -1,7 +1,17 @@
 # 3m-ui — Mihomo management panel (Ant Design frontend)
 # Usage:
 #   docker compose up -d
-# Panel: http://localhost:8080/
+# Panel: http://localhost:8080/  (bound to 127.0.0.1 by default)
+#
+# Security notes (M-3 / M-9):
+#   - The panel is bound to 127.0.0.1 only. Place a reverse proxy (nginx/Caddy/
+#     Traefik) in front for TLS termination and access control. To expose the
+#     panel directly (NOT recommended), replace the port mapping with "8080:8080".
+#   - Default administrator is admin/admin (forced password change on first
+#     login). For unattended installs, set THREE_M_UI_ADMIN_PASSWORD below.
+#   - Named volumes inherit UID 10001 (the non-root 3m-ui user) from the image on
+#     first creation. If you bind-mount host directories instead, chown them to
+#     10001:10001 on the host.
 
 services:
   3m-ui:
@@ -10,10 +20,14 @@ services:
     container_name: 3m-ui
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # M-3: bind loopback only by default. Use a reverse proxy for public access.
+      - "127.0.0.1:8080:8080"
     environment:
       THREE_M_UI_CONFIG: /etc/3m-ui/config.yaml
       TZ: Asia/Shanghai
+      # M-9: default admin is admin/admin (forced change on first login).
+      # Uncomment and set to override the initial password for unattended installs:
+      # THREE_M_UI_ADMIN_PASSWORD: change-me-before-deploy
     volumes:
       - 3m-ui-config:/etc/3m-ui
       - 3m-ui-data:/var/lib/3m-ui

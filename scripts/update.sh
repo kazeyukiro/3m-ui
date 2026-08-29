@@ -74,33 +74,78 @@ file_sha256(){
   fi
 }
 
+# Verify file against release SHA256SUMS. Fail-closed (C-2): any integrity
+# failure aborts the update. Set THREE_M_UI_INSECURE=1 to bypass verification
+# when GitHub is unavailable (NOT recommended; prints a loud warning).
 verify_release_sha256(){
   tag="$1"
   asset="$2"
   path="$3"
+  # sha256 tooling is now a hard dependency for release verification.
+  if ! command_exists sha256sum && ! command_exists shasum && ! command_exists openssl; then
+    echo "Error: no sha256 tool available; cannot verify $asset. Install coreutils/sha256sum (or openssl) and re-run." >&2
+    exit 1
+  fi
   sums_tmp="$(mktemp)"
   if ! download "https://github.com/$REPO/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
-    echo "Note: SHA256SUMS not published for $tag; skipping checksum verification."
     rm -f "$sums_tmp"
-    return 0
+    if [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
+      echo "WARNING: THREE_M_UI_INSECURE=1 set; SHA256SUMS not published for $tag; skipping checksum verification (NOT RECOMMENDED)." >&2
+      return 0
+    fi
+    echo "Error: SHA256SUMS not published for $tag; cannot verify $asset. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)." >&2
+    exit 1
   fi
   # SHA256SUMS may list "./3m-ui-linux-amd64" or "3m-ui-linux-amd64"
   expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
-  rm -f "$sums_tmp"
   if [ -z "$expected" ]; then
-    echo "Note: $asset not listed in SHA256SUMS; skipping checksum verification."
-    return 0
+    rm -f "$sums_tmp"
+    if [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
+      echo "WARNING: THREE_M_UI_INSECURE=1 set; $asset not listed in SHA256SUMS; skipping verification (NOT RECOMMENDED)." >&2
+      return 0
+    fi
+    echo "Error: $asset not listed in SHA256SUMS for $tag; cannot verify. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)." >&2
+    exit 1
   fi
   actual="$(file_sha256 "$path")"
-  if [ -z "$actual" ]; then
-    echo "Warning: no sha256 tool available; cannot verify $asset."
-    return 0
-  fi
+  rm -f "$sums_tmp"
   if [ "$actual" != "$expected" ]; then
     echo "Error: checksum mismatch for $asset (expected $expected, got $actual)" >&2
     exit 1
   fi
   echo "Checksum OK: $asset"
+}
+
+# Verify the Mihomo .gz asset against the upstream SHA256SUMS published by
+# MetaCubeX/mihomo (C-3). Best-effort: if Mihomo did not publish SHA256SUMS for
+# a release, print a loud warning and return non-zero so the caller can decide
+# (fail-closed unless THREE_M_UI_INSECURE=1).
+verify_mihomo_sha256(){
+  tag="$1"
+  asset="$2"
+  gzpath="$3"
+  if ! command_exists sha256sum && ! command_exists shasum && ! command_exists openssl; then
+    echo "Error: no sha256 tool available; cannot verify Mihomo $asset. Install coreutils/sha256sum (or openssl) and re-run." >&2
+    exit 1
+  fi
+  sums_tmp="$(mktemp)"
+  if ! download "https://github.com/MetaCubeX/mihomo/releases/download/${tag}/SHA256SUMS" "$sums_tmp" 2>/dev/null; then
+    rm -f "$sums_tmp"
+    echo "Warning: Mihomo SHA256SUMS not published for $tag; cannot verify $asset." >&2
+    return 1
+  fi
+  expected="$(awk -v a="$asset" '{ n=$2; sub(/^\.\//,"",n); if (n==a) { print $1; exit } }' "$sums_tmp")"
+  rm -f "$sums_tmp"
+  if [ -z "$expected" ]; then
+    echo "Warning: $asset not listed in Mihomo SHA256SUMS for $tag; cannot verify checksum." >&2
+    return 1
+  fi
+  actual="$(file_sha256 "$gzpath")"
+  if [ "$actual" != "$expected" ]; then
+    echo "Error: checksum mismatch for Mihomo $asset (expected $expected, got $actual)" >&2
+    exit 1
+  fi
+  echo "Checksum OK: Mihomo $asset"
 }
 
 prune_backups(){
@@ -151,17 +196,19 @@ if ! download "https://github.com/$REPO/releases/download/${tag}/${asset}" "$pan
 fi
 verify_release_sha256 "$tag" "$asset" "$panel_tmp"
 chmod 0755 "$panel_tmp"
-"$panel_tmp" --version >/dev/null 2>&1 || { echo "Error: downloaded 3m-ui failed validation." >&2; exit 1; }
+# Smoke-test the binary is a Linux ELF — do NOT execute it as root (C-5).
+if command_exists file; then
+  file "$panel_tmp" | grep -q "ELF" || { echo "Error: downloaded 3m-ui is not a valid ELF binary." >&2; exit 1; }
+fi
 
 download_release_script(){
   file="$1"; out="$2"
-  if download "https://github.com/$REPO/releases/download/${tag}/${file}" "$out" 2>/dev/null; then
-    :
-  else
-    echo "Release $tag does not contain $file; using the current main-branch script." >&2
-    rm -f "$out"
-    download "https://raw.githubusercontent.com/$REPO/main/scripts/$file" "$out"
+  # H-1: do NOT fall back to raw.githubusercontent.com — releases MUST contain all scripts.
+  if ! download "https://github.com/$REPO/releases/download/${tag}/${file}" "$out" 2>/dev/null; then
+    echo "Error: release $tag does not contain $file. Refusing to fall back to raw.githubusercontent.com for supply-chain safety; use a complete release." >&2
+    exit 1
   fi
+  verify_release_sha256 "$tag" "$file" "$out"
   chmod 0755 "$out"
 }
 
@@ -184,10 +231,29 @@ if [ "$UPDATE_MIHOMO" -eq 1 ] && [ -x "$MIHOMO_BIN" ]; then
       loongarch64|loong64) mihomo_asset="mihomo-linux-loong64-abi2.0";;
       *) mihomo_asset="";;
     esac
-    if [ -n "$mihomo_asset" ] && download "https://github.com/MetaCubeX/mihomo/releases/download/${mtag}/${mihomo_asset}-${mtag}.gz" "$mihomo_tmp.gz" && gzip -dc "$mihomo_tmp.gz" > "$mihomo_tmp"; then
-      chmod 0755 "$mihomo_tmp"
-      "$mihomo_tmp" -v >/dev/null 2>&1 || mihomo_tmp=""
-    else mihomo_tmp=""; fi
+    mihomo_gzname="${mihomo_asset}-${mtag}.gz"
+    if [ -n "$mihomo_asset" ] && download "https://github.com/MetaCubeX/mihomo/releases/download/${mtag}/${mihomo_gzname}" "$mihomo_tmp.gz"; then
+      # Verify the .gz checksum BEFORE decompressing (C-3).
+      if verify_mihomo_sha256 "$mtag" "$mihomo_gzname" "$mihomo_tmp.gz"; then
+        : # verified
+      elif [ "${THREE_M_UI_INSECURE:-0}" = "1" ]; then
+        echo "WARNING: THREE_M_UI_INSECURE=1 set; continuing Mihomo update WITHOUT checksum verification (NOT recommended)." >&2
+      else
+        echo "Error: Mihomo checksum verification failed. Set THREE_M_UI_INSECURE=1 to bypass (NOT recommended)." >&2
+        exit 1
+      fi
+      if gzip -dc "$mihomo_tmp.gz" > "$mihomo_tmp"; then
+        chmod 0755 "$mihomo_tmp"
+        # Smoke-test: confirm ELF without executing the downloaded binary as root (C-5).
+        if command_exists file; then
+          file "$mihomo_tmp" | grep -q "ELF" || { echo "Warning: downloaded Mihomo is not a valid ELF binary; skipping update." >&2; mihomo_tmp=""; }
+        fi
+      else
+        mihomo_tmp=""
+      fi
+    else
+      mihomo_tmp=""
+    fi
   fi
 fi
 

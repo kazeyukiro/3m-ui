@@ -124,6 +124,20 @@ jobs:
           echo "=== SHA256SUMS ==="
           cat SHA256SUMS
           ls -la
+      # TODO(supply-chain, M-10): sign SHA256SUMS with cosign so downstream
+      # installers can verify release authenticity end-to-end. Recommended flow
+      # (keyless OIDC, no long-lived secret on GitHub):
+      #   - uses: sigstore/cosign-installer@v3
+      #   - run: cosign sign-blob --yes release-files/SHA256SUMS \
+      #              --output-certificate release-files/SHA256SUMS.pem \
+      #              --output-signature release-files/SHA256SUMS.sig
+      # Installers then verify with:
+      #   cosign verify-blob --certificate SHA256SUMS.pem \
+      #     --signature SHA256SUMS.sig --certificate-identity ... \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+      # Requires the workflow to have `id-token: write` permission and a public
+      # Sigstore/Fulcio root. Add before enabling:
+      #   permissions: { contents: write, id-token: write }
       - name: Resolve tag
         id: meta
         run: |
