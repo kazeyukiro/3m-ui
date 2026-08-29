@@ -135,9 +135,15 @@ func (TUICCompiler) Capability() ProtocolCapability { return tuicCapability() }
 func (TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
-	if len(users) > 0 {
-		m["users"] = users
+	// TUIC v4 uses `token` (array of strings) — passed through by copyConfigPassthrough.
+	// TUIC v5 uses `users` as a map{UUID: PASSWORD} (verified against Mihomo wiki).
+	// We emit the v5 map form when credentials are bound. If the operator configured
+	// `token` directly in the listener config, it takes precedence (passthrough).
+	if _, hasToken := in.Config["token"]; !hasToken {
+		users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
+		if len(users) > 0 {
+			m["users"] = users
+		}
 	}
 	return m, nil
 }
@@ -149,6 +155,23 @@ func (ShadowQUICCompiler) Capability() ProtocolCapability { return shadowquicCap
 func (ShadowQUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type TrustTunnelCompiler struct{}
+
+func (TrustTunnelCompiler) Kind() string { return "trusttunnel" }
+func (TrustTunnelCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: "trusttunnel", Label: "trusttunnel"}
+}
+func (TrustTunnelCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	// TrustTunnel uses users: [{username, password}] (array form, verified against Mihomo wiki).
 	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users

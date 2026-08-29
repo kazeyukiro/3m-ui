@@ -67,7 +67,7 @@ func DefaultCompileRegistry() Registry {
 		AnyTLSCompiler{},
 		MieruCompiler{},
 		GenericCompiler{kind: "sudoku"},
-		GenericCompiler{kind: "trusttunnel"},
+		TrustTunnelCompiler{},
 	)
 }
 
@@ -199,6 +199,42 @@ func asUsersMap(cfg map[string]interface{}, fromCreds []UserCred, hasCredState b
 				name = "default"
 			}
 			out[name] = c.Password
+		}
+		return out
+	}
+	if hasCredState {
+		return nil
+	}
+	if raw, ok := cfg["users"]; ok {
+		switch users := raw.(type) {
+		case map[string]interface{}:
+			return users
+		case map[interface{}]interface{}:
+			out := make(map[string]interface{}, len(users))
+			for k, v := range users {
+				out[fmt.Sprint(k)] = fmt.Sprint(v)
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+// asUsersMapUUID returns users as a map{uuid: password} for protocols whose
+// Mihomo listener schema expects that shape (TUIC v5: users is a map keyed by UUID).
+// Falls back to Username when UUID is empty (legacy panel users without UUID).
+func asUsersMapUUID(cfg map[string]interface{}, fromCreds []UserCred, hasCredState bool) map[string]interface{} {
+	if len(fromCreds) > 0 {
+		out := make(map[string]interface{}, len(fromCreds))
+		for _, c := range fromCreds {
+			key := c.UUID
+			if key == "" {
+				key = c.Username
+			}
+			if key == "" {
+				key = "default"
+			}
+			out[key] = c.Password
 		}
 		return out
 	}

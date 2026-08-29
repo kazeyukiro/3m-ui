@@ -162,8 +162,8 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	},
 	"sudoku": {
 		Protocol:     "sudoku",
-		Fields:       listenerFields("key", "aead-method", "padding-min", "padding-max", "table-type", "custom-table", "custom-tables", "handshake-timeout", "enable-pure-downlink", "httpmask", "fallback", "disable-http-mask"),
-		NestedFields: listenerNested("httpmask.disable", "httpmask.mode", "httpmask.path-root", "httpmask.path_root", "httpmask.tls", "httpmask.host", "httpmask.multiplex"),
+		Fields:       listenerFields("key", "aead-method", "padding-min", "padding-max", "table-type", "custom-table", "custom-tables", "handshake-timeout", "enable-pure-downlink", "httpmask", "fallback", "disable-http-mask", "mux-option"),
+		NestedFields: listenerNested("httpmask.disable", "httpmask.mode", "httpmask.path-root", "httpmask.path_root", "httpmask.tls", "httpmask.host", "httpmask.multiplex", "mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down"),
 	},
 	"trusttunnel": {
 		Protocol: "trusttunnel",
