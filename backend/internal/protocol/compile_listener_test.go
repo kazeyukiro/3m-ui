@@ -70,3 +70,19 @@ func TestVLESSCompilerDoesNotOverrideExplicitUserFlow(t *testing.T) {
 		t.Fatalf("explicit user flow was overwritten: %#v", users[0]["flow"])
 	}
 }
+
+func TestVLESSCompilerNeverUsesPasswordAsUUID(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Users:    []UserCred{{Password: "not-a-uuid"}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	if _, ok := result["users"]; ok {
+		t.Fatalf("VLESS credential without UUID must not be emitted as a UUID: %#v", result["users"])
+	}
+}
