@@ -131,7 +131,7 @@ func (s *Service) BatchCreate(list []models.Listener) ([]models.Listener, error)
 			return nil, err
 		}
 		var n int64
-		if err := tx.Model(&models.Listener{}).Where("enabled = ?", true).Where("name = ?", list[i].Name).Count(&n).Error; err != nil {
+		if err := tx.Model(&models.Listener{}).Where("name = ?", list[i].Name).Count(&n).Error; err != nil {
 			tx.Rollback()
 			return nil, err
 		}

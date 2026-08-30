@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,6 +38,45 @@ type ProxyEntry struct {
 	Server  string                 `json:"server" yaml:"server"`
 	Port    interface{}            `json:"port" yaml:"port"`
 	Options map[string]interface{} `json:"options,omitempty" yaml:",inline"`
+}
+
+// UnmarshalJSON captures unknown top-level JSON fields (cipher, password, uuid,
+// etc.) into Options. Go's encoding/json does not honour yaml's `,inline`
+// directive, so without this the frontend's flat JSON shape loses protocol
+// fields when round-tripping through the visual config API.
+func (p *ProxyEntry) UnmarshalJSON(data []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	p.Name, _ = raw["name"].(string)
+	p.Type, _ = raw["type"].(string)
+	p.Server, _ = raw["server"].(string)
+	p.Port = raw["port"]
+	delete(raw, "name")
+	delete(raw, "type")
+	delete(raw, "server")
+	delete(raw, "port")
+	if len(raw) > 0 {
+		p.Options = raw
+	}
+	return nil
+}
+
+// MarshalJSON emits the per-protocol fields stored in Options at the top level
+// so the JSON shape matches what the frontend sends (flat object) and what
+// mihomo YAML expects after yaml.Marshal (inline keys).
+func (p ProxyEntry) MarshalJSON() ([]byte, error) {
+	out := map[string]interface{}{
+		"name":   p.Name,
+		"type":   p.Type,
+		"server": p.Server,
+		"port":   p.Port,
+	}
+	for k, v := range p.Options {
+		out[k] = v
+	}
+	return json.Marshal(out)
 }
 
 type GroupEntry struct {

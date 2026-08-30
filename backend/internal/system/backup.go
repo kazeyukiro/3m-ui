@@ -109,6 +109,10 @@ func RestoreDatabase(dbPath string, r io.Reader) error {
 	}
 
 	tmp := dbPath + ".restore-tmp"
+	// Clean up the temp file on any failure path. If Rename succeeds the temp
+	// no longer exists, so Remove is a no-op (its error is intentionally
+	// discarded — the only failure mode is "not found", which is expected).
+	defer os.Remove(tmp)
 	if err := os.WriteFile(tmp, dbContent, 0o600); err != nil {
 		return err
 	}

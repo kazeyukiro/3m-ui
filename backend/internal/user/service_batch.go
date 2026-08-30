@@ -3,6 +3,7 @@ package user
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -83,14 +84,18 @@ func (s *Service) Batch(action BatchAction, ids []uint) (int, error) {
 		if res.Error != nil {
 			return 0, res.Error
 		}
-		_ = s.notifyCredentialsChanged()
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
 		return int(res.RowsAffected), nil
 	case BatchDisable:
 		res := s.db.Model(&models.ProxyUser{}).Where("id IN ?", clean).Update("enabled", false)
 		if res.Error != nil {
 			return 0, res.Error
 		}
-		_ = s.notifyCredentialsChanged()
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
 		return int(res.RowsAffected), nil
 	case BatchResetTraffic:
 		res := s.db.Model(&models.ProxyUser{}).Where("id IN ?", clean).Updates(map[string]interface{}{
@@ -111,7 +116,9 @@ func (s *Service) Batch(action BatchAction, ids []uint) (int, error) {
 		}); err != nil {
 			return 0, err
 		}
-		_ = s.notifyCredentialsChanged()
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
 		return len(clean), nil
 	default:
 		return 0, fmt.Errorf("unknown batch action %q (enable|disable|reset-traffic|delete)", action)
