@@ -11,6 +11,7 @@ INSTALLER="$BASE/install.sh"
 UPDATER="$BASE/update.sh"
 UNINSTALLER="$BASE/uninstall.sh"
 APP_BIN="$BASE/3m-ui-bin"
+CONFIG_FILE="/etc/3m-ui/config.yaml"
 
 run_script() {
     script="$1"
@@ -38,9 +39,10 @@ menu() {
         printf '%s\n' '  6. 停止 3m-ui'
         printf '%s\n' '  7. 查看日志'
         printf '%s\n' '  8. 查看版本'
-        printf '%s\n' '  9. 卸载 3m-ui'
+        printf '%s\n' '  9. 修改面板端口'
+        printf '%s\n' '  a. 卸载 3m-ui'
         printf '%s\n' '  0. 退出'
-        printf '\n请选择 [0-9]: '
+        printf '\n请选择 [0-9a]: '
         IFS= read -r choice || exit 0
         case "$choice" in
             1) run_script "$INSTALLER" ;;
@@ -51,7 +53,8 @@ menu() {
             6) run_script "$MANAGER" stop ;;
             7) run_script "$MANAGER" logs ;;
             8) run_script "$MANAGER" version ;;
-            9) run_script "$UNINSTALLER" ;;
+            9) change_port ;;
+            a|A) run_script "$UNINSTALLER" ;;
             0) exit 0 ;;
             *) printf '%s\n' '无效选择，请重新输入。' ;;
         esac
@@ -113,6 +116,39 @@ need_root() {
     [ "$(id -u)" -eq 0 ] || { printf '%s\n' '请使用 root 运行 3m-ui 管理命令。' >&2; exit 1; }
 }
 
+change_port() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        printf '%s\n' "配置文件不存在: $CONFIG_FILE" >&2
+        return 1
+    fi
+    current=$(awk '/^  port:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+    printf '当前面板端口: %s\n' "$current"
+    printf '输入新端口 (1-65535, 回车取消): '
+    IFS= read -r new_port || return 0
+    [ -z "$new_port" ] && return 0
+    case "$new_port" in
+        ''|*[!0-9]*) printf '%s\n' '无效端口。' >&2; return 1 ;;
+    esac
+    [ "$new_port" -ge 1 ] 2>/dev/null && [ "$new_port" -le 65535 ] 2>/dev/null || {
+        printf '%s\n' '端口必须在 1-65535 范围内。' >&2
+        return 1
+    }
+    [ "$new_port" = "$current" ] && {
+        printf '%s\n' '端口未变更。'
+        return 0
+    }
+    sed -i "s/^  port: .*/  port: $new_port/" "$CONFIG_FILE"
+    printf '%s\n' "端口已更改: $current → $new_port"
+    printf '%s\n' '正在重启 3m-ui...'
+    service_action restart
+    sleep 1
+    if service_action status >/dev/null 2>&1; then
+        printf '%s\n' "✓ 3m-ui 已重启。新地址: http://0.0.0.0:$new_port"
+    else
+        printf '%s\n' '✗ 3m-ui 启动失败，请检查日志。' >&2
+    fi
+}
+
 main() {
     need_root
     cmd=${1:-}
@@ -123,8 +159,11 @@ main() {
         stop) service_action stop ;;
         logs) logs ;;
         version) version ;;
+        config) shift; run_script "$MANAGER" config "$@" ;;
         help|-h|--help)
-            printf '%s\n' '用法: 3m-ui [status|start|restart|stop|logs|version|help]'
+            printf '%s\n' '用法: 3m-ui [status|start|restart|stop|logs|version|config|help]'
+            printf '%s\n' '  3m-ui config show              查看配置'
+            printf '%s\n' '  3m-ui config port <端口号>      修改端口并重启'
             printf '%s\n' '不带参数直接运行 3m-ui 将进入交互式管理菜单。'
             ;;
         '') menu ;;
