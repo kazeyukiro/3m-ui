@@ -93,7 +93,11 @@ func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, str
 	case "vmess":
 		ob["uuid"] = firstString(p["uuid"], p["password"])
 		ob["security"] = firstString(p["cipher"], "auto")
-		ob["alter_id"] = 0
+		if alterId, ok := p["alterId"]; ok {
+			ob["alter_id"] = alterId
+		} else {
+			ob["alter_id"] = 0
+		}
 	case "vless":
 		ob["uuid"] = firstString(p["uuid"], p["password"])
 		if flow, ok := p["flow"].(string); ok && flow != "" {
@@ -138,6 +142,12 @@ func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, str
 				"public_key": reality["public-key"],
 				"short_id":   reality["short-id"],
 			}
+		}
+		if v, ok := p["skip-cert-verify"].(bool); ok && v {
+			tlsObj["insecure"] = true
+		}
+		if alpn, ok := p["alpn"]; ok {
+			tlsObj["alpn"] = alpn
 		}
 		ob["tls"] = tlsObj
 	}

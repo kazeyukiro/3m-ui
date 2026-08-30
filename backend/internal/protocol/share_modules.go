@@ -191,6 +191,7 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 			ws["Host"] = spec.Transport.WSHost
 		}
 		if len(ws) > 0 {
+			p["network"] = "ws"
 			p["ws-opts"] = ws
 		}
 	case "grpc":
@@ -199,6 +200,7 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 			grpc["grpc-service-name"] = spec.Transport.GRPCService
 		}
 		if len(grpc) > 0 {
+			p["network"] = "grpc"
 			p["grpc-opts"] = grpc
 		}
 	case "xhttp":
@@ -207,6 +209,7 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 			xh["path"] = spec.Transport.XHTTPPath
 		}
 		if len(xh) > 0 {
+			p["network"] = "xhttp"
 			p["xhttp-opts"] = xh
 		}
 	}
@@ -235,7 +238,7 @@ func (ShadowsocksCompiler) BuildShare(in ShareInput) (Share, error) {
 	if spec.Cipher == "" || pass == "" {
 		return Share{}, fmt.Errorf("shadowsocks share requires cipher and password")
 	}
-	encoded := base64.RawStdEncoding.EncodeToString([]byte(spec.Cipher + ":" + pass))
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(spec.Cipher + ":" + pass))
 	uri := shareName("ss://"+encoded+"@"+netutil.JoinHostPort(host, port), in.Node.Name)
 	return Share{URI: uri, QRContent: uri}, nil
 }

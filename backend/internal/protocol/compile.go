@@ -189,6 +189,16 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 			}
 		}
 	}
+	// Propagate top-level alterId to each user object. The official Mihomo
+	// schema for VMess expects alterId inside users[].alterId; without it,
+	// per-user alterId is silently dropped when panel credentials are bound.
+	if alterId, ok := cfg["alterId"]; ok && alterId != nil {
+		for _, user := range out {
+			if _, exists := user["alterId"]; !exists {
+				user["alterId"] = alterId
+			}
+		}
+	}
 	return out
 }
 

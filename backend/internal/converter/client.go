@@ -259,9 +259,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p := makeProxy(fmt.Sprintf("%d", i+1))
 			p["password"] = cred.Password
 			for _, key := range []string{
-				"up", "down", "obfs", "obfs-password", "masquerade", "bbr-profile",
+				"up", "down", "obfs", "obfs-password", "bbr-profile",
 				"realm-opts", "alpn", "sni", "servername", "skip-cert-verify", "name-cert-verify",
-				"fingerprint", "ca", "ca-str",
+				"fingerprint",
 			} {
 				copyOption(p, opts, key)
 			}
