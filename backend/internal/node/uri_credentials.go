@@ -25,7 +25,21 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 	flow, _ := cfg["flow"].(string)
 	if len(credentials) > 0 {
 		switch listener.Protocol {
-		case "anytls", "hysteria2", "mieru", "tuic":
+		case "tuic":
+			// TUIC v5 uses users: {UUID: PASSWORD} per official Mihomo docs.
+			// Must match asUsersMapUUID in compile.go which keys by UUID.
+			users := make(map[string]interface{}, len(credentials))
+			for _, credential := range credentials {
+				key := credential.UUID
+				if key == "" {
+					key = credential.Username
+				}
+				if key != "" {
+					users[key] = credential.Password
+				}
+			}
+			cfg["users"] = users
+		case "anytls", "hysteria2", "mieru":
 			users := make(map[string]interface{}, len(credentials))
 			for _, credential := range credentials {
 				if credential.Username != "" {

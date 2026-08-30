@@ -310,7 +310,7 @@ func (h *Handler) CreateClientAccess(c *gin.Context) {
 	if name == "" {
 		name = listener.Name + "-access"
 	}
-	buf := make([]byte, 16)
+	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
