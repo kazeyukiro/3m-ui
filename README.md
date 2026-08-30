@@ -2,6 +2,8 @@
 
 > Mihomo Web Management Console
 
+> 📖 **文档已迁移至 [3m-ui-docs](https://github.com/kazeyukiro/3m-ui-docs) 仓库（基于 Docusaurus 构建）。** 本仓库的 `docs/` 目录已删除，GitHub Wiki 已清空。
+
 ---
 
 # 中文
