@@ -51,3 +51,22 @@ func CORSMiddleware(origins []string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// SecurityHeaders sets defensive browser-side HTTP headers on every
+// response. CSP is intentionally NOT set here: API responses are JSON and a
+// global CSP would risk breaking them, while the SPA shell already carries a
+// tight Content-Security-Policy via a <meta> tag in index.html. The headers
+// below harden both API and SPA responses against common MIME-sniffing,
+// framing, and reflected-XSS pitfalls.
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-XSS-Protection", "1; mode=block")
+		// Don't set CSP on API responses — only on the SPA HTML.
+		// The meta CSP in index.html handles the SPA.
+		c.Next()
+	}
+}

@@ -81,7 +81,7 @@ func isSensitiveSettingKey(key string) bool {
 	case "telegram", "panel_ssl":
 		return true
 	}
-	for _, s := range []string{"token", "secret", "credential", "password", "private", "bot"} {
+	for _, s := range []string{"token", "secret", "credential", "password", "private", "bot", "key", "auth"} {
 		if strings.Contains(k, s) {
 			return true
 		}
