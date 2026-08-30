@@ -17,7 +17,8 @@ export interface ProxyUser {
   ip_limit?: number;
   remark?: string;
   sub_token?: string;
-  created_at?: string;
+  telegram_id?: number;
+  telegram_name?: string;
 }
 
 export interface BoundNode {

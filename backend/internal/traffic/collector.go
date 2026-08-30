@@ -152,6 +152,9 @@ func (c *Collector) CollectOnce() error {
 		view.DestinationPort = destPort
 		view.ListenerID = listenerID
 		view.ListenerName = listenerName
+		view.Rule = conn.Rule
+		view.Chains = conn.Chains
+		view.Start = conn.Start
 
 		// Attribution, in order of confidence. Never guess: if neither
 		// path applies, the connection stays unattributed.

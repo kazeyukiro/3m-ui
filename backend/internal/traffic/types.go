@@ -34,16 +34,19 @@ type UserTraffic struct {
 // attributed without guessing (see collector.go). Unattributed connections
 // have ProxyUserID == nil and Username == "".
 type ConnectionView struct {
-	ID              string `json:"id"`
-	ListenerID      *uint  `json:"listener_id"`
-	ListenerName    string `json:"listener_name"`
-	ProxyUserID     *uint  `json:"proxy_user_id"`
-	Username        string `json:"username"`
-	Network         string `json:"network"`
-	Host            string `json:"host"`
-	SourceIP        string `json:"source_ip"`
-	DestinationIP   string `json:"destination_ip"`
-	DestinationPort string `json:"destination_port"`
-	Upload          int64  `json:"upload"`
-	Download        int64  `json:"download"`
+	ID              string   `json:"id"`
+	ListenerID      *uint    `json:"listener_id"`
+	ListenerName    string   `json:"listener_name"`
+	ProxyUserID     *uint    `json:"proxy_user_id"`
+	Username        string   `json:"username"`
+	Network         string   `json:"network"`
+	Host            string   `json:"host"`
+	SourceIP        string   `json:"source_ip"`
+	DestinationIP   string   `json:"destination_ip"`
+	DestinationPort string   `json:"destination_port"`
+	Upload          int64    `json:"upload"`
+	Download        int64    `json:"download"`
+	Rule            string   `json:"rule,omitempty"`
+	Chains          []string `json:"chains,omitempty"`
+	Start           string   `json:"start,omitempty"`
 }
