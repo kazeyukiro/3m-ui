@@ -561,22 +561,15 @@ export function formValuesToConfig(
     }) || { enable: true };
   }
 
-  // mux-option
+  // mux-option (listener-side: only padding + brutal per official docs)
   if (MUX_PROTOCOLS.has(protocol) && values.mux_enabled) {
     const brutal = values.mux_brutal_enabled
       ? cleanObj({ enabled: true, up: values.mux_brutal_up, down: values.mux_brutal_down })
       : undefined;
     cfg['mux-option'] = cleanObj({
-      enable: true,
-      protocol: values.mux_protocol,
-      'max-connections': values.mux_max_connections,
-      'min-streams': values.mux_min_streams,
-      'max-streams': values.mux_max_streams,
       padding: values.mux_padding === true ? true : undefined,
-      statistic: values.mux_statistic === true ? true : undefined,
-      'only-tcp': values.mux_only_tcp === true ? true : undefined,
       brutal,
-    }) || { enable: true };
+    }) || { padding: true };
   }
 
   // kcp-tun
@@ -1202,24 +1195,6 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {MUX_PROTOCOLS.has(protocol) && (
         <EnableSection name="mux_enabled" label={t('listeners.sectionMux')}>
           <Form.Item name="mux_padding" label={t('listeners.muxPadding')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="mux_protocol" label={t('listeners.muxProtocol')}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="mux_max_connections" label={t('listeners.muxMaxConnections')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="mux_min_streams" label={t('listeners.muxMinStreams')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="mux_max_streams" label={t('listeners.muxMaxStreams')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="mux_statistic" label={t('listeners.muxStatistic')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="mux_only_tcp" label={t('listeners.muxOnlyTcp')} valuePropName="checked">
             <Switch />
           </Form.Item>
           <Form.Item name="mux_brutal_enabled" label={t('listeners.muxBrutal')} valuePropName="checked">

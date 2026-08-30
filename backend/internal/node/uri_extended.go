@@ -33,14 +33,16 @@ func snellURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 }
 
 func shadowQUICURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
-	users := userMap(cfg)
-	if len(users) == 0 {
+	// ShadowQUIC uses array-form users: [{username, password}] per official docs.
+	rows := userRows(cfg)
+	if len(rows) == 0 {
 		return nil, fmt.Errorf("shadowquic listener requires at least one user for URI export")
 	}
-	result := make([]string, 0, len(users))
-	for username, raw := range users {
-		password, ok := raw.(string)
-		if !ok || password == "" {
+	result := make([]string, 0, len(rows))
+	for _, row := range rows {
+		username, _ := row["username"].(string)
+		password, _ := row["password"].(string)
+		if password == "" {
 			return nil, fmt.Errorf("shadowquic user %q has empty password", username)
 		}
 		params := map[string]string{}
@@ -106,14 +108,16 @@ func sudokuURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 }
 
 func trustTunnelURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
-	users := userMap(cfg)
-	if len(users) == 0 {
+	// TrustTunnel uses array-form users: [{username, password}] per official docs.
+	rows := userRows(cfg)
+	if len(rows) == 0 {
 		return nil, fmt.Errorf("trusttunnel listener requires at least one user for URI export")
 	}
-	result := make([]string, 0, len(users))
-	for username, raw := range users {
-		password, ok := raw.(string)
-		if !ok || password == "" {
+	result := make([]string, 0, len(rows))
+	for _, row := range rows {
+		username, _ := row["username"].(string)
+		password, _ := row["password"].(string)
+		if password == "" {
 			return nil, fmt.Errorf("trusttunnel user %q has empty password", username)
 		}
 		params := map[string]string{}
