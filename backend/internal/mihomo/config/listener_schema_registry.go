@@ -171,7 +171,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	},
 	"sudoku": {
 		Protocol:     "sudoku",
-		Fields:       listenerFields("key", "aead-method", "padding-min", "padding-max", "table-type", "custom-table", "custom-tables", "handshake-timeout", "enable-pure-downlink", "httpmask", "fallback", "disable-http-mask", "mux-option"),
+		Fields:       listenerFields("key", "aead-method", "padding-min", "padding-max", "table-type", "custom-table", "custom-tables", "handshake-timeout", "enable-pure-downlink", "httpmask", "fallback", "disable-http-mask", "http-mask-mode", "path-root", "mux-option"),
 		NestedFields: listenerNested("httpmask.disable", "httpmask.mode", "httpmask.path-root", "httpmask.path_root", "httpmask.tls", "httpmask.host", "httpmask.multiplex", "mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down"),
 	},
 	"trusttunnel": {
