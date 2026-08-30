@@ -156,7 +156,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if l.UDP && clientSupportsUDP(protocol) {
 		base["udp"] = true
 	}
-	copyClientTLS(base, opts)
+	// SS has no top-level tls/sni/servername/alpn fields — its TLS-like
+	// wrappers (shadow-tls/restls/jls-config) are emitted as the `plugin`
+	// format via applySSPluginWrappers, not via copyClientTLS.
+	if protocol != "shadowsocks" {
+		copyClientTLS(base, opts)
+	}
 	copyTransport(base, opts)
 	makeProxy := func(suffix string) map[string]interface{} {
 		p := cloneMap(base)
@@ -184,7 +189,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["plugin"] = "simple-obfs"
 			p["plugin-opts"] = value
 		}
-		applyClientWrappers(p, opts)
+		applySSPluginWrappers(p, opts)
 		result = append(result, p)
 	case "snell":
 		p := makeProxy("")
@@ -437,6 +442,116 @@ func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) 
 	}
 }
 
+// applySSPluginWrappers translates the SS listener wrapper blocks
+// (shadow-tls/res-tls/jls-config) into the SS `plugin` format documented in
+// proxies/ss.md. Unlike VMess/VLESS/Trojan which use `shadow-tls-opts` /
+// `restls-opts` / `jls-opts`, SS carries TLS-like wrappers as a plugin:
+//
+//	plugin: shadow-tls
+//	plugin-opts:
+//	  host: example.com
+//	  password: xxx
+//	  version: 3
+//	client-fingerprint: chrome
+//
+// Only the first matching enabled wrapper is emitted (they are mutually
+// exclusive on a single SS listener).
+func applySSPluginWrappers(p map[string]interface{}, src map[string]interface{}) {
+	if stls, ok := src["shadow-tls"].(map[string]interface{}); ok {
+		if enable, _ := stls["enable"].(bool); enable {
+			p["plugin"] = "shadow-tls"
+			opts := map[string]interface{}{}
+			if v, ok := stls["version"]; ok {
+				opts["version"] = v
+			}
+			// Password: v2 uses the top-level password; v3 uses users[0].password.
+			if pwd, ok := stls["password"].(string); ok && pwd != "" {
+				opts["password"] = pwd
+			} else if users, ok := stls["users"].([]interface{}); ok && len(users) > 0 {
+				if u, ok := users[0].(map[string]interface{}); ok {
+					if pwd, ok := u["password"].(string); ok {
+						opts["password"] = pwd
+					}
+				}
+			}
+			// host from handshake.dest (strip :port).
+			if hs, ok := stls["handshake"].(map[string]interface{}); ok {
+				if dest, ok := hs["dest"].(string); ok {
+					opts["host"] = stripHostPort(dest)
+				}
+			}
+			p["plugin-opts"] = opts
+			p["client-fingerprint"] = ssClientFingerprint(src)
+			return
+		}
+	}
+	if restls, ok := src["res-tls"].(map[string]interface{}); ok {
+		if enable, _ := restls["enable"].(bool); enable {
+			p["plugin"] = "restls"
+			opts := map[string]interface{}{}
+			if dest, ok := restls["dest"].(string); ok {
+				opts["host"] = stripHostPort(dest)
+			}
+			if pwd, ok := restls["password"].(string); ok {
+				opts["password"] = pwd
+			}
+			// version-hint is not in the listener config; default to tls13
+			// (matches the m-ui SS module and the restls proxy doc example).
+			opts["version-hint"] = "tls13"
+			if script, ok := restls["restls-script"].(string); ok && script != "" {
+				opts["restls-script"] = script
+			}
+			p["plugin-opts"] = opts
+			p["client-fingerprint"] = ssClientFingerprint(src)
+			return
+		}
+	}
+	if jls, ok := src["jls-config"].(map[string]interface{}); ok {
+		if enable, _ := jls["enable"].(bool); enable {
+			p["plugin"] = "jls"
+			opts := map[string]interface{}{}
+			if dest, ok := jls["dest"].(string); ok {
+				opts["host"] = stripHostPort(dest)
+			}
+			// JLS users: use first user's username+password (single-user case).
+			if users, ok := jls["users"].([]interface{}); ok && len(users) > 0 {
+				if u, ok := users[0].(map[string]interface{}); ok {
+					if un, ok := u["username"].(string); ok {
+						opts["username"] = un
+					}
+					if pwd, ok := u["password"].(string); ok {
+						opts["password"] = pwd
+					}
+				}
+			}
+			if alpn, ok := jls["alpn"]; ok {
+				opts["alpn"] = alpn
+			}
+			p["plugin-opts"] = opts
+			p["client-fingerprint"] = ssClientFingerprint(src)
+			return
+		}
+	}
+}
+
+// ssClientFingerprint returns the listener's client-fingerprint if set,
+// otherwise defaults to "chrome" (the documented default for SS plugins).
+func ssClientFingerprint(src map[string]interface{}) string {
+	if cf, ok := src["client-fingerprint"].(string); ok && strings.TrimSpace(cf) != "" {
+		return strings.TrimSpace(cf)
+	}
+	return "chrome"
+}
+
+// stripHostPort removes the :port suffix from a host:port string, returning
+// the bare hostname. If the input has no port, it is returned unchanged.
+func stripHostPort(addr string) string {
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		return h
+	}
+	return addr
+}
+
 func decodeOptions(raw string) (map[string]interface{}, error) {
 	if strings.TrimSpace(raw) == "" {
 		return map[string]interface{}{}, nil
@@ -521,6 +636,46 @@ func copyTransport(dst, src map[string]interface{}) {
 	if value, ok := src["xhttp-config"]; ok && value != nil {
 		dst["network"] = "xhttp"
 		dst["xhttp-opts"] = value
+	}
+	// mkcp-config → mkcp-opts (VMess only per mihomo docs).
+	// Listener and client field names are identical (minus `enable`).
+	if mkcp, ok := src["mkcp-config"].(map[string]interface{}); ok {
+		if enable, _ := mkcp["enable"].(bool); enable {
+			dst["network"] = "mkcp"
+			opts := map[string]interface{}{}
+			for _, key := range []string{"mtu", "tti", "uplink-capacity", "downlink-capacity", "congestion", "write-buffer", "read-buffer", "seed", "header"} {
+				if v, ok := mkcp[key]; ok {
+					opts[key] = v
+				}
+			}
+			dst["mkcp-opts"] = opts
+		}
+	}
+	// mekya-config → mekya-opts (VMess only per mihomo docs).
+	// The listener mekya-config field names differ from the client mekya-opts
+	// field names. The kcp sub-block maps 1:1. The URL field has no listener
+	// counterpart and is left empty (operator must set it manually).
+	if mekya, ok := src["mekya-config"].(map[string]interface{}); ok {
+		if enable, _ := mekya["enable"].(bool); enable {
+			dst["network"] = "mekya"
+			opts := map[string]interface{}{}
+			if v, ok := mekya["max-write-size"]; ok {
+				opts["max-request-size"] = v
+			}
+			if v, ok := mekya["max-write-duration-ms"]; ok {
+				opts["max-write-delay"] = v
+			}
+			if kcp, ok := mekya["kcp"].(map[string]interface{}); ok {
+				kcpOpts := map[string]interface{}{}
+				for _, key := range []string{"mtu", "tti", "uplink-capacity", "downlink-capacity", "congestion", "write-buffer", "read-buffer", "seed", "header"} {
+					if v, ok := kcp[key]; ok {
+						kcpOpts[key] = v
+					}
+				}
+				opts["kcp"] = kcpOpts
+			}
+			dst["mekya-opts"] = opts
+		}
 	}
 }
 
