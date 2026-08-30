@@ -2,6 +2,7 @@ package user
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -53,6 +54,8 @@ func (s *Service) DeleteDepleted() (int, error) {
 	}); err != nil {
 		return 0, err
 	}
-	_ = s.notifyCredentialsChanged()
+	if err := s.notifyCredentialsChanged(); err != nil {
+		log.Printf("warning: credentials changed notification failed: %v", err)
+	}
 	return len(ids), nil
 }

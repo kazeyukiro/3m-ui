@@ -125,8 +125,24 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 	if config.GlobalConfig != nil {
 		publicURL = strings.TrimSpace(config.GlobalConfig.Server.PublicURL)
 	}
-	if ap := protocol.LoadAccessProfile(h.db); ap.PublicHost != "" {
+	ap := protocol.LoadAccessProfile(h.db)
+	if ap.PublicHost != "" {
 		publicURL = ap.PublicHost
+	}
+	// Apply global access-profile fields as fallbacks when the per-listener
+	// values are empty. Per-listener values always take precedence so admins
+	// can still override a panel-wide default for an individual node.
+	if ap.PublicPort != "" && strings.TrimSpace(listener.PublicPort) == "" {
+		listener.PublicPort = ap.PublicPort
+	}
+	if ap.SNI != "" && strings.TrimSpace(listener.AccessSNI) == "" {
+		listener.AccessSNI = ap.SNI
+	}
+	if ap.ClientFingerprint != "" && strings.TrimSpace(listener.ClientFingerprint) == "" {
+		listener.ClientFingerprint = ap.ClientFingerprint
+	}
+	if len(ap.ALPN) > 0 && strings.TrimSpace(listener.AccessALPN) == "" {
+		listener.AccessALPN = strings.Join(ap.ALPN, ",")
 	}
 	if host := strings.TrimSpace(listener.PublicHost); host != "" {
 		publicURL = host
