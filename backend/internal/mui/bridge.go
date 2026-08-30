@@ -249,9 +249,94 @@ func decodeTrojan(cfg map[string]interface{}, tls bool) *domain.TrojanSpec {
 
 func decodeSS(cfg map[string]interface{}) *domain.ShadowsocksSpec {
 	return &domain.ShadowsocksSpec{
-		Cipher: strCfg(cfg, "cipher"),
-		UDP:    boolCfg(cfg, "udp"),
+		Cipher:   strCfg(cfg, "cipher"),
+		UDP:      boolCfg(cfg, "udp"),
+		Security: decodeSSSecurity(cfg),
 	}
+}
+
+// decodeSSSecurity decodes the SS listener wrapper blocks (shadow-tls /
+// res-tls / jls-config) into a VLESSSecuritySpec so the m-ui SS module's
+// shadowsocksPlugin emission code fires. SS listeners have no reality-config
+// or certificate path — only the three plugin-style wrappers.
+func decodeSSSecurity(cfg map[string]interface{}) domain.VLESSSecuritySpec {
+	if stls, ok := cfg["shadow-tls"].(map[string]interface{}); ok && boolCfg(stls, "enable") {
+		return domain.VLESSSecuritySpec{
+			Type:      domain.VLESSSecurityShadowTLS,
+			ShadowTLS: decodeShadowTLSConfig(stls),
+		}
+	}
+	if restls, ok := cfg["res-tls"].(map[string]interface{}); ok && boolCfg(restls, "enable") {
+		return domain.VLESSSecuritySpec{
+			Type:   domain.VLESSSecurityResTLS,
+			ResTLS: decodeResTLSConfig(restls),
+		}
+	}
+	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok && boolCfg(jls, "enable") {
+		return domain.VLESSSecuritySpec{
+			Type: domain.VLESSSecurityJLS,
+			JLS:  decodeJLSConfig(jls),
+		}
+	}
+	return domain.VLESSSecuritySpec{Type: domain.VLESSSecurityNone}
+}
+
+// decodeShadowTLSConfig maps the listener shadow-tls block into the domain
+// ShadowTLSConfig consumed by the m-ui SS and classic-stream modules.
+func decodeShadowTLSConfig(src map[string]interface{}) *domain.ShadowTLSConfig {
+	cfg := &domain.ShadowTLSConfig{
+		Version:  int(uint32Cfg(src, "version")),
+		Password: strCfg(src, "password"),
+	}
+	if hs, ok := src["handshake"].(map[string]interface{}); ok {
+		cfg.Handshake = domain.ShadowTLSHandshake{
+			Destination: strCfg(hs, "dest"),
+			Proxy:       strMap(hs, "proxy"),
+		}
+	}
+	if users, ok := src["users"].([]interface{}); ok {
+		for _, item := range users {
+			if u, ok := item.(map[string]interface{}); ok {
+				cfg.Users = append(cfg.Users, domain.ShadowTLSUser{
+					Name:     strMap(u, "name"),
+					Password: strMap(u, "password"),
+				})
+			}
+		}
+	}
+	return cfg
+}
+
+// decodeResTLSConfig maps the listener res-tls block into the domain ResTLSConfig.
+func decodeResTLSConfig(src map[string]interface{}) *domain.ResTLSConfig {
+	return &domain.ResTLSConfig{
+		Destination:     strCfg(src, "dest"),
+		Password:        strCfg(src, "password"),
+		Script:          strCfg(src, "restls-script"),
+		MinRecordLength: int(uint32Cfg(src, "min-record-len")),
+		Proxy:           strCfg(src, "proxy"),
+	}
+}
+
+// decodeJLSConfig maps the listener jls-config block into the domain JLSConfig.
+func decodeJLSConfig(src map[string]interface{}) *domain.JLSConfig {
+	cfg := &domain.JLSConfig{
+		ServerName:  strCfg(src, "sni"),
+		Destination: strCfg(src, "dest"),
+		Proxy:       strCfg(src, "proxy"),
+		ALPN:        decodeALPN(src),
+	}
+	if users, ok := src["users"].([]interface{}); ok {
+		for _, item := range users {
+			if u, ok := item.(map[string]interface{}); ok {
+				cfg.Users = append(cfg.Users, domain.JLSUser{
+					Username: strMap(u, "username"),
+					Password: strMap(u, "password"),
+				})
+			}
+		}
+	}
+	return cfg
 }
 
 func decodeHy2(cfg map[string]interface{}) *domain.Hysteria2Spec {
@@ -314,7 +399,49 @@ func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {
 		h.Type = domain.VLESSHandlerXHTTP
 		h.XHTTP = &domain.XHTTPConfig{Path: strMap(xhttp, "path"), Host: strMap(xhttp, "host"), Mode: strMap(xhttp, "mode")}
 	}
+	// mkcp-config → MKCP handler (VMess only per mihomo transport docs).
+	if mkcp, ok := cfg["mkcp-config"].(map[string]interface{}); ok && boolCfg(mkcp, "enable") {
+		h.Type = domain.VMessHandlerMKCP
+		h.MKCP = decodeMKCPConfig(mkcp)
+	}
+	// mekya-config: the m-ui domain types do not yet model a Mekya handler.
+	// The 3m-ui native converter (converter/client.go copyTransport) emits
+	// mekya-opts directly for the client YAML path; the m-ui bridge path
+	// falls back to raw TCP here. Adding a Mekya handler type is tracked as
+	// a separate feature task.
 	return h
+}
+
+// decodeMKCPConfig maps the listener mkcp-config block into the domain
+// MKCPConfig consumed by the m-ui VMess module's compileClassicClient.
+func decodeMKCPConfig(src map[string]interface{}) *domain.MKCPConfig {
+	return &domain.MKCPConfig{
+		MTU:              uint32Cfg(src, "mtu"),
+		TTI:              uint32Cfg(src, "tti"),
+		UplinkCapacity:   uint32Cfg(src, "uplink-capacity"),
+		DownlinkCapacity: uint32Cfg(src, "downlink-capacity"),
+		Congestion:       boolCfg(src, "congestion"),
+		WriteBuffer:      uint32Cfg(src, "write-buffer"),
+		ReadBuffer:       uint32Cfg(src, "read-buffer"),
+		Seed:             strCfg(src, "seed"),
+		Header:           strCfg(src, "header"),
+	}
+}
+
+// uint32Cfg reads a numeric field from a JSON-decoded map as uint32.
+// encoding/json decodes numbers as float64; int/int64 are also tolerated.
+func uint32Cfg(m map[string]interface{}, key string) uint32 {
+	switch v := m[key].(type) {
+	case float64:
+		return uint32(v)
+	case int:
+		return uint32(v)
+	case int64:
+		return uint32(v)
+	case uint32:
+		return v
+	}
+	return 0
 }
 
 func decodeSecurity(cfg map[string]interface{}, tlsFlag bool) domain.VLESSSecuritySpec {
