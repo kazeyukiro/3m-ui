@@ -117,7 +117,7 @@ func (b *Bot) loop() {
 		}
 
 		if !b.webhookCleared {
-			if err := deleteWebhook(client, settings.BotToken); err != nil {
+			if err := deleteWebhook(client, settings.BotToken, tgClient.apiBase()); err != nil {
 				log.Printf("telegram: deleteWebhook: %v", err)
 			} else {
 				b.webhookCleared = true
@@ -125,7 +125,7 @@ func (b *Bot) loop() {
 			}
 		}
 
-		updates, next, err := getUpdates(client, settings.BotToken, offset, 30)
+		updates, next, err := getUpdates(client, settings.BotToken, tgClient.apiBase(), offset, 30)
 		if err != nil {
 			log.Printf("telegram: getUpdates: %v", err)
 			if !sleepOrStop(b.stopCh, 5*time.Second) {
@@ -319,8 +319,8 @@ type tgUpdate struct {
 	CallbackQuery *tgCallbackQuery `json:"callback_query"`
 }
 
-func deleteWebhook(httpClient *http.Client, token string) error {
-	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/deleteWebhook?drop_pending_updates=false", token)
+func deleteWebhook(httpClient *http.Client, token, apiBase string) error {
+	endpoint := fmt.Sprintf("%s/bot%s/deleteWebhook?drop_pending_updates=false", apiBase, token)
 	resp, err := httpClient.Get(endpoint)
 	if err != nil {
 		return err
@@ -333,14 +333,14 @@ func deleteWebhook(httpClient *http.Client, token string) error {
 	return nil
 }
 
-func getUpdates(httpClient *http.Client, token string, offset int64, timeoutSec int) ([]tgUpdate, int64, error) {
+func getUpdates(httpClient *http.Client, token, apiBase string, offset int64, timeoutSec int) ([]tgUpdate, int64, error) {
 	q := url.Values{}
 	q.Set("timeout", strconv.Itoa(timeoutSec))
 	q.Set("allowed_updates", `["message","callback_query"]`)
 	if offset > 0 {
 		q.Set("offset", strconv.FormatInt(offset, 10))
 	}
-	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?%s", token, q.Encode())
+	endpoint := fmt.Sprintf("%s/bot%s/getUpdates?%s", apiBase, token, q.Encode())
 	resp, err := httpClient.Get(endpoint)
 	if err != nil {
 		return nil, offset, err

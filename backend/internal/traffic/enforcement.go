@@ -53,9 +53,13 @@ func (e *Enforcer) CheckAndEnforce() (blockedCount int, err error) {
 		}
 	}
 
+	// Detect change against the last successfully-enforced state WITHOUT
+	// updating lastBlocked yet. If we updated lastBlocked first and
+	// RegenerateConfig failed, the next tick would see changed==false and
+	// never retry — leaving over-quota users connected. Instead, we keep the
+	// old state on failure so the next tick re-detects the same diff.
 	e.mu.Lock()
 	changed := !equalBlockedSets(e.lastBlocked, current)
-	e.lastBlocked = current
 	e.mu.Unlock()
 
 	if !changed {
@@ -64,11 +68,21 @@ func (e *Enforcer) CheckAndEnforce() (blockedCount int, err error) {
 
 	log.Printf("traffic: enforcement state changed (%d user(s) now blocked); regenerating Mihomo config", len(current))
 	if e.nodeSvc == nil {
+		// Nothing to regenerate; record state so we don't keep logging.
+		e.mu.Lock()
+		e.lastBlocked = current
+		e.mu.Unlock()
 		return len(current), nil
 	}
 	if err := e.nodeSvc.RegenerateConfig(); err != nil {
+		// Leave lastBlocked as-is so the next tick detects the same diff
+		// and retries regen. Over-quota users must not stay connected due
+		// to a single transient regen failure.
 		return len(current), err
 	}
+	e.mu.Lock()
+	e.lastBlocked = current
+	e.mu.Unlock()
 	return len(current), nil
 }
 

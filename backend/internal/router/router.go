@@ -37,6 +37,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	}
 
 	r := gin.Default()
+	r.Use(SecurityHeaders())
 	r.Use(CORSMiddleware(cfg.Security.CORSOrigins))
 
 	RegisterLegacySubscriptionRoutes(r, db, cfg)

@@ -1,3 +1,9 @@
+# 3M-UI configuration file.
+# This file contains PLACEHOLDER secrets that will be REJECTED on startup.
+# Use the installer (scripts/install.sh) to generate random secrets, OR
+# manually replace with random 32+ byte strings before first run.
+# Generate with: openssl rand -hex 32
+
 server:
   port: 8080
   mode: "debug"
@@ -6,13 +12,13 @@ database:
   path: "backend/data/3m-ui.db"
 
 jwt:
-  secret: "3m-ui-default-jwt-secret-key-change-it-in-production"
+  secret: "CHANGE_ME_TO_RANDOM_32_PLUS_BYTES"  # rejected by Validate; use install.sh or set random hex
 security:
   # Empty → no cross-origin browser access. Use ["*"] only when you
   # intentionally want to allow every origin.
   # Example: ["https://panel.example.com"]
   cors_origins: []
-  credential_key: "3m-ui-default-credential-key-change-it-in-production"
+  credential_key: "CHANGE_ME_TO_RANDOM_32_PLUS_BYTES"  # rejected by Validate; use install.sh or set random hex
 
 mihomo:
   binary: "/usr/local/bin/mihomo"

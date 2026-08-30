@@ -254,10 +254,6 @@ const Settings: React.FC = () => {
               { value: 'cpu', label: 'CPU' },
               { value: 'memory', label: '内存/Memory' },
               { value: 'crash', label: '核心崩溃/Crash' },
-              { value: 'node_down', label: '节点下线/Node down' },
-              { value: 'node_up', label: '节点上线/Node up' },
-              { value: 'block', label: '用户封禁/Block' },
-              { value: 'unblock', label: '用户解封/Unblock' },
               { value: 'expiry', label: '到期/Expiry' },
               { value: 'traffic', label: '流量/Traffic' },
             ]} placeholder="login,cpu,crash" />

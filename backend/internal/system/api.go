@@ -81,10 +81,16 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+	// The running panel still holds the old (now-unlinked) SQLite inode via
+	// GORM; we cannot cleanly close/reopen it in-place. The operator MUST
+	// restart the panel or every subsequent write goes to a stale file and
+	// is lost on next start. Log loudly so this is visible in journalctl.
+	log.Printf("[WARNING] Database restored from backup. The panel MUST be restarted (systemctl restart 3m-ui) for changes to take effect. Further writes will be lost.")
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"message": "database restored; restart the panel process to reopen SQLite connections",
-		"path":    filepath.Base(h.dbPath),
+		"status":           "ok",
+		"restart_required": true,
+		"message":          "Database restored. *** RESTART REQUIRED *** The running panel still holds the old SQLite handle; run `systemctl restart 3m-ui` (or restart the panel process) now, otherwise all further DB writes will be lost.",
+		"path":             filepath.Base(h.dbPath),
 	})
 }
 
