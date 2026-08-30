@@ -24,13 +24,13 @@ type Service struct {
 func NewService(db *gorm.DB) *Service {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		Proxy:       http.ProxyFromEnvironment,
 		DialContext: safeClusterDialContext(dialer),
 	}
 	return &Service{
 		db: db,
 		httpClient: &http.Client{
-			Timeout: 12 * time.Second,
+			Timeout:   12 * time.Second,
 			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 3 {
@@ -212,6 +212,8 @@ func (s *Service) runHealth(row *models.RemoteServer) (*models.RemoteServer, err
 		return nil, err
 	}
 	if row.APIToken != "" {
+		// The api_token must be a valid JWT obtained from POST /api/v1/auth/login
+		// on the remote panel. Opaque access tokens are NOT accepted by RequireAuth.
 		req.Header.Set("Authorization", "Bearer "+row.APIToken)
 	}
 	now := time.Now().UTC()
@@ -335,6 +337,8 @@ func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, [
 		return 0, nil, err
 	}
 	if row.APIToken != "" {
+		// The api_token must be a valid JWT obtained from POST /api/v1/auth/login
+		// on the remote panel. Opaque access tokens are NOT accepted by RequireAuth.
 		req.Header.Set("Authorization", "Bearer "+row.APIToken)
 	}
 	if len(body) > 0 {
