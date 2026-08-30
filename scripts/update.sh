@@ -9,6 +9,7 @@ VERSION_FILE="$BASE/VERSION"
 MODE_FILE="$BASE/BUILD_MODE"
 ENTRY="/usr/local/bin/3m-ui"
 CONFIG_DIR="/etc/3m-ui"
+CONFIG_DIR="/etc/3m-ui"
 DATA_DIR="/var/lib/3m-ui"
 LOG_DIR="/var/log/3m-ui"
 MIHOMO_BIN="/usr/local/bin/mihomo"
@@ -381,3 +382,9 @@ echo "Version: $tag"
 echo "Build mode: $current_mode"
 echo "Backup: $backup (keeping last $BACKUP_KEEP)"
 echo "Command: 3m-ui"
+# Show panel port from config so user knows where to access after update.
+if [ -f "$CONFIG_DIR/config.yaml" ]; then
+  panel_port=$(awk '/^  port:/ {print $2; exit}' "$CONFIG_DIR/config.yaml" 2>/dev/null || echo "8080")
+  echo "Panel: http://SERVER_IP:${panel_port}/"
+  echo "  (to change port: 3m-ui config port <new-port>)"
+fi
