@@ -323,7 +323,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 				continue
 			}
 			params := map[string]string{}
-			for key, out := range map[string]string{"congestion-controller": "congestion_control", "bbr-profile": "bbr_profile", "udp-relay-mode": "udp_relay_mode"} {
+			for key, out := range map[string]string{"congestion-controller": "congestion-controller", "bbr-profile": "bbr-profile", "udp-relay-mode": "udp-relay-mode"} {
 				if v, ok := cfg[key].(string); ok && v != "" {
 					params[out] = v
 				}
@@ -354,7 +354,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 			return nil, fmt.Errorf("tuic user %q has empty password", uuid)
 		}
 		params := map[string]string{}
-		for key, out := range map[string]string{"congestion-controller": "congestion_control", "bbr-profile": "bbr_profile", "udp-relay-mode": "udp_relay_mode", "max-udp-relay-packet-size": "max_udp_relay_packet_size"} {
+		for key, out := range map[string]string{"congestion-controller": "congestion-controller", "bbr-profile": "bbr-profile", "udp-relay-mode": "udp-relay-mode", "max-udp-relay-packet-size": "max-udp-relay-packet-size"} {
 			if v, ok := cfg[key].(string); ok && v != "" {
 				params[out] = v
 			}

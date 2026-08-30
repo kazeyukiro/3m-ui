@@ -250,8 +250,21 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
   if (cfg['padding-min'] != null) values['padding-min'] = cfg['padding-min'];
   if (cfg['padding-max'] != null) values['padding-max'] = cfg['padding-max'];
   if (cfg['table-type']) values['table-type'] = cfg['table-type'];
+  if (cfg['custom-table']) values['custom-table'] = cfg['custom-table'];
+  if (cfg['custom-tables']) values['custom-tables'] = asStringList(cfg['custom-tables']);
+  if (cfg['fallback']) values['fallback'] = cfg['fallback'];
   if (cfg['handshake-timeout'] != null) values['handshake-timeout'] = cfg['handshake-timeout'];
   if (cfg['enable-pure-downlink'] != null) values['enable-pure-downlink'] = cfg['enable-pure-downlink'];
+  // sudoku httpmask nested block
+  if (cfg['httpmask'] && typeof cfg['httpmask'] === 'object') {
+    const hm = cfg['httpmask'];
+    values.httpmask_enabled = true;
+    values.httpmask_disable = !!hm.disable;
+    values.httpmask_mode = hm.mode;
+    values.httpmask_path_root = hm['path-root'] ?? hm['path_root'];
+  } else {
+    values.httpmask_enabled = false;
+  }
 
   // trusttunnel
   if (cfg.network) values.network = cfg.network;
@@ -285,6 +298,7 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
   delete values['realm-opts'];
   delete values['reality-config'];
   delete values['ss-option'];
+  delete values['httpmask'];
 
   if (cfg['ws-path']) values.transport_layer = 'ws';
   else if (cfg['grpc-service-name']) values.transport_layer = 'grpc';
@@ -305,10 +319,11 @@ const FORM_OWNED_KEYS = new Set([
   'masquerade', 'alpn', 'max-idle-time', 'handshake-timeout', 'token', 'congestion-controller',
   'authentication-timeout', 'max-udp-relay-packet-size', 'zero-rtt', 'padding-scheme', 'transport',
   'key', 'aead-method', 'padding-min', 'padding-max', 'table-type', 'enable-pure-downlink',
+  'custom-table', 'custom-tables', 'fallback', 'httpmask',
   'certificate', 'private-key', 'client-auth-type', 'client-auth-cert', 'ech-key', 'allow-insecure',
   'reality-config', 'users', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'mux-option',
   'kcp-tun', 'xhttp-config', 'mkcp-config', 'mekya-config', 'obfs-opts', 'jls-upstream', 'realm-opts',
-  'network', 'bbr-profile', 'quic-versions', 'cwnd', 'traffic-pattern', 'user-hint-is-mandatory',
+  'network', 'bbr-profile', 'quic-versions', 'cwnd', 'max-datagram-frame-size', 'recv-window-conn', 'recv-window', 'disable-mtu-discovery', 'traffic-pattern', 'user-hint-is-mandatory',
 ]);
 
 function cleanObj(obj: Record<string, any>): Record<string, any> | undefined {
@@ -435,6 +450,10 @@ export function formValuesToConfig(
       set('cwnd', values.cwnd);
       set('bbr-profile', values['bbr-profile']);
       set('quic-versions', values['quic-versions']);
+      set('max-datagram-frame-size', values['max-datagram-frame-size']);
+      set('recv-window-conn', values['recv-window-conn']);
+      set('recv-window', values['recv-window']);
+      if (values['disable-mtu-discovery'] === true) cfg['disable-mtu-discovery'] = true;
       break;
     case 'anytls':
       set('padding-scheme', values['padding-scheme']);
@@ -450,8 +469,18 @@ export function formValuesToConfig(
       set('padding-min', values['padding-min']);
       set('padding-max', values['padding-max']);
       set('table-type', values['table-type']);
+      set('custom-table', values['custom-table']);
+      set('custom-tables', values['custom-tables']);
+      set('fallback', values['fallback']);
       set('handshake-timeout', values['handshake-timeout']);
       if (values['enable-pure-downlink'] === true) cfg['enable-pure-downlink'] = true;
+      if (values.httpmask_enabled) {
+        cfg['httpmask'] = cleanObj({
+          disable: values.httpmask_disable === true ? true : undefined,
+          mode: values.httpmask_mode,
+          'path-root': values.httpmask_path_root,
+        }) || {};
+      }
       break;
     case 'trusttunnel':
       set('network', values.network);
@@ -766,8 +795,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="psk" label={t('listeners.psk')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty → auto-generate on save (SS / password protocols).'}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
-          <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={3}>
-            <Select options={[1, 2, 3].map((v) => ({ value: v, label: String(v) }))} />
+          <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4}>
+            <Select options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))} />
           </Form.Item>
           <Form.Item name="obfs_opts_mode" label={t('listeners.obfsOptsMode')}>
             <Select allowClear options={[{ value: 'http', label: 'http' }, { value: 'tls', label: 'tls' }]} />
@@ -934,6 +963,18 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="quic-versions" label={t('listeners.quicVersions')}>
             <Select mode="tags" tokenSeparators={[',']} />
           </Form.Item>
+          <Form.Item name="max-datagram-frame-size" label={t('listeners.shadowquicMaxDatagramFrameSize', 'Max datagram frame size')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1400" />
+          </Form.Item>
+          <Form.Item name="recv-window-conn" label={t('listeners.shadowquicRecvWindowConn', 'Recv window conn')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item name="recv-window" label={t('listeners.shadowquicRecvWindow', 'Recv window')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item name="disable-mtu-discovery" label={t('listeners.shadowquicDisableMtuDiscovery', 'Disable MTU discovery')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
         </>
       )}
 
@@ -982,12 +1023,35 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="table-type" label={t('listeners.tableType')}>
             <Input />
           </Form.Item>
+          <Form.Item name="custom-table" label={t('listeners.customTable')} tooltip={t('listeners.customTable') || 'Custom byte layout (must contain 2x, 2p, 4v); entropy direction only'}>
+            <Input placeholder="xpxvvpvv" />
+          </Form.Item>
+          <Form.Item name="custom-tables" label={t('listeners.customTables')} tooltip={t('listeners.customTables') || 'Custom byte layout list for multi-table rotation; overrides custom-table when non-empty'}>
+            <Input.TextArea rows={2} placeholder="xpxvvpvv\nvxpvxvvp" />
+          </Form.Item>
           <Form.Item name="handshake-timeout" label={t('listeners.handshakeTimeout')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="enable-pure-downlink" label={t('listeners.enablePureDownlink')} valuePropName="checked">
             <Switch />
           </Form.Item>
+          <Form.Item name="fallback" label={t('listeners.sudokuFallback')} tooltip={t('listeners.sudokuFallback') || 'When HTTPMask is on, forward non-tunnel HTTP-like requests to this address (host:port)'}>
+            <Input placeholder="127.0.0.1:80" />
+          </Form.Item>
+          <EnableSection name="httpmask_enabled" label={t('listeners.sectionHttpmask')} hint={t('listeners.sectionHttpmask') || 'HTTP tunnel masking for Sudoku'}>
+            <Form.Item name="httpmask_disable" label={t('listeners.httpmaskDisable')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="httpmask_mode" label={t('listeners.httpmaskMode')}>
+              <Select
+                allowClear
+                options={['legacy', 'stream', 'poll', 'auto', 'ws'].map((v) => ({ value: v, label: v }))}
+              />
+            </Form.Item>
+            <Form.Item name="httpmask_path_root" label={t('listeners.httpmaskPathRoot')}>
+              <Input placeholder="aabbcc" />
+            </Form.Item>
+          </EnableSection>
         </>
       )}
 

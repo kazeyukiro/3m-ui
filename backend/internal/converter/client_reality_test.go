@@ -2,6 +2,7 @@ package converter
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -85,7 +86,19 @@ func TestShadowQUICClientExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := proxies[0]
-	if p["username"] != "u" || p["password"] != "p" || p["sni"] != "test.com" || p["udp"] != true || p["zero-rtt"] != true {
-		t.Fatalf("%#v", p)
+	if p["username"] != "u" || p["password"] != "p" || p["sni"] != "test.com" || p["udp"] != true {
+		t.Fatalf("base fields mismatch: %#v", p)
+	}
+	// quic-versions / congestion-controller must pass through unchanged.
+	if p["quic-versions"] == nil || fmt.Sprint(p["quic-versions"]) != "[v2]" {
+		t.Fatalf("quic-versions not passed through: %#v", p["quic-versions"])
+	}
+	if p["congestion-controller"] != "bbr" {
+		t.Fatalf("congestion-controller not passed through: %#v", p["congestion-controller"])
+	}
+	// zero-rtt is absent from the listener config; the converter must NOT
+	// invent a default (official docs default is false, applied by mihomo).
+	if _, ok := p["zero-rtt"]; ok {
+		t.Fatalf("zero-rtt should not be defaulted when absent from listener config: %#v", p["zero-rtt"])
 	}
 }
