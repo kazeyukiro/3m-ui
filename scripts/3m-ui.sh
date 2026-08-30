@@ -11,6 +11,7 @@ APP_BIN="$BASE/3m-ui-bin"
 VERSION_FILE="$BASE/VERSION"
 DATA_DIR="/var/lib/3m-ui"
 CONFIG_DIR="/etc/3m-ui"
+CONFIG_FILE="$CONFIG_DIR/config.yaml"
 SERVICE="3m-ui"
 
 say() { printf '%s\n' "$*"; }
@@ -101,6 +102,57 @@ uninstall() {
   say "Mihomo was not removed."
 }
 
+config() {
+  action="${1:-show}"
+  case "$action" in
+    show)
+      if [ -f "$CONFIG_FILE" ]; then
+        say "Config file: $CONFIG_FILE"
+        say "---"
+        cat "$CONFIG_FILE"
+      else
+        err "Config file not found: $CONFIG_FILE"
+      fi
+      ;;
+    port)
+      new_port="$2"
+      case "$new_port" in
+        ''|*[!0-9]*) err "Usage: 3m-ui config port <1-65535>" ;;
+      esac
+      [ "$new_port" -ge 1 ] 2>/dev/null && [ "$new_port" -le 65535 ] 2>/dev/null || err "Port must be 1-65535."
+      [ -f "$CONFIG_FILE" ] || err "Config file not found: $CONFIG_FILE"
+      # Read current port
+      old_port=$(awk '/^  port:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+      if [ "$old_port" = "$new_port" ]; then
+        say "Port is already $new_port — no change needed."
+        return 0
+      fi
+      # Replace port in config.yaml
+      sed -i "s/^  port: .*/  port: $new_port/" "$CONFIG_FILE"
+      say "Port changed: $old_port → $new_port"
+      say "Restarting 3m-ui to apply..."
+      service_action restart
+      sleep 1
+      if service_is_active; then
+        say "✓ 3m-ui restarted. Access: http://0.0.0.0:$new_port"
+      else
+        say "✗ 3m-ui failed to start. Check logs: 3m-ui logs"
+      fi
+      ;;
+    *)
+      err "Unknown config action: $action. Use 'show' or 'port <number>'."
+      ;;
+  esac
+}
+
+service_is_active() {
+  case "$(init_system)" in
+    systemd) systemctl is-active --quiet "$SERVICE" ;;
+    openrc) rc-service "$SERVICE" status >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+
 usage() {
   cat <<EOF
 Usage: 3m-ui <command>
@@ -112,8 +164,13 @@ Commands:
   stop         Stop 3m-ui
   logs         Show recent service logs
   version      Show installed 3m-ui version
+  config       Show or edit config (see below)
   uninstall    Remove 3m-ui but preserve data/config
   help         Show this help
+
+Config sub-commands:
+  3m-ui config show              Display current config.yaml
+  3m-ui config port <1-65535>    Change panel port and restart
 
 Run '3m-ui' without arguments to open the interactive management menu.
 EOF
@@ -129,6 +186,7 @@ main() {
     stop) service_action stop ;;
     logs) logs ;;
     version) version ;;
+    config) shift; config "$@" ;;
     uninstall) uninstall ;;
     help|-h|--help) usage ;;
     '')
