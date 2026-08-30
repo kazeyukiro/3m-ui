@@ -295,6 +295,7 @@ type classicClientProxy struct {
 	SNI               string              `yaml:"sni,omitempty"`
 	ClientFingerprint string              `yaml:"client-fingerprint,omitempty"`
 	SkipCertVerify    bool                `yaml:"skip-cert-verify,omitempty"`
+	ALPN              []string            `yaml:"alpn,omitempty"`
 	PacketEncoding    string              `yaml:"packet-encoding,omitempty"`
 	Reality           *vlessClientReality `yaml:"reality-opts,omitempty"`
 	ShadowTLS         *vlessClientSecret  `yaml:"shadow-tls-opts,omitempty"`
@@ -325,10 +326,12 @@ func compileClassicClient(node domain.Node, user domain.NodeUser, profile domain
 		proxy.UUID, proxy.AlterID, proxy.Cipher = user.VMess.UUID, user.VMess.AlterID, defaultCipher(user.VMess.Cipher)
 		proxy.ServerName = profile.ServerName
 		proxy.PacketEncoding = profile.PacketEncoding
+		proxy.ALPN = append([]string(nil), node.VMess.ALPN...)
 		handler, security = node.VMess.Handler, node.VMess.Security
 	case domain.ProtocolTrojan:
 		proxy.Password = user.Trojan.Password
 		proxy.SNI = profile.ServerName
+		proxy.ALPN = append([]string(nil), node.Trojan.ALPN...)
 		handler, security = node.Trojan.Handler, node.Trojan.Security
 		if node.Trojan.Shadowsocks.Enabled {
 			proxy.TrojanShadowsocks = &trojanClientSS{

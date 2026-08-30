@@ -620,12 +620,27 @@ func resTLSClientOptions(src map[string]interface{}) map[string]interface{} {
 	if value, ok := cfg["version-hint"]; ok {
 		result["version-hint"] = value
 	}
+	// restls-script is a documented client field (tls.md L190-192) used to
+	// control the post-handshake Restls carrier traffic script.
+	if script, ok := cfg["restls-script"].(string); ok && script != "" {
+		result["restls-script"] = script
+	}
 	if len(result) == 0 {
 		return nil
 	}
 	return result
 }
 
+// jlsClientOptions exports JLS credentials for the client restls/jls-opts block.
+//
+// Known limitation (P3-2): only the first user in jls-config.users is exported.
+// Although applyClientWrappers is invoked once per protocol credential, the
+// credential identifier differs per protocol (UUID for vmess/vless, password
+// for trojan/anytls) and cannot be matched reliably against jls-config.users
+// which keys users by {username, password}. Per-user matching would require an
+// explicit listener-side mapping table that the current schema does not carry.
+// For the shared single-JLS-user deployment (the documented common case) this
+// is correct; multi-JLS-user listeners currently fall back to the first user.
 func jlsClientOptions(src map[string]interface{}) map[string]interface{} {
 	cfg, ok := src["jls-config"].(map[string]interface{})
 	if !ok {

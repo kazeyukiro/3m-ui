@@ -136,6 +136,7 @@ type VLESSSpec struct {
 	Handler    VLESSHandlerSpec  `json:"handler"`
 	Security   VLESSSecuritySpec `json:"security"`
 	Mux        MuxSpec           `json:"mux,omitempty"`
+	ALPN       []string          `json:"alpn,omitempty"`
 }
 
 // VMess and Trojan share the stream handler and security building blocks that
@@ -145,6 +146,7 @@ type VMessSpec struct {
 	Handler  VLESSHandlerSpec  `json:"handler"`
 	Security VLESSSecuritySpec `json:"security"`
 	Mux      MuxSpec           `json:"mux,omitempty"`
+	ALPN     []string          `json:"alpn,omitempty"`
 }
 
 type TrojanSpec struct {
@@ -152,6 +154,7 @@ type TrojanSpec struct {
 	Security    VLESSSecuritySpec     `json:"security"`
 	Mux         MuxSpec               `json:"mux,omitempty"`
 	Shadowsocks TrojanShadowsocksSpec `json:"shadowsocks,omitempty"`
+	ALPN        []string              `json:"alpn,omitempty"`
 }
 
 type TrojanShadowsocksSpec struct {

@@ -115,6 +115,10 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 		if params["fp"] == "" {
 			params["fp"] = "chrome"
 		}
+	} else if in.Node.TLS {
+		// Non-Reality TLS: emit security=tls so clients don't fall back to
+		// plaintext VLESS (security=none) which the URI scheme defaults to.
+		params["security"] = "tls"
 	}
 	uri := shareName(
 		shareQuery("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params),

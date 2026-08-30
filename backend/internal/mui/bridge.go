@@ -137,7 +137,14 @@ func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
 		}
 	}
 
-	// Protocol specs from flat Mihomo listener JSON
+	// Protocol specs from flat Mihomo listener JSON.
+	//
+	// Follow-up (P3-8 / X-MUI-1): only 5 of the 12 supported Mihomo listener
+	// protocols are decoded here (vless, vmess, trojan, shadowsocks, hysteria2).
+	// The remaining 7 (tuic, shadowquic, anytls, mieru, sudoku, trusttunnel,
+	// snell) fall back to the 3m-ui native / legacy share builders via the
+	// three-tier fallback in internal/node/api.go. Adding decoders for those
+	// protocols here is tracked as a separate feature task.
 	switch proto {
 	case domain.ProtocolVLESS:
 		node.VLESS = decodeVLESS(cfg, l.TLS)
@@ -224,6 +231,7 @@ func decodeVLESS(cfg map[string]interface{}, tls bool) *domain.VLESSSpec {
 		Decryption: strCfg(cfg, "encryption", "decryption"),
 		Handler:    decodeHandler(cfg),
 		Security:   decodeSecurity(cfg, tls),
+		ALPN:       decodeALPN(cfg),
 	}
 	if spec.Decryption == "" {
 		spec.Decryption = "none"
@@ -232,11 +240,11 @@ func decodeVLESS(cfg map[string]interface{}, tls bool) *domain.VLESSSpec {
 }
 
 func decodeVMess(cfg map[string]interface{}, tls bool) *domain.VMessSpec {
-	return &domain.VMessSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls)}
+	return &domain.VMessSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls), ALPN: decodeALPN(cfg)}
 }
 
 func decodeTrojan(cfg map[string]interface{}, tls bool) *domain.TrojanSpec {
-	return &domain.TrojanSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls)}
+	return &domain.TrojanSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls), ALPN: decodeALPN(cfg)}
 }
 
 func decodeSS(cfg map[string]interface{}) *domain.ShadowsocksSpec {
@@ -254,7 +262,42 @@ func decodeHy2(cfg map[string]interface{}) *domain.Hysteria2Spec {
 		Down:         strCfg(cfg, "down"),
 		Obfs:         strCfg(cfg, "obfs"),
 		ObfsPassword: strCfg(cfg, "obfs-password"),
+		ALPN:         decodeALPN(cfg),
 	}
+}
+
+// decodeALPN reads the alpn field from a Mihomo listener config JSON. The field
+// is usually a []interface{} (from encoding/json) but some imports carry it as
+// []string; a bare string is also tolerated.
+func decodeALPN(cfg map[string]interface{}) []string {
+	alpn, ok := cfg["alpn"]
+	if !ok {
+		return nil
+	}
+	switch a := alpn.(type) {
+	case []interface{}:
+		out := make([]string, 0, len(a))
+		for _, v := range a {
+			if s, ok := v.(string); ok {
+				out = append(out, s)
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	case []string:
+		if len(a) == 0 {
+			return nil
+		}
+		return a
+	case string:
+		if strings.TrimSpace(a) == "" {
+			return nil
+		}
+		return []string{a}
+	}
+	return nil
 }
 
 func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {

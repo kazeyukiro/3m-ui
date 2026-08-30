@@ -162,7 +162,15 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		credentials = byListener[listener.ID]
 	}
 
-	// Prefer full m-ui protocol port; fall back to 3m-ui registry then legacy URIs.
+	// Three-tier share export: m-ui protocol port -> 3m-ui registry -> legacy URIs.
+	//
+	// Follow-up (P3-9 / X-MUI-2): the three tiers produce inconsistent output
+	// shapes (m-ui emits URIs + client YAML from the protocol port; the
+	// 3m-ui registry emits its own URI format; the legacy builder emits
+	// plain URIs only). When the first tier succeeds the client gets the
+	// m-ui shape, otherwise it silently degrades to a different shape for
+	// the same listener. Unifying the output contract across tiers is
+	// tracked as a separate design task.
 	var uris []string
 	var clientYAML, primary string
 	muiCreds := make([]mui.Cred, 0, len(credentials))
