@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/base64"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -79,7 +80,8 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			if target == "v2ray" || target == "base64" || target == "raw" || target == "uri" {
 				raw, err = converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials)
 				if err != nil {
-					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+					log.Printf("subscription error: %v", err)
+					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "subscription generation failed"})
 					return
 				}
 				page := subpage.LoadPageSettings(db)
@@ -104,7 +106,8 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			if target == "singbox" || target == "sing-box" || target == "sfa" || target == "sfm" {
 				raw, err = converter.GenerateUserSingboxSubscription(db, pu, c.Request)
 				if err != nil {
-					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+					log.Printf("subscription error: %v", err)
+					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "subscription generation failed"})
 					return
 				}
 				writeSubHeaders(c, db, &pu)
@@ -119,7 +122,8 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+			log.Printf("subscription error: %v", err)
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "subscription generation failed"})
 			return
 		}
 
@@ -365,7 +369,8 @@ func writeSubHTML(c *gin.Context, db *gorm.DB, cfg *config.Config, pu models.Pro
 	}
 	html, err := subpage.RenderHTML(db, pu, base, links)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("subscription error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "subscription generation failed"})
 		return
 	}
 	c.Header("Cache-Control", "no-store")

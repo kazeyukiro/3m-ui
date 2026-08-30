@@ -186,7 +186,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["password"] = value
 		}
 		if value, ok := opts["simple-obfs"].(map[string]interface{}); ok && boolValue(value["enable"]) {
-			p["plugin"] = "simple-obfs"
+			// The listener config key is `simple-obfs`, but the mihomo SS
+			// client proxy doc (proxies/ss.md) names the plugin `obfs`.
+			p["plugin"] = "obfs"
 			p["plugin-opts"] = value
 		}
 		applySSPluginWrappers(p, opts)
@@ -199,6 +201,10 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		if value, ok := opts["obfs-opts"]; ok {
 			p["obfs-opts"] = value
 		}
+		// Translate TLS-like listener wrappers (shadow-tls/res-tls/jls-config)
+		// into the snell `obfs-opts` format documented in proxies/snell.md.
+		// Skipped when an explicit `obfs-opts` block is already present.
+		applySnellObfsOpts(p, opts)
 		result = append(result, p)
 	case "vmess", "vless":
 		if len(credentials) == 0 {
@@ -223,7 +229,10 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			copyOption(p, opts, "authenticated-length")
 			// encryption (client) and decryption (server) are a generated pair from
 			// `mihomo generate vless-x25519` / `vless-mlkem768` — never copy decryption→encryption.
-			copyOption(p, opts, "encryption")
+			// VLESS has an `encryption` field (xtls-rprx-vision etc.); VMess does not.
+			if protocol == "vless" {
+				copyOption(p, opts, "encryption")
+			}
 			if flow := userFieldFromOpts(opts, cred.UUID, "flow"); flow != nil {
 				p["flow"] = flow
 			} else {
@@ -266,7 +275,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			for _, key := range []string{
 				"up", "down", "obfs", "obfs-password", "bbr-profile",
 				"realm-opts", "alpn", "sni", "servername", "skip-cert-verify", "name-cert-verify",
-				"fingerprint",
+				"fingerprint", "handshake-timeout", "max-idle-time",
 			} {
 				copyOption(p, opts, key)
 			}
@@ -287,7 +296,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		if token, ok := opts["token"]; ok {
 			p := makeProxy("")
 			p["token"] = token
-			for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size"} {
+			for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify"} {
 				copyOption(p, opts, key)
 			}
 			result = append(result, p)
@@ -299,7 +308,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p := makeProxy(fmt.Sprintf("%d", i+1))
 				p["uuid"] = cred.UUID
 				p["password"] = cred.Password
-				for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size"} {
+				for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify"} {
 					copyOption(p, opts, key)
 				}
 				result = append(result, p)
@@ -340,15 +349,13 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if p["alpn"] == nil {
 				p["alpn"] = []string{"h3"}
 			}
-			if p["quic-versions"] == nil {
-				p["quic-versions"] = []string{"v2"}
-			}
-			if p["congestion-controller"] == nil {
-				p["congestion-controller"] = "bbr"
-			}
-			if p["zero-rtt"] == nil {
-				p["zero-rtt"] = true
-			}
+			// quic-versions / congestion-controller / zero-rtt are NOT defaulted
+			// here: the official docs (proxies/shadowquic.md) specify defaults of
+			// v1 / cubic / false, which mihomo applies automatically when these
+			// fields are absent. Inventing conflicting defaults (v2/bbr/true)
+			// would override the listener's intent and break connectivity with
+			// servers that don't support them. They pass through via copyOption
+			// above only when present in the listener config.
 			result = append(result, p)
 		}
 	case "anytls":
@@ -543,6 +550,89 @@ func ssClientFingerprint(src map[string]interface{}) string {
 	return "chrome"
 }
 
+// applySnellObfsOpts translates a Snell listener's TLS-like wrapper blocks
+// (shadow-tls/res-tls/jls-config) into the snell `obfs-opts` format documented
+// in proxies/snell.md. Snell carries these wrappers as obfs-opts (with a
+// `mode` field) rather than the `plugin`/`plugin-opts` form used by SS.
+//
+// Only the first matching enabled wrapper is emitted (they are mutually
+// exclusive on a single Snell listener). When the listener config already
+// provides an explicit `obfs-opts` block it is left untouched.
+func applySnellObfsOpts(p map[string]interface{}, src map[string]interface{}) {
+	if _, ok := p["obfs-opts"]; ok {
+		return
+	}
+	if stls, ok := src["shadow-tls"].(map[string]interface{}); ok {
+		if enable, _ := stls["enable"].(bool); enable {
+			opts := map[string]interface{}{"mode": "shadow-tls"}
+			if v, ok := stls["version"]; ok {
+				opts["version"] = v
+			}
+			// Password: v2 uses the top-level password; v3 uses users[0].password.
+			if pwd, ok := stls["password"].(string); ok && pwd != "" {
+				opts["password"] = pwd
+			} else if users, ok := stls["users"].([]interface{}); ok && len(users) > 0 {
+				if u, ok := users[0].(map[string]interface{}); ok {
+					if pwd, ok := u["password"].(string); ok {
+						opts["password"] = pwd
+					}
+				}
+			}
+			if alpn, ok := stls["alpn"]; ok {
+				opts["alpn"] = alpn
+			}
+			// host from handshake.dest (strip :port).
+			if hs, ok := stls["handshake"].(map[string]interface{}); ok {
+				if dest, ok := hs["dest"].(string); ok {
+					opts["host"] = stripHostPort(dest)
+				}
+			}
+			p["obfs-opts"] = opts
+			return
+		}
+	}
+	if restls, ok := src["res-tls"].(map[string]interface{}); ok {
+		if enable, _ := restls["enable"].(bool); enable {
+			opts := map[string]interface{}{
+				"mode":         "restls",
+				"version-hint": "tls13",
+			}
+			if dest, ok := restls["dest"].(string); ok {
+				opts["host"] = stripHostPort(dest)
+			}
+			if pwd, ok := restls["password"].(string); ok {
+				opts["password"] = pwd
+			}
+			if script, ok := restls["restls-script"].(string); ok && script != "" {
+				opts["restls-script"] = script
+			}
+			p["obfs-opts"] = opts
+			return
+		}
+	}
+	if jls, ok := src["jls-config"].(map[string]interface{}); ok {
+		if enable, _ := jls["enable"].(bool); enable {
+			opts := map[string]interface{}{"mode": "jls"}
+			if dest, ok := jls["dest"].(string); ok {
+				opts["host"] = stripHostPort(dest)
+			}
+			// JLS users: use first user's username+password (single-user case).
+			if users, ok := jls["users"].([]interface{}); ok && len(users) > 0 {
+				if u, ok := users[0].(map[string]interface{}); ok {
+					if un, ok := u["username"].(string); ok {
+						opts["username"] = un
+					}
+					if pwd, ok := u["password"].(string); ok {
+						opts["password"] = pwd
+					}
+				}
+			}
+			p["obfs-opts"] = opts
+			return
+		}
+	}
+}
+
 // stripHostPort removes the :port suffix from a host:port string, returning
 // the bare hostname. If the input has no port, it is returned unchanged.
 func stripHostPort(addr string) string {
@@ -696,8 +786,6 @@ func realityClientOptions(src map[string]interface{}) map[string]interface{} {
 	}
 	if v, ok := cfg["support-x25519mlkem768"]; ok {
 		result["support-x25519mlkem768"] = v
-	} else {
-		result["support-x25519mlkem768"] = true
 	}
 	return result
 }
