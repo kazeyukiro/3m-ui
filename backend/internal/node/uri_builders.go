@@ -67,7 +67,7 @@ func shadowsocksURIs(name, host, port string, cfg map[string]interface{}) ([]str
 	if cipher == "" || password == "" {
 		return nil, fmt.Errorf("shadowsocks listener requires cipher and password for URI export")
 	}
-	encoded := base64.RawStdEncoding.EncodeToString([]byte(cipher + ":" + password))
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(cipher + ":" + password))
 	return []string{addName("ss://"+encoded+"@"+netutil.JoinHostPort(host, port), name)}, nil
 }
 
@@ -172,7 +172,7 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, "vmess://"+base64.RawStdEncoding.EncodeToString(data))
+		result = append(result, "vmess://"+base64.StdEncoding.EncodeToString(data))
 	}
 	return result, nil
 }
@@ -287,8 +287,19 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 }
 
 func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
-	if token, ok := cfg["token"].(string); ok && strings.TrimSpace(token) != "" {
-		return []string{addName("tuic://"+url.PathEscape(token)+"@"+netutil.JoinHostPort(host, port), name)}, nil
+	// token is an array of strings per tuic-v4 (Mihomo listener config).
+	if tokens, ok := cfg["token"].([]interface{}); ok && len(tokens) > 0 {
+		result := make([]string, 0, len(tokens))
+		for _, t := range tokens {
+			ts, ok := t.(string)
+			if !ok || strings.TrimSpace(ts) == "" {
+				continue
+			}
+			result = append(result, addName("tuic://"+url.PathEscape(ts)+"@"+netutil.JoinHostPort(host, port), name))
+		}
+		if len(result) > 0 {
+			return result, nil
+		}
 	}
 	// Support both map users and array rows {uuid,password} from panel credentials.
 	if rows := userRows(cfg); len(rows) > 0 {
