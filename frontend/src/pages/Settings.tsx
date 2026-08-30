@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Button, Space, Typography, Tag, message, Upload, Form, Input, Switch, Select, InputNumber } from 'antd';
+import { Card, Button, Space, Typography, Tag, message, Modal, Upload, Form, Input, Switch, Select, InputNumber } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { copyText } from '../utils/clipboard';
@@ -89,8 +89,29 @@ const Settings: React.FC = () => {
               listen: values.listen || '',
               public_url: values.public_url || '',
             });
-            message.success(res.data?.message || t('common.saved') || 'Saved — restart service to apply port');
+            const prevPort = panelServer.port;
+            const newPort = res.data?.port ?? Number(values.port);
+            const portChanged = prevPort && prevPort !== newPort;
             setPanelServer((s) => ({ ...s, ...res.data }));
+            if (portChanged) {
+              Modal.warning({
+                title: '端口已更改 — 需要重启面板',
+                content: (
+                  <div>
+                    <p>面板端口已从 <code>{prevPort}</code> 改为 <code>{newPort}</code>。</p>
+                    <p>当前会话仍通过旧端口访问，重启后才能生效。</p>
+                    <p><strong>请在服务器上执行：</strong></p>
+                    <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4 }}>
+{`systemctl restart 3m-ui`}
+                    </pre>
+                    <p>重启后，访问 <code>http://你的IP:{newPort}</code></p>
+                  </div>
+                ),
+                okText: '我知道了',
+              });
+            } else {
+              message.success(res.data?.message || t('common.saved') || '已保存 — 端口未变更');
+            }
           } catch (e: any) {
             message.error(e?.response?.data?.error || e.message);
           }
