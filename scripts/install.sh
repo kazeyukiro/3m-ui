@@ -281,7 +281,6 @@ verify_mihomo_sha256(){
 
 write_config(){
   mkdir -p "$CONFIG_DIR" "$DATA_DIR/mihomo" "$LOG_DIR"
-  [ -f "$CONFIG_DIR/config.yaml" ] && { chmod 0600 "$CONFIG_DIR/config.yaml"; return; }
   # NAT-friendly: PANEL_PORT / THREE_M_UI_PORT (default 8080), optional PANEL_LISTEN / PUBLIC_URL
   panel_port="${PANEL_PORT:-${THREE_M_UI_PORT:-8080}}"
   case "$panel_port" in
@@ -290,6 +289,27 @@ write_config(){
   if [ "$panel_port" -lt 1 ] || [ "$panel_port" -gt 65535 ]; then panel_port=8080; fi
   panel_listen="${PANEL_LISTEN:-${THREE_M_UI_LISTEN:-}}"
   public_url="${PUBLIC_URL:-${THREE_M_UI_PUBLIC_URL:-}}"
+
+  if [ -f "$CONFIG_DIR/config.yaml" ]; then
+    # Config already exists — only update port/listen/public_url if the user
+    # explicitly set the env vars. This preserves existing customizations
+    # (admin password already changed, etc.) while still allowing re-install
+    # with a different port via PANEL_PORT=9000 bash install.sh.
+    chmod 0600 "$CONFIG_DIR/config.yaml"
+    if [ -n "${PANEL_PORT:-${THREE_M_UI_PORT:-}}" ]; then
+      say "Updating panel port to ${panel_port} in existing config..."
+      sed -i "s/^  port: .*/  port: ${panel_port}/" "$CONFIG_DIR/config.yaml"
+    fi
+    if [ -n "${PANEL_LISTEN:-${THREE_M_UI_LISTEN:-}}" ]; then
+      sed -i "s/^  listen: .*/  listen: \"${panel_listen}\"/" "$CONFIG_DIR/config.yaml"
+    fi
+    if [ -n "${PUBLIC_URL:-${THREE_M_UI_PUBLIC_URL:-}}" ]; then
+      sed -i "s|^  public_url: .*|  public_url: \"${public_url}\"|" "$CONFIG_DIR/config.yaml"
+    fi
+    return
+  fi
+
+  # First-time install — write full config with random JWT/credential keys.
   cat > "$CONFIG_DIR/config.yaml" <<EOF
 server:
   port: ${panel_port}
