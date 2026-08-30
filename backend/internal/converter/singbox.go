@@ -103,6 +103,9 @@ func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, str
 		if flow, ok := p["flow"].(string); ok && flow != "" {
 			ob["flow"] = flow
 		}
+		if enc, ok := p["encryption"].(string); ok && enc != "" {
+			ob["encryption"] = enc
+		}
 	case "trojan":
 		ob["password"] = p["password"]
 	case "hysteria2":
@@ -114,8 +117,38 @@ func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, str
 			ob["down_mbps"] = parseMbps(down)
 		}
 	case "tuic":
-		ob["uuid"] = p["uuid"]
-		ob["password"] = p["password"]
+		// TUIC v4 authenticates with a token (string or []string in mihomo);
+		// v5 uses uuid + password. sing-box's TUIC outbound accepts `token`
+		// ([]string) for v4 and `uuid`/`password` for v5. Without this, v4
+		// mihomo proxies produce credential-less sing-box outbounds.
+		if rawToken, ok := p["token"]; ok && rawToken != nil {
+			var tokens []string
+			switch t := rawToken.(type) {
+			case []interface{}:
+				tokens = make([]string, 0, len(t))
+				for _, v := range t {
+					if s, ok := v.(string); ok && s != "" {
+						tokens = append(tokens, s)
+					}
+				}
+			case []string:
+				tokens = t
+			case string:
+				if strings.TrimSpace(t) != "" {
+					tokens = []string{t}
+				}
+			}
+			if len(tokens) > 0 {
+				ob["token"] = tokens
+			}
+		} else {
+			if uuid, ok := p["uuid"].(string); ok && uuid != "" {
+				ob["uuid"] = uuid
+			}
+			if pass, ok := p["password"].(string); ok && pass != "" {
+				ob["password"] = pass
+			}
+		}
 	default:
 		// Keep generic fields best-effort.
 		if pw, ok := p["password"]; ok {

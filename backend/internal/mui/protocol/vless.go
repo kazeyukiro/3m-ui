@@ -131,7 +131,6 @@ func (VLESSModule) BuildShare(
 		query.Set("host", node.VLESS.Handler.XHTTP.Host)
 		query.Set("mode", node.VLESS.Handler.XHTTP.Mode)
 	}
-	query.Set("security", string(node.VLESS.Security.Type))
 	switch node.VLESS.Security.Type {
 	case domain.VLESSSecurityReality:
 		query.Set("security", "reality")
@@ -156,7 +155,11 @@ func (VLESSModule) BuildShare(
 				query.Set("fp", "chrome")
 			}
 		}
-	case domain.VLESSSecurityTLS:
+	case domain.VLESSSecurityTLS, domain.VLESSSecurityShadowTLS, domain.VLESSSecurityResTLS, domain.VLESSSecurityJLS:
+		// The VLESS URI scheme only standardizes tls/reality/none.
+		// Wrappers (shadow-tls/res-tls/jls) ride on top of TLS, so the URI
+		// still advertises security=tls; the wrapper detail lives in the
+		// client YAML only.
 		query.Set("security", "tls")
 		if profile.AllowInsecure || (node.VLESS.Security.TLS != nil && node.VLESS.Security.TLS.AllowInsecure) {
 			query.Set("allowInsecure", "1")
@@ -412,6 +415,7 @@ type vlessClientProxy struct {
 	ServerName        string              `yaml:"servername,omitempty"`
 	ClientFingerprint string              `yaml:"client-fingerprint,omitempty"`
 	SkipCertVerify    bool                `yaml:"skip-cert-verify,omitempty"`
+	ALPN              []string            `yaml:"alpn,omitempty"`
 	Reality           *vlessClientReality `yaml:"reality-opts,omitempty"`
 	ShadowTLS         *vlessClientSecret  `yaml:"shadow-tls-opts,omitempty"`
 	ResTLS            *vlessClientResTLS  `yaml:"restls-opts,omitempty"`
@@ -461,6 +465,7 @@ func compileVLESSClient(node domain.Node, user domain.NodeUser, profile domain.A
 		PacketEncoding: profile.PacketEncoding, ServerName: sni,
 		ClientFingerprint: fp, SkipCertVerify: profile.AllowInsecure,
 		Encryption: normalizedDecryption(node.VLESS.Decryption),
+		ALPN:       append([]string(nil), node.VLESS.ALPN...),
 	}
 	switch node.VLESS.Handler.Type {
 	case domain.VLESSHandlerRaw:

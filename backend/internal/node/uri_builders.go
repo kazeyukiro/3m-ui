@@ -245,6 +245,15 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := cfg["obfs-password"].(string); ok && v != "" {
 				params["obfs-password"] = v
 			}
+			// up/down are bandwidth hints; include them when set so the panel
+			// credential-row branch stays consistent with the config-embedded map
+			// users branch below (P3-6).
+			if v, ok := cfg["up"].(string); ok && v != "" {
+				params["up"] = v
+			}
+			if v, ok := cfg["down"].(string); ok && v != "" {
+				params["down"] = v
+			}
 			result = append(result, addName(query("hysteria2://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 		}
 		if len(result) > 0 {

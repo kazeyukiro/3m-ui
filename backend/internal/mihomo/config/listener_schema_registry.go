@@ -58,6 +58,15 @@ func joinPath(p []string) string {
 // Mihomo listener schemas mirror the official listener examples. These are
 // the fields exposed at the node configuration boundary; protocol-local
 // capture endpoints such as socks/http/tun/tproxy are intentionally excluded.
+//
+// Design note (P3-5): the "users" field is intentionally present only at the
+// top level (Fields), never in NestedFields. Per-protocol the "users" shape
+// differs: vmess/vless/trojan/anytls use an array of objects
+// [{username,uuid,...}], whereas hysteria2/tuic-v5/mieru use a map of strings
+// {username: password}. The validator's array recursion (see C2 fix in
+// listener_validation.go) already accepts both shapes without recursing into
+// per-user keys. Adding users.<key> to NestedFields would break map-form
+// validation, so per-user field allowlisting is deferred as a follow-up.
 var MihomoListenerSchemas = map[string]ListenerSchema{
 	"shadowsocks": {
 		Protocol: "shadowsocks",
@@ -70,7 +79,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 			"res-tls.enable", "res-tls.dest", "res-tls.password", "res-tls.restls-script", "res-tls.min-record-len", "res-tls.proxy", "res-tls.rate-limit",
 			"jls-config.enable", "jls-config.users", "jls-config.dest", "jls-config.sni", "jls-config.alpn", "jls-config.proxy", "jls-config.rate-limit",
 			"kcp-tun.enable", "kcp-tun.key", "kcp-tun.crypt", "kcp-tun.mode", "kcp-tun.conn", "kcp-tun.autoexpire", "kcp-tun.scavengettl", "kcp-tun.ratelimit", "kcp-tun.mtu", "kcp-tun.sndwnd", "kcp-tun.rcvwnd", "kcp-tun.datashard", "kcp-tun.parityshard", "kcp-tun.dscp", "kcp-tun.nocomp", "kcp-tun.acknodelay", "kcp-tun.nodelay", "kcp-tun.interval", "kcp-tun.resend", "kcp-tun.sockbuf", "kcp-tun.smuxver", "kcp-tun.smuxbuf", "kcp-tun.framesize", "kcp-tun.streambuf", "kcp-tun.keepalive",
-			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 		),
 	},
 	"snell": {
@@ -85,42 +94,42 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	},
 	"vmess": {
 		Protocol: "vmess",
-		Fields:   listenerFields("users", "alterId", "ws-path", "grpc-service-name", "mekya-config", "mkcp-config", "shadow-tls", "res-tls", "jls-config", "reality-config", "tlsmirror-config", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "mux-option"),
+		Fields:   listenerFields("users", "alterId", "ws-path", "ws-headers", "grpc-service-name", "mekya-config", "mkcp-config", "shadow-tls", "res-tls", "jls-config", "reality-config", "tlsmirror-config", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "mux-option"),
 		NestedFields: listenerNested(
 			"mekya-config.enable", "mekya-config.max-write-size", "mekya-config.max-write-duration-ms", "mekya-config.max-simultaneous-write-connection", "mekya-config.packet-writing-buffer",
 			"mekya-config.kcp.mtu", "mekya-config.kcp.tti", "mekya-config.kcp.uplink-capacity", "mekya-config.kcp.downlink-capacity", "mekya-config.kcp.congestion", "mekya-config.kcp.write-buffer", "mekya-config.kcp.read-buffer", "mekya-config.kcp.seed", "mekya-config.kcp.header",
 			"mkcp-config.enable", "mkcp-config.mtu", "mkcp-config.tti", "mkcp-config.uplink-capacity", "mkcp-config.downlink-capacity", "mkcp-config.congestion", "mkcp-config.write-buffer", "mkcp-config.read-buffer", "mkcp-config.seed", "mkcp-config.header",
-			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 			"shadow-tls.enable", "shadow-tls.version", "shadow-tls.password", "shadow-tls.users", "shadow-tls.handshake.dest", "shadow-tls.handshake.proxy",
 			"res-tls.enable", "res-tls.dest", "res-tls.password", "res-tls.restls-script", "res-tls.min-record-len", "res-tls.proxy", "res-tls.rate-limit",
 			"jls-config.enable", "jls-config.users", "jls-config.dest", "jls-config.sni", "jls-config.alpn", "jls-config.proxy", "jls-config.rate-limit",
 			"reality-config.dest", "reality-config.private-key", "reality-config.short-id", "reality-config.server-names", "reality-config.max-time-difference", "reality-config.proxy", "reality-config.limit-fallback-upload.after-bytes", "reality-config.limit-fallback-upload.bytes-per-sec", "reality-config.limit-fallback-upload.burst-bytes-per-sec", "reality-config.limit-fallback-download.after-bytes", "reality-config.limit-fallback-download.bytes-per-sec", "reality-config.limit-fallback-download.burst-bytes-per-sec",
 			"tlsmirror-config.dest", "tlsmirror-config.primary-key", "tlsmirror-config.proxy", "tlsmirror-config.explicit-nonce-ciphersuites", "tlsmirror-config.defer-instance-derived-write-time.base-nanoseconds", "tlsmirror-config.defer-instance-derived-write-time.uniform-random-multiplier-nanoseconds", "tlsmirror-config.transport-layer-padding.enabled", "tlsmirror-config.connection-enrolment.primary-ingress-outbound", "tlsmirror-config.sequence-watermarking-enabled",
-			"tlsmirror-config.embedded-traffic-generator.steps.host", "tlsmirror-config.embedded-traffic-generator.steps.path", "tlsmirror-config.embedded-traffic-generator.steps.method", "tlsmirror-config.embedded-traffic-generator.steps.connection-ready", "tlsmirror-config.embedded-traffic-generator.steps.connection-recall-exit", "tlsmirror-config.embedded-traffic-generator.steps.h2-do-not-wait-for-download-finish", "tlsmirror-config.embedded-traffic-generator.steps.wait-time.base-nanoseconds", "tlsmirror-config.embedded-traffic-generator.steps.next-step.weight", "tlsmirror-config.embedded-traffic-generator.steps.next-step.goto-location",
+			"tlsmirror-config.embedded-traffic-generator.steps.name", "tlsmirror-config.embedded-traffic-generator.steps.host", "tlsmirror-config.embedded-traffic-generator.steps.path", "tlsmirror-config.embedded-traffic-generator.steps.method", "tlsmirror-config.embedded-traffic-generator.steps.headers", "tlsmirror-config.embedded-traffic-generator.steps.connection-ready", "tlsmirror-config.embedded-traffic-generator.steps.connection-recall-exit", "tlsmirror-config.embedded-traffic-generator.steps.h2-do-not-wait-for-download-finish", "tlsmirror-config.embedded-traffic-generator.steps.wait-time.base-nanoseconds", "tlsmirror-config.embedded-traffic-generator.steps.wait-time.uniform-random-multiplier-nanoseconds", "tlsmirror-config.embedded-traffic-generator.steps.next-step.weight", "tlsmirror-config.embedded-traffic-generator.steps.next-step.goto-location",
 		),
 	},
 	"vless": {
 		Protocol: "vless",
-		Fields:   listenerFields("users", "flow", "ws-path", "grpc-service-name", "xhttp-config", "decryption", "encryption", "reality-config", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "jls-config", "shadow-tls", "res-tls", "mux-option"),
+		Fields:   listenerFields("users", "flow", "ws-path", "ws-headers", "grpc-service-name", "xhttp-config", "decryption", "encryption", "reality-config", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "jls-config", "shadow-tls", "res-tls", "mux-option"),
 		NestedFields: listenerNested(
 			"xhttp-config.path", "xhttp-config.host", "xhttp-config.mode", "xhttp-config.no-sse-header", "xhttp-config.x-padding-bytes", "xhttp-config.x-padding-obfs-mode", "xhttp-config.x-padding-key", "xhttp-config.x-padding-header", "xhttp-config.x-padding-placement", "xhttp-config.x-padding-method", "xhttp-config.uplink-http-method", "xhttp-config.session-placement", "xhttp-config.session-key", "xhttp-config.session-table", "xhttp-config.session-length", "xhttp-config.seq-placement", "xhttp-config.seq-key", "xhttp-config.uplink-data-placement", "xhttp-config.uplink-data-key", "xhttp-config.uplink-chunk-size", "xhttp-config.sc-max-buffered-posts", "xhttp-config.sc-stream-up-server-secs", "xhttp-config.sc-max-each-post-bytes",
 			"reality-config.dest", "reality-config.private-key", "reality-config.short-id", "reality-config.server-names", "reality-config.max-time-difference", "reality-config.proxy", "reality-config.limit-fallback-upload.after-bytes", "reality-config.limit-fallback-upload.bytes-per-sec", "reality-config.limit-fallback-upload.burst-bytes-per-sec", "reality-config.limit-fallback-download.after-bytes", "reality-config.limit-fallback-download.bytes-per-sec", "reality-config.limit-fallback-download.burst-bytes-per-sec",
 			"jls-config.enable", "jls-config.users", "jls-config.dest", "jls-config.sni", "jls-config.alpn", "jls-config.proxy", "jls-config.rate-limit",
 			"shadow-tls.enable", "shadow-tls.version", "shadow-tls.password", "shadow-tls.users", "shadow-tls.handshake.dest", "shadow-tls.handshake.proxy",
 			"res-tls.enable", "res-tls.dest", "res-tls.password", "res-tls.restls-script", "res-tls.min-record-len", "res-tls.proxy", "res-tls.rate-limit",
-			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 		),
 	},
 	"trojan": {
 		Protocol: "trojan",
-		Fields:   listenerFields("users", "ws-path", "grpc-service-name", "reality-config", "ss-option", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "shadow-tls", "res-tls", "jls-config", "mux-option"),
+		Fields:   listenerFields("users", "ws-path", "ws-headers", "grpc-service-name", "reality-config", "ss-option", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "shadow-tls", "res-tls", "jls-config", "mux-option"),
 		NestedFields: listenerNested(
 			"reality-config.dest", "reality-config.private-key", "reality-config.short-id", "reality-config.server-names", "reality-config.max-time-difference", "reality-config.proxy", "reality-config.limit-fallback-upload.after-bytes", "reality-config.limit-fallback-upload.bytes-per-sec", "reality-config.limit-fallback-upload.burst-bytes-per-sec", "reality-config.limit-fallback-download.after-bytes", "reality-config.limit-fallback-download.bytes-per-sec", "reality-config.limit-fallback-download.burst-bytes-per-sec",
 			"ss-option.enabled", "ss-option.method", "ss-option.password",
 			"shadow-tls.enable", "shadow-tls.version", "shadow-tls.password", "shadow-tls.users", "shadow-tls.handshake.dest", "shadow-tls.handshake.proxy",
 			"res-tls.enable", "res-tls.dest", "res-tls.password", "res-tls.restls-script", "res-tls.min-record-len", "res-tls.proxy", "res-tls.rate-limit",
 			"jls-config.enable", "jls-config.users", "jls-config.dest", "jls-config.sni", "jls-config.alpn", "jls-config.proxy", "jls-config.rate-limit",
-			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 		),
 	},
 	"hysteria2": {
@@ -130,7 +139,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 		),
 		NestedFields: listenerNested(
 			"realm-opts.enable", "realm-opts.server-url", "realm-opts.token", "realm-opts.realm-id", "realm-opts.stun-servers", "realm-opts.proxy", "realm-opts.sni", "realm-opts.skip-cert-verify", "realm-opts.fingerprint", "realm-opts.certificate", "realm-opts.private-key", "realm-opts.alpn", "realm-opts.name-cert-verify",
-			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 		),
 	},
 	"tuic": {
@@ -139,7 +148,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 			"users", "token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "mux-option",
 		),
 		NestedFields: listenerNested(
-			"mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
+			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 		),
 	},
 	"shadowquic": {
@@ -163,7 +172,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	"sudoku": {
 		Protocol:     "sudoku",
 		Fields:       listenerFields("key", "aead-method", "padding-min", "padding-max", "table-type", "custom-table", "custom-tables", "handshake-timeout", "enable-pure-downlink", "httpmask", "fallback", "disable-http-mask", "mux-option"),
-		NestedFields: listenerNested("httpmask.disable", "httpmask.mode", "httpmask.path-root", "httpmask.path_root", "httpmask.tls", "httpmask.host", "httpmask.multiplex", "mux-option.enable", "mux-option.protocol", "mux-option.max-connections", "mux-option.min-streams", "mux-option.max-streams", "mux-option.padding", "mux-option.statistic", "mux-option.only-tcp", "mux-option.brutal-opts", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down"),
+		NestedFields: listenerNested("httpmask.disable", "httpmask.mode", "httpmask.path-root", "httpmask.path_root", "httpmask.tls", "httpmask.host", "httpmask.multiplex", "mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down"),
 	},
 	"trusttunnel": {
 		Protocol: "trusttunnel",
