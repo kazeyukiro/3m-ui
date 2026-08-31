@@ -13,6 +13,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"golang.org/x/crypto/curve25519"
@@ -668,6 +669,10 @@ func copyClientTLS(dst, src map[string]interface{}) {
 	}
 	for _, key := range []string{"sni", "servername", "alpn", "fingerprint", "client-fingerprint", "skip-cert-verify", "name-cert-verify"} {
 		copyOption(dst, src, key)
+	}
+	// Panel self-signed certificates → clients must skip verify.
+	if certutil.ShouldSkipCertVerify(src) {
+		dst["skip-cert-verify"] = true
 	}
 	if dst["sni"] == nil && dst["servername"] == nil {
 		if reality, ok := src["reality-config"].(map[string]interface{}); ok {
