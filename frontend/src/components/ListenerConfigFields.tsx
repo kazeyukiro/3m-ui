@@ -34,6 +34,7 @@ const WRAPPER_TLS_PROTOCOLS = new Set([
 const MUX_PROTOCOLS = new Set(['shadowsocks', 'vmess', 'vless', 'trojan']);
 const SIMPLE_OBFS_PROTOCOLS = new Set(['shadowsocks']);
 const KCP_TUN_PROTOCOLS = new Set(['shadowsocks']);
+// XHTTP is VLESS-only (MetaCubeX listener schema). Do NOT add vmess/trojan here.
 const XHTTP_PROTOCOLS = new Set(['vless']);
 const MKCP_PROTOCOLS = new Set(['vmess']);
 const MEKYA_PROTOCOLS = new Set(['vmess']);
@@ -693,6 +694,42 @@ export function formValuesToConfig(
   return cfg;
 }
 
+
+/** Per-protocol required / optional / auto-generate field guide. */
+const ProtocolFieldGuide: React.FC<{ protocol: string }> = ({ protocol }) => {
+  const { t } = useI18n();
+  const key = protocol.toLowerCase();
+  const required = t(`listeners.guide.${key}.required`);
+  const optional = t(`listeners.guide.${key}.optional`);
+  const auto = t(`listeners.guide.${key}.auto`);
+  // If i18n missing, t() may return the key path — skip empty-looking guides.
+  const missing = (s: string) => !s || s.startsWith('listeners.guide.');
+  if (missing(required) && missing(optional) && missing(auto)) {
+    return (
+      <Alert
+        type="info"
+        showIcon
+        message={t('listeners.fieldGuideTitle') || 'Field guide'}
+        description={t('listeners.fieldGuideFallback') || 'Required / optional / auto-generate hints follow each field. Users are bound under 用户管理.'}
+      />
+    );
+  }
+  return (
+    <Alert
+      type="info"
+      showIcon
+      message={t('listeners.fieldGuideTitle') || 'Field guide (this protocol)'}
+      description={
+        <div style={{ lineHeight: 1.7 }}>
+          <div><strong>{t('listeners.fieldRequired') || 'Required'}</strong>: {missing(required) ? '—' : required}</div>
+          <div><strong>{t('listeners.fieldOptional') || 'Optional'}</strong>: {missing(optional) ? '—' : optional}</div>
+          <div><strong>{t('listeners.fieldAuto') || 'Auto-generate if empty'}</strong>: {missing(auto) ? '—' : auto}</div>
+        </div>
+      }
+    />
+  );
+};
+
 /** Collapsible-style section with enable switch driving nested fields. */
 const EnableSection: React.FC<{
   name: string;
@@ -749,11 +786,21 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Alert type="info" showIcon message={t('listeners.usersHint')} />
       <Alert type="success" showIcon message={t('listeners.autoGenerateHint') || 'Auto on save if empty: REALITY private-key + short-id + dest/server-names; SS password (by cipher); Snell PSK; password-protocol users; Hy2 self-signed cert. Public-key is client-only (derived for share URI). Click Generate to fill now.'} />
+      <ProtocolFieldGuide protocol={protocol} />
 
       {TRANSPORT_PROTOCOLS.has(protocol) && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionTransport')}</Divider>
-          <Form.Item name="transport_layer" label={t('listeners.transportLayer') || 'Transport'} initialValue="raw">
+          <Form.Item
+            name="transport_layer"
+            label={t('listeners.transportLayer') || 'Transport'}
+            initialValue="raw"
+            extra={
+              XHTTP_PROTOCOLS.has(protocol)
+                ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS only.')
+                : (TRANSPORT_PROTOCOLS.has(protocol) ? (t('listeners.transportNoXhttpHint') || 'XHTTP is not available for this protocol (VLESS only).') : undefined)
+            }
+          >
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="raw">TCP</Radio.Button>
               <Radio.Button value="ws">WebSocket</Radio.Button>
