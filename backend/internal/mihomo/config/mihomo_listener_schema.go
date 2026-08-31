@@ -12,6 +12,8 @@ var MihomoListenerProtocols = []string{
 	"trojan",
 	"hysteria2",
 	"tuic",
+	"tuic-v4",
+	"tuic-v5",
 	"shadowquic",
 	"anytls",
 	"mieru",

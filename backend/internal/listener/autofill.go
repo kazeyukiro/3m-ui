@@ -48,7 +48,7 @@ func AutofillListenerDefaults(l *models.Listener) error {
 	case "trojan", "shadowquic", "trusttunnel":
 		// array form users [{username, password}]
 		autofillUsersArray(cfg)
-	case "tuic":
+	case "tuic", "tuic-v4", "tuic-v5":
 		// TUIC v4 uses token (array of strings); v5 uses users [{username, password}].
 		autofillTUICUsers(cfg)
 	case "shadowsocks":
@@ -500,7 +500,6 @@ func ssPasswordForCipher(method string) string {
 	_, _ = rand.Read(b)
 	return base64.StdEncoding.EncodeToString(b)
 }
-
 
 // ensureServerTLSCertificate fills certificate/private-key with a self-signed
 // pair when the protocol requires server TLS material and neither field is set.
