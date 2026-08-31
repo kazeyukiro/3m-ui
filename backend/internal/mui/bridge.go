@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mui/domain"
 	muiprotocol "github.com/kazeyukiro/3m-ui/backend/internal/mui/protocol"
@@ -61,7 +62,7 @@ func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
 		PublicPort:    pubPort,
 		ServerName:    strings.TrimSpace(l.AccessSNI),
 		Fingerprint:   strings.TrimSpace(l.ClientFingerprint),
-		AllowInsecure: boolCfg(cfg, "skip-cert-verify"),
+		AllowInsecure: boolCfg(cfg, "skip-cert-verify") || certutil.IsPanelSelfSignedPEM(strCfg(cfg, "certificate")),
 	}
 	if profile.ServerName == "" {
 		profile.ServerName = strCfg(cfg, "sni", "servername")
@@ -488,7 +489,7 @@ func decodeSecurity(cfg map[string]interface{}, tlsFlag bool) domain.VLESSSecuri
 			TLS: &domain.TLSConfig{
 				Certificate:   strCfg(cfg, "certificate"),
 				PrivateKey:    strCfg(cfg, "private-key"),
-				AllowInsecure: boolCfg(cfg, "skip-cert-verify"),
+				AllowInsecure: boolCfg(cfg, "skip-cert-verify") || certutil.IsPanelSelfSignedPEM(strCfg(cfg, "certificate")),
 			},
 		}
 	}

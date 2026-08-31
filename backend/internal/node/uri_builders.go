@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"golang.org/x/crypto/curve25519"
 )
@@ -31,7 +32,7 @@ func tlsParams(cfg map[string]interface{}) map[string]string {
 	if v, ok := cfg["fingerprint"].(string); ok && v != "" {
 		params["fp"] = v
 	}
-	if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+	if certutil.ShouldSkipCertVerify(cfg) {
 		params["allowInsecure"] = "1"
 	}
 	return params
@@ -236,7 +237,7 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := cfg["sni"].(string); ok && v != "" {
 				params["sni"] = v
 			}
-			if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+			if certutil.ShouldSkipCertVerify(cfg) {
 				params["insecure"] = "1"
 			}
 			if v, ok := cfg["obfs"].(string); ok && v != "" {
@@ -274,7 +275,7 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		if v, ok := cfg["sni"].(string); ok && v != "" {
 			params["sni"] = v
 		}
-		if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+		if certutil.ShouldSkipCertVerify(cfg) {
 			params["insecure"] = "1"
 		}
 		if v, ok := cfg["obfs"].(string); ok && v != "" {
@@ -334,7 +335,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 			if v, ok := cfg["sni"].(string); ok && v != "" {
 				params["sni"] = v
 			}
-			if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+			if certutil.ShouldSkipCertVerify(cfg) {
 				params["allow_insecure"] = "1"
 			}
 			result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
@@ -365,7 +366,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 		if v, ok := cfg["sni"].(string); ok && v != "" {
 			params["sni"] = v
 		}
-		if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+		if certutil.ShouldSkipCertVerify(cfg) {
 			params["allow_insecure"] = "1"
 		}
 		result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
@@ -391,7 +392,7 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		if v, ok := cfg["client-fingerprint"].(string); ok && v != "" {
 			params["fp"] = v
 		}
-		if b, ok := cfg["skip-cert-verify"].(bool); ok && b {
+		if certutil.ShouldSkipCertVerify(cfg) {
 			params["insecure"] = "1"
 		}
 		if v, ok := cfg["idle-session-check-interval"].(string); ok && v != "" {
