@@ -299,8 +299,9 @@ func autofillTUICUsers(cfg map[string]interface{}) {
 		cfg["users"] = out
 		return
 	}
-	// No users map exists - create default v5 map form.
-	cfg["users"] = map[string]interface{}{"default": randomPassword(16)}
+	// No users map exists - create default v5 map form with a real UUID key
+	// (TUIC clients reject non-UUID uuid fields).
+	cfg["users"] = map[string]interface{}{uuid.New().String(): randomPassword(16)}
 }
 
 func normalizeUsersSlice(v interface{}) []map[string]interface{} {
