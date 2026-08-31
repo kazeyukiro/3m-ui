@@ -499,7 +499,9 @@ func ensureServerTLSCertificate(cfg map[string]interface{}, proto string) error 
 		return nil
 	}
 	if strings.TrimSpace(cert) != "" || strings.TrimSpace(key) != "" {
-		return nil
+		delete(cfg, "certificate")
+		delete(cfg, "private-key")
+		delete(cfg, "private_key")
 	}
 	if !protocolNeedsServerCertificate(proto, cfg) {
 		return nil
