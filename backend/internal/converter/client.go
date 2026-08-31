@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"golang.org/x/crypto/curve25519"
@@ -260,6 +260,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			for _, key := range []string{"sni", "alpn", "fingerprint", "client-fingerprint", "skip-cert-verify", "name-cert-verify"} {
 				copyOption(p, opts, key)
 			}
+			// SNI fallback: listener config strips "sni" (panel-only hint).
+			// If no SNI was set, use the server host as SNI so the client
+			// knows which hostname to verify in the TLS certificate.
+			if p["sni"] == nil && p["servername"] == nil {
+				p["sni"] = server
+			}
 			applyClientWrappers(p, opts)
 			if value, ok := opts["ss-option"]; ok {
 				p["ss-opts"] = value
@@ -279,6 +285,10 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				"fingerprint", "handshake-timeout", "max-idle-time",
 			} {
 				copyOption(p, opts, key)
+			}
+			// SNI fallback: use server host when not set.
+			if p["sni"] == nil && p["servername"] == nil {
+				p["sni"] = server
 			}
 			if p["alpn"] == nil {
 				p["alpn"] = []string{"h3"}
@@ -666,7 +676,6 @@ func decodeOptions(raw string) (map[string]interface{}, error) {
 	}
 	return options, nil
 }
-
 
 // ensureTUICClientDefaults fills alpn/congestion and skip-cert-verify for
 // panel self-signed certificates. TUIC is QUIC/UDP and typically uses ALPN h3.
