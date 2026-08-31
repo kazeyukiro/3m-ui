@@ -76,7 +76,7 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	if err := RestoreDatabase(h.dbPath, f); err != nil {
+	if err := RestoreDatabase(h.dbPath, h.mihomoCfg, f); err != nil {
 		log.Printf("system restore-database failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return

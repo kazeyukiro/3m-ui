@@ -75,7 +75,7 @@ func WriteZip(w io.Writer, paths BackupPaths) error {
 //   - A zip archive exported by ExportBackup (containing 3m-ui.db + mihomo-config.yaml)
 //
 // Callers should stop the panel or accept that a process restart may be required.
-func RestoreDatabase(dbPath string, r io.Reader) error {
+func RestoreDatabase(dbPath, mihomoCfgPath string, r io.Reader) error {
 	if dbPath == "" {
 		return fmt.Errorf("database path is empty")
 	}
@@ -92,10 +92,10 @@ func RestoreDatabase(dbPath string, r io.Reader) error {
 	}
 
 	// Check if it's a zip file (PK magic).
-	var dbContent []byte
+	var dbContent, mihomoCfg []byte
 	if len(raw) >= 4 && raw[0] == 0x50 && raw[1] == 0x4B && raw[2] == 0x03 && raw[3] == 0x04 {
 		// Zip archive — extract 3m-ui.db from it.
-		dbContent, err = extractDBFromZip(raw)
+		dbContent, mihomoCfg, err = extractDBFromZip(raw)
 		if err != nil {
 			return fmt.Errorf("extract from zip: %w", err)
 		}
@@ -116,32 +116,56 @@ func RestoreDatabase(dbPath string, r io.Reader) error {
 	if err := os.WriteFile(tmp, dbContent, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, dbPath)
+	if err := os.Rename(tmp, dbPath); err != nil {
+		return err
+	}
+
+	// Restore mihomo-config.yaml if the zip contained it and the path is set.
+	if len(mihomoCfg) > 0 && mihomoCfgPath != "" {
+		cfgDir := filepath.Dir(mihomoCfgPath)
+		_ = os.MkdirAll(cfgDir, 0o750)
+		cfgTmp := mihomoCfgPath + ".restore-tmp"
+		defer os.Remove(cfgTmp)
+		if err := os.WriteFile(cfgTmp, mihomoCfg, 0o600); err == nil {
+			_ = os.Rename(cfgTmp, mihomoCfgPath)
+		}
+	}
+	return nil
 }
 
-// extractDBFromZip reads a zip archive and returns the contents of 3m-ui.db.
-// Also restores mihomo-config.yaml if mihomoCfgPath is set.
-func extractDBFromZip(raw []byte) ([]byte, error) {
-	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
-	if err != nil {
-		return nil, fmt.Errorf("open zip: %w", err)
+// extractDBFromZip reads a zip archive and returns the contents of
+// 3m-ui.db and mihomo-config.yaml (if present).
+func extractDBFromZip(raw []byte) (dbContent, mihomoCfg []byte, err error) {
+	zr, zErr := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if zErr != nil {
+		return nil, nil, fmt.Errorf("open zip: %w", zErr)
 	}
-	var dbContent []byte
 	for _, f := range zr.File {
-		if f.Name == "3m-ui.db" {
-			rc, err := f.Open()
-			if err != nil {
-				return nil, fmt.Errorf("open %s in zip: %w", f.Name, err)
+		switch f.Name {
+		case "3m-ui.db":
+			rc, e := f.Open()
+			if e != nil {
+				return nil, nil, fmt.Errorf("open %s in zip: %w", f.Name, e)
 			}
-			dbContent, err = io.ReadAll(rc)
+			dbContent, e = io.ReadAll(rc)
 			rc.Close()
-			if err != nil {
-				return nil, fmt.Errorf("read %s in zip: %w", f.Name, err)
+			if e != nil {
+				return nil, nil, fmt.Errorf("read %s in zip: %w", f.Name, e)
+			}
+		case "mihomo-config.yaml":
+			rc, e := f.Open()
+			if e != nil {
+				return nil, nil, fmt.Errorf("open %s in zip: %w", f.Name, e)
+			}
+			mihomoCfg, e = io.ReadAll(rc)
+			rc.Close()
+			if e != nil {
+				return nil, nil, fmt.Errorf("read %s in zip: %w", f.Name, e)
 			}
 		}
 	}
 	if dbContent == nil {
-		return nil, fmt.Errorf("zip does not contain 3m-ui.db")
+		return nil, nil, fmt.Errorf("zip does not contain 3m-ui.db")
 	}
-	return dbContent, nil
+	return dbContent, mihomoCfg, nil
 }
