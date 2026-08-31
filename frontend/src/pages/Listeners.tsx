@@ -50,7 +50,7 @@ const Listeners: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const protocol = Form.useWatch('protocol', form);
   const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
-  const [useCapabilityForm] = useState(true);
+  const [useCapabilityForm] = useState(false); // full ListenerConfigFields; capability form is a reduced schema view
 
   const load = async (showError = true) => {
     setLoading(true);
