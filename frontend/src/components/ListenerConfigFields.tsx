@@ -698,41 +698,6 @@ export function formValuesToConfig(
 }
 
 
-/** Per-protocol required / optional / auto-generate field guide. */
-const ProtocolFieldGuide: React.FC<{ protocol: string }> = ({ protocol }) => {
-  const { t } = useI18n();
-  const key = protocol.toLowerCase();
-  const required = t(`listeners.guide.${key}.required`);
-  const optional = t(`listeners.guide.${key}.optional`);
-  const auto = t(`listeners.guide.${key}.auto`);
-  // If i18n missing, t() may return the key path — skip empty-looking guides.
-  const missing = (s: string) => !s || s.startsWith('listeners.guide.');
-  if (missing(required) && missing(optional) && missing(auto)) {
-    return (
-      <Alert
-        type="info"
-        showIcon
-        message={t('listeners.fieldGuideTitle') || 'Field guide'}
-        description={t('listeners.fieldGuideFallback') || 'Required / optional / auto-generate hints follow each field. Users are bound under 用户管理.'}
-      />
-    );
-  }
-  return (
-    <Alert
-      type="info"
-      showIcon
-      message={t('listeners.fieldGuideTitle') || 'Field guide (this protocol)'}
-      description={
-        <div style={{ lineHeight: 1.7 }}>
-          <div><strong>{t('listeners.fieldRequired') || 'Required'}</strong>: {missing(required) ? '—' : required}</div>
-          <div><strong>{t('listeners.fieldOptional') || 'Optional'}</strong>: {missing(optional) ? '—' : optional}</div>
-          <div><strong>{t('listeners.fieldAuto') || 'Auto-generate if empty'}</strong>: {missing(auto) ? '—' : auto}</div>
-        </div>
-      }
-    />
-  );
-};
-
 /** Collapsible-style section with enable switch driving nested fields. */
 const EnableSection: React.FC<{
   name: string;
@@ -788,8 +753,6 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Alert type="info" showIcon message={t('listeners.usersHint')} />
-      <Alert type="success" showIcon message={t('listeners.autoGenerateHint') || 'Auto on save if empty: REALITY private-key + short-id + dest/server-names; SS password (by cipher); Snell PSK; password-protocol users; Hy2 self-signed cert. Public-key is client-only (derived for share URI). Click Generate to fill now.'} />
-      <ProtocolFieldGuide protocol={protocol} />
 
       {TRANSPORT_PROTOCOLS.has(protocol) && (
         <>
@@ -833,8 +796,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="cipher" label={t('listeners.cipher')} initialValue="aes-128-gcm">
             <Select options={SS_CIPHERS.map((c) => ({ value: c, label: c }))} showSearch />
           </Form.Item>
-          <Form.Item name="password" label={t('listeners.password')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty → auto-generate on save (SS / password protocols).'}>
-            <Input.Password placeholder={t('listeners.passwordOptionalPlaceholder') || 'auto'} addonAfter={<Button type="link" size="small" onClick={() => gen('ss-password', form.getFieldValue('cipher'))}>{t('common.generate') || 'Generate'}</Button>} />
+          <Form.Item name="password" label={t('listeners.password')}>
+            <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('ss-password', form.getFieldValue('cipher'))}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
         </>
       )}
@@ -842,7 +805,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {protocol === 'snell' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="psk" label={t('listeners.psk')} tooltip={t('listeners.passwordOptionalHint') || 'Leave empty → auto-generate on save (SS / password protocols).'}>
+          <Form.Item name="psk" label={t('listeners.psk')}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
           <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4}>
@@ -1171,11 +1134,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="reality_dest" label={t('listeners.realityDest')} tooltip="Default: www.microsoft.com:443">
             <Input placeholder="www.microsoft.com:443" />
           </Form.Item>
-          <Form.Item
-            name="reality_private_key"
-            label={t('listeners.realityPrivateKey')}
-            tooltip={t('listeners.realityKeyHint') || 'Server private-key only. Leave empty → auto-generate on save. Client pbk is derived for share links (not stored).'}
-          >
+          <Form.Item name="reality_private_key" label={t('listeners.realityPrivateKey')}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('reality')}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
           <Form.Item name="reality_short_id" label={t('listeners.realityShortId')}>
