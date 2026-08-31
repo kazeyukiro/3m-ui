@@ -23,7 +23,7 @@ for arg in "$@"; do
     --no-mihomo) UPDATE_MIHOMO=0;;
     -h|--help)
       printf '%s\n' 'Usage: update.sh [VERSION] [--yes] [--no-mihomo]'
-      printf '%s\n' '  VERSION   optional tag such as v0.1.0 (default: latest)'
+      printf '%s\n' '  VERSION   optional tag such as v1.0.0 (default: latest)'
       exit 0
       ;;
     v[0-9]*|manual-[0-9]*)
