@@ -24,6 +24,10 @@ export const SS_CIPHERS = [
 const TLS_PROTOCOLS = new Set([
   'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'anytls', 'trusttunnel',
 ]);
+/** Always require server TLS material (cert or autofilled self-signed). No Security=None. */
+const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'anytls', 'trusttunnel']);
+/** Optional None / TLS / Reality security selector. */
+const OPTIONAL_SECURITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const TRANSPORT_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const UDP_PROTOCOLS = new Set(['shadowsocks', 'snell', 'vmess', 'vless', 'trojan']);
@@ -38,6 +42,8 @@ const KCP_TUN_PROTOCOLS = new Set(['shadowsocks']);
 const XHTTP_PROTOCOLS = new Set(['vless']);
 const MKCP_PROTOCOLS = new Set(['vmess']);
 const MEKYA_PROTOCOLS = new Set(['vmess']);
+/** VMess-only TLS mirror (advanced). */
+const TLSMIRROR_PROTOCOLS = new Set(['vmess']);
 /** Protocols that support allow-insecure (plain TLS offload behind nginx/caddy). */
 const ALLOW_INSECURE_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'anytls']);
 
@@ -225,6 +231,15 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.obfs_opts_host = cfg['obfs-opts'].host;
   }
 
+  // tlsmirror-config (vmess)
+  if (cfg['tlsmirror-config'] && typeof cfg['tlsmirror-config'] === 'object') {
+    const m = cfg['tlsmirror-config'];
+    values.tlsmirror_enabled = true;
+    values.tlsmirror_dest = m.dest;
+    values.tlsmirror_primary_key = m['primary-key'];
+    values.tlsmirror_proxy = m.proxy;
+  }
+
   // shadowquic jls-upstream
   if (cfg['jls-upstream'] && typeof cfg['jls-upstream'] === 'object') {
     const j = cfg['jls-upstream'];
@@ -296,6 +311,7 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
   delete values['mekya-config'];
   delete values['obfs-opts'];
   delete values['jls-upstream'];
+  delete values['tlsmirror-config'];
   delete values['realm-opts'];
   delete values['reality-config'];
   delete values['ss-option'];
@@ -322,7 +338,7 @@ const FORM_OWNED_KEYS = new Set([
   'key', 'aead-method', 'padding-min', 'padding-max', 'table-type', 'enable-pure-downlink',
   'custom-table', 'custom-tables', 'fallback', 'httpmask',
   'certificate', 'private-key', 'client-auth-type', 'client-auth-cert', 'ech-key', 'allow-insecure',
-  'reality-config', 'users', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'mux-option',
+  'reality-config', 'users', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'tlsmirror-config', 'mux-option',
   'kcp-tun', 'xhttp-config', 'mkcp-config', 'mekya-config', 'obfs-opts', 'jls-upstream', 'realm-opts',
   'network', 'bbr-profile', 'quic-versions', 'cwnd', 'max-datagram-frame-size', 'recv-window-conn', 'recv-window', 'disable-mtu-discovery', 'traffic-pattern', 'user-hint-is-mandatory',
 ]);
@@ -514,6 +530,9 @@ export function formValuesToConfig(
     values.xhttp_enabled = false;
   }
   const realityOn = REALITY_PROTOCOLS.has(protocol) && (!!values.reality_enabled || values.security_layer === 'reality');
+  const wantTLSMaterial =
+    ALWAYS_TLS_PROTOCOLS.has(protocol) ||
+    (!realityOn && TLS_PROTOCOLS.has(protocol) && values.security_layer === 'tls');
   if (realityOn) {
     // Always emit reality-config so backend Autofill can fill empty private-key / short-id.
     const dest = (values.reality_dest && String(values.reality_dest).trim()) || 'www.microsoft.com:443';
@@ -525,7 +544,7 @@ export function formValuesToConfig(
       reality['server-names'] = values.reality_server_names;
     }
     cfg['reality-config'] = reality;
-  } else if (TLS_PROTOCOLS.has(protocol)) {
+  } else if (wantTLSMaterial) {
     set('certificate', values.certificate);
     set('private-key', values['private-key']);
     set('client-auth-type', values['client-auth-type']);
@@ -542,36 +561,43 @@ export function formValuesToConfig(
     }) || { enable: true };
   }
 
-  // shadow-tls
+  // shadow-tls — require handshake.dest and (password or users); never emit empty enable-only.
   if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.shadow_tls_enabled) {
     const users = asArray(values.shadow_tls_users)
-      .filter((u: any) => u?.name || u?.password)
+      .filter((u: any) => u?.name && u?.password)
       .map((u: any) => cleanObj({ name: u.name, password: u.password }))
       .filter(Boolean);
-    const handshake = cleanObj({
-      dest: values.shadow_tls_handshake_dest,
-      proxy: values.shadow_tls_handshake_proxy,
-    });
-    cfg['shadow-tls'] = cleanObj({
-      enable: true,
-      version: toInt(values.shadow_tls_version),
-      password: values.shadow_tls_password,
-      users: users.length ? users : undefined,
-      handshake,
-    }) || { enable: true };
+    const dest = typeof values.shadow_tls_handshake_dest === 'string' ? values.shadow_tls_handshake_dest.trim() : '';
+    const password = typeof values.shadow_tls_password === 'string' ? values.shadow_tls_password.trim() : '';
+    if (dest && (password || users.length > 0)) {
+      const handshake = cleanObj({
+        dest,
+        proxy: values.shadow_tls_handshake_proxy,
+      });
+      cfg['shadow-tls'] = cleanObj({
+        enable: true,
+        version: toInt(values.shadow_tls_version),
+        password: password || undefined,
+        users: users.length ? users : undefined,
+        handshake,
+      });
+    }
   }
 
-  // res-tls
+  // res-tls — require dest.
   if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.res_tls_enabled) {
-    cfg['res-tls'] = cleanObj({
-      enable: true,
-      dest: values.res_tls_dest,
-      password: values.res_tls_password,
-      'restls-script': values.res_tls_restls_script,
-      'min-record-len': values.res_tls_min_record_len,
-      proxy: values.res_tls_proxy,
-      'rate-limit': values.res_tls_rate_limit,
-    }) || { enable: true };
+    const dest = typeof values.res_tls_dest === 'string' ? values.res_tls_dest.trim() : '';
+    if (dest) {
+      cfg['res-tls'] = cleanObj({
+        enable: true,
+        dest,
+        password: values.res_tls_password,
+        'restls-script': values.res_tls_restls_script,
+        'min-record-len': values.res_tls_min_record_len,
+        proxy: values.res_tls_proxy,
+        'rate-limit': values.res_tls_rate_limit,
+      });
+    }
   }
 
   // jls-config — Mihomo requires dest + users; never emit a half-filled block.
@@ -590,6 +616,19 @@ export function formValuesToConfig(
         proxy: values.jls_proxy,
         'rate-limit': values.jls_rate_limit,
         users,
+      });
+    }
+  }
+
+  // tlsmirror-config (vmess) — require dest + primary-key
+  if (TLSMIRROR_PROTOCOLS.has(protocol) && values.tlsmirror_enabled) {
+    const dest = typeof values.tlsmirror_dest === 'string' ? values.tlsmirror_dest.trim() : '';
+    const primaryKey = typeof values.tlsmirror_primary_key === 'string' ? values.tlsmirror_primary_key.trim() : '';
+    if (dest && primaryKey) {
+      cfg['tlsmirror-config'] = cleanObj({
+        dest,
+        'primary-key': primaryKey,
+        proxy: values.tlsmirror_proxy,
       });
     }
   }
@@ -779,7 +818,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           </Form.Item>
         </>
       )}
-      {(TLS_PROTOCOLS.has(protocol) || REALITY_PROTOCOLS.has(protocol)) && (
+      {OPTIONAL_SECURITY_PROTOCOLS.has(protocol) && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionSecurity') || 'Security'}</Divider>
           <Form.Item name="security_layer" label={t('listeners.securityLayer') || 'Security'} initialValue="none">
@@ -790,6 +829,14 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
             </Radio.Group>
           </Form.Item>
         </>
+      )}
+      {ALWAYS_TLS_PROTOCOLS.has(protocol) && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 8 }}
+          message={t('listeners.alwaysTlsHint') || 'This protocol requires TLS. Leave certificate empty to auto-generate a panel self-signed pair on save.'}
+        />
       )}
 
       {/* ---- Protocol core options ---- */}
@@ -952,8 +999,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="alpn" label={t('listeners.alpn')}>
             <Select mode="tags" placeholder="h3" tokenSeparators={[',']} />
           </Form.Item>
-          <Form.Item name="congestion-controller" label={t('listeners.congestionController')}>
-            <Select allowClear options={['bbr', 'cubic', 'new_reno'].map((v) => ({ value: v, label: v }))} />
+          <Form.Item name="congestion-controller" label={t('listeners.congestionController')} initialValue="cubic">
+            <Select allowClear options={['cubic', 'new_reno', 'bbr'].map((v) => ({ value: v, label: v }))} />
           </Form.Item>
           <Form.Item name="zero-rtt" label={t('listeners.zeroRtt')} valuePropName="checked">
             <Switch />
@@ -1086,46 +1133,57 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
         </>
       )}
 
-      {/* ---- TLS certificates ---- */}
-      {TLS_PROTOCOLS.has(protocol) && (
-        <>
-          <Divider titlePlacement="start" plain>{t('listeners.sectionTLS')}</Divider>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-            {t('listeners.tlsPairHint')}
-          </Text>
-          <Form.Item name="certificate" label={t('listeners.certificate')}>
-            <Input.TextArea rows={2} placeholder="./server.crt" />
-          </Form.Item>
-          <Form.Item name="private-key" label={t('listeners.privateKey')}>
-            <Input.TextArea rows={2} placeholder="./server.key" />
-          </Form.Item>
-          <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')}>
-            <Select
-              allowClear
-              options={['request', 'require-any', 'verify-if-given', 'require-and-verify'].map((v) => ({
-                value: v,
-                label: v,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item name="ech-key" label={t('listeners.echKey')}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
-            <Form.Item
-              name="allow-insecure"
-              label={t('listeners.allowInsecure')}
-              valuePropName="checked"
-              tooltip={t('listeners.allowInsecureHint')}
-            >
-              <Switch />
-            </Form.Item>
-          )}
-        </>
-      )}
+      {/* ---- TLS certificates (always-TLS protocols, or optional security_layer=tls) ---- */}
+      <Form.Item noStyle shouldUpdate={(a, b) => a.security_layer !== b.security_layer}>
+        {({ getFieldValue }) => {
+          const layer = getFieldValue('security_layer');
+          const visible =
+            ALWAYS_TLS_PROTOCOLS.has(protocol) ||
+            (OPTIONAL_SECURITY_PROTOCOLS.has(protocol) && layer === 'tls');
+          if (!visible) return null;
+          return (
+            <>
+              <Divider titlePlacement="start" plain>{t('listeners.sectionTLS')}</Divider>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                {ALWAYS_TLS_PROTOCOLS.has(protocol)
+                  ? (t('listeners.tlsPairAutoHint') || 'Certificate + private-key required. Leave both empty → panel self-signed on save.')
+                  : t('listeners.tlsPairHint')}
+              </Text>
+              <Form.Item name="certificate" label={t('listeners.certificate')}>
+                <Input.TextArea rows={2} placeholder={ALWAYS_TLS_PROTOCOLS.has(protocol) ? 'auto' : './server.crt'} />
+              </Form.Item>
+              <Form.Item name="private-key" label={t('listeners.privateKey')}>
+                <Input.TextArea rows={2} placeholder={ALWAYS_TLS_PROTOCOLS.has(protocol) ? 'auto' : './server.key'} />
+              </Form.Item>
+              <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')}>
+                <Select
+                  allowClear
+                  options={['request', 'require-any', 'verify-if-given', 'require-and-verify'].map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+              <Form.Item name="ech-key" label={t('listeners.echKey')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+              {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
+                <Form.Item
+                  name="allow-insecure"
+                  label={t('listeners.allowInsecure')}
+                  valuePropName="checked"
+                  tooltip={t('listeners.allowInsecureHint')}
+                >
+                  <Switch />
+                </Form.Item>
+              )}
+            </>
+          );
+        }}
+      </Form.Item>
 
       {/* ---- Reality ---- */}
       {REALITY_PROTOCOLS.has(protocol) && (
@@ -1145,6 +1203,25 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           </Form.Item>
           <Form.Item name="reality_server_names" label={t('listeners.realityServerNames')}>
             <Select mode="tags" placeholder="www.example.com" tokenSeparators={[',']} />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- tlsmirror (VMess) ---- */}
+      {TLSMIRROR_PROTOCOLS.has(protocol) && (
+        <EnableSection
+          name="tlsmirror_enabled"
+          label={t('listeners.sectionTlsMirror') || 'TLS Mirror'}
+          hint={t('listeners.tlsMirrorHint') || 'Advanced. Requires dest and primary-key; mutually exclusive with certificate TLS.'}
+        >
+          <Form.Item name="tlsmirror_dest" label={t('listeners.tlsMirrorDest') || 'Dest'}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item name="tlsmirror_primary_key" label={t('listeners.tlsMirrorPrimaryKey') || 'Primary key'}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="tlsmirror_proxy" label={t('listeners.tlsMirrorProxy') || 'Proxy'}>
+            <Input />
           </Form.Item>
         </EnableSection>
       )}

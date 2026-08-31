@@ -133,6 +133,29 @@ func sanitizeServerConfig(cfg map[string]interface{}) {
 			delete(cfg, "jls-upstream")
 		}
 	}
+	if st, ok := cfg["shadow-tls"].(map[string]interface{}); ok {
+		// Drop enable-only / missing handshake.dest
+		dest := ""
+		if hs, ok := st["handshake"].(map[string]interface{}); ok {
+			dest, _ = hs["dest"].(string)
+		}
+		pass, _ := st["password"].(string)
+		if strings.TrimSpace(dest) == "" || (strings.TrimSpace(pass) == "" && st["users"] == nil) {
+			delete(cfg, "shadow-tls")
+		}
+	}
+	if rt, ok := cfg["res-tls"].(map[string]interface{}); ok {
+		if dest, _ := rt["dest"].(string); strings.TrimSpace(dest) == "" {
+			delete(cfg, "res-tls")
+		}
+	}
+	if tm, ok := cfg["tlsmirror-config"].(map[string]interface{}); ok {
+		dest, _ := tm["dest"].(string)
+		pk, _ := tm["primary-key"].(string)
+		if strings.TrimSpace(dest) == "" || strings.TrimSpace(pk) == "" {
+			delete(cfg, "tlsmirror-config")
+		}
+	}
 	// If a cert pair is present, clear allow-insecure (mutually exclusive modes).
 	cert, _ := cfg["certificate"].(string)
 	key, _ := cfg["private-key"].(string)
