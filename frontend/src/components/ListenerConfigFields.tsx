@@ -574,21 +574,24 @@ export function formValuesToConfig(
     }) || { enable: true };
   }
 
-  // jls-config
+  // jls-config — Mihomo requires dest + users; never emit a half-filled block.
   if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.jls_enabled) {
     const users = asArray(values.jls_users)
-      .filter((u: any) => u?.username || u?.password)
+      .filter((u: any) => u?.username && u?.password)
       .map((u: any) => cleanObj({ username: u.username, password: u.password }))
       .filter(Boolean);
-    cfg['jls-config'] = cleanObj({
-      enable: true,
-      dest: values.jls_dest,
-      sni: values.jls_sni,
-      alpn: values.jls_alpn,
-      proxy: values.jls_proxy,
-      'rate-limit': values.jls_rate_limit,
-      users: users.length ? users : undefined,
-    }) || { enable: true };
+    const dest = typeof values.jls_dest === 'string' ? values.jls_dest.trim() : '';
+    if (dest && users.length > 0) {
+      cfg['jls-config'] = cleanObj({
+        enable: true,
+        dest,
+        sni: values.jls_sni,
+        alpn: values.jls_alpn,
+        proxy: values.jls_proxy,
+        'rate-limit': values.jls_rate_limit,
+        users,
+      });
+    }
   }
 
   // mux-option (listener-side: only padding + brutal per official docs)

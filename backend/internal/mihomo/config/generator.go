@@ -201,6 +201,8 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		if err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
+		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
+		sanitizeIncompleteTLSWrappers(configMap)
 		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
