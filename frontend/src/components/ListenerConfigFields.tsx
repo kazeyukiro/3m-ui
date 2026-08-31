@@ -283,7 +283,10 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
   }
 
   // trusttunnel
-  if (cfg.network) values.network = cfg.network;
+  if (cfg.network) {
+    if (Array.isArray(cfg.network)) values.network = cfg.network;
+    else if (typeof cfg.network === 'string') values.network = [cfg.network];
+  }
   if (cfg['bbr-profile']) values['bbr-profile'] = cfg['bbr-profile'];
   if (cfg['quic-versions']) values['quic-versions'] = asStringList(cfg['quic-versions']);
   if (cfg.cwnd != null) values.cwnd = cfg.cwnd;
@@ -500,7 +503,9 @@ export function formValuesToConfig(
       }
       break;
     case 'trusttunnel':
-      set('network', values.network);
+      if (Array.isArray(values.network) && values.network.length > 0) {
+        set('network', values.network);
+      }
       set('congestion-controller', values['congestion-controller']);
       set('bbr-profile', values['bbr-profile']);
       break;
@@ -1121,7 +1126,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
           <Form.Item name="network" label={t('listeners.network')}>
-            <Select allowClear options={['tcp', 'udp'].map((v) => ({ value: v, label: v }))} />
+            <Select mode="multiple" allowClear options={['tcp', 'udp'].map((v) => ({ value: v, label: v }))} placeholder="tcp, udp" />
           </Form.Item>
           <Form.Item name="congestion-controller" label={t('listeners.congestionController')}>
             <Select allowClear options={['bbr', 'cubic', 'new_reno'].map((v) => ({ value: v, label: v }))} />
