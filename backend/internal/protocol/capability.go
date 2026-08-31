@@ -119,21 +119,44 @@ func transportSecurityLayers(defaultTransport, defaultSecurity string) []LayerCa
 }
 
 func transportComponents() []ComponentCapability {
-	return []ComponentCapability{
+	return transportComponentsCore(false)
+}
+
+// transportComponentsWithXHTTP is VLESS-only (MetaCubeX schema).
+func transportComponentsWithXHTTP() []ComponentCapability {
+	return transportComponentsCore(true)
+}
+
+func transportComponentsCore(withXHTTP bool) []ComponentCapability {
+	wsConflicts := []string{"transport:grpc"}
+	grpcConflicts := []string{"transport:ws"}
+	if withXHTTP {
+		wsConflicts = append(wsConflicts, "transport:xhttp")
+		grpcConflicts = append(grpcConflicts, "transport:xhttp")
+	}
+	comps := []ComponentCapability{
 		{Group: ComponentTransport, Kind: "raw", Label: "TCP / raw", SelectionPath: "transport_layer"},
 		{Group: ComponentTransport, Kind: "ws", Label: "WebSocket", SelectionPath: "transport_layer", Fields: []FieldCapability{
-			{Path: "ws-path", Label: "Path", Type: FieldString, Required: true},
-		}, Conflicts: []string{"transport:grpc", "transport:xhttp"}},
+			{Path: "ws-path", Label: "WS Path", Type: FieldString},
+		}, Conflicts: wsConflicts},
 		{Group: ComponentTransport, Kind: "grpc", Label: "gRPC", SelectionPath: "transport_layer", Fields: []FieldCapability{
-			{Path: "grpc-service-name", Label: "Service Name", Type: FieldString, Required: true},
-		}, Conflicts: []string{"transport:ws", "transport:xhttp"}},
-		{Group: ComponentTransport, Kind: "xhttp", Label: "XHTTP", SelectionPath: "transport_layer", Fields: []FieldCapability{
-			{Path: "xhttp_path", Label: "Path", Type: FieldString, Required: true},
-			{Path: "xhttp_host", Label: "Host", Type: FieldString},
-			{Path: "xhttp_mode", Label: "Mode", Type: FieldString, Options: []string{"auto", "stream-one", "stream-up", "packet-up"}},
-		}, Conflicts: []string{"transport:ws", "transport:grpc"}},
+			{Path: "grpc-service-name", Label: "gRPC Service Name", Type: FieldString},
+		}, Conflicts: grpcConflicts},
 	}
+	if withXHTTP {
+		comps = append(comps, ComponentCapability{
+			Group: ComponentTransport, Kind: "xhttp", Label: "XHTTP", SelectionPath: "transport_layer",
+			Fields: []FieldCapability{
+				{Path: "xhttp_path", Label: "Path", Type: FieldString, Required: true},
+				{Path: "xhttp_host", Label: "Host", Type: FieldString},
+				{Path: "xhttp_mode", Label: "Mode", Type: FieldString, Options: []string{"auto", "stream-one", "stream-up", "packet-up"}},
+			},
+			Conflicts: []string{"transport:ws", "transport:grpc"},
+		})
+	}
+	return comps
 }
+
 
 func securityComponents(withReality bool) []ComponentCapability {
 	comps := []ComponentCapability{
@@ -162,7 +185,7 @@ func securityComponents(withReality bool) []ComponentCapability {
 }
 
 func vlessCapability() ProtocolCapability {
-	comps := append(transportComponents(), securityComponents(true)...)
+	comps := append(transportComponentsWithXHTTP(), securityComponents(true)...)
 	return ProtocolCapability{
 		Kind: "vless", Label: "VLESS",
 		Layers:     transportSecurityLayers("raw", "reality"),
