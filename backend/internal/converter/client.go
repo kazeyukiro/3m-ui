@@ -160,7 +160,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	// SS has no top-level tls/sni/servername/alpn fields — its TLS-like
 	// wrappers (shadow-tls/restls/jls-config) are emitted as the `plugin`
 	// format via applySSPluginWrappers, not via copyClientTLS.
-	if protocol != "shadowsocks" {
+	// ShadowQUIC uses QUIC's built-in TLS — no certificate/tls/skip-cert-verify.
+	if protocol != "shadowsocks" && protocol != "shadowquic" {
 		copyClientTLS(base, opts)
 	}
 	copyTransport(base, opts)
@@ -362,6 +363,10 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 						}
 						p["sni"] = host
 					}
+				}
+				// Final fallback: use server host as SNI.
+				if p["sni"] == nil {
+					p["sni"] = server
 				}
 			}
 			if p["udp"] == nil {

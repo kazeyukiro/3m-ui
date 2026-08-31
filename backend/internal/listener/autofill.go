@@ -45,7 +45,7 @@ func AutofillListenerDefaults(l *models.Listener) error {
 	case "hysteria2", "anytls", "mieru":
 		// map form users (username -> password)
 		autofillUsersMap(cfg)
-	case "trojan", "shadowquic", "trusttunnel":
+	case "trojan", "trusttunnel":
 		// array form users [{username, password}]
 		autofillUsersArray(cfg)
 	case "tuic", "tuic-v4", "tuic-v5":
