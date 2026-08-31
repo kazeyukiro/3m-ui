@@ -1078,7 +1078,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {protocol === 'sudoku' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="key" label={t('listeners.sudokuKey')} rules={[{ required: true }]}>
+          <Form.Item name="key" label={t('listeners.sudokuKey')} tooltip="Leave empty to auto-generate">
             <Input.Password />
           </Form.Item>
           <Form.Item name="aead-method" label={t('listeners.aeadMethod')}>
