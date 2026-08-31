@@ -106,6 +106,12 @@ func (s *Service) Batch(action BatchAction, ids []uint) (int, error) {
 		if res.Error != nil {
 			return 0, res.Error
 		}
+		// Resetting traffic may unblock previously over-quota users. Trigger a
+		// config regeneration so blocked users regain access immediately
+		// instead of waiting for the next enforcer tick (up to 10s latency).
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
 		return int(res.RowsAffected), nil
 	case BatchDelete:
 		if err := s.db.Transaction(func(tx *gorm.DB) error {

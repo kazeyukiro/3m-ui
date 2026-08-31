@@ -126,18 +126,24 @@ func (s *Service) BatchCreate(list []models.Listener) ([]models.Listener, error)
 	}
 	created := make([]models.Listener, 0, len(list))
 	for i := range list {
+		// Batch-created listeners must go through the same autofill path as
+		// single Create so UUIDs / passwords / REALITY keys are generated and
+		// the config passes mihomo validation. Without this, mihomo rejects the
+		// entire config and the whole batch fails.
+		if err := AutofillListenerDefaults(&list[i]); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("autofill listener defaults: %w", err)
+		}
 		if err := ValidateModel(&list[i]); err != nil {
 			tx.Rollback()
 			return nil, err
 		}
-		var n int64
-		if err := tx.Model(&models.Listener{}).Where("name = ?", list[i].Name).Count(&n).Error; err != nil {
+		// GORM's default scope excludes soft-deleted rows, but the UNIQUE(name)
+		// index covers them. Use ensureUniqueName so soft-deleted rows with the
+		// same name are renamed out of the way before Create hits the index.
+		if err := s.ensureUniqueName(&list[i]); err != nil {
 			tx.Rollback()
 			return nil, err
-		}
-		if n > 0 {
-			tx.Rollback()
-			return nil, fmt.Errorf("listener name %q already exists", list[i].Name)
 		}
 		if err := tx.Create(&list[i]).Error; err != nil {
 			tx.Rollback()
