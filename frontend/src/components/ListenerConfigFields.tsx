@@ -520,13 +520,16 @@ export function formValuesToConfig(
   } else if (values.transport_layer === 'grpc') {
     values['ws-path'] = undefined;
     values.xhttp_enabled = false;
-  } else if (values.transport_layer === 'xhttp') {
+  } else if (values.transport_layer === 'xhttp' && XHTTP_PROTOCOLS.has(protocol)) {
     values['ws-path'] = undefined;
     values['grpc-service-name'] = undefined;
     values.xhttp_enabled = true;
   } else if (values.transport_layer === 'raw') {
     values['ws-path'] = undefined;
     values['grpc-service-name'] = undefined;
+    values.xhttp_enabled = false;
+  }
+  if (!XHTTP_PROTOCOLS.has(protocol)) {
     values.xhttp_enabled = false;
   }
   const realityOn = REALITY_PROTOCOLS.has(protocol) && (!!values.reality_enabled || values.security_layer === 'reality');
@@ -803,11 +806,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
             name="transport_layer"
             label={t('listeners.transportLayer') || 'Transport'}
             initialValue="raw"
-            extra={
-              XHTTP_PROTOCOLS.has(protocol)
-                ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS only.')
-                : (TRANSPORT_PROTOCOLS.has(protocol) ? (t('listeners.transportNoXhttpHint') || 'XHTTP is not available for this protocol (VLESS only).') : undefined)
-            }
+            extra={XHTTP_PROTOCOLS.has(protocol) ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS.') : undefined}
           >
             <Radio.Group optionType="button" buttonStyle="solid">
               <Radio.Button value="raw">TCP</Radio.Button>
