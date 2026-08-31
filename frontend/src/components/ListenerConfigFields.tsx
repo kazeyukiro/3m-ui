@@ -670,15 +670,18 @@ export function formValuesToConfig(
     }) || { enable: true };
   }
 
-  // jls-upstream (shadowquic)
+  // jls-upstream (shadowquic) — Mihomo requires addr; do not emit empty blocks.
   if (protocol === 'shadowquic' && values.jls_upstream_enabled) {
-    const upstream = cleanObj({
-      addr: values.jls_upstream_addr,
-      sni: values.jls_upstream_sni,
-      proxy: values.jls_upstream_proxy,
-      'rate-limit': values.jls_upstream_rate_limit,
-    });
-    if (upstream) cfg['jls-upstream'] = upstream;
+    const addr = typeof values.jls_upstream_addr === 'string' ? values.jls_upstream_addr.trim() : '';
+    if (addr) {
+      const upstream = cleanObj({
+        addr,
+        sni: values.jls_upstream_sni,
+        proxy: values.jls_upstream_proxy,
+        'rate-limit': values.jls_upstream_rate_limit,
+      });
+      if (upstream) cfg['jls-upstream'] = upstream;
+    }
   }
 
   // realm-opts (hysteria2)
