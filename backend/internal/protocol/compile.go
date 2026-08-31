@@ -174,10 +174,12 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 			}
 		}
 	} else {
-		// Explicit empty credential state must not fall back to config users.
-		if hasCredState {
-			return nil
-		}
+		// Fall back to config users when panel credentials are empty.
+		// Previously, hasCredState=true with empty fromCreds returned nil,
+		// which caused Mihomo validation failure ("unset fields: users").
+		// Now we fall back to config users so the listener is at least valid.
+		// Panel-managed users take precedence when available; config users
+		// are a safety net for decrypt failures, inactive users, etc.
 		if raw, ok := cfg["users"]; ok {
 			out = normalizeUsersValue(raw)
 		}
@@ -216,9 +218,8 @@ func asUsersMap(cfg map[string]interface{}, fromCreds []UserCred, hasCredState b
 		}
 		return out
 	}
-	if hasCredState {
-		return nil
-	}
+	// Fall back to config users when panel credentials are empty.
+	// See asUsersArray for rationale.
 	if raw, ok := cfg["users"]; ok {
 		switch users := raw.(type) {
 		case map[string]interface{}:
@@ -251,9 +252,6 @@ func asUsersMapUUID(cfg map[string]interface{}, fromCreds []UserCred, hasCredSta
 			out[key] = c.Password
 		}
 		return out
-	}
-	if hasCredState {
-		return nil
 	}
 	if raw, ok := cfg["users"]; ok {
 		switch users := raw.(type) {
