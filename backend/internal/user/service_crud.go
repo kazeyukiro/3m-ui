@@ -43,7 +43,10 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 	if err != nil {
 		return nil, err
 	}
-	subTok, _ := randomHex(16)
+	subTok, err := randomHex(16)
+	if err != nil {
+		return nil, fmt.Errorf("generate proxy user sub token: %w", err)
+	}
 	u := &models.ProxyUser{
 		Username:          username,
 		PasswordEncrypted: encrypted,
