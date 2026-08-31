@@ -300,6 +300,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify"} {
 				copyOption(p, opts, key)
 			}
+			ensureTUICClientDefaults(p, opts)
 			result = append(result, p)
 		} else {
 			if len(credentials) == 0 {
@@ -307,11 +308,20 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			for i, cred := range credentials {
 				p := makeProxy(fmt.Sprintf("%d", i+1))
-				p["uuid"] = cred.UUID
+				// Server users map is keyed by UUID (fallback username). Client must match.
+				uuid := strings.TrimSpace(cred.UUID)
+				if uuid == "" {
+					uuid = strings.TrimSpace(cred.Username)
+				}
+				if uuid == "" {
+					return nil, fmt.Errorf("listener %q: TUIC V5 user is missing uuid", l.Name)
+				}
+				p["uuid"] = uuid
 				p["password"] = cred.Password
 				for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify"} {
 					copyOption(p, opts, key)
 				}
+				ensureTUICClientDefaults(p, opts)
 				result = append(result, p)
 			}
 		}
@@ -655,6 +665,24 @@ func decodeOptions(raw string) (map[string]interface{}, error) {
 		options = map[string]interface{}{}
 	}
 	return options, nil
+}
+
+
+// ensureTUICClientDefaults fills alpn/congestion and skip-cert-verify for
+// panel self-signed certificates. TUIC is QUIC/UDP and typically uses ALPN h3.
+func ensureTUICClientDefaults(p, opts map[string]interface{}) {
+	if p["alpn"] == nil {
+		p["alpn"] = []string{"h3"}
+	}
+	if p["congestion-controller"] == nil {
+		p["congestion-controller"] = "bbr"
+	}
+	if certutil.ShouldSkipCertVerify(opts) {
+		p["skip-cert-verify"] = true
+	}
+	if p["udp"] == nil {
+		p["udp"] = true
+	}
 }
 
 func copyClientTLS(dst, src map[string]interface{}) {

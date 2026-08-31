@@ -145,6 +145,13 @@ func (TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 			m["users"] = users
 		}
 	}
+	// Sensible defaults when operator left advanced QUIC fields empty.
+	if _, ok := m["alpn"]; !ok {
+		m["alpn"] = []string{"h3"}
+	}
+	if _, ok := m["congestion-controller"]; !ok {
+		m["congestion-controller"] = "bbr"
+	}
 	return m, nil
 }
 
