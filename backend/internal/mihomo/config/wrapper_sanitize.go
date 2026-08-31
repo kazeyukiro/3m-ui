@@ -16,8 +16,7 @@ func sanitizeIncompleteTLSWrappers(cfg map[string]interface{}) {
 		}
 	}
 	if st, ok := cfg["shadow-tls"].(map[string]interface{}); ok {
-		// Minimal: if explicitly disabled or empty object, drop.
-		if !wrapperEnabled(st) {
+		if !completeShadowTLSBlock(st) {
 			delete(cfg, "shadow-tls")
 		}
 	}
@@ -32,8 +31,43 @@ func sanitizeIncompleteTLSWrappers(cfg map[string]interface{}) {
 			delete(cfg, "jls-upstream")
 		}
 	}
-	// allow-insecure alone without cert is valid for anytls only when intentional;
-	// do not strip it here.
+	// VMess tlsmirror-config requires dest + primary-key.
+	if tm, ok := cfg["tlsmirror-config"].(map[string]interface{}); ok {
+		if !hasNonEmptyString(tm, "dest") || !hasNonEmptyString(tm, "primary-key") {
+			delete(cfg, "tlsmirror-config")
+		}
+	}
+}
+
+func completeShadowTLSBlock(st map[string]interface{}) bool {
+	if !wrapperEnabled(st) {
+		return false
+	}
+	// handshake.dest required for useful shadow-tls
+	dest := ""
+	if hs, ok := st["handshake"].(map[string]interface{}); ok {
+		dest, _ = hs["dest"].(string)
+	}
+	if strings.TrimSpace(dest) == "" {
+		return false
+	}
+	// v2 password or v3 users
+	if p, _ := st["password"].(string); strings.TrimSpace(p) != "" {
+		return true
+	}
+	if users, ok := st["users"]; ok && users != nil {
+		switch u := users.(type) {
+		case []interface{}:
+			if len(u) > 0 {
+				return true
+			}
+		case []map[string]interface{}:
+			if len(u) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func wrapperEnabled(m map[string]interface{}) bool {

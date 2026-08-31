@@ -166,6 +166,9 @@ func (ShadowQUICCompiler) Compile(in CompileInput) (map[string]interface{}, erro
 	if len(users) > 0 {
 		m["users"] = users
 	}
+	if _, ok := m["congestion-controller"]; !ok {
+		m["congestion-controller"] = "cubic"
+	}
 	return m, nil
 }
 
