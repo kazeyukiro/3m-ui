@@ -2,6 +2,7 @@ package traffic
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -200,7 +201,12 @@ func (c *Collector) CollectOnce() error {
 			continue
 		}
 		if err := c.userSvc.AddSample(uid, d.up, d.down, true); err != nil {
-			return fmt.Errorf("record traffic sample for user %d: %w", uid, err)
+			// Don't abort the whole collection cycle for one user's DB error:
+			// other users' deltas would be lost and the global snapshot below
+			// would never run, leaving the dashboard stale. Log via the wrapped
+			// error and keep going so the remaining users are still processed.
+			log.Printf("traffic: record sample for user %d failed: %v", uid, err)
+			continue
 		}
 	}
 	if err := c.userSvc.MarkOffline(activeUserIDs); err != nil {

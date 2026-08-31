@@ -2,13 +2,11 @@ package user
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/credentials"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"gorm.io/gorm"
 )
 
 func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
@@ -28,18 +26,38 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 		return nil, err
 	}
 	boundUsers := make(map[uint][]uint)
+	userIDSet := make(map[uint]struct{})
 	for _, row := range rows {
 		boundUsers[row.ListenerID] = append(boundUsers[row.ListenerID], row.ProxyUserID)
+		userIDSet[row.ProxyUserID] = struct{}{}
+	}
+	// Batch-load every bound proxy user in a single query instead of issuing
+	// one SELECT per (listener, user) pair. The previous N+1 pattern made
+	// ActiveCredentialsByListener scale poorly with the number of bindings
+	// and was visible in profiles of config regeneration on large panels.
+	userIDs := make([]uint, 0, len(userIDSet))
+	for id := range userIDSet {
+		userIDs = append(userIDs, id)
+	}
+	usersByID := make(map[uint]*models.ProxyUser, len(userIDs))
+	if len(userIDs) > 0 {
+		var users []models.ProxyUser
+		if err := s.db.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+			return nil, err
+		}
+		for i := range users {
+			usersByID[users[i].ID] = &users[i]
+		}
 	}
 	for _, listener := range listeners {
 		if ids, hasBindings := boundUsers[listener.ID]; hasBindings {
 			for _, userID := range ids {
-				u, err := s.GetByID(userID)
-				if err != nil {
-					if errors.Is(err, gorm.ErrRecordNotFound) {
-						continue
-					}
-					return nil, err
+				u, ok := usersByID[userID]
+				if !ok {
+					// Binding row referenced a proxy user that no longer exists
+					// (soft-deleted or hard-deleted out from under us). Skip it
+					// instead of failing the whole regeneration.
+					continue
 				}
 				if !IsCredentialActive(*u) {
 					continue

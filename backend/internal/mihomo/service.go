@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -178,7 +179,56 @@ func (s *Service) GetLogs() ([]LogResponse, error) {
 	lines := s.pm.Logs()
 	result := make([]LogResponse, 0, len(lines))
 	for _, line := range lines {
-		result = append(result, LogResponse{Timestamp: time.Now(), Level: "info", Payload: line})
+		ts, payload := parseStoredLogLine(line)
+		result = append(result, LogResponse{
+			Timestamp: ts,
+			Level:     inferLogLevel(payload),
+			Payload:   payload,
+		})
 	}
 	return result, nil
+}
+
+// parseStoredLogLine extracts the RFC3339 timestamp prefix that
+// appendLogLocked writes at the start of every stored log line. The stored
+// format is "<RFC3339> <line>". When the prefix parses as a valid RFC3339
+// timestamp, it is returned as `ts` and the remainder (after the separating
+// space) is returned as `payload`. When the line does not start with a
+// parseable timestamp, time.Now() is used as a fallback (matching the
+// original behaviour) and the whole line becomes the payload.
+func parseStoredLogLine(line string) (time.Time, string) {
+	// RFC3339 timestamps are at least 20 characters ("2006-01-02T15:04:05Z")
+	// and are followed by a single space before the actual log payload.
+	idx := strings.IndexByte(line, ' ')
+	if idx < 20 {
+		return time.Now(), line
+	}
+	ts, err := time.Parse(time.RFC3339, line[:idx])
+	if err != nil {
+		return time.Now(), line
+	}
+	return ts, strings.TrimPrefix(line[idx+1:], " ")
+}
+
+// inferLogLevel maps common mihomo log prefixes to a log level. mihomo emits
+// lines such as "[INFO] ...", "INFO[0001] ...", "ERROR ...", "WARN ...", or
+// "DEBUG ...". Returns "info" (the historical default) when no known prefix
+// is found.
+func inferLogLevel(payload string) string {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return "info"
+	}
+	upper := strings.ToUpper(strings.TrimPrefix(trimmed, "["))
+	switch {
+	case strings.HasPrefix(upper, "ERROR"), strings.HasPrefix(upper, "FATAL"):
+		return "error"
+	case strings.HasPrefix(upper, "WARN"):
+		return "warning"
+	case strings.HasPrefix(upper, "DEBUG"):
+		return "debug"
+	case strings.HasPrefix(upper, "INFO"):
+		return "info"
+	}
+	return "info"
 }

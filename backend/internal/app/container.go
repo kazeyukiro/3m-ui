@@ -90,3 +90,28 @@ func (c *Container) RouterDeps() router.Deps {
 		System:           c.System,
 	}
 }
+
+// Shutdown gracefully stops the background goroutines spawned by NewContainer
+// (traffic scheduler, Telegram bot long-poll loop, Telegram scheduler). It is
+// safe to call even when some components are nil. The HTTP server itself is
+// not stopped here — callers should signal/interrupt the server first (or
+// rely on the process exiting) and then invoke Shutdown to release goroutines.
+//
+// Note: this method is currently NOT wired to OS signals; it exists so that
+// future signal-handling code (or tests) can call it. Each Start() is also
+// idempotent via sync.Once, so calling Stop() on a never-started component is
+// still well-defined for the traffic/telegram schedulers and bot.
+func (c *Container) Shutdown() {
+	if c == nil {
+		return
+	}
+	if c.TrafficScheduler != nil {
+		c.TrafficScheduler.Stop()
+	}
+	if c.TelegramBot != nil {
+		c.TelegramBot.Stop()
+	}
+	if c.TelegramScheduler != nil {
+		c.TelegramScheduler.Stop()
+	}
+}

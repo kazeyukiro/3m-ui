@@ -16,6 +16,11 @@ type Scheduler struct {
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
+
+	// startOnce guards Start() so the goroutine is launched exactly once even
+	// if Start() is invoked multiple times (defensive against caller bugs in
+	// container wiring / tests). Stop() stays a one-shot via stopCh.
+	startOnce sync.Once
 }
 
 func NewScheduler(collector *Collector, enforcer *Enforcer, interval time.Duration) *Scheduler {
@@ -37,21 +42,26 @@ func (s *Scheduler) SetNotifier(n interface{ CheckAndNotify() }) {
 }
 
 func (s *Scheduler) Start() {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		ticker := time.NewTicker(s.interval)
-		defer ticker.Stop()
-		s.tick()
-		for {
-			select {
-			case <-ticker.C:
-				s.tick()
-			case <-s.stopCh:
-				return
+	// Idempotent: subsequent calls are no-ops so accidental double-Start (e.g.
+	// from container wiring or tests) does not spawn a second collector loop
+	// racing on the same enforcer/collector state.
+	s.startOnce.Do(func() {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			ticker := time.NewTicker(s.interval)
+			defer ticker.Stop()
+			s.tick()
+			for {
+				select {
+				case <-ticker.C:
+					s.tick()
+				case <-s.stopCh:
+					return
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 func (s *Scheduler) tick() {

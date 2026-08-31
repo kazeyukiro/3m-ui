@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -131,6 +133,9 @@ func (s *Service) Create(in CreateInput) (*models.RemoteServer, error) {
 	if in.Enabled != nil {
 		enabled = *in.Enabled
 	}
+	if err := validateAPIToken(in.APIToken); err != nil {
+		return nil, err
+	}
 	row := &models.RemoteServer{
 		Name:     name,
 		BaseURL:  base,
@@ -142,6 +147,27 @@ func (s *Service) Create(in CreateInput) (*models.RemoteServer, error) {
 		return nil, err
 	}
 	return sanitize(row), nil
+}
+
+// validateAPIToken checks that a non-empty api_token looks like a JWT issued
+// by the remote panel's auth/login endpoint. Empty tokens are allowed
+// (health-check-only mode does not require a token). Returns an error
+// describing the expected format when the token is present but malformed —
+// opaque access tokens are rejected at runtime by the remote panel's
+// RequireAuth middleware, so catching them at save time gives the operator a
+// clear, actionable message instead of a confusing 401 on first use.
+func validateAPIToken(token string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil
+	}
+	if !strings.HasPrefix(token, "ey") {
+		return fmt.Errorf("api_token must be a JWT obtained from POST /api/v1/auth/login on the remote panel")
+	}
+	if len(strings.Split(token, ".")) != 3 {
+		return fmt.Errorf("api_token must be a JWT obtained from POST /api/v1/auth/login on the remote panel")
+	}
+	return nil
 }
 
 func (s *Service) Update(id uint, in UpdateInput) (*models.RemoteServer, error) {
@@ -160,6 +186,9 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.RemoteServer, error) 
 		row.BaseURL = base
 	}
 	if !in.KeepToken && strings.TrimSpace(in.APIToken) != "" {
+		if err := validateAPIToken(in.APIToken); err != nil {
+			return nil, err
+		}
 		row.APIToken = strings.TrimSpace(in.APIToken)
 	}
 	if in.Enabled != nil {
@@ -189,14 +218,30 @@ func (s *Service) HealthCheckAll() ([]models.RemoteServer, error) {
 	if err := s.db.Where("enabled = ?", true).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	out := make([]models.RemoteServer, 0, len(rows))
+	// Parallelize health checks: each remote has its own 12s HTTP timeout, so a
+	// sequential scan of N servers can block for up to N*12s. Each goroutine
+	// calls runHealth on a distinct row (distinct &rows[i]) and persists its
+	// own result via s.db.Save, which is goroutine-safe at the pool level. A
+	// mutex guards the shared output slice.
+	var (
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		out = make([]models.RemoteServer, 0, len(rows))
+	)
 	for i := range rows {
-		r, err := s.runHealth(&rows[i])
-		if err != nil {
-			continue
-		}
-		out = append(out, *r)
+		wg.Add(1)
+		go func(row *models.RemoteServer) {
+			defer wg.Done()
+			r, err := s.runHealth(row)
+			if err != nil || r == nil {
+				return
+			}
+			mu.Lock()
+			out = append(out, *r)
+			mu.Unlock()
+		}(&rows[i])
 	}
+	wg.Wait()
 	var disabled []models.RemoteServer
 	_ = s.db.Where("enabled = ?", false).Find(&disabled).Error
 	for i := range disabled {
@@ -222,7 +267,12 @@ func (s *Service) runHealth(row *models.RemoteServer) (*models.RemoteServer, err
 	if err != nil {
 		row.LastStatus = "down"
 		row.LastError = truncateErr(err.Error())
-		_ = s.db.Save(row).Error
+		if saveErr := s.db.Save(row).Error; saveErr != nil {
+			// The health-check itself already failed; persisting the failure
+			// status is best-effort. Log so a misconfigured DB doesn't silently
+			// mask a down remote from the operator's view in the panel.
+			log.Printf("cluster: health check save failed for remote %d: %v", row.ID, saveErr)
+		}
 		return sanitize(row), nil
 	}
 	defer resp.Body.Close()

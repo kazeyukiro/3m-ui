@@ -74,7 +74,7 @@ func Run(frontendFS fs.FS) error {
 	// or listener can be fixed from the UI once HTTP is up.
 	generatedConfig, err := container.ConfigEngine.GenerateFinalConfig()
 	if err != nil {
-		log.Printf("warning: generate Mihomo configuration failed: %v; panel will start without applying core config", err)
+		log.Printf("[WARNING] generate Mihomo configuration failed: %v; panel will start without applying core config — check listener configs (conflicting ports, invalid custom fragments, or missing VLESS+REALITY params) and re-apply from the UI", err)
 		generatedConfig = ""
 	}
 	if container.Mihomo == nil {
@@ -89,16 +89,16 @@ func Run(frontendFS fs.FS) error {
 				// ApplyConfig already rolled back any on-disk candidate on failure.
 				// Do NOT re-write the failed config — that would undo the rollback
 				// and leave a broken YAML for the next restart.
-				log.Printf("warning: apply Mihomo configuration failed: %v; panel started without core", err)
+				log.Printf("[WARNING] apply Mihomo configuration failed: %v; panel started without core", err)
 			} else {
 				log.Printf("Mihomo core started successfully")
 			}
 		} else {
 			manager := mihomo.NewConfigManager(cfg.Mihomo.Config)
 			if err := manager.SaveConfig(generatedConfig); err != nil {
-				log.Printf("warning: save Mihomo configuration failed: %v", err)
+				log.Printf("[WARNING] save Mihomo configuration failed: %v", err)
 			} else {
-				log.Printf("warning: Mihomo binary unavailable at %s; panel started without core", cfg.Mihomo.Binary)
+				log.Printf("[WARNING] Mihomo binary unavailable at %s; panel started without core", cfg.Mihomo.Binary)
 			}
 		}
 	}
@@ -111,7 +111,7 @@ func Run(frontendFS fs.FS) error {
 		if err := serveWithSSL(r, sslSettings, cfg.Server.Port); err != nil {
 			// Fall back to plain HTTP so the panel remains reachable when TLS
 			// bind / ACME fails (port in use, missing domain, permission, …).
-			log.Printf("warning: panel SSL failed (%v); falling back to HTTP on :%d", err, cfg.Server.Port)
+			log.Printf("[WARNING] panel SSL failed (%v); falling back to HTTP on :%d", err, cfg.Server.Port)
 		} else {
 			return nil
 		}
@@ -148,6 +148,15 @@ func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	// HTTP-01 challenge + optional redirect to HTTPS.
+	//
+	// KNOWN LIMITATION (R2-2.1): this goroutine is intentionally NOT tracked by
+	// the caller. http.ListenAndServe blocks until the listener errors out, and
+	// serveWithSSL does not wait on it. When serveWithSSL returns (e.g. because
+	// ListenAndServeTLS failed and the caller falls back to plain HTTP in Run),
+	// this goroutine keeps holding :80 until the process exits or the listener
+	// breaks. Wiring it into a context with cancellation + a tracked WaitGroup
+	// is a larger refactor tracked separately; for now this comment documents
+	// the leak so it is not silently reintroduced.
 	httpAddr := s.ListenHTTP
 	if httpAddr == "" {
 		httpAddr = ":80"
@@ -197,7 +206,7 @@ func mountFrontend(r *gin.Engine, frontendFS fs.FS) {
 	r.RedirectFixedPath = false
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if len(path) >= 4 && path[:4] == "/api" {
+		if strings.HasPrefix(path, "/api") {
 			c.Status(http.StatusNotFound)
 			return
 		}

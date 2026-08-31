@@ -45,6 +45,17 @@ type MihomoConfig struct {
 	Config string `yaml:"config"`
 }
 
+// GlobalConfig is the package-level handle to the loaded configuration.
+//
+// THREAD-SAFETY (R2-1.3): GlobalConfig is mutated without a lock by
+// LoadConfig (which assigns it once at startup) and read by callers such as
+// the Telegram bot's buildSubURL helper. In practice this is low-risk because
+// the only writer is the single startup path and the only readers fire later
+// (after Run begins serving). It is NOT safe to mutate GlobalConfig from
+// concurrent goroutines — admin-API-driven config reloads must either swap the
+// pointer atomically (sync/atomic.Pointer[Config]) or take a mutex before doing
+// so. That hardening is tracked as a separate change; this comment documents
+// the current contract so it is not silently relied upon as a hot path.
 var GlobalConfig *Config
 
 func IsMihomoListenerProtocol(protocol string) bool {
@@ -79,9 +90,10 @@ func LoadConfig(path string) (*Config, error) {
 
 // ApplyEnvOverrides applies NAT-friendly environment overrides after YAML load.
 // Supported:
-//   THREE_M_UI_PORT / PANEL_PORT     → server.port
-//   THREE_M_UI_LISTEN / PANEL_LISTEN → server.listen
-//   THREE_M_UI_PUBLIC_URL / PUBLIC_URL → server.public_url
+//
+//	THREE_M_UI_PORT / PANEL_PORT     → server.port
+//	THREE_M_UI_LISTEN / PANEL_LISTEN → server.listen
+//	THREE_M_UI_PUBLIC_URL / PUBLIC_URL → server.public_url
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
@@ -170,8 +182,6 @@ func UpdateServerFile(path string, port int, listen, publicURL string, setPublic
 	}
 	return nil
 }
-
-
 
 // Validate rejects insecure placeholder secrets and malformed server settings
 // before they can be used to authenticate or encrypt stored credentials.

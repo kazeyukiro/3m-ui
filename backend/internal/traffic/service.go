@@ -27,7 +27,8 @@ func (s *Service) Update(totalUpload, totalDownload int64, connections int) Snap
 		Connections:   connections,
 	}
 
-	if seconds > 0 {
+	firstCall := s.last.UploadBytes == 0 && s.last.DownloadBytes == 0
+	if seconds > 0 && !firstCall {
 		uploadDelta := totalUpload - s.last.UploadBytes
 		downloadDelta := totalDownload - s.last.DownloadBytes
 		// Mihomo counters can reset when the core restarts. Never expose a
@@ -41,6 +42,11 @@ func (s *Service) Update(totalUpload, totalDownload int64, connections int) Snap
 		result.UploadRate = int64(float64(uploadDelta) / seconds)
 		result.DownloadRate = int64(float64(downloadDelta) / seconds)
 	}
+	// On the very first call s.last is the zero Snapshot, so the delta would
+	// equal the entire cumulative counter and the rate would be a meaningless
+	// "total traffic since process start / seconds since NewService" value.
+	// Skip rate computation on the first sample; UploadRate/DownloadRate stay 0
+	// and the next call will produce a correct delta-based rate.
 
 	s.last = result
 	s.lastTime = now

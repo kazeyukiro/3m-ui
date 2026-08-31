@@ -11,7 +11,20 @@ import (
 )
 
 type Service struct {
-	db                 *gorm.DB
+	db *gorm.DB
+	// credentialsChanged is invoked by notifyCredentialsChanged() after a
+	// proxy-user mutation (Create/Update/Delete) so the node config can be
+	// hot-reloaded. It is set exactly once, at startup, by
+	// SetCredentialsChangedHandler (called from app.NewContainer before any
+	// HTTP handler can fire), so the missing lock around the read in
+	// notifyCredentialsChanged is safe in practice.
+	//
+	// THREAD-SAFETY (R2-1.4): the field is read without a lock from
+	// notifyCredentialsChanged. This is currently safe because the handler is
+	// only ever set at startup — no admin API mutates it after the server begins
+	// serving. If a future code path starts rebinding the handler at runtime,
+	// this must move behind sync.RWMutex or sync/atomic.Value. Documented here
+	// so the assumption is explicit.
 	credentialsChanged func() error
 }
 

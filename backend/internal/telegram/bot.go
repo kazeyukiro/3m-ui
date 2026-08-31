@@ -39,6 +39,11 @@ type Bot struct {
 	wg             sync.WaitGroup
 	webhookCleared bool
 
+	// startOnce guards Start() so the long-poll goroutine is launched at most
+	// once even if Start() is called repeatedly (defensive against caller bugs
+	// in container wiring / tests). Stop() is a one-shot via stopCh.
+	startOnce sync.Once
+
 	// tgClient is the long-poll Telegram client reused by handlers to send
 	// messages with keyboards. It is set by loop() on each iteration and only
 	// read/written by the single loop goroutine, so no extra locking is needed.
@@ -53,12 +58,17 @@ func (b *Bot) Start() {
 	if b == nil {
 		return
 	}
-	b.wg.Add(1)
-	go func() {
-		defer b.wg.Done()
-		b.loop()
-	}()
-	log.Printf("telegram: bot command loop started")
+	// Idempotent: subsequent calls are no-ops so accidental double-Start does
+	// not spawn a second long-poll goroutine racing on the same getUpdates
+	// offset (which would cause Telegram to return duplicate/conflicting updates).
+	b.startOnce.Do(func() {
+		b.wg.Add(1)
+		go func() {
+			defer b.wg.Done()
+			b.loop()
+		}()
+		log.Printf("telegram: bot command loop started")
+	})
 }
 
 func (b *Bot) Stop() {
@@ -77,6 +87,12 @@ func (b *Bot) Stop() {
 
 func (b *Bot) loop() {
 	var offset int64
+	// authFailed is set when getUpdates returns a 401/Unauthorized. Once set,
+	// the retry interval is raised from 5s to 5min so an invalid/revoked bot
+	// token does not hammer the Telegram API forever. It is cleared on the
+	// first successful getUpdates so a subsequent transient error resumes the
+	// normal short backoff.
+	var authFailed bool
 	client := &http.Client{Timeout: 50 * time.Second}
 	for {
 		select {
@@ -127,12 +143,27 @@ func (b *Bot) loop() {
 
 		updates, next, err := getUpdates(client, settings.BotToken, tgClient.apiBase(), offset, 30)
 		if err != nil {
-			log.Printf("telegram: getUpdates: %v", err)
-			if !sleepOrStop(b.stopCh, 5*time.Second) {
+			errStr := err.Error()
+			if strings.Contains(errStr, "401") || strings.Contains(strings.ToLower(errStr), "unauthorized") {
+				if !authFailed {
+					log.Printf("telegram: getUpdates returned 401 Unauthorized — bot token is invalid or revoked; backing off to 5-minute retries. Update the token in panel Settings.")
+				}
+				authFailed = true
+			} else {
+				log.Printf("telegram: getUpdates: %v", err)
+			}
+			sleep := 5 * time.Second
+			if authFailed {
+				sleep = 5 * time.Minute
+			}
+			if !sleepOrStop(b.stopCh, sleep) {
 				return
 			}
 			continue
 		}
+		// Success — clear the auth-failed backoff so the next transient error
+		// resumes the normal short retry interval.
+		authFailed = false
 		if next > offset {
 			offset = next
 		}

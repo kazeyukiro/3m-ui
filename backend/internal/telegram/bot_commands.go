@@ -307,10 +307,15 @@ func (b *Bot) cmdStatus() string {
 		}
 	}
 	var userCount, blocked, online, listeners int64
+	var dbWarn string
 	if b.db != nil {
-		_ = b.db.Model(&models.ProxyUser{}).Count(&userCount).Error
+		if err := b.db.Model(&models.ProxyUser{}).Count(&userCount).Error; err != nil {
+			dbWarn = fmt.Sprintf("\n⚠️ DB error: %s", escapeHTML(err.Error()))
+		}
 		var users []models.ProxyUser
-		_ = b.db.Find(&users).Error
+		if err := b.db.Find(&users).Error; err != nil {
+			dbWarn = fmt.Sprintf("\n⚠️ DB error: %s", escapeHTML(err.Error()))
+		}
 		for _, u := range users {
 			if !user.IsCredentialActive(u) {
 				blocked++
@@ -319,15 +324,17 @@ func (b *Bot) cmdStatus() string {
 				online++
 			}
 		}
-		_ = b.db.Model(&models.Listener{}).Count(&listeners).Error
+		if err := b.db.Model(&models.Listener{}).Count(&listeners).Error; err != nil {
+			dbWarn = fmt.Sprintf("\n⚠️ DB error: %s", escapeHTML(err.Error()))
+		}
 	}
 	core := "stopped"
 	if running {
 		core = "running"
 	}
 	return fmt.Sprintf(
-		"📊 <b>Status</b>\ncore: <code>%s</code>\nversion: <code>%s</code>\npid: <code>%d</code>\nusers: %d (online %d, blocked %d)\nlisteners: %d",
-		core, escapeHTML(version), pid, userCount, online, blocked, listeners,
+		"📊 <b>Status</b>\ncore: <code>%s</code>\nversion: <code>%s</code>\npid: <code>%d</code>\nusers: %d (online %d, blocked %d)\nlisteners: %d%s",
+		core, escapeHTML(version), pid, userCount, online, blocked, listeners, dbWarn,
 	)
 }
 
@@ -396,7 +403,10 @@ func (b *Bot) cmdListeners() string {
 
 func (b *Bot) cmdTraffic() string {
 	var users []models.ProxyUser
-	_ = b.db.Order("traffic_used desc").Limit(15).Find(&users).Error
+	var dbWarn string
+	if err := b.db.Order("traffic_used desc").Limit(15).Find(&users).Error; err != nil {
+		dbWarn = fmt.Sprintf("\n⚠️ DB error: %s", escapeHTML(err.Error()))
+	}
 	var total int64
 	for _, u := range users {
 		total += u.TrafficUsed
@@ -409,6 +419,9 @@ func (b *Bot) cmdTraffic() string {
 	}
 	if len(users) == 0 {
 		bld.WriteString("暂无数据。")
+	}
+	if dbWarn != "" {
+		bld.WriteString(dbWarn)
 	}
 	return bld.String()
 }
