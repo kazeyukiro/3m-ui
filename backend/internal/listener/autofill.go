@@ -127,6 +127,12 @@ func sanitizeServerConfig(cfg map[string]interface{}) {
 			delete(cfg, "jls-config")
 		}
 	}
+	if ju, ok := cfg["jls-upstream"].(map[string]interface{}); ok {
+		addr, _ := ju["addr"].(string)
+		if strings.TrimSpace(addr) == "" {
+			delete(cfg, "jls-upstream")
+		}
+	}
 	// If a cert pair is present, clear allow-insecure (mutually exclusive modes).
 	cert, _ := cfg["certificate"].(string)
 	key, _ := cfg["private-key"].(string)

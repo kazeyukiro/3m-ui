@@ -26,6 +26,12 @@ func sanitizeIncompleteTLSWrappers(cfg map[string]interface{}) {
 			delete(cfg, "res-tls")
 		}
 	}
+	// ShadowQUIC jls-upstream requires addr; empty block fails mihomo -t.
+	if ju, ok := cfg["jls-upstream"].(map[string]interface{}); ok {
+		if !hasNonEmptyString(ju, "addr") {
+			delete(cfg, "jls-upstream")
+		}
+	}
 	// allow-insecure alone without cert is valid for anytls only when intentional;
 	// do not strip it here.
 }
