@@ -127,6 +127,15 @@ func sanitizeServerConfig(cfg map[string]interface{}) {
 			delete(cfg, "jls-config")
 		}
 	}
+	// If a cert pair is present, clear allow-insecure (mutually exclusive modes).
+	cert, _ := cfg["certificate"].(string)
+	key, _ := cfg["private-key"].(string)
+	if key == "" {
+		key, _ = cfg["private_key"].(string)
+	}
+	if strings.TrimSpace(cert) != "" && strings.TrimSpace(key) != "" {
+		delete(cfg, "allow-insecure")
+	}
 }
 
 func jlsHasUsers(m map[string]interface{}) bool {
@@ -507,6 +516,8 @@ func ensureServerTLSCertificate(cfg map[string]interface{}, proto string) error 
 	}
 	cfg["certificate"] = certPEM
 	cfg["private-key"] = keyPEM
+	// Normal TLS with cert — not the nginx/caddy "allow-insecure" mode.
+	delete(cfg, "allow-insecure")
 	return nil
 }
 
@@ -514,8 +525,20 @@ func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bo
 	if _, ok := cfg["reality-config"]; ok {
 		return false
 	}
-	if enabledMap(cfg, "shadow-tls") || enabledMap(cfg, "res-tls") || enabledMap(cfg, "jls-config") {
+	// Incomplete wrapper toggles must not suppress cert generation.
+	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok {
+		dest, _ := jls["dest"].(string)
+		if strings.TrimSpace(dest) != "" && jlsHasUsers(jls) {
+			return false
+		}
+	}
+	if enabledMap(cfg, "shadow-tls") {
 		return false
+	}
+	if rt, ok := cfg["res-tls"].(map[string]interface{}); ok {
+		if dest, _ := rt["dest"].(string); strings.TrimSpace(dest) != "" {
+			return false
+		}
 	}
 	if _, ok := cfg["tlsmirror-config"]; ok {
 		return false
