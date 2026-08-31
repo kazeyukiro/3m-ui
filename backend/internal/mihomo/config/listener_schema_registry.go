@@ -151,6 +151,16 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 			"mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down",
 		),
 	},
+	"tuic-v4": {
+		Protocol:     "tuic-v4",
+		Fields:       listenerFields("users", "token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "mux-option"),
+		NestedFields: listenerNested("mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down"),
+	},
+	"tuic-v5": {
+		Protocol:     "tuic-v5",
+		Fields:       listenerFields("users", "token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "mux-option"),
+		NestedFields: listenerNested("mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down", "mux-option.brutal-opts", "mux-option.brutal-opts.enabled", "mux-option.brutal-opts.up", "mux-option.brutal-opts.down"),
+	},
 	"shadowquic": {
 		Protocol:     "shadowquic",
 		Fields:       listenerFields("users", "jls-upstream", "alpn", "quic-versions", "zero-rtt", "congestion-controller", "up", "down", "ignore-client-bandwidth", "cwnd", "bbr-profile", "max-idle-time", "max-datagram-frame-size", "recv-window-conn", "recv-window", "disable-mtu-discovery"),

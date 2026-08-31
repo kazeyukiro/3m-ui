@@ -1,6 +1,10 @@
 package protocol
 
-import "fmt"
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+)
 
 // GenericCompiler passes config through with optional users injection.
 type GenericCompiler struct{ kind string }
@@ -128,25 +132,41 @@ func (Hysteria2Compiler) Compile(in CompileInput) (map[string]interface{}, error
 	return m, nil
 }
 
-type TUICCompiler struct{}
+type TUICCompiler struct{ kind string }
 
-func (TUICCompiler) Kind() string                   { return "tuic" }
+func (t TUICCompiler) Kind() string {
+	if t.kind != "" {
+		return t.kind
+	}
+	return "tuic"
+}
 func (TUICCompiler) Capability() ProtocolCapability { return tuicCapability() }
-func (TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+func (t TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
+	// Mihomo's listener type is always "tuic" regardless of v4/v5.
+	m["type"] = "tuic"
 	copyConfigPassthrough(m, in.Config, managedKeys())
 	// Mihomo expects token as a slice. Legacy configs may store a single string.
 	if tok, ok := m["token"].(string); ok {
 		m["token"] = []string{tok}
 	}
-	// TUIC v4 uses `token` (array of strings) — passed through by copyConfigPassthrough.
-	// TUIC v5 uses `users` as a map{UUID: PASSWORD} (verified against Mihomo wiki).
-	// We emit the v5 map form when credentials are bound. If the operator configured
-	// `token` directly in the listener config, it takes precedence (passthrough).
-	if _, hasToken := in.Config["token"]; !hasToken {
-		users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
-		if len(users) > 0 {
-			m["users"] = users
+	kind := t.Kind()
+	if kind == "tuic-v4" {
+		// TUIC v4: token-based auth. Ensure token is present.
+		if _, hasToken := m["token"]; !hasToken {
+			// Generate a default token if none set.
+			m["token"] = []string{randomToken()}
+		}
+		// Remove users — v4 uses token, not users.
+		delete(m, "users")
+	} else {
+		// TUIC v5 (or generic tuic): users map{UUID: PASSWORD}.
+		// If token is present, it takes precedence (v4 compat mode).
+		if _, hasToken := m["token"]; !hasToken {
+			users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
+			if len(users) > 0 {
+				m["users"] = users
+			}
 		}
 	}
 	// Sensible defaults when operator left advanced QUIC fields empty.
@@ -231,4 +251,10 @@ func (MieruCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 		m["users"] = users
 	}
 	return m, nil
+}
+
+func randomToken() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
