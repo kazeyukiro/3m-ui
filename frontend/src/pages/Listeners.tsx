@@ -16,7 +16,7 @@ import CapabilityFormFields, { capabilityFormToConfig } from '../components/Capa
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
 import QRCode from '../components/QRCode';
 
-const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
+const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic-v4', 'tuic-v5', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const parseConfig = (raw?: string) => { try { return raw ? JSON.parse(raw) : {}; } catch { return {}; } };
 const firstNonEmpty = (...values: any[]) => values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');

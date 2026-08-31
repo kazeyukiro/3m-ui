@@ -25,7 +25,7 @@ const TLS_PROTOCOLS = new Set([
   'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'anytls', 'trusttunnel',
 ]);
 /** Always require server TLS material (cert or autofilled self-signed). No Security=None. */
-const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'anytls', 'trusttunnel']);
+const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'tuic-v4', 'tuic-v5', 'anytls', 'trusttunnel']);
 /** Optional None / TLS / Reality security selector. */
 const OPTIONAL_SECURITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
@@ -448,6 +448,8 @@ export function formValuesToConfig(
       set('bbr-profile', values['bbr-profile']);
       break;
     case 'tuic':
+    case 'tuic-v4':
+    case 'tuic-v5':
       if (values.token) {
         const tokens = String(values.token).split(',').map((s: string) => s.trim()).filter(Boolean);
         if (tokens.length > 0) {
@@ -972,12 +974,14 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
         </>
       )}
 
-      {protocol === 'tuic' && (
+      ({(protocol === 'tuic' || protocol === 'tuic-v4' || protocol === 'tuic-v5') && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="token" label={t('listeners.token')} tooltip={t('listeners.tokenHint')}>
-            <Input placeholder={t('listeners.tokenPlaceholder')} />
-          </Form.Item>
+          {(protocol === 'tuic-v4' || protocol === 'tuic') && (
+            <Form.Item name="token" label={t('listeners.token')} tooltip={t('listeners.tokenHint')}>
+              <Input placeholder={t('listeners.tokenPlaceholder')} />
+            </Form.Item>
+          )}
           <Form.Item name="congestion-controller" label={t('listeners.congestionController')}>
             <Select allowClear options={['bbr', 'cubic', 'new_reno'].map((v) => ({ value: v, label: v }))} />
           </Form.Item>
