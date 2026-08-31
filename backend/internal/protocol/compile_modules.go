@@ -186,6 +186,11 @@ func (TrustTunnelCompiler) Compile(in CompileInput) (map[string]interface{}, err
 	if len(users) > 0 {
 		m["users"] = users
 	}
+	// Mihomo expects network as a slice (e.g. ["tcp", "udp"]).
+	// Legacy configs may store it as a string; convert to slice.
+	if net, ok := m["network"].(string); ok {
+		m["network"] = []string{net}
+	}
 	return m, nil
 }
 
