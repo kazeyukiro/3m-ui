@@ -47,7 +47,12 @@ type Props = { protocol?: string; capability?: ProtocolCapability; showAdvanced?
 
 const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvanced = false }) => {
   const { t } = useI18n();
-  const transportComps = useMemo(() => (capability?.components || []).filter((c) => c.group === 'transport'), [capability]);
+  const transportComps = useMemo(() => {
+    const list = (capability?.components || []).filter((c) => c.group === 'transport');
+    // XHTTP is VLESS-only even if an older capability payload still lists it.
+    if (protocol !== 'vless') return list.filter((c) => c.kind !== 'xhttp');
+    return list;
+  }, [capability, protocol]);
   const securityComps = useMemo(() => (capability?.components || []).filter((c) => c.group === 'security'), [capability]);
   if (!protocol || !capability) return <Text type="secondary">{t('listeners.selectProtocolFirst')}</Text>;
   const defaultTransport = capability.layers?.find((l) => l.group === 'transport')?.default_component || 'raw';
