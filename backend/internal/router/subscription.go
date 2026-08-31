@@ -81,7 +81,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				raw, err = converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials)
 				if err != nil {
 					log.Printf("subscription error: %v", err)
-					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "subscription generation failed"})
+					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 					return
 				}
 				page := subpage.LoadPageSettings(db)
@@ -107,7 +107,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				raw, err = converter.GenerateUserSingboxSubscription(db, pu, c.Request)
 				if err != nil {
 					log.Printf("subscription error: %v", err)
-					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "subscription generation failed"})
+					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 					return
 				}
 				writeSubHeaders(c, db, &pu)
@@ -123,7 +123,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 		}
 		if err != nil {
 			log.Printf("subscription error: %v", err)
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "subscription generation failed"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -370,7 +370,7 @@ func writeSubHTML(c *gin.Context, db *gorm.DB, cfg *config.Config, pu models.Pro
 	html, err := subpage.RenderHTML(db, pu, base, links)
 	if err != nil {
 		log.Printf("subscription error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "subscription generation failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.Header("Cache-Control", "no-store")
