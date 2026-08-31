@@ -201,6 +201,12 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		if err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
+		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
+			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
+		}
+		if patched, mErr := json.Marshal(configMap); mErr == nil {
+			l.Config = string(patched)
+		}
 		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}

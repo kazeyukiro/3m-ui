@@ -90,22 +90,11 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		}
 	}
 
-	// Hysteria2: optional self-signed cert when neither certificate nor private-key set.
-	if proto == "hysteria2" {
-		cert, _ := cfg["certificate"].(string)
-		key, _ := cfg["private-key"].(string)
-		if strings.TrimSpace(cert) == "" && strings.TrimSpace(key) == "" {
-			host := "localhost"
-			if sni, _ := cfg["sni"].(string); strings.TrimSpace(sni) != "" {
-				host = strings.TrimSpace(sni)
-			}
-			certPEM, keyPEM, err := generateSelfSignedTLS(host)
-			if err != nil {
-				return err
-			}
-			cfg["certificate"] = certPEM
-			cfg["private-key"] = keyPEM
-		}
+	// Protocols that speak TLS at the listener layer need certificate + private-key
+	// unless an alternate security wrapper (REALITY / shadow-tls / …) is configured.
+	// Empty strings are treated as unset (Mihomo rejects present-but-empty fields).
+	if err := ensureServerTLSCertificate(cfg, proto); err != nil {
+		return err
 	}
 
 	sanitizeServerConfig(cfg)
@@ -433,6 +422,89 @@ func ssPasswordForCipher(method string) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+
+// ensureServerTLSCertificate fills certificate/private-key with a self-signed
+// pair when the protocol requires server TLS material and neither field is set.
+// REALITY / shadow-tls / res-tls / jls / tlsmirror listeners are skipped.
+func ensureServerTLSCertificate(cfg map[string]interface{}, proto string) error {
+	if cfg == nil {
+		return nil
+	}
+	if s, ok := cfg["certificate"].(string); ok && strings.TrimSpace(s) == "" {
+		delete(cfg, "certificate")
+	}
+	if s, ok := cfg["private-key"].(string); ok && strings.TrimSpace(s) == "" {
+		delete(cfg, "private-key")
+	}
+	if s, ok := cfg["private_key"].(string); ok && strings.TrimSpace(s) == "" {
+		delete(cfg, "private_key")
+	}
+
+	cert, _ := cfg["certificate"].(string)
+	key, _ := cfg["private-key"].(string)
+	if key == "" {
+		key, _ = cfg["private_key"].(string)
+	}
+	if strings.TrimSpace(cert) != "" && strings.TrimSpace(key) != "" {
+		return nil
+	}
+	if strings.TrimSpace(cert) != "" || strings.TrimSpace(key) != "" {
+		return nil
+	}
+	if !protocolNeedsServerCertificate(proto, cfg) {
+		return nil
+	}
+
+	host := "localhost"
+	if sni, _ := cfg["sni"].(string); strings.TrimSpace(sni) != "" {
+		host = strings.TrimSpace(sni)
+	} else if names := asStringSlice(cfg["server-names"]); len(names) > 0 {
+		host = names[0]
+	}
+	certPEM, keyPEM, err := generateSelfSignedTLS(host)
+	if err != nil {
+		return fmt.Errorf("generate self-signed certificate for %s: %w", proto, err)
+	}
+	cfg["certificate"] = certPEM
+	cfg["private-key"] = keyPEM
+	return nil
+}
+
+func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bool {
+	if _, ok := cfg["reality-config"]; ok {
+		return false
+	}
+	if enabledMap(cfg, "shadow-tls") || enabledMap(cfg, "res-tls") || enabledMap(cfg, "jls-config") {
+		return false
+	}
+	if _, ok := cfg["tlsmirror-config"]; ok {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(proto)) {
+	case "hysteria2", "anytls", "mieru", "tuic", "trusttunnel", "trojan":
+		return true
+	default:
+		return false
+	}
+}
+
+func enabledMap(cfg map[string]interface{}, key string) bool {
+	raw, ok := cfg[key]
+	if !ok || raw == nil {
+		return false
+	}
+	if m, ok := raw.(map[string]interface{}); ok {
+		if en, ok := m["enable"].(bool); ok {
+			return en
+		}
+		if en, ok := m["enabled"].(bool); ok {
+			return en
+		}
+		return len(m) > 0
+	}
+	return true
 }
 
 func generateSelfSignedTLS(host string) (certPEM, keyPEM string, err error) {

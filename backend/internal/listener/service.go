@@ -78,6 +78,9 @@ func (s *Service) GetByID(id uint) (*models.Listener, error) {
 func (s *Service) Update(l *models.Listener) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := AutofillListenerDefaults(l); err != nil {
+		return fmt.Errorf("autofill listener defaults: %w", err)
+	}
 	if err := ValidateModel(l); err != nil {
 		return err
 	}
