@@ -450,7 +450,9 @@ export function formValuesToConfig(
     case 'tuic':
       if (values.token) {
         const tokens = String(values.token).split(',').map((s: string) => s.trim()).filter(Boolean);
-        set('token', tokens.length === 1 ? tokens[0] : tokens);
+        if (tokens.length > 0) {
+          set('token', tokens); // Mihomo expects token as array
+        }
       }
       set('congestion-controller', values['congestion-controller']);
       set('alpn', values.alpn);

@@ -135,6 +135,10 @@ func (TUICCompiler) Capability() ProtocolCapability { return tuicCapability() }
 func (TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
+	// Mihomo expects token as a slice. Legacy configs may store a single string.
+	if tok, ok := m["token"].(string); ok {
+		m["token"] = []string{tok}
+	}
 	// TUIC v4 uses `token` (array of strings) — passed through by copyConfigPassthrough.
 	// TUIC v5 uses `users` as a map{UUID: PASSWORD} (verified against Mihomo wiki).
 	// We emit the v5 map form when credentials are bound. If the operator configured
