@@ -47,9 +47,11 @@ func ensureListenerTLSMaterial(protocol string, cfg map[string]interface{}) erro
 		delete(cfg, "allow-insecure")
 		return nil
 	}
-	// Partial cert/key — leave for validator; do not invent half a pair.
+	// Partial pair (only cert or only key) cannot work — drop and regenerate.
 	if strings.TrimSpace(cert) != "" || strings.TrimSpace(key) != "" {
-		return nil
+		delete(cfg, "certificate")
+		delete(cfg, "private-key")
+		delete(cfg, "private_key")
 	}
 	if !listenerProtocolNeedsCert(proto, cfg) {
 		return nil
