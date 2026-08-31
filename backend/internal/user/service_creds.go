@@ -64,7 +64,12 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 				}
 				password, err := decryptPassword(u.PasswordEncrypted)
 				if err != nil {
-					return nil, fmt.Errorf("decrypt proxy user %d password: %w", u.ID, err)
+					// Skip this user instead of failing the entire operation.
+					// A decrypt failure usually means the credential_key was
+					// rotated after this user was created. The user's
+					// subscription will fail until their password is reset,
+					// but other users' subscriptions should still work.
+					continue
 				}
 				result[listener.ID] = append(result[listener.ID], Credential{
 					Username: u.Username,
