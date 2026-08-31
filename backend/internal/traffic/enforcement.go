@@ -82,6 +82,17 @@ func (e *Enforcer) CheckAndEnforce() (blockedCount int, err error) {
 	}
 	e.mu.Lock()
 	e.lastBlocked = current
+	// Prune entries for users no longer present in the latest snapshot (e.g.
+	// deleted proxy users) so lastBlocked does not grow without bound if a
+	// future code path starts mutating lastBlocked incrementally. Today the
+	// whole map is replaced above, so this loop is a defensive no-op — but it
+	// is done under the lock to avoid a data race on the map (delete while
+	// another goroutine reads via CheckAndEnforce).
+	for id := range e.lastBlocked {
+		if _, ok := current[id]; !ok {
+			delete(e.lastBlocked, id)
+		}
+	}
 	e.mu.Unlock()
 	return len(current), nil
 }

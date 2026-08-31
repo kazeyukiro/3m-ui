@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"gorm.io/gorm"
 )
 
 func registerPanelSettingsRoutes(api *gin.RouterGroup, d Deps) {
@@ -42,27 +43,35 @@ func registerPanelSettingsRoutes(api *gin.RouterGroup, d Deps) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		for k, v := range body {
-			k = strings.TrimSpace(k)
-			if isSensitiveSettingKey(k) {
-				continue
-			}
-			var row models.PanelSetting
-			err := db.Where("key = ?", k).First(&row).Error
-			if err != nil {
-				if createErr := db.Create(&models.PanelSetting{Key: k, Value: v}).Error; createErr != nil {
-					log.Printf("panel-settings create %q failed: %v", k, createErr)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-					return
+		// Apply all settings in a single transaction so a partial failure (e.g.
+		// a DB error mid-loop) rolls back every prior create/update and leaves
+		// the persisted settings in a consistent state rather than half-applied.
+		txErr := db.Transaction(func(tx *gorm.DB) error {
+			for k, v := range body {
+				k = strings.TrimSpace(k)
+				if isSensitiveSettingKey(k) {
+					continue
 				}
-			} else {
-				row.Value = v
-				if saveErr := db.Save(&row).Error; saveErr != nil {
-					log.Printf("panel-settings save %q failed: %v", k, saveErr)
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-					return
+				var row models.PanelSetting
+				err := tx.Where("key = ?", k).First(&row).Error
+				if err != nil {
+					if createErr := tx.Create(&models.PanelSetting{Key: k, Value: v}).Error; createErr != nil {
+						log.Printf("panel-settings create %q failed: %v", k, createErr)
+						return createErr
+					}
+				} else {
+					row.Value = v
+					if saveErr := tx.Save(&row).Error; saveErr != nil {
+						log.Printf("panel-settings save %q failed: %v", k, saveErr)
+						return saveErr
+					}
 				}
 			}
+			return nil
+		})
+		if txErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})

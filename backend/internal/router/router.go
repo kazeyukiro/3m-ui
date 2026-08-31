@@ -56,6 +56,13 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		RegisterPublicSubscriptionRoutes(apiV1, db, cfg)
 
 		apiV1.Use(auth.RequireAuth(db, cfg.JWT.Secret))
+		// Access-token CRUD (GET/POST/PUT/DELETE) and the per-node
+		// /nodes/:id/client-access + /nodes/:id/uri endpoints below are NOT
+		// dead code: they back the subscription system (router/subscription.go
+		// resolves a bearer access token to a Listener and generates a client
+		// config via converter.GenerateRawConfig) and the node URI export used by
+		// the frontend's "copy link" buttons. Do not remove without grepping both
+		// callers — a previous audit (R3-F5) incorrectly flagged them as unused.
 		RegisterAccessTokenRoutes(apiV1, d)
 
 		registerDashboardRoute(apiV1, d)

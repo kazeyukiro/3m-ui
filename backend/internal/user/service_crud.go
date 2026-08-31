@@ -3,6 +3,7 @@ package user
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -60,7 +61,13 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		return nil, fmt.Errorf("create proxy user: %w", err)
 	}
 	if err := s.notifyCredentialsChanged(); err != nil {
-		return u, fmt.Errorf("proxy user created, but Mihomo configuration could not be updated: %w", err)
+		// The proxy user has ALREADY been persisted to the DB at this point, so
+		// returning an error here would cause the API layer to translate it into
+		// a 400/500 — even though the user was created successfully. The only
+		// thing that failed is the Mihomo config hot-reload, which the next
+		// scheduler/enforcer tick (or any later credential change) will retry.
+		// Log the warning and return the created user so the caller sees success.
+		log.Printf("warning: proxy user %d created, but Mihomo config could not be updated: %v", u.ID, err)
 	}
 	return u, nil
 }

@@ -28,7 +28,8 @@ import (
 //   - @monthly             → 1st of every month at 00:00
 //   - @every <duration>    → tick at interval (e.g. @every 6h, @every 30m)
 //   - 5-field cron         → minute hour day month weekday
-//     (supports * and comma lists, no range/step)
+//     (supports *, comma lists, exact values, "A-B" ranges,
+//     "*/N" steps, and "A-B/N" stepped ranges)
 type Scheduler struct {
 	db        *gorm.DB
 	mihomo    *mihomo.Service
@@ -40,6 +41,10 @@ type Scheduler struct {
 	mu     sync.Mutex
 	stopCh chan struct{}
 	wg     sync.WaitGroup
+
+	// startOnce guards Start() so the scheduler goroutine is launched at most
+	// once even if Start() is called repeatedly (defensive against caller bugs).
+	startOnce sync.Once
 }
 
 // NewScheduler constructs a Scheduler. dbPath/mihomoCfg enable optional backup
@@ -56,17 +61,20 @@ func NewScheduler(db *gorm.DB, mihomoSvc *mihomo.Service, userSvc *user.Service,
 	}
 }
 
-// Start launches the scheduler goroutine. Idempotent: safe to call once.
+// Start launches the scheduler goroutine. Idempotent: safe to call multiple
+// times — only the first call spawns the loop, subsequent calls are no-ops.
 func (s *Scheduler) Start() {
 	if s == nil {
 		return
 	}
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.loop()
-	}()
-	log.Printf("telegram: scheduler started")
+	s.startOnce.Do(func() {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.loop()
+		}()
+		log.Printf("telegram: scheduler started")
+	})
 }
 
 // Stop signals the scheduler loop to exit and blocks until it has.
@@ -342,9 +350,8 @@ func scheduleMatch(spec string, now, last time.Time) (bool, time.Time) {
 }
 
 // cronFieldMatches reports whether a single cron field matches a value.
-// Supports "*" (wildcard), comma "," lists, and exact integer values.
-// Range "-" and step "/" syntax are intentionally NOT supported to keep the
-// parser minimal — operators can express common schedules with * and lists.
+// Supports "*" (wildcard), comma "," lists, exact integer values, "*/N"
+// (step from base 0), "A-B" (inclusive range), and "A-B/N" (stepped range).
 func cronFieldMatches(field string, value int) bool {
 	field = strings.TrimSpace(field)
 	if field == "*" || field == "" {
@@ -352,12 +359,59 @@ func cronFieldMatches(field string, value int) bool {
 	}
 	for _, part := range strings.Split(field, ",") {
 		part = strings.TrimSpace(part)
-		if part == "*" {
+		if part == "*" || part == "" {
 			return true
+		}
+		// Step syntax: "*/N", "A-B/N", "A/N".
+		if slashIdx := strings.IndexByte(part, '/'); slashIdx >= 0 {
+			rangePart := strings.TrimSpace(part[:slashIdx])
+			step, err := strconv.Atoi(strings.TrimSpace(part[slashIdx+1:]))
+			if err != nil || step <= 0 {
+				continue
+			}
+			if rangePart == "*" || rangePart == "" {
+				// "*/N" — match every Nth value (0, N, 2N, ...).
+				if value%step == 0 {
+					return true
+				}
+				continue
+			}
+			// "A-B/N" — match values in [A,B] that are A + k*step.
+			lo, hi, ok := parseCronRange(rangePart)
+			if !ok {
+				continue
+			}
+			if value >= lo && value <= hi && (value-lo)%step == 0 {
+				return true
+			}
+			continue
+		}
+		// Plain inclusive range "A-B".
+		if strings.Contains(part, "-") {
+			lo, hi, ok := parseCronRange(part)
+			if ok && value >= lo && value <= hi {
+				return true
+			}
+			continue
 		}
 		if n, err := strconv.Atoi(part); err == nil && n == value {
 			return true
 		}
 	}
 	return false
+}
+
+// parseCronRange parses an "A-B" cron range expression into [lo, hi].
+// Returns ok=false when either end is missing, non-numeric, or lo > hi.
+func parseCronRange(s string) (int, int, bool) {
+	parts := strings.SplitN(s, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	lo, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	hi, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || lo > hi {
+		return 0, 0, false
+	}
+	return lo, hi, true
 }

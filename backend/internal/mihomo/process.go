@@ -433,6 +433,13 @@ func (pm *ProcessManager) start() error {
 		)
 	}
 
+	// findExistingProcesses scans /proc and is slow I/O. Do NOT hold pm.mu
+	// during the scan — it blocks Logs()/Status()/Stop() and any other caller
+	// that needs the lock. The result depends only on binaryPath/configPath,
+	// which are immutable after construction, so it can be computed before the
+	// lock is acquired. Only the subsequent state mutation needs the lock.
+	existing := pm.findExistingProcesses()
+
 	pm.mu.Lock()
 
 	if pm.isRunning() {
@@ -445,8 +452,6 @@ func (pm *ProcessManager) start() error {
 			pid,
 		)
 	}
-
-	existing := pm.findExistingProcesses()
 
 	if len(existing) > 0 {
 		pid := pm.adoptExistingLocked(existing)
