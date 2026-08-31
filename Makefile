@@ -2,7 +2,7 @@ APP_NAME := 3m-ui
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 DIST_DIR := dist
-VERSION ?= v0.1.0-rc.3
+VERSION ?= v1.0.0
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildTime=$(BUILD_TIME)
