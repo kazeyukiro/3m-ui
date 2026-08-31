@@ -119,6 +119,44 @@ func sanitizeServerConfig(cfg map[string]interface{}) {
 		delete(raw, "public_key")
 		cfg["reality-config"] = raw
 	}
+	// Incomplete JLS blocks make Mihomo reject the whole config:
+	// "jls-config has unset fields: dest, users".
+	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok {
+		dest, _ := jls["dest"].(string)
+		if strings.TrimSpace(dest) == "" || !jlsHasUsers(jls) {
+			delete(cfg, "jls-config")
+		}
+	}
+}
+
+func jlsHasUsers(m map[string]interface{}) bool {
+	raw, ok := m["users"]
+	if !ok || raw == nil {
+		return false
+	}
+	switch users := raw.(type) {
+	case []interface{}:
+		for _, item := range users {
+			u, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			user, _ := u["username"].(string)
+			pass, _ := u["password"].(string)
+			if strings.TrimSpace(user) != "" && strings.TrimSpace(pass) != "" {
+				return true
+			}
+		}
+	case []map[string]interface{}:
+		for _, u := range users {
+			user, _ := u["username"].(string)
+			pass, _ := u["password"].(string)
+			if strings.TrimSpace(user) != "" && strings.TrimSpace(pass) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func needsReality(cfg map[string]interface{}) bool {
