@@ -37,6 +37,22 @@ func sanitizeIncompleteTLSWrappers(cfg map[string]interface{}) {
 			delete(cfg, "tlsmirror-config")
 		}
 	}
+	// Snell obfs-opts requires host (Mihomo reports unset field "Host").
+	if oo, ok := cfg["obfs-opts"].(map[string]interface{}); ok {
+		host := ""
+		if hasNonEmptyString(oo, "host") {
+			host, _ = oo["host"].(string)
+		} else if hasNonEmptyString(oo, "Host") {
+			host, _ = oo["Host"].(string)
+		}
+		mode := ""
+		if s, _ := oo["mode"].(string); strings.TrimSpace(s) != "" {
+			mode = s
+		}
+		if strings.TrimSpace(host) == "" || strings.TrimSpace(mode) == "" {
+			delete(cfg, "obfs-opts")
+		}
+	}
 }
 
 func completeShadowTLSBlock(st map[string]interface{}) bool {
