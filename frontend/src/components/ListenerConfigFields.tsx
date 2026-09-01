@@ -974,7 +974,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
         </>
       )}
 
-      ({(protocol === 'tuic' || protocol === 'tuic-v4' || protocol === 'tuic-v5') && (
+      {(protocol === 'tuic' || protocol === 'tuic-v4' || protocol === 'tuic-v5') && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
           {(protocol === 'tuic-v4' || protocol === 'tuic') && (
