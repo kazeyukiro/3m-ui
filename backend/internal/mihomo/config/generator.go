@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -178,6 +179,7 @@ func listenerAddressesConflict(a, b string) bool {
 func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint][]Credential) ([]map[string]interface{}, error) {
 	reg := protocol.DefaultCompileRegistry()
 	result := make([]map[string]interface{}, 0, len(listeners))
+	var skipped []string
 	for _, l := range listeners {
 		if !l.Enabled {
 			continue
@@ -187,10 +189,12 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			protocolName = strings.ToLower(strings.TrimSpace(l.Type))
 		}
 		if !IsMihomoListenerProtocol(protocolName) {
-			return nil, fmt.Errorf("unsupported Mihomo listener protocol %q", protocolName)
+			skipped = append(skipped, fmt.Sprintf("%s: unsupported protocol %q", l.Name, protocolName))
+			continue
 		}
 		if !isValidPortString(l.Port) {
-			return nil, fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port)
+			skipped = append(skipped, fmt.Sprintf("%s: invalid port %q", l.Name, l.Port))
+			continue
 		}
 		listen := firstListenerAddress(l)
 		var portVal interface{} = strings.TrimSpace(l.Port)
@@ -199,36 +203,26 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		}
 		configMap, err := decodeListenerConfig(l.Config)
 		if err != nil {
-			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
 		}
 		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
 		sanitizeIncompleteTLSWrappers(configMap)
-		certBefore, _ := configMap["certificate"].(string)
-		keyBefore, _ := configMap["private-key"].(string)
-		if keyBefore == "" {
-			keyBefore, _ = configMap["private_key"].(string)
-		}
 		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
-			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
 		}
 		if patched, mErr := json.Marshal(configMap); mErr == nil {
 			l.Config = string(patched)
-			// Persist autofilled TLS material so the next reload does not mint a
-			// new self-signed pair (which breaks clients without skip-cert-verify
-			// and confuses operators after panel updates).
-			certAfter, _ := configMap["certificate"].(string)
-			keyAfter, _ := configMap["private-key"].(string)
-			if keyAfter == "" {
-				keyAfter, _ = configMap["private_key"].(string)
-			}
-			tlsChanged := strings.TrimSpace(certAfter) != strings.TrimSpace(certBefore) ||
-				strings.TrimSpace(keyAfter) != strings.TrimSpace(keyBefore)
-			if db != nil && l.ID != 0 && tlsChanged && strings.TrimSpace(certAfter) != "" && strings.TrimSpace(keyAfter) != "" {
+			// Persist sanitized/autofilled config so incomplete wrappers and new
+			// certs stick across reloads (does not rotate existing complete certs).
+			if db != nil && l.ID != 0 {
 				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
 			}
 		}
 		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
-			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
 		}
 
 		listenerCreds, hasCredState := creds[l.ID]
@@ -255,21 +249,19 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			Users:              users,
 			HasCredentialState: hasCredState,
 		}
-		m, err := reg.Compile(in)
+		compiled, err := reg.Compile(in)
 		if err != nil {
-			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
 		}
-		// Second pass: compilers may passthrough nested maps; strip incomplete ones
-		// that Mihomo -t would reject (e.g. obfs-opts without Host).
-		sanitizeIncompleteTLSWrappers(m)
-		if db != nil && l.ID != 0 {
-			if patched, mErr := json.Marshal(configMap); mErr == nil {
-				// configMap already sanitized before compile; ensure DB does not keep
-				// incomplete obfs-opts that caused this validation failure.
-				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
-			}
-		}
-		result = append(result, m)
+		sanitizeIncompleteTLSWrappers(compiled)
+		result = append(result, compiled)
+	}
+	if len(skipped) > 0 {
+		log.Printf("3m-ui: skipped %d listener(s) during config generation: %s", len(skipped), strings.Join(skipped, "; "))
+	}
+	if len(result) == 0 && len(skipped) > 0 {
+		return nil, fmt.Errorf("no valid listeners to generate; skipped: %s", strings.Join(skipped, "; "))
 	}
 	return result, nil
 }
