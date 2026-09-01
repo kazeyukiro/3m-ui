@@ -156,6 +156,18 @@ func sanitizeServerConfig(cfg map[string]interface{}) {
 			delete(cfg, "tlsmirror-config")
 		}
 	}
+	if oo, ok := cfg["obfs-opts"].(map[string]interface{}); ok {
+		host, _ := oo["host"].(string)
+		if strings.TrimSpace(host) == "" {
+			if h, ok := oo["Host"].(string); ok {
+				host = h
+			}
+		}
+		mode, _ := oo["mode"].(string)
+		if strings.TrimSpace(host) == "" || strings.TrimSpace(mode) == "" {
+			delete(cfg, "obfs-opts")
+		}
+	}
 	// If a cert pair is present, clear allow-insecure (mutually exclusive modes).
 	cert, _ := cfg["certificate"].(string)
 	key, _ := cfg["private-key"].(string)

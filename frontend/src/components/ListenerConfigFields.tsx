@@ -404,9 +404,14 @@ export function formValuesToConfig(
         const ver = toInt(values.version);
         if (ver !== undefined) set('version', ver);
       }
-      if (values.obfs_opts_mode || values.obfs_opts_host) {
-        const o = cleanObj({ mode: values.obfs_opts_mode, host: values.obfs_opts_host });
-        if (o) cfg['obfs-opts'] = o;
+      // Mihomo rejects obfs-opts without Host; only emit a complete block.
+      {
+        const mode = typeof values.obfs_opts_mode === 'string' ? values.obfs_opts_mode.trim() : '';
+        const host = typeof values.obfs_opts_host === 'string' ? values.obfs_opts_host.trim() : '';
+        if (mode && host) {
+          const o = cleanObj({ mode, host });
+          if (o) cfg['obfs-opts'] = o;
+        }
       }
       break;
     case 'vmess':
