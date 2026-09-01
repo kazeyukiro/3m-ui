@@ -568,6 +568,12 @@ func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bo
 	if _, ok := cfg["reality-config"]; ok {
 		return false
 	}
+	if b, ok := cfg["allow-insecure"].(bool); ok && b {
+		switch strings.ToLower(strings.TrimSpace(proto)) {
+		case "anytls", "trojan", "vmess", "vless":
+			return false
+		}
+	}
 	// Incomplete wrapper toggles must not suppress cert generation.
 	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok {
 		dest, _ := jls["dest"].(string)
