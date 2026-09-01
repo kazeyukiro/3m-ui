@@ -575,7 +575,7 @@ func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bo
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(proto)) {
-	case "hysteria2", "anytls", "tuic", "trusttunnel", "trojan":
+	case "hysteria2", "anytls", "tuic", "tuic-v4", "tuic-v5", "trusttunnel", "trojan":
 		return true
 	default:
 		return false

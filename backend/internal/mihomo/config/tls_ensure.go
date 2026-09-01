@@ -83,7 +83,7 @@ func listenerProtocolNeedsCert(proto string, cfg map[string]interface{}) bool {
 		return false
 	}
 	switch proto {
-	case "hysteria2", "anytls", "tuic", "trusttunnel", "trojan":
+	case "hysteria2", "anytls", "tuic", "tuic-v4", "tuic-v5", "trusttunnel", "trojan":
 		return true
 	default:
 		return false
