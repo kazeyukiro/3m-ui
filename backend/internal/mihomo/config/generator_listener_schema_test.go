@@ -16,7 +16,7 @@ func TestGenerateListenersUsesNativeSchema(t *testing.T) {
 		2: {{Username: "alice", UUID: "11111111-1111-4111-8111-111111111111"}},
 	}
 
-	result, err := generateListeners(listeners, creds)
+	result, err := generateListeners(nil, listeners, creds)
 	if err != nil {
 		t.Fatalf("generateListeners failed: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestGenerateShadowQUICNormalizesObjectUsers(t *testing.T) {
 		Config:      `{"users":{"alice":"secret","bob":"secret2"}}`,
 	}}
 
-	result, err := generateListeners(listeners, nil)
+	result, err := generateListeners(nil, listeners, nil)
 	if err != nil {
 		t.Fatalf("generateListeners failed: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestGenerateShadowQUICUsesCredentialsAsList(t *testing.T) {
 		1: {{Username: "alice", Password: "secret"}},
 	}
 
-	result, err := generateListeners(listeners, creds)
+	result, err := generateListeners(nil, listeners, creds)
 	if err != nil {
 		t.Fatalf("generateListeners failed: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestGenerateShadowQUICUsesCredentialsAsList(t *testing.T) {
 
 func TestGenerateListenersRejectsExcludedProtocols(t *testing.T) {
 	for _, protocol := range []string{"socks", "http", "tproxy", "redir", "mixed", "tunnel", "tun", "wireguard"} {
-		_, err := generateListeners([]models.Listener{{Name: "bad", Protocol: protocol, Port: "1080", Enabled: true}}, nil)
+		_, err := generateListeners(nil, []models.Listener{{Name: "bad", Protocol: protocol, Port: "1080", Enabled: true}}, nil)
 		if err == nil {
 			t.Fatalf("expected protocol %q to be rejected", protocol)
 		}
@@ -126,7 +126,7 @@ func TestGenerateListenersRejectsExcludedProtocols(t *testing.T) {
 }
 
 func TestGenerateListenersSkipsDisabled(t *testing.T) {
-	result, err := generateListeners([]models.Listener{
+	result, err := generateListeners(nil, []models.Listener{
 		{Name: "on", Protocol: "shadowsocks", Port: "1080", Enabled: true, Config: `{"cipher":"aes-256-gcm","password":"x"}`},
 		{Name: "off", Protocol: "vless", Port: "1081", Enabled: false},
 	}, nil)

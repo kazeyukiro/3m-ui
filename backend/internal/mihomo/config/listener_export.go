@@ -7,5 +7,5 @@ import "github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 // listener compilation in one place prevents export and runtime config from
 // drifting apart (for example, ShadowQUIC users being emitted as a map).
 func GenerateListenersForExport(listeners []models.Listener) ([]map[string]interface{}, error) {
-	return generateListeners(listeners, nil)
+	return generateListeners(nil, listeners, nil)
 }

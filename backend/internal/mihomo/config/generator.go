@@ -63,7 +63,7 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 			return "", fmt.Errorf("load listener credentials: %w", err)
 		}
 	}
-	generated, err := generateListeners(listeners, credentials)
+	generated, err := generateListeners(ce.db, listeners, credentials)
 	if err != nil {
 		return "", err
 	}
@@ -175,7 +175,7 @@ func listenerAddressesConflict(a, b string) bool {
 	return false
 }
 
-func generateListeners(listeners []models.Listener, creds map[uint][]Credential) ([]map[string]interface{}, error) {
+func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint][]Credential) ([]map[string]interface{}, error) {
 	reg := protocol.DefaultCompileRegistry()
 	result := make([]map[string]interface{}, 0, len(listeners))
 	for _, l := range listeners {
@@ -203,11 +203,29 @@ func generateListeners(listeners []models.Listener, creds map[uint][]Credential)
 		}
 		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
 		sanitizeIncompleteTLSWrappers(configMap)
+		certBefore, _ := configMap["certificate"].(string)
+		keyBefore, _ := configMap["private-key"].(string)
+		if keyBefore == "" {
+			keyBefore, _ = configMap["private_key"].(string)
+		}
 		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
 		if patched, mErr := json.Marshal(configMap); mErr == nil {
 			l.Config = string(patched)
+			// Persist autofilled TLS material so the next reload does not mint a
+			// new self-signed pair (which breaks clients without skip-cert-verify
+			// and confuses operators after panel updates).
+			certAfter, _ := configMap["certificate"].(string)
+			keyAfter, _ := configMap["private-key"].(string)
+			if keyAfter == "" {
+				keyAfter, _ = configMap["private_key"].(string)
+			}
+			tlsChanged := strings.TrimSpace(certAfter) != strings.TrimSpace(certBefore) ||
+				strings.TrimSpace(keyAfter) != strings.TrimSpace(keyBefore)
+			if db != nil && l.ID != 0 && tlsChanged && strings.TrimSpace(certAfter) != "" && strings.TrimSpace(keyAfter) != "" {
+				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
+			}
 		}
 		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
