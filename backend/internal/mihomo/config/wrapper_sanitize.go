@@ -37,22 +37,40 @@ func sanitizeIncompleteTLSWrappers(cfg map[string]interface{}) {
 			delete(cfg, "tlsmirror-config")
 		}
 	}
-	// Snell obfs-opts requires host (Mihomo reports unset field "Host").
-	if oo, ok := cfg["obfs-opts"].(map[string]interface{}); ok {
-		host := ""
-		if hasNonEmptyString(oo, "host") {
-			host, _ = oo["host"].(string)
-		} else if hasNonEmptyString(oo, "Host") {
-			host, _ = oo["Host"].(string)
-		}
-		mode := ""
-		if s, _ := oo["mode"].(string); strings.TrimSpace(s) != "" {
-			mode = s
-		}
-		if strings.TrimSpace(host) == "" || strings.TrimSpace(mode) == "" {
-			delete(cfg, "obfs-opts")
+	// Snell obfs-opts requires mode + host (Mihomo reports unset field "Host").
+	sanitizeObfsOpts(cfg)
+}
+
+// sanitizeObfsOpts drops incomplete Snell/simple obfs-opts blocks.
+func sanitizeObfsOpts(cfg map[string]interface{}) {
+	if cfg == nil {
+		return
+	}
+	oo, ok := cfg["obfs-opts"].(map[string]interface{})
+	if !ok || oo == nil {
+		// Also handle JSON objects decoded into map[interface{}]interface{} via re-decode paths.
+		return
+	}
+	host := firstHost(oo)
+	mode := ""
+	if s, _ := oo["mode"].(string); strings.TrimSpace(s) != "" {
+		mode = strings.TrimSpace(s)
+	}
+	if host == "" || mode == "" {
+		delete(cfg, "obfs-opts")
+		return
+	}
+	// Normalize to lowercase keys Mihomo accepts.
+	cfg["obfs-opts"] = map[string]interface{}{"mode": mode, "host": host}
+}
+
+func firstHost(m map[string]interface{}) string {
+	for _, k := range []string{"host", "Host", "HOST"} {
+		if s, ok := m[k].(string); ok && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
 		}
 	}
+	return ""
 }
 
 func completeShadowTLSBlock(st map[string]interface{}) bool {
