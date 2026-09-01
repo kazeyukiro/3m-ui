@@ -259,6 +259,16 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		if err != nil {
 			return nil, fmt.Errorf("listener %q: %w", l.Name, err)
 		}
+		// Second pass: compilers may passthrough nested maps; strip incomplete ones
+		// that Mihomo -t would reject (e.g. obfs-opts without Host).
+		sanitizeIncompleteTLSWrappers(m)
+		if db != nil && l.ID != 0 {
+			if patched, mErr := json.Marshal(configMap); mErr == nil {
+				// configMap already sanitized before compile; ensure DB does not keep
+				// incomplete obfs-opts that caused this validation failure.
+				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
+			}
+		}
 		result = append(result, m)
 	}
 	return result, nil
