@@ -75,6 +75,14 @@ func listenerProtocolNeedsCert(proto string, cfg map[string]interface{}) bool {
 	if _, ok := cfg["reality-config"]; ok {
 		return false
 	}
+	// Official: allow-insecure=true means TLS off at the listener (nginx/caddy front).
+	// Do NOT invent a self-signed cert or clear this flag — that silently breaks nodes.
+	if b, ok := cfg["allow-insecure"].(bool); ok && b {
+		switch proto {
+		case "anytls", "trojan", "vmess", "vless":
+			return false
+		}
+	}
 	// Only a *complete* alternate wrapper replaces certificate/private-key.
 	if completeShadowTLS(cfg) || completeResTLS(cfg) || completeJLS(cfg) {
 		return false

@@ -213,10 +213,10 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			continue
 		}
 		if patched, mErr := json.Marshal(configMap); mErr == nil {
+			prev := strings.TrimSpace(l.Config)
 			l.Config = string(patched)
-			// Persist sanitized/autofilled config so incomplete wrappers and new
-			// certs stick across reloads (does not rotate existing complete certs).
-			if db != nil && l.ID != 0 {
+			// Persist only when sanitization/autofill changed the stored JSON.
+			if db != nil && l.ID != 0 && strings.TrimSpace(string(patched)) != prev {
 				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
 			}
 		}
