@@ -137,6 +137,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if protocol == "" {
 		protocol = strings.ToLower(strings.TrimSpace(l.Type))
 	}
+	// Panel stores tuic-v4 / tuic-v5; Mihomo client type is always "tuic".
+	exportProtocol := protocol
+	switch protocol {
+	case "tuic-v4", "tuic-v5":
+		exportProtocol = "tuic"
+	}
 	if !config.IsMihomoListenerProtocol(protocol) {
 		return nil, fmt.Errorf("unsupported listener protocol %q", protocol)
 	}
@@ -153,7 +159,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		portVal = p
 	}
 	server = netutil.NormalizeHost(server)
-	base := map[string]interface{}{"type": protocol, "server": server, "port": portVal}
+	base := map[string]interface{}{"type": exportProtocol, "server": server, "port": portVal}
 	if l.UDP && clientSupportsUDP(protocol) {
 		base["udp"] = true
 	}
@@ -304,7 +310,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			result = append(result, p)
 		}
-	case "tuic":
+	case "tuic", "tuic-v4", "tuic-v5":
 		if token, ok := opts["token"]; ok {
 			p := makeProxy("")
 			p["token"] = token
@@ -982,7 +988,9 @@ func boolValue(v interface{}) bool {
 
 func clientSupportsUDP(protocol string) bool {
 	switch protocol {
-	case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel":
+	case "shadowsocks", "snell", "vmess", "vless", "trojan",
+		"hysteria2", "tuic", "tuic-v4", "tuic-v5", "shadowquic",
+		"anytls", "trusttunnel":
 		return true
 	default:
 		return false
