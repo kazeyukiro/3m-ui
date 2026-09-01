@@ -8,7 +8,7 @@ import (
 
 func TestGenerateListenersUsesModelTLS(t *testing.T) {
 	listeners := []models.Listener{{BaseModel: models.BaseModel{ID: 1}, Name: "vless", Protocol: "vless", Port: "443", TLS: true, Enabled: true}}
-	got, err := generateListeners(listeners, nil)
+	got, err := generateListeners(nil, listeners, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestGenerateListenersFallsBackToConfigUsersWhenCredentialStateIsExplicitlyE
 	// valid; the enforcer is responsible for disabling the listener when all
 	// panel users are inactive.
 	listeners := []models.Listener{{BaseModel: models.BaseModel{ID: 1}, Name: "vless", Protocol: "vless", Port: "443", Enabled: true, Config: `{"users":[{"uuid":"legacy"}]}`}}
-	got, err := generateListeners(listeners, map[uint][]Credential{1: {}})
+	got, err := generateListeners(nil, listeners, map[uint][]Credential{1: {}})
 	if err != nil {
 		t.Fatal(err)
 	}
