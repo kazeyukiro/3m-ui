@@ -874,10 +874,25 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4}>
             <Select options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))} />
           </Form.Item>
-          <Form.Item name="obfs_opts_mode" label={t('listeners.obfsOptsMode')}>
+          <Form.Item name="obfs_opts_mode" label={t('listeners.obfsOptsMode')} tooltip={t('listeners.obfsOptsHint') || 'Leave both empty to disable. Mode and host must be set together.'}>
             <Select allowClear options={[{ value: 'http', label: 'http' }, { value: 'tls', label: 'tls' }]} />
           </Form.Item>
-          <Form.Item name="obfs_opts_host" label={t('listeners.obfsOptsHost')}>
+          <Form.Item
+            name="obfs_opts_host"
+            label={t('listeners.obfsOptsHost')}
+            dependencies={['obfs_opts_mode']}
+            rules={[
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  const mode = getFieldValue('obfs_opts_mode');
+                  if (mode && !String(value || '').trim()) {
+                    return Promise.reject(new Error(t('listeners.obfsOptsHostRequired') || 'Host is required when obfs mode is set'));
+                  }
+                  return Promise.resolve();
+                },
+              }),
+            ]}
+          >
             <Input placeholder="www.example.com" />
           </Form.Item>
         </>
