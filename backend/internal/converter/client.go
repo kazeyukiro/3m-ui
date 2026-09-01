@@ -161,7 +161,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	// wrappers (shadow-tls/restls/jls-config) are emitted as the `plugin`
 	// format via applySSPluginWrappers, not via copyClientTLS.
 	// ShadowQUIC uses QUIC's built-in TLS — no certificate/tls/skip-cert-verify.
-	if protocol != "shadowsocks" && protocol != "shadowquic" {
+	if protocol != "shadowsocks" && protocol != "shadowquic" && protocol != "mieru" {
 		copyClientTLS(base, opts)
 	}
 	copyTransport(base, opts)
@@ -739,6 +739,14 @@ func copyClientTLS(dst, src map[string]interface{}) {
 	if dst["servername"] == nil {
 		if sni, ok := dst["sni"].(string); ok && sni != "" {
 			dst["servername"] = sni
+		}
+	}
+	// Ensure sni is set when only servername was derived (e.g. from
+	// reality-config.server-names). Trojan and other protocols use "sni"
+	// as the client-side TLS hostname, not "servername".
+	if dst["sni"] == nil {
+		if sn, ok := dst["servername"].(string); ok && sn != "" {
+			dst["sni"] = sn
 		}
 	}
 }
