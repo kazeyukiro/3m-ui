@@ -36,14 +36,9 @@ func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	if in.UDP {
 		m["udp"] = true
 	}
-	// Reality: never set top-level tls
-	if _, hasReality := in.Config["reality-config"]; hasReality {
-		delete(m, "tls")
-	} else if in.TLS {
-		m["tls"] = true
-	} else {
-		delete(m, "tls")
-	}
+	// Official VLESS listener has no top-level "tls" field; TLS is implied by
+	// certificate/private-key, reality-config, or wrappers — never emit tls: true.
+	delete(m, "tls")
 	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
@@ -61,13 +56,8 @@ func (VMessCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	if in.UDP {
 		m["udp"] = true
 	}
-	if _, hasReality := in.Config["reality-config"]; hasReality {
-		delete(m, "tls")
-	} else if in.TLS {
-		m["tls"] = true
-	} else {
-		delete(m, "tls")
-	}
+	// Official VMess listener: no top-level tls boolean.
+	delete(m, "tls")
 	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
@@ -85,13 +75,8 @@ func (TrojanCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	if in.UDP {
 		m["udp"] = true
 	}
-	if _, hasReality := in.Config["reality-config"]; hasReality {
-		delete(m, "tls")
-	} else if in.TLS {
-		m["tls"] = true
-	} else {
-		delete(m, "tls")
-	}
+	// Official Trojan listener: no top-level tls boolean.
+	delete(m, "tls")
 	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
 	if len(users) > 0 {
 		m["users"] = users
