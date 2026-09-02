@@ -135,7 +135,24 @@ func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]stru
 			k == "transport_layer" || k == "security_layer" {
 			continue
 		}
+		// Client-side TLS/hostname fields must not appear on listeners
+		// (wiki inbound docs use certificate/reality/wrappers, not sni/skip-cert-verify).
+		if clientOnlyListenerKey(k) {
+			continue
+		}
 		dst[k] = v
+	}
+}
+
+func clientOnlyListenerKey(k string) bool {
+	switch k {
+	case "sni", "servername", "skip-cert-verify", "name-cert-verify",
+		"fingerprint", "client-fingerprint", "reality-opts",
+		"shadow-tls-opts", "restls-opts", "jls-opts", "ss-opts",
+		"plugin", "plugin-opts":
+		return true
+	default:
+		return false
 	}
 }
 

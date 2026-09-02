@@ -137,11 +137,14 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if protocol == "" {
 		protocol = strings.ToLower(strings.TrimSpace(l.Type))
 	}
-	// Panel stores tuic-v4 / tuic-v5; Mihomo client type is always "tuic".
+	// Panel protocol names → Mihomo proxy type names (proxies/*.md).
 	exportProtocol := protocol
 	switch protocol {
 	case "tuic-v4", "tuic-v5":
 		exportProtocol = "tuic"
+	case "shadowsocks":
+		// Official client type is "ss", not "shadowsocks" (listener type).
+		exportProtocol = "ss"
 	}
 	if !config.IsMihomoListenerProtocol(protocol) {
 		return nil, fmt.Errorf("unsupported listener protocol %q", protocol)
@@ -194,10 +197,17 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["password"] = value
 		}
 		if value, ok := opts["simple-obfs"].(map[string]interface{}); ok && boolValue(value["enable"]) {
-			// The listener config key is `simple-obfs`, but the mihomo SS
-			// client proxy doc (proxies/ss.md) names the plugin `obfs`.
+			// Listener uses simple-obfs; client proxies/ss.md uses plugin: obfs.
+			// Do not pass enable:true — client plugin-opts only wants mode/host.
 			p["plugin"] = "obfs"
-			p["plugin-opts"] = value
+			optsCopy := map[string]interface{}{}
+			if mode, ok := value["mode"]; ok {
+				optsCopy["mode"] = mode
+			}
+			if host, ok := value["host"]; ok {
+				optsCopy["host"] = host
+			}
+			p["plugin-opts"] = optsCopy
 		}
 		applySSPluginWrappers(p, opts)
 		result = append(result, p)
@@ -288,8 +298,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["password"] = cred.Password
 			for _, key := range []string{
 				"up", "down", "obfs", "obfs-password", "bbr-profile",
-				"realm-opts", "alpn", "sni", "servername", "skip-cert-verify", "name-cert-verify",
-				"fingerprint", "handshake-timeout", "max-idle-time",
+				"realm-opts", "alpn", "sni", "skip-cert-verify", "name-cert-verify",
+				"fingerprint", "handshake-timeout",
 			} {
 				copyOption(p, opts, key)
 			}
@@ -314,7 +324,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		if token, ok := opts["token"]; ok {
 			p := makeProxy("")
 			p["token"] = token
-			for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify"} {
+			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
 				copyOption(p, opts, key)
 			}
 			ensureTUICClientDefaults(p, opts)
@@ -335,7 +345,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				}
 				p["uuid"] = uuid
 				p["password"] = cred.Password
-				for _, key := range []string{"congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify"} {
+				for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
 					copyOption(p, opts, key)
 				}
 				ensureTUICClientDefaults(p, opts)
