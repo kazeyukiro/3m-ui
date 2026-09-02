@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"golang.org/x/crypto/curve25519"
 )
@@ -93,6 +94,19 @@ func AutofillListenerDefaults(l *models.Listener) error {
 	// Protocols that speak TLS at the listener layer need certificate + private-key
 	// unless an alternate security wrapper (REALITY / shadow-tls / …) is configured.
 	// Empty strings are treated as unset (Mihomo rejects present-but-empty fields).
+	// Restore durable certs before autofill so we never rotate on save/update.
+	cert0, _ := cfg["certificate"].(string)
+	key0, _ := cfg["private-key"].(string)
+	if key0 == "" {
+		key0, _ = cfg["private_key"].(string)
+	}
+	if (strings.TrimSpace(cert0) == "" || strings.TrimSpace(key0) == "") && l.ID != 0 {
+		if c, k, ok := certstore.Load(l.ID); ok {
+			cfg["certificate"] = c
+			cfg["private-key"] = k
+			delete(cfg, "private_key")
+		}
+	}
 	if err := ensureServerTLSCertificate(cfg, proto); err != nil {
 		return err
 	}
@@ -104,6 +118,16 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		return err
 	}
 	l.Config = string(raw)
+	if l.ID != 0 {
+		c, _ := cfg["certificate"].(string)
+		k, _ := cfg["private-key"].(string)
+		if k == "" {
+			k, _ = cfg["private_key"].(string)
+		}
+		if strings.TrimSpace(c) != "" && strings.TrimSpace(k) != "" {
+			_ = certstore.Save(l.ID, c, k)
+		}
+	}
 	return nil
 }
 

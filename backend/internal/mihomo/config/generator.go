@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"gopkg.in/yaml.v3"
@@ -208,6 +209,20 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		}
 		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
 		sanitizeIncompleteTLSWrappers(configMap)
+		// Prefer durable on-disk certs when DB config has no pair (survives panel updates
+		// that used to mint a new self-signed identity every apply).
+		cert0, _ := configMap["certificate"].(string)
+		key0, _ := configMap["private-key"].(string)
+		if key0 == "" {
+			key0, _ = configMap["private_key"].(string)
+		}
+		if strings.TrimSpace(cert0) == "" || strings.TrimSpace(key0) == "" {
+			if c, k, ok := certstore.Load(l.ID); ok {
+				configMap["certificate"] = c
+				configMap["private-key"] = k
+				delete(configMap, "private_key")
+			}
+		}
 		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
 			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
 			continue
@@ -218,6 +233,18 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			// Persist only when sanitization/autofill changed the stored JSON.
 			if db != nil && l.ID != 0 && strings.TrimSpace(string(patched)) != prev {
 				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
+			}
+		}
+		// Always mirror a complete pair to disk so the next binary update can
+		// restore the same identity even if the DB row lacked PEMs historically.
+		if l.ID != 0 {
+			c, _ := configMap["certificate"].(string)
+			k, _ := configMap["private-key"].(string)
+			if k == "" {
+				k, _ = configMap["private_key"].(string)
+			}
+			if strings.TrimSpace(c) != "" && strings.TrimSpace(k) != "" {
+				_ = certstore.Save(l.ID, c, k)
 			}
 		}
 		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
