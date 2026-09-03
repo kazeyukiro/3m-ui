@@ -414,8 +414,12 @@ type vlessClientProxy struct {
 	TLS               bool                `yaml:"tls,omitempty"`
 	ServerName        string              `yaml:"servername,omitempty"`
 	ClientFingerprint string              `yaml:"client-fingerprint,omitempty"`
+	Fingerprint       string              `yaml:"fingerprint,omitempty"`
+	NameCertVerify    string              `yaml:"name-cert-verify,omitempty"`
 	SkipCertVerify    bool                `yaml:"skip-cert-verify,omitempty"`
 	ALPN              []string            `yaml:"alpn,omitempty"`
+	SMux              *smuxClient         `yaml:"smux,omitempty"`
+	ECHOpts           map[string]any      `yaml:"ech-opts,omitempty"`
 	Reality           *vlessClientReality `yaml:"reality-opts,omitempty"`
 	ShadowTLS         *vlessClientSecret  `yaml:"shadow-tls-opts,omitempty"`
 	ResTLS            *vlessClientResTLS  `yaml:"restls-opts,omitempty"`
@@ -444,10 +448,69 @@ type vlessClientJLS struct {
 	Password string `yaml:"password"`
 }
 type websocketClient struct {
-	Path string `yaml:"path"`
+	Path    string            `yaml:"path"`
+	Headers map[string]string `yaml:"headers,omitempty"`
 }
 type grpcClient struct {
-	ServiceName string `yaml:"grpc-service-name"`
+	ServiceName    string `yaml:"grpc-service-name"`
+	GRPCUserAgent  string `yaml:"grpc-user-agent,omitempty"`
+	PingInterval   int    `yaml:"ping-interval,omitempty"`
+	MaxConnections int    `yaml:"max-connections,omitempty"`
+	MinStreams     int    `yaml:"min-streams,omitempty"`
+	MaxStreams     int    `yaml:"max-streams,omitempty"`
+}
+
+// compileGRPCClient builds the client-side `grpc-opts` block from the listener
+// gRPC spec. Per proxies-transport wiki block 2 the client grpc-opts carries
+// `grpc-service-name` plus 5 optional control-plane fields (grpc-user-agent /
+// ping-interval / max-connections / min-streams / max-streams). The listener
+// schema only whitelists `grpc-service-name`; the optional fields are surfaced
+// verbatim when the panel sets them via the listener Config JSON.
+func compileGRPCClient(spec *domain.GRPCSpec) *grpcClient {
+	if spec == nil {
+		return &grpcClient{}
+	}
+	return &grpcClient{
+		ServiceName:    spec.ServiceName,
+		GRPCUserAgent:  spec.GRPCUserAgent,
+		PingInterval:   spec.PingInterval,
+		MaxConnections: spec.MaxConnections,
+		MinStreams:     spec.MinStreams,
+		MaxStreams:     spec.MaxStreams,
+	}
+}
+
+// compileWSClient builds the client-side `ws-opts` block from the listener
+// WebSocket spec. Per proxies-transport wiki block 3 the client ws-opts carries
+// `path` + `headers` (a free-form map; the listener side stores these as
+// ws-headers).
+func compileWSClient(spec *domain.WebSocketSpec) *websocketClient {
+	if spec == nil {
+		return &websocketClient{}
+	}
+	ws := &websocketClient{Path: spec.Path}
+	if len(spec.Headers) > 0 {
+		ws.Headers = make(map[string]string, len(spec.Headers))
+		for k, v := range spec.Headers {
+			ws.Headers[k] = v
+		}
+	}
+	return ws
+}
+
+// compileSMux converts the domain SMuxSpec (listener-decoded `smux` block)
+// into the m-ui client YAML `smux` representation. Returns nil when smux is
+// disabled and has no padding/brutal control plane (so the m-ui emitter omits
+// the key entirely).
+func compileSMux(spec domain.SMuxSpec) *smuxClient {
+	if !spec.Enabled && !spec.Padding && !spec.Brutal.Enabled {
+		return nil
+	}
+	out := &smuxClient{Enabled: spec.Enabled, Padding: spec.Padding}
+	if spec.Brutal.Enabled {
+		out.Brutal = &brutalConfig{Enabled: true, Up: spec.Brutal.Up, Down: spec.Brutal.Down}
+	}
+	return out
 }
 
 func compileVLESSClient(node domain.Node, user domain.NodeUser, profile domain.AccessProfile, host string) ([]byte, error) {
@@ -464,18 +527,21 @@ func compileVLESSClient(node domain.Node, user domain.NodeUser, profile domain.A
 		UDP: true, UUID: user.VLESS.UUID, Flow: user.VLESS.Flow,
 		PacketEncoding: profile.PacketEncoding, ServerName: sni,
 		ClientFingerprint: fp, SkipCertVerify: profile.AllowInsecure,
-		Encryption: normalizedDecryption(node.VLESS.Decryption),
-		ALPN:       append([]string(nil), node.VLESS.ALPN...),
+		Encryption:     normalizedDecryption(node.VLESS.Decryption),
+		ALPN:           append([]string(nil), node.VLESS.ALPN...),
+		Fingerprint:    node.VLESS.Fingerprint,
+		NameCertVerify: node.VLESS.NameCertVerify,
+		SMux:           compileSMux(node.VLESS.SMux),
+		ECHOpts:        node.VLESS.ECHOpts,
 	}
 	switch node.VLESS.Handler.Type {
 	case domain.VLESSHandlerRaw:
 		proxy.Network = "tcp"
 	case domain.VLESSHandlerWebSocket:
-		proxy.Network = "ws"
-		proxy.WS = &websocketClient{Path: node.VLESS.Handler.WebSocket.Path}
+		proxy.Network, proxy.WS = "ws", compileWSClient(node.VLESS.Handler.WebSocket)
 	case domain.VLESSHandlerGRPC:
 		proxy.Network = "grpc"
-		proxy.GRPC = &grpcClient{ServiceName: node.VLESS.Handler.GRPC.ServiceName}
+		proxy.GRPC = compileGRPCClient(node.VLESS.Handler.GRPC)
 	case domain.VLESSHandlerXHTTP:
 		proxy.Network = "xhttp"
 		proxy.XHTTP = compileXHTTP(*node.VLESS.Handler.XHTTP)

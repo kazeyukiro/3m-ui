@@ -229,10 +229,14 @@ func CompileListener(l models.Listener, creds []Cred) (map[string]interface{}, e
 
 func decodeVLESS(cfg map[string]interface{}, tls bool) *domain.VLESSSpec {
 	spec := &domain.VLESSSpec{
-		Decryption: strCfg(cfg, "encryption", "decryption"),
-		Handler:    decodeHandler(cfg),
-		Security:   decodeSecurity(cfg, tls),
-		ALPN:       decodeALPN(cfg),
+		Decryption:     strCfg(cfg, "encryption", "decryption"),
+		Handler:        decodeHandler(cfg),
+		Security:       decodeSecurity(cfg, tls),
+		ALPN:           decodeALPN(cfg),
+		Fingerprint:    strCfg(cfg, "fingerprint"),
+		NameCertVerify: strCfg(cfg, "name-cert-verify"),
+		SMux:           decodeSMux(cfg),
+		ECHOpts:        decodeECHOpts(cfg),
 	}
 	if spec.Decryption == "" {
 		spec.Decryption = "none"
@@ -241,18 +245,80 @@ func decodeVLESS(cfg map[string]interface{}, tls bool) *domain.VLESSSpec {
 }
 
 func decodeVMess(cfg map[string]interface{}, tls bool) *domain.VMessSpec {
-	return &domain.VMessSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls), ALPN: decodeALPN(cfg)}
+	return &domain.VMessSpec{
+		Handler:             decodeHandler(cfg),
+		Security:            decodeSecurity(cfg, tls),
+		ALPN:                decodeALPN(cfg),
+		GlobalPadding:       boolCfg(cfg, "global-padding"),
+		AuthenticatedLength: boolCfg(cfg, "authenticated-length"),
+		Fingerprint:         strCfg(cfg, "fingerprint"),
+		NameCertVerify:      strCfg(cfg, "name-cert-verify"),
+		TLSMirrorOpts:       decodeTLSMirrorOpts(cfg),
+		SMux:                decodeSMux(cfg),
+		ECHOpts:             decodeECHOpts(cfg),
+	}
 }
 
 func decodeTrojan(cfg map[string]interface{}, tls bool) *domain.TrojanSpec {
-	return &domain.TrojanSpec{Handler: decodeHandler(cfg), Security: decodeSecurity(cfg, tls), ALPN: decodeALPN(cfg)}
+	return &domain.TrojanSpec{
+		Handler:        decodeHandler(cfg),
+		Security:       decodeSecurity(cfg, tls),
+		ALPN:           decodeALPN(cfg),
+		Fingerprint:    strCfg(cfg, "fingerprint"),
+		NameCertVerify: strCfg(cfg, "name-cert-verify"),
+		TLSMirrorOpts:  decodeTLSMirrorOpts(cfg),
+		SMux:           decodeSMux(cfg),
+		ECHOpts:        decodeECHOpts(cfg),
+	}
 }
 
 func decodeSS(cfg map[string]interface{}) *domain.ShadowsocksSpec {
 	return &domain.ShadowsocksSpec{
-		Cipher:   strCfg(cfg, "cipher"),
-		UDP:      boolCfg(cfg, "udp"),
-		Security: decodeSSSecurity(cfg),
+		Cipher:            strCfg(cfg, "cipher"),
+		UDP:               boolCfg(cfg, "udp"),
+		Security:          decodeSSSecurity(cfg),
+		Kcptun:            decodeKCPTunConfig(cfg),
+		UDPOverTCP:        boolCfg(cfg, "udp-over-tcp"),
+		UDPOverTCPVersion: strCfg(cfg, "udp-over-tcp-version"),
+		IPVersion:         strCfg(cfg, "ip-version"),
+		SMux:              decodeSMux(cfg),
+	}
+}
+
+// decodeKCPTunConfig reads the SS listener `kcp-tun` block (whitelisted by the
+// SS schema registry) into a domain KCPTunConfig. Returns nil when the block is
+// absent or disabled, mirroring the SS module's `plugin: kcptun` emission gate.
+func decodeKCPTunConfig(cfg map[string]interface{}) *domain.KCPTunConfig {
+	src, ok := cfg["kcp-tun"].(map[string]interface{})
+	if !ok || !boolCfg(src, "enable") {
+		return nil
+	}
+	return &domain.KCPTunConfig{
+		Enable:      true,
+		Key:         strCfg(src, "key"),
+		Crypt:       strCfg(src, "crypt"),
+		Mode:        strCfg(src, "mode"),
+		Conn:        intCfg(src, "conn"),
+		AutoExpire:  intCfg(src, "autoexpire"),
+		ScavengeTTL: intCfg(src, "scavengettl"),
+		RateLimit:   intCfg(src, "ratelimit"),
+		MTU:         intCfg(src, "mtu"),
+		SndWnd:      intCfg(src, "sndwnd"),
+		RcvWnd:      intCfg(src, "rcvwnd"),
+		DataShard:   intCfg(src, "datashard"),
+		ParityShard: intCfg(src, "parityshard"),
+		DSCP:        intCfg(src, "dscp"),
+		NoComp:      boolCfg(src, "nocomp"),
+		AckNoDelay:  boolCfg(src, "acknodelay"),
+		NoDelay:     intCfg(src, "nodelay"),
+		Interval:    intCfg(src, "interval"),
+		Resend:      intCfg(src, "resend"),
+		SockBuf:     intCfg(src, "sockbuf"),
+		SmuxVer:     intCfg(src, "smuxver"),
+		SmuxBuf:     intCfg(src, "smuxbuf"),
+		FrameSize:   intCfg(src, "framesize"),
+		StreamBuf:   intCfg(src, "streambuf"),
+		KeepAlive:   intCfg(src, "keepalive"),
 	}
 }
 
@@ -342,13 +408,20 @@ func decodeJLSConfig(src map[string]interface{}) *domain.JLSConfig {
 
 func decodeHy2(cfg map[string]interface{}) *domain.Hysteria2Spec {
 	return &domain.Hysteria2Spec{
-		Certificate:  strCfg(cfg, "certificate"),
-		PrivateKey:   strCfg(cfg, "private-key"),
-		Up:           strCfg(cfg, "up"),
-		Down:         strCfg(cfg, "down"),
-		Obfs:         strCfg(cfg, "obfs"),
-		ObfsPassword: strCfg(cfg, "obfs-password"),
-		ALPN:         decodeALPN(cfg),
+		Certificate:       strCfg(cfg, "certificate"),
+		PrivateKey:        strCfg(cfg, "private-key"),
+		Up:                strCfg(cfg, "up"),
+		Down:              strCfg(cfg, "down"),
+		Obfs:              strCfg(cfg, "obfs"),
+		ObfsPassword:      strCfg(cfg, "obfs-password"),
+		ALPN:              decodeALPN(cfg),
+		Ports:             strCfg(cfg, "ports"),
+		HopInterval:       intCfg(cfg, "hop-interval"),
+		ObfsMinPacketSize: intCfg(cfg, "obfs-min-packet-size"),
+		ObfsMaxPacketSize: intCfg(cfg, "obfs-max-packet-size"),
+		NameCertVerify:    strCfg(cfg, "name-cert-verify"),
+		Fingerprint:       strCfg(cfg, "fingerprint"),
+		HandshakeTimeout:  intCfg(cfg, "handshake-timeout"),
 	}
 }
 
@@ -390,11 +463,11 @@ func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {
 	h := domain.VLESSHandlerSpec{Type: domain.VLESSHandlerRaw}
 	if path := strCfg(cfg, "ws-path"); path != "" {
 		h.Type = domain.VLESSHandlerWebSocket
-		h.WebSocket = &domain.WebSocketSpec{Path: path}
+		h.WebSocket = &domain.WebSocketSpec{Path: path, Headers: decodeWSHeaders(cfg)}
 	}
 	if svc := strCfg(cfg, "grpc-service-name"); svc != "" {
 		h.Type = domain.VLESSHandlerGRPC
-		h.GRPC = &domain.GRPCSpec{ServiceName: svc}
+		h.GRPC = decodeGRPCSpec(cfg)
 	}
 	if xhttp, ok := cfg["xhttp-config"].(map[string]interface{}); ok {
 		h.Type = domain.VLESSHandlerXHTTP
@@ -411,6 +484,130 @@ func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {
 	// falls back to raw TCP here. Adding a Mekya handler type is tracked as
 	// a separate feature task.
 	return h
+}
+
+// decodeWSHeaders reads the listener-side `ws-headers` map (a free-form
+// map[string]string of HTTP headers carried by vmess/vless/trojan listener
+// configs to populate the client-side `ws-opts.headers` block per
+// proxies-transport wiki block 3). Returns nil when no header entries are
+// present so the m-ui client YAML emitter omits the headers key entirely.
+func decodeWSHeaders(cfg map[string]interface{}) map[string]string {
+	raw, ok := cfg["ws-headers"].(map[string]interface{})
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(raw))
+	for k, v := range raw {
+		if s, ok := v.(string); ok {
+			trimmed := strings.TrimSpace(s)
+			if trimmed != "" {
+				out[k] = trimmed
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// decodeSMux reads the optional `smux` block from listener config JSON.
+// mihomo listener schemas (vmess/vless/trojan) whitelist `smux` as a nested
+// map so the m-ui bridge can surface it on the client YAML unchanged.
+func decodeSMux(cfg map[string]interface{}) domain.SMuxSpec {
+	src, ok := cfg["smux"].(map[string]interface{})
+	if !ok || len(src) == 0 {
+		return domain.SMuxSpec{}
+	}
+	sm := domain.SMuxSpec{Enabled: boolCfg(src, "enabled"), Padding: boolCfg(src, "padding")}
+	if brutal, ok := src["brutal"].(map[string]interface{}); ok {
+		sm.Brutal = domain.BrutalSpec{
+			Enabled: boolCfg(brutal, "enabled"),
+			Up:      strCfg(brutal, "up"),
+			Down:    strCfg(brutal, "down"),
+		}
+	}
+	return sm
+}
+
+// decodeTLSMirrorOpts forwards the listener-side `tlsmirror-config` block to
+// the client-side `tlsmirror-opts` shape per proxies-tls wiki. The block is
+// passed through verbatim since the listener and client structures are
+// identical (primary-key + explicit-nonce-ciphersuites + transport-layer-
+// padding + connection-enrolment + sequence-watermarking-enabled + embedded-
+// traffic-generator). Returns nil when the listener has no tlsmirror-config.
+func decodeTLSMirrorOpts(cfg map[string]interface{}) map[string]any {
+	src, ok := cfg["tlsmirror-config"].(map[string]interface{})
+	if !ok || len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// decodeECHOpts forwards the listener-side `ech-opts` block (a documented
+// client-side TLS field per proxies-tls wiki block 0) to the m-ui client YAML
+// emitter. The listener side carries `ech-key` (a raw key string) which would
+// require non-trivial derivation to expand into a `config` list — for the
+// LOW-priority path we forward the operator-supplied `ech-opts` block verbatim
+// and leave the listener-side `ech-key` → `ech-opts.config` derivation as a
+// follow-up. Returns nil when no `ech-opts` block is set.
+func decodeECHOpts(cfg map[string]interface{}) map[string]any {
+	src, ok := cfg["ech-opts"].(map[string]interface{})
+	if !ok || len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// decodeGRPCSpec reads the optional grpc-opts fields documented on
+// proxies-transport wiki block 2 (grpc-user-agent / ping-interval /
+// max-connections / min-streams / max-streams). The listener schema only
+// whitelists `grpc-service-name`; these extended fields can be set via the
+// panel's free-form JSON editor and are surfaced on the m-ui client YAML
+// verbatim when present.
+func decodeGRPCSpec(cfg map[string]interface{}) *domain.GRPCSpec {
+	g := &domain.GRPCSpec{ServiceName: strCfg(cfg, "grpc-service-name")}
+	if v := strCfg(cfg, "grpc-user-agent"); v != "" {
+		g.GRPCUserAgent = v
+	}
+	if v := intCfg(cfg, "ping-interval"); v != 0 {
+		g.PingInterval = v
+	}
+	if v := intCfg(cfg, "max-connections"); v != 0 {
+		g.MaxConnections = v
+	}
+	if v := intCfg(cfg, "min-streams"); v != 0 {
+		g.MinStreams = v
+	}
+	if v := intCfg(cfg, "max-streams"); v != 0 {
+		g.MaxStreams = v
+	}
+	return g
+}
+
+// intCfg reads a numeric field from a JSON-decoded map as int. Handles the
+// float64 (encoding/json default) and integer widenings also accepted by
+// uint32Cfg above.
+func intCfg(m map[string]interface{}, key string) int {
+	switch v := m[key].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case uint32:
+		return int(v)
+	}
+	return 0
 }
 
 // decodeMKCPConfig maps the listener mkcp-config block into the domain

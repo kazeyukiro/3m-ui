@@ -210,6 +210,22 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["plugin-opts"] = optsCopy
 		}
 		applySSPluginWrappers(p, opts)
+		// Optional SS client fields documented on proxies-ss wiki
+		// block 0 (udp-over-tcp / udp-over-tcp-version / ip-version /
+		// smux). Forward as-is when present in the listener config JSON
+		// so the panel can surface them on the outbound SS proxy.
+		if v, ok := opts["udp-over-tcp"].(bool); ok && v {
+			p["udp-over-tcp"] = v
+		}
+		if v, ok := opts["udp-over-tcp-version"].(string); ok && v != "" {
+			p["udp-over-tcp-version"] = v
+		}
+		if v, ok := opts["ip-version"].(string); ok && v != "" {
+			p["ip-version"] = v
+		}
+		if v, ok := opts["smux"]; ok {
+			p["smux"] = v
+		}
 		result = append(result, p)
 	case "snell":
 		p := makeProxy("")
@@ -303,6 +319,36 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			} {
 				copyOption(p, opts, key)
 			}
+			// Hysteria2 wiki-documented optional fields (proxies-hysteria2
+			// wiki block 0): port-hopping + obfs packet-size. Match m-ui
+			// path (mui/protocol/hysteria2.go BuildShare + yaml:",omitempty"
+			// tags) so unset listeners don't pollute client YAML with
+			// zero-valued placeholders:
+			//   ports                  (string e.g. "443-8443"; non-empty required)
+			//   hop-interval           (int seconds, default 30 — emit only if > 0)
+			//   obfs-min-packet-size   (int, gecko-only — emit only if > 0)
+			//   obfs-max-packet-size   (int, gecko-only — emit only if > 0)
+			if v, ok := opts["ports"].(string); ok && v != "" {
+				p["ports"] = v
+			}
+			for _, k := range []string{"hop-interval", "obfs-min-packet-size", "obfs-max-packet-size"} {
+				if v, ok := opts[k]; ok {
+					switch n := v.(type) {
+					case float64:
+						if n > 0 {
+							p[k] = v
+						}
+					case int:
+						if n > 0 {
+							p[k] = v
+						}
+					case int64:
+						if n > 0 {
+							p[k] = v
+						}
+					}
+				}
+			}
 			// SNI fallback: use server host when not set.
 			if p["sni"] == nil && p["servername"] == nil {
 				p["sni"] = server
@@ -321,11 +367,22 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			result = append(result, p)
 		}
 	case "tuic", "tuic-v4", "tuic-v5":
+		// TUIC client YAML (proxies-tuic wiki) supports the optional
+		// `ip` (UDP NAT source IP hint) and `name-cert-verify`
+		// (cert hostname to verify) fields. Only emit them when the
+		// listener carries a non-empty value, so we don't pollute the
+		// client YAML with `ip: ""` placeholders.
 		if token, ok := opts["token"]; ok {
 			p := makeProxy("")
 			p["token"] = token
 			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
 				copyOption(p, opts, key)
+			}
+			if v, ok := opts["ip"].(string); ok && v != "" {
+				p["ip"] = v
+			}
+			if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
+				p["name-cert-verify"] = v
 			}
 			ensureTUICClientDefaults(p, opts)
 			result = append(result, p)
@@ -347,6 +404,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p["password"] = cred.Password
 				for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
 					copyOption(p, opts, key)
+				}
+				if v, ok := opts["ip"].(string); ok && v != "" {
+					p["ip"] = v
+				}
+				if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
+					p["name-cert-verify"] = v
 				}
 				ensureTUICClientDefaults(p, opts)
 				result = append(result, p)
@@ -489,6 +552,20 @@ func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) 
 	if value := jlsClientOptions(opts); value != nil {
 		p["jls-opts"] = value
 	}
+	// tlsmirror-opts: forward the listener-side `tlsmirror-config` block
+	// verbatim to the client-side `tlsmirror-opts` shape per proxies-tls
+	// wiki block 0. The listener and client structures are identical
+	// (primary-key + explicit-nonce-ciphersuites + transport-layer-padding
+	// + connection-enrolment + sequence-watermarking-enabled +
+	// embedded-traffic-generator). Wiki note: VMess is currently the only
+	// protocol that supports tlsmirror on the client side; the converter
+	// still forwards the block for VMess/VLESS/Trojan uniformly so a
+	// listener that later migrates its transport does not silently lose
+	// the operator-supplied tlsmirror config. Matches m-ui path's
+	// decodeTLSMirrorOpts helper (mui/bridge.go).
+	if value := tlsmirrorClientOptions(opts); value != nil {
+		p["tlsmirror-opts"] = value
+	}
 }
 
 // applySSPluginWrappers translates the SS listener wrapper blocks
@@ -506,6 +583,34 @@ func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) 
 // Only the first matching enabled wrapper is emitted (they are mutually
 // exclusive on a single SS listener).
 func applySSPluginWrappers(p map[string]interface{}, src map[string]interface{}) {
+	// kcptun (kcp-tun) is a UDP-over-TCP plugin documented on proxies-ss
+	// wiki block 6. It is mutually exclusive with the TLS-like wrappers
+	// below (the SS listener schema whitelists `kcp-tun` alongside
+	// `shadow-tls` / `res-tls` / `jls-config`, but only one `plugin` value
+	// is meaningful per SS outbound). Precedence matches the m-ui SS
+	// module: kcptun is preferred over the TLS wrappers when both happen
+	// to be enabled.
+	if kcp, ok := src["kcp-tun"].(map[string]interface{}); ok {
+		if enable, _ := kcp["enable"].(bool); enable {
+			p["plugin"] = "kcptun"
+			opts := map[string]interface{}{}
+			// Plugin-opts field names mirror the listener kcp-tun keys
+			// verbatim — proxies-ss wiki block 6 documents the exact
+			// same names (key/crypt/mode/conn/autoexpire/...).
+			for _, key := range []string{
+				"key", "crypt", "mode", "conn", "autoexpire", "scavengettl",
+				"ratelimit", "mtu", "sndwnd", "rcvwnd", "datashard", "parityshard",
+				"dscp", "nocomp", "acknodelay", "nodelay", "interval", "resend",
+				"sockbuf", "smuxver", "smuxbuf", "framesize", "streambuf", "keepalive",
+			} {
+				if v, ok := kcp[key]; ok {
+					opts[key] = v
+				}
+			}
+			p["plugin-opts"] = opts
+			return
+		}
+	}
 	if stls, ok := src["shadow-tls"].(map[string]interface{}); ok {
 		if enable, _ := stls["enable"].(bool); enable {
 			p["plugin"] = "shadow-tls"
@@ -765,6 +870,15 @@ func copyClientTLS(dst, src map[string]interface{}) {
 			dst["sni"] = sn
 		}
 	}
+	// ech-opts is a documented client-side TLS field (proxies-tls wiki
+	// block 0) with no direct listener-side counterpart (the listener
+	// carries `ech-key` only — deriving the ECH config list from a raw key
+	// is non-trivial and out of scope here). When the operator sets an
+	// `ech-opts` block in the listener Config JSON via the panel's
+	// free-form JSON editor, forward it verbatim to the client YAML.
+	if v, ok := src["ech-opts"]; ok {
+		dst["ech-opts"] = v
+	}
 }
 
 func enabledWrapper(src map[string]interface{}, key string) bool {
@@ -792,7 +906,19 @@ func copyTransport(dst, src map[string]interface{}) {
 	}
 	if service, ok := src["grpc-service-name"].(string); ok && strings.TrimSpace(service) != "" {
 		dst["network"] = "grpc"
-		dst["grpc-opts"] = map[string]interface{}{"grpc-service-name": service}
+		opts := map[string]interface{}{"grpc-service-name": service}
+		// Optional grpc-opts fields documented on proxies-transport
+		// wiki block 2 (grpc-user-agent / ping-interval /
+		// max-connections / min-streams / max-streams). The listener
+		// schema only whitelists `grpc-service-name`; the panel can
+		// still set these via the listener Config JSON (the converter
+		// forwards them verbatim when present).
+		for _, key := range []string{"grpc-user-agent", "ping-interval", "max-connections", "min-streams", "max-streams"} {
+			if v, ok := src[key]; ok {
+				opts[key] = v
+			}
+		}
+		dst["grpc-opts"] = opts
 	}
 	if value, ok := src["xhttp-config"]; ok && value != nil {
 		dst["network"] = "xhttp"
@@ -816,6 +942,14 @@ func copyTransport(dst, src map[string]interface{}) {
 	// The listener mekya-config field names differ from the client mekya-opts
 	// field names. The kcp sub-block maps 1:1. The URL field has no listener
 	// counterpart and is left empty (operator must set it manually).
+	//
+	// `polling-interval-initial` and `h2-pool-size` (client-only fields per
+	// proxies-transport mekya-opts wiki) are passed through verbatim when
+	// present in the listener's mekya-config block. NOTE: the VMess listener
+	// schema in internal/mihomo/config/listener_schema_registry.go does NOT
+	// currently whitelist these two paths in its NestedFields list, so the
+	// panel cannot set them until Task A / a follow-up adds them. They are
+	// handled here so future schema additions work transparently.
 	if mekya, ok := src["mekya-config"].(map[string]interface{}); ok {
 		if enable, _ := mekya["enable"].(bool); enable {
 			dst["network"] = "mekya"
@@ -825,6 +959,15 @@ func copyTransport(dst, src map[string]interface{}) {
 			}
 			if v, ok := mekya["max-write-duration-ms"]; ok {
 				opts["max-write-delay"] = v
+			}
+			// `polling-interval-initial` (int, ms) and `h2-pool-size` (int)
+			// are wiki-documented client mekya-opts fields with no listener
+			// counterpart in inbound-vmess. Forward as-is when supplied.
+			if v, ok := mekya["polling-interval-initial"]; ok {
+				opts["polling-interval-initial"] = v
+			}
+			if v, ok := mekya["h2-pool-size"]; ok {
+				opts["h2-pool-size"] = v
 			}
 			if kcp, ok := mekya["kcp"].(map[string]interface{}); ok {
 				kcpOpts := map[string]interface{}{}
@@ -941,6 +1084,26 @@ func resTLSClientOptions(src map[string]interface{}) map[string]interface{} {
 	}
 	if len(result) == 0 {
 		return nil
+	}
+	return result
+}
+
+// tlsmirrorClientOptions forwards the listener-side `tlsmirror-config` block
+// to the client-side `tlsmirror-opts` shape per proxies-tls wiki block 0.
+// The block is passed through verbatim since the listener and client
+// structures are identical (primary-key + explicit-nonce-ciphersuites +
+// transport-layer-padding + connection-enrolment + sequence-watermarking-
+// enabled + embedded-traffic-generator). Returns nil when the listener has
+// no tlsmirror-config (matches m-ui path's decodeTLSMirrorOpts helper in
+// mui/bridge.go).
+func tlsmirrorClientOptions(src map[string]interface{}) map[string]interface{} {
+	cfg, ok := src["tlsmirror-config"].(map[string]interface{})
+	if !ok || len(cfg) == 0 {
+		return nil
+	}
+	result := make(map[string]interface{}, len(cfg))
+	for k, v := range cfg {
+		result[k] = v
 	}
 	return result
 }

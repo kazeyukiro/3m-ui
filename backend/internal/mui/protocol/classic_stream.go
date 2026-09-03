@@ -280,31 +280,46 @@ type classicClientDocument struct {
 	Proxies []classicClientProxy `yaml:"proxies"`
 }
 type classicClientProxy struct {
-	Name              string              `yaml:"name"`
-	Type              string              `yaml:"type"`
-	Server            string              `yaml:"server"`
-	Port              uint16              `yaml:"port"`
-	UDP               bool                `yaml:"udp"`
-	UUID              string              `yaml:"uuid,omitempty"`
-	AlterID           int                 `yaml:"alterId"`
-	Cipher            string              `yaml:"cipher,omitempty"`
-	Password          string              `yaml:"password,omitempty"`
-	Network           string              `yaml:"network,omitempty"`
-	TLS               bool                `yaml:"tls,omitempty"`
-	ServerName        string              `yaml:"servername,omitempty"`
-	SNI               string              `yaml:"sni,omitempty"`
-	ClientFingerprint string              `yaml:"client-fingerprint,omitempty"`
-	SkipCertVerify    bool                `yaml:"skip-cert-verify,omitempty"`
-	ALPN              []string            `yaml:"alpn,omitempty"`
-	PacketEncoding    string              `yaml:"packet-encoding,omitempty"`
-	Reality           *vlessClientReality `yaml:"reality-opts,omitempty"`
-	ShadowTLS         *vlessClientSecret  `yaml:"shadow-tls-opts,omitempty"`
-	ResTLS            *vlessClientResTLS  `yaml:"restls-opts,omitempty"`
-	JLS               *vlessClientJLS     `yaml:"jls-opts,omitempty"`
-	WS                *websocketClient    `yaml:"ws-opts,omitempty"`
-	GRPC              *grpcClient         `yaml:"grpc-opts,omitempty"`
-	MKCP              *mkcpClientConfig   `yaml:"mkcp-opts,omitempty"`
-	TrojanShadowsocks *trojanClientSS     `yaml:"ss-opts,omitempty"`
+	Name                string              `yaml:"name"`
+	Type                string              `yaml:"type"`
+	Server              string              `yaml:"server"`
+	Port                uint16              `yaml:"port"`
+	UDP                 bool                `yaml:"udp"`
+	UUID                string              `yaml:"uuid,omitempty"`
+	AlterID             int                 `yaml:"alterId"`
+	Cipher              string              `yaml:"cipher,omitempty"`
+	Password            string              `yaml:"password,omitempty"`
+	Network             string              `yaml:"network,omitempty"`
+	TLS                 bool                `yaml:"tls,omitempty"`
+	ServerName          string              `yaml:"servername,omitempty"`
+	SNI                 string              `yaml:"sni,omitempty"`
+	ClientFingerprint   string              `yaml:"client-fingerprint,omitempty"`
+	Fingerprint         string              `yaml:"fingerprint,omitempty"`
+	NameCertVerify      string              `yaml:"name-cert-verify,omitempty"`
+	SkipCertVerify      bool                `yaml:"skip-cert-verify,omitempty"`
+	ALPN                []string            `yaml:"alpn,omitempty"`
+	PacketEncoding      string              `yaml:"packet-encoding,omitempty"`
+	GlobalPadding       bool                `yaml:"global-padding,omitempty"`
+	AuthenticatedLength bool                `yaml:"authenticated-length,omitempty"`
+	TLSMirrorOpts       map[string]any      `yaml:"tlsmirror-opts,omitempty"`
+	SMux                *smuxClient         `yaml:"smux,omitempty"`
+	ECHOpts             map[string]any      `yaml:"ech-opts,omitempty"`
+	Reality             *vlessClientReality `yaml:"reality-opts,omitempty"`
+	ShadowTLS           *vlessClientSecret  `yaml:"shadow-tls-opts,omitempty"`
+	ResTLS              *vlessClientResTLS  `yaml:"restls-opts,omitempty"`
+	JLS                 *vlessClientJLS     `yaml:"jls-opts,omitempty"`
+	WS                  *websocketClient    `yaml:"ws-opts,omitempty"`
+	GRPC                *grpcClient         `yaml:"grpc-opts,omitempty"`
+	MKCP                *mkcpClientConfig   `yaml:"mkcp-opts,omitempty"`
+	TrojanShadowsocks   *trojanClientSS     `yaml:"ss-opts,omitempty"`
+}
+
+// smuxClient is the m-ui client YAML representation of the `smux` block
+// documented on proxies-vmess/vless/trojan/ss (common optional field).
+type smuxClient struct {
+	Enabled bool          `yaml:"enabled,omitempty"`
+	Padding bool          `yaml:"padding,omitempty"`
+	Brutal  *brutalConfig `yaml:"brutal,omitempty"`
 }
 
 func compileClassicClient(node domain.Node, user domain.NodeUser, profile domain.AccessProfile, host string) ([]byte, error) {
@@ -327,11 +342,23 @@ func compileClassicClient(node domain.Node, user domain.NodeUser, profile domain
 		proxy.ServerName = profile.ServerName
 		proxy.PacketEncoding = profile.PacketEncoding
 		proxy.ALPN = append([]string(nil), node.VMess.ALPN...)
+		proxy.GlobalPadding = node.VMess.GlobalPadding
+		proxy.AuthenticatedLength = node.VMess.AuthenticatedLength
+		proxy.Fingerprint = node.VMess.Fingerprint
+		proxy.NameCertVerify = node.VMess.NameCertVerify
+		proxy.TLSMirrorOpts = node.VMess.TLSMirrorOpts
+		proxy.SMux = compileSMux(node.VMess.SMux)
+		proxy.ECHOpts = node.VMess.ECHOpts
 		handler, security = node.VMess.Handler, node.VMess.Security
 	case domain.ProtocolTrojan:
 		proxy.Password = user.Trojan.Password
 		proxy.SNI = profile.ServerName
 		proxy.ALPN = append([]string(nil), node.Trojan.ALPN...)
+		proxy.Fingerprint = node.Trojan.Fingerprint
+		proxy.NameCertVerify = node.Trojan.NameCertVerify
+		proxy.TLSMirrorOpts = node.Trojan.TLSMirrorOpts
+		proxy.SMux = compileSMux(node.Trojan.SMux)
+		proxy.ECHOpts = node.Trojan.ECHOpts
 		handler, security = node.Trojan.Handler, node.Trojan.Security
 		if node.Trojan.Shadowsocks.Enabled {
 			proxy.TrojanShadowsocks = &trojanClientSS{
@@ -346,9 +373,9 @@ func compileClassicClient(node domain.Node, user domain.NodeUser, profile domain
 	case domain.VLESSHandlerRaw:
 		proxy.Network = "tcp"
 	case domain.VLESSHandlerWebSocket:
-		proxy.Network, proxy.WS = "ws", &websocketClient{Path: handler.WebSocket.Path}
+		proxy.Network, proxy.WS = "ws", compileWSClient(handler.WebSocket)
 	case domain.VLESSHandlerGRPC:
-		proxy.Network, proxy.GRPC = "grpc", &grpcClient{ServiceName: handler.GRPC.ServiceName}
+		proxy.Network, proxy.GRPC = "grpc", compileGRPCClient(handler.GRPC)
 	case domain.VMessHandlerMKCP:
 		proxy.Network, proxy.MKCP = "mkcp", compileMKCPClient(*handler.MKCP)
 	}

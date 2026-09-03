@@ -192,7 +192,12 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 			ws["path"] = spec.Transport.WSPath
 		}
 		if spec.Transport.WSHost != "" {
-			ws["Host"] = spec.Transport.WSHost
+			// Per mihomo wiki (proxies-transport: ws-opts), the Host
+			// header must be nested under `headers`, not placed at the
+			// top level of ws-opts. See /tmp/wiki/REF.txt block 3.
+			headers := map[string]interface{}{}
+			headers["Host"] = spec.Transport.WSHost
+			ws["headers"] = headers
 		}
 		if len(ws) > 0 {
 			p["network"] = "ws"

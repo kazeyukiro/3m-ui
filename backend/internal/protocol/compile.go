@@ -127,10 +127,11 @@ func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]stru
 			continue
 		}
 		// strip panel-only / client-export-only keys.
-		// NOTE: "encryption" is intentionally NOT stripped — it is a legitimate
-		// top-level VLESS server field (paired with "decryption") per the
-		// official Mihomo schema. Stripping it silently breaks VLESS listeners
-		// that rely on it.
+		// NOTE: "encryption" is a CLIENT-side field per proxies-vless wiki.
+		// It is preserved in the panel Config map for client YAML emission
+		// (converter/client.go reads p["encryption"]) but stripped from
+		// the listener config.yaml via clientOnlyListenerKey. The server-side
+		// counterpart is "decryption" only per inbound-vless wiki.
 		if strings.HasPrefix(k, "_") || k == "access_profile" ||
 			k == "transport_layer" || k == "security_layer" {
 			continue
@@ -149,7 +150,7 @@ func clientOnlyListenerKey(k string) bool {
 	case "sni", "servername", "skip-cert-verify", "name-cert-verify",
 		"fingerprint", "client-fingerprint", "reality-opts",
 		"shadow-tls-opts", "restls-opts", "jls-opts", "ss-opts",
-		"plugin", "plugin-opts":
+		"plugin", "plugin-opts", "encryption":
 		return true
 	default:
 		return false
@@ -160,6 +161,7 @@ func managedKeys() map[string]struct{} {
 	return map[string]struct{}{
 		"name": {}, "type": {}, "port": {}, "listen": {}, "proxy": {}, "rule": {},
 		"routing-mark": {}, "udp": {}, "tls": {}, "users": {}, "flow": {},
+		"alterId": {},
 	}
 }
 

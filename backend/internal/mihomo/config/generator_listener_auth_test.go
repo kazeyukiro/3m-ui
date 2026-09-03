@@ -12,8 +12,18 @@ func TestGenerateListenersUsesModelTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0]["tls"] != true {
-		t.Fatalf("expected tls=true, got %#v", got)
+	if len(got) != 1 {
+		t.Fatalf("expected one compiled listener, got %d", len(got))
+	}
+	// Per official MetaCubeX wiki (inbound-vless), the listener YAML does NOT
+	// carry a top-level `tls` field — TLS is implied by certificate/private-key
+	// or by a TLS wrapper (reality-config / shadow-tls / res-tls / jls-config).
+	// The model.TLS flag is consumed by the panel for UI hints only.
+	if _, present := got[0]["tls"]; present {
+		t.Fatalf("listener yaml must not carry top-level tls field (wiki-correct), got %#v", got[0])
+	}
+	if got[0]["type"] != "vless" || got[0]["port"] != 443 || got[0]["name"] != "vless" {
+		t.Fatalf("unexpected listener fields: %#v", got[0])
 	}
 }
 
