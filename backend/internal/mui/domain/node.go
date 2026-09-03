@@ -132,29 +132,55 @@ const (
 )
 
 type VLESSSpec struct {
-	Decryption string            `json:"decryption,omitempty"`
-	Handler    VLESSHandlerSpec  `json:"handler"`
-	Security   VLESSSecuritySpec `json:"security"`
-	Mux        MuxSpec           `json:"mux,omitempty"`
-	ALPN       []string          `json:"alpn,omitempty"`
+	Decryption     string            `json:"decryption,omitempty"`
+	Handler        VLESSHandlerSpec  `json:"handler"`
+	Security       VLESSSecuritySpec `json:"security"`
+	Mux            MuxSpec           `json:"mux,omitempty"`
+	ALPN           []string          `json:"alpn,omitempty"`
+	Fingerprint    string            `json:"fingerprint,omitempty"`
+	NameCertVerify string            `json:"name_cert_verify,omitempty"`
+	SMux           SMuxSpec          `json:"smux,omitempty"`
+	ECHOpts        map[string]any    `json:"ech_opts,omitempty"`
+}
+
+// SMuxSpec mirrors the mihomo `smux` block documented on proxies-vmess /
+// proxies-vless / proxies-trojan / proxies-ss (common optional client field).
+// It is intentionally a subset of MuxSpec since `smux` and `mux-option` share
+// the same brutal control plane but `smux` carries an explicit `enabled` flag.
+type SMuxSpec struct {
+	Enabled bool       `json:"enabled,omitempty"`
+	Padding bool       `json:"padding,omitempty"`
+	Brutal  BrutalSpec `json:"brutal,omitempty"`
 }
 
 // VMess and Trojan share the stream handler and security building blocks that
 // Mihomo exposes for their listeners. Keeping the composition typed here lets
 // later protocol modules opt into only the components their source supports.
 type VMessSpec struct {
-	Handler  VLESSHandlerSpec  `json:"handler"`
-	Security VLESSSecuritySpec `json:"security"`
-	Mux      MuxSpec           `json:"mux,omitempty"`
-	ALPN     []string          `json:"alpn,omitempty"`
+	Handler             VLESSHandlerSpec  `json:"handler"`
+	Security            VLESSSecuritySpec `json:"security"`
+	Mux                 MuxSpec           `json:"mux,omitempty"`
+	ALPN                []string          `json:"alpn,omitempty"`
+	GlobalPadding       bool              `json:"global_padding,omitempty"`
+	AuthenticatedLength bool              `json:"authenticated_length,omitempty"`
+	Fingerprint         string            `json:"fingerprint,omitempty"`
+	NameCertVerify      string            `json:"name_cert_verify,omitempty"`
+	TLSMirrorOpts       map[string]any    `json:"tlsmirror_opts,omitempty"`
+	SMux                SMuxSpec          `json:"smux,omitempty"`
+	ECHOpts             map[string]any    `json:"ech_opts,omitempty"`
 }
 
 type TrojanSpec struct {
-	Handler     VLESSHandlerSpec      `json:"handler"`
-	Security    VLESSSecuritySpec     `json:"security"`
-	Mux         MuxSpec               `json:"mux,omitempty"`
-	Shadowsocks TrojanShadowsocksSpec `json:"shadowsocks,omitempty"`
-	ALPN        []string              `json:"alpn,omitempty"`
+	Handler        VLESSHandlerSpec      `json:"handler"`
+	Security       VLESSSecuritySpec     `json:"security"`
+	Mux            MuxSpec               `json:"mux,omitempty"`
+	Shadowsocks    TrojanShadowsocksSpec `json:"shadowsocks,omitempty"`
+	ALPN           []string              `json:"alpn,omitempty"`
+	Fingerprint    string                `json:"fingerprint,omitempty"`
+	NameCertVerify string                `json:"name_cert_verify,omitempty"`
+	TLSMirrorOpts  map[string]any        `json:"tlsmirror_opts,omitempty"`
+	SMux           SMuxSpec              `json:"smux,omitempty"`
+	ECHOpts        map[string]any        `json:"ech_opts,omitempty"`
 }
 
 type TrojanShadowsocksSpec struct {
@@ -164,11 +190,47 @@ type TrojanShadowsocksSpec struct {
 }
 
 type ShadowsocksSpec struct {
-	Cipher     string            `json:"cipher"`
-	UDP        bool              `json:"udp"`
-	Security   VLESSSecuritySpec `json:"security"`
-	Mux        MuxSpec           `json:"mux,omitempty"`
-	SimpleObfs SimpleObfsSpec    `json:"simple_obfs,omitempty"`
+	Cipher            string            `json:"cipher"`
+	UDP               bool              `json:"udp"`
+	Security          VLESSSecuritySpec `json:"security"`
+	Mux               MuxSpec           `json:"mux,omitempty"`
+	SimpleObfs        SimpleObfsSpec    `json:"simple_obfs,omitempty"`
+	Kcptun            *KCPTunConfig     `json:"kcptun,omitempty"`
+	UDPOverTCP        bool              `json:"udp_over_tcp,omitempty"`
+	UDPOverTCPVersion string            `json:"udp_over_tcp_version,omitempty"`
+	IPVersion         string            `json:"ip_version,omitempty"`
+	SMux              SMuxSpec          `json:"smux,omitempty"`
+}
+
+// KCPTunConfig mirrors the SS listener `kcp-tun` block. The m-ui SS module
+// emits it as `plugin: kcptun` + `plugin-opts: {key, crypt, mode, mtu, ...}`
+// per proxies-ss wiki block 6.
+type KCPTunConfig struct {
+	Enable      bool   `json:"enable,omitempty"`
+	Key         string `json:"key,omitempty"`
+	Crypt       string `json:"crypt,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	Conn        int    `json:"conn,omitempty"`
+	AutoExpire  int    `json:"auto_expire,omitempty"`
+	ScavengeTTL int    `json:"scavenge_ttl,omitempty"`
+	RateLimit   int    `json:"rate_limit,omitempty"`
+	MTU         int    `json:"mtu,omitempty"`
+	SndWnd      int    `json:"snd_wnd,omitempty"`
+	RcvWnd      int    `json:"rcv_wnd,omitempty"`
+	DataShard   int    `json:"data_shard,omitempty"`
+	ParityShard int    `json:"parity_shard,omitempty"`
+	DSCP        int    `json:"dscp,omitempty"`
+	NoComp      bool   `json:"no_comp,omitempty"`
+	AckNoDelay  bool   `json:"ack_no_delay,omitempty"`
+	NoDelay     int    `json:"no_delay,omitempty"`
+	Interval    int    `json:"interval,omitempty"`
+	Resend      int    `json:"resend,omitempty"`
+	SockBuf     int    `json:"sock_buf,omitempty"`
+	SmuxVer     int    `json:"smux_ver,omitempty"`
+	SmuxBuf     int    `json:"smux_buf,omitempty"`
+	FrameSize   int    `json:"frame_size,omitempty"`
+	StreamBuf   int    `json:"stream_buf,omitempty"`
+	KeepAlive   int    `json:"keep_alive,omitempty"`
 }
 
 type SimpleObfsSpec struct {
@@ -199,11 +261,17 @@ type MKCPConfig struct {
 }
 
 type WebSocketSpec struct {
-	Path string `json:"path"`
+	Path    string            `json:"path"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type GRPCSpec struct {
-	ServiceName string `json:"service_name"`
+	ServiceName    string `json:"service_name"`
+	GRPCUserAgent  string `json:"grpc_user_agent,omitempty"`
+	PingInterval   int    `json:"ping_interval,omitempty"`
+	MaxConnections int    `json:"max_connections,omitempty"`
+	MinStreams     int    `json:"min_streams,omitempty"`
+	MaxStreams     int    `json:"max_streams,omitempty"`
 }
 
 type XHTTPConfig struct {
@@ -332,28 +400,32 @@ type BrutalSpec struct {
 }
 
 type Hysteria2Spec struct {
-	Obfs                           string                `json:"obfs,omitempty"`
-	ObfsPassword                   string                `json:"obfs_password,omitempty"`
-	Certificate                    string                `json:"certificate"`
-	PrivateKey                     string                `json:"private_key"`
-	ClientAuthType                 string                `json:"client_auth_type,omitempty"`
-	ClientAuthCert                 string                `json:"client_auth_cert,omitempty"`
-	ECHKey                         string                `json:"ech_key,omitempty"`
-	MaxIdleTime                    int                   `json:"max_idle_time,omitempty"`
-	ALPN                           []string              `json:"alpn,omitempty"`
-	Up                             string                `json:"up,omitempty"`
-	Down                           string                `json:"down,omitempty"`
-	IgnoreClientBandwidth          bool                  `json:"ignore_client_bandwidth,omitempty"`
-	Masquerade                     string                `json:"masquerade,omitempty"`
-	CWND                           int                   `json:"cwnd,omitempty"`
-	BBRProfile                     string                `json:"bbr_profile,omitempty"`
-	UDPMTU                         int                   `json:"udp_mtu,omitempty"`
-	Mux                            MuxSpec               `json:"mux,omitempty"`
-	Realm                          *Hysteria2RealmConfig `json:"realm,omitempty"`
-	InitialStreamReceiveWindow     uint64                `json:"initial_stream_receive_window,omitempty"`
-	MaxStreamReceiveWindow         uint64                `json:"max_stream_receive_window,omitempty"`
-	InitialConnectionReceiveWindow uint64                `json:"initial_connection_receive_window,omitempty"`
-	MaxConnectionReceiveWindow     uint64                `json:"max_connection_receive_window,omitempty"`
+	Obfs                  string                `json:"obfs,omitempty"`
+	ObfsPassword          string                `json:"obfs_password,omitempty"`
+	Certificate           string                `json:"certificate"`
+	PrivateKey            string                `json:"private_key"`
+	ClientAuthType        string                `json:"client_auth_type,omitempty"`
+	ClientAuthCert        string                `json:"client_auth_cert,omitempty"`
+	ECHKey                string                `json:"ech_key,omitempty"`
+	MaxIdleTime           int                   `json:"max_idle_time,omitempty"`
+	ALPN                  []string              `json:"alpn,omitempty"`
+	Up                    string                `json:"up,omitempty"`
+	Down                  string                `json:"down,omitempty"`
+	IgnoreClientBandwidth bool                  `json:"ignore_client_bandwidth,omitempty"`
+	Masquerade            string                `json:"masquerade,omitempty"`
+	BBRProfile            string                `json:"bbr_profile,omitempty"`
+	Mux                   MuxSpec               `json:"mux,omitempty"`
+	Realm                 *Hysteria2RealmConfig `json:"realm,omitempty"`
+	// Client-side fields (proxies-hysteria2 wiki). Populated by decodeHy2
+	// from the listener config JSON so the m-ui client YAML emitter can
+	// surface them on the outbound proxy entry.
+	Ports             string `json:"ports,omitempty"`
+	HopInterval       int    `json:"hop_interval,omitempty"`
+	ObfsMinPacketSize int    `json:"obfs_min_packet_size,omitempty"`
+	ObfsMaxPacketSize int    `json:"obfs_max_packet_size,omitempty"`
+	NameCertVerify    string `json:"name_cert_verify,omitempty"`
+	Fingerprint       string `json:"fingerprint,omitempty"`
+	HandshakeTimeout  int    `json:"handshake_timeout,omitempty"`
 }
 
 type Hysteria2RealmConfig struct {
@@ -369,7 +441,6 @@ type Hysteria2RealmConfig struct {
 	Certificate    string   `json:"certificate,omitempty"`
 	PrivateKey     string   `json:"private_key,omitempty"`
 	ALPN           []string `json:"alpn,omitempty"`
-	Proxy          string   `json:"proxy,omitempty"`
 }
 
 type Keypair struct {

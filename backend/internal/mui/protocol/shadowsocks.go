@@ -82,6 +82,10 @@ func (ShadowsocksModule) BuildShare(state domain.DesiredState, node domain.Node,
 		Name: node.Name + " - " + user.Name, Type: "ss", Server: host, Port: uint16(port),
 		Cipher: node.Shadowsocks.Cipher, Password: user.Shadowsocks.Password, UDP: node.Shadowsocks.UDP,
 		Plugin: plugin, PluginOptions: pluginOptions, ClientFingerprint: profile.Fingerprint,
+		UDPOverTCP:        node.Shadowsocks.UDPOverTCP,
+		UDPOverTCPVersion: node.Shadowsocks.UDPOverTCPVersion,
+		IPVersion:         node.Shadowsocks.IPVersion,
+		SMux:              compileSMux(node.Shadowsocks.SMux),
 	}}}
 	clientYAML, err := encodeClientYAML(client)
 	if err != nil {
@@ -121,11 +125,22 @@ type shadowsocksClientProxy struct {
 	Plugin            string         `yaml:"plugin,omitempty"`
 	PluginOptions     map[string]any `yaml:"plugin-opts,omitempty"`
 	ClientFingerprint string         `yaml:"client-fingerprint,omitempty"`
+	UDPOverTCP        bool           `yaml:"udp-over-tcp,omitempty"`
+	UDPOverTCPVersion string         `yaml:"udp-over-tcp-version,omitempty"`
+	IPVersion         string         `yaml:"ip-version,omitempty"`
+	SMux              *smuxClient    `yaml:"smux,omitempty"`
 }
 
 func shadowsocksPlugin(spec *domain.ShadowsocksSpec, user domain.NodeUser, profile domain.AccessProfile) (string, map[string]any) {
 	if spec.SimpleObfs.Enabled {
 		return "obfs", map[string]any{"mode": spec.SimpleObfs.Mode}
+	}
+	// kcptun is a UDP-over-TCP wrapper that rides on the SS `plugin` format per
+	// proxies-ss wiki block 6. It is mutually exclusive with the TLS-like
+	// wrappers below (shadow-tls / res-tls / jls) since the listener schema
+	// only allows one `plugin` value per SS outbound.
+	if spec.Kcptun != nil && spec.Kcptun.Enable {
+		return "kcptun", kcptunPluginOpts(spec.Kcptun)
 	}
 	switch spec.Security.Type {
 	case domain.VLESSSecurityShadowTLS:
@@ -177,6 +192,87 @@ func pluginHost(profile domain.AccessProfile, destination string) string {
 		return host
 	}
 	return destination
+}
+
+// kcptunPluginOpts maps the listener `kcp-tun` block (via domain.KCPTunConfig)
+// into the SS `plugin-opts` shape documented on proxies-ss wiki block 6. Only
+// non-zero / non-default values are emitted so the client YAML stays clean
+// (matching the wiki example which comments out most optional fields).
+func kcptunPluginOpts(c *domain.KCPTunConfig) map[string]any {
+	opts := map[string]any{}
+	if c.Key != "" {
+		opts["key"] = c.Key
+	}
+	if c.Crypt != "" {
+		opts["crypt"] = c.Crypt
+	}
+	if c.Mode != "" {
+		opts["mode"] = c.Mode
+	}
+	if c.Conn != 0 {
+		opts["conn"] = c.Conn
+	}
+	if c.AutoExpire != 0 {
+		opts["autoexpire"] = c.AutoExpire
+	}
+	if c.ScavengeTTL != 0 {
+		opts["scavengettl"] = c.ScavengeTTL
+	}
+	if c.MTU != 0 {
+		opts["mtu"] = c.MTU
+	}
+	if c.RateLimit != 0 {
+		opts["ratelimit"] = c.RateLimit
+	}
+	if c.SndWnd != 0 {
+		opts["sndwnd"] = c.SndWnd
+	}
+	if c.RcvWnd != 0 {
+		opts["rcvwnd"] = c.RcvWnd
+	}
+	if c.DataShard != 0 {
+		opts["datashard"] = c.DataShard
+	}
+	if c.ParityShard != 0 {
+		opts["parityshard"] = c.ParityShard
+	}
+	if c.DSCP != 0 {
+		opts["dscp"] = c.DSCP
+	}
+	if c.NoComp {
+		opts["nocomp"] = c.NoComp
+	}
+	if c.AckNoDelay {
+		opts["acknodelay"] = c.AckNoDelay
+	}
+	if c.NoDelay != 0 {
+		opts["nodelay"] = c.NoDelay
+	}
+	if c.Interval != 0 {
+		opts["interval"] = c.Interval
+	}
+	if c.Resend != 0 {
+		opts["resend"] = c.Resend
+	}
+	if c.SockBuf != 0 {
+		opts["sockbuf"] = c.SockBuf
+	}
+	if c.SmuxVer != 0 {
+		opts["smuxver"] = c.SmuxVer
+	}
+	if c.SmuxBuf != 0 {
+		opts["smuxbuf"] = c.SmuxBuf
+	}
+	if c.FrameSize != 0 {
+		opts["framesize"] = c.FrameSize
+	}
+	if c.StreamBuf != 0 {
+		opts["streambuf"] = c.StreamBuf
+	}
+	if c.KeepAlive != 0 {
+		opts["keepalive"] = c.KeepAlive
+	}
+	return opts
 }
 
 func sortedKeys(values map[string]any) []string {

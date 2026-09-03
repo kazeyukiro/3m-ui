@@ -40,11 +40,7 @@ func (Hysteria2Module) Compile(
 		ClientAuthType: spec.ClientAuthType, ClientAuthCert: spec.ClientAuthCert, ECHKey: spec.ECHKey,
 		MaxIdleTime: spec.MaxIdleTime, ALPN: append([]string(nil), spec.ALPN...), Up: spec.Up, Down: spec.Down,
 		IgnoreClientBandwidth: spec.IgnoreClientBandwidth, Masquerade: spec.Masquerade,
-		CWND: spec.CWND, BBRProfile: spec.BBRProfile, UDPMTU: spec.UDPMTU, Mux: compileMux(spec.Mux),
-		InitialStreamReceiveWindow:     spec.InitialStreamReceiveWindow,
-		MaxStreamReceiveWindow:         spec.MaxStreamReceiveWindow,
-		InitialConnectionReceiveWindow: spec.InitialConnectionReceiveWindow,
-		MaxConnectionReceiveWindow:     spec.MaxConnectionReceiveWindow,
+		BBRProfile: spec.BBRProfile, Mux: compileMux(spec.Mux),
 	}
 	if spec.Realm != nil {
 		listener.Realm = compileHysteria2Realm(*spec.Realm)
@@ -102,6 +98,10 @@ func (Hysteria2Module) BuildShare(
 		Obfs: node.Hysteria2.Obfs, ObfsPassword: node.Hysteria2.ObfsPassword,
 		ServerName: profile.ServerName, SkipCertVerify: profile.AllowInsecure,
 		ALPN: append([]string(nil), node.Hysteria2.ALPN...), Realm: compileHysteria2Realm(hysteria2RealmOrZero(node.Hysteria2)),
+		Ports: node.Hysteria2.Ports, HopInterval: node.Hysteria2.HopInterval,
+		ObfsMinPacketSize: node.Hysteria2.ObfsMinPacketSize, ObfsMaxPacketSize: node.Hysteria2.ObfsMaxPacketSize,
+		NameCertVerify: node.Hysteria2.NameCertVerify, Fingerprint: node.Hysteria2.Fingerprint,
+		HandshakeTimeout: node.Hysteria2.HandshakeTimeout,
 	}}}
 	clientYAML, err := encodeClientYAML(client)
 	if err != nil {
@@ -111,35 +111,33 @@ func (Hysteria2Module) BuildShare(
 }
 
 type hysteria2Listener struct {
-	Name                           string                `yaml:"name"`
-	Type                           string                `yaml:"type"`
-	Listen                         string                `yaml:"listen"`
-	Port                           string                `yaml:"port"`
-	Users                          map[string]string     `yaml:"users,omitempty"`
-	Obfs                           string                `yaml:"obfs,omitempty"`
-	ObfsPassword                   string                `yaml:"obfs-password,omitempty"`
-	Certificate                    string                `yaml:"certificate"`
-	PrivateKey                     string                `yaml:"private-key"`
-	ClientAuthType                 string                `yaml:"client-auth-type,omitempty"`
-	ClientAuthCert                 string                `yaml:"client-auth-cert,omitempty"`
-	ECHKey                         string                `yaml:"ech-key,omitempty"`
-	MaxIdleTime                    int                   `yaml:"max-idle-time,omitempty"`
-	ALPN                           []string              `yaml:"alpn,omitempty"`
-	Up                             string                `yaml:"up,omitempty"`
-	Down                           string                `yaml:"down,omitempty"`
-	IgnoreClientBandwidth          bool                  `yaml:"ignore-client-bandwidth,omitempty"`
-	Masquerade                     string                `yaml:"masquerade,omitempty"`
-	CWND                           int                   `yaml:"cwnd,omitempty"`
-	BBRProfile                     string                `yaml:"bbr-profile,omitempty"`
-	UDPMTU                         int                   `yaml:"udp-mtu,omitempty"`
-	Mux                            *muxConfig            `yaml:"mux-option,omitempty"`
-	Realm                          *hysteria2RealmConfig `yaml:"realm-opts,omitempty"`
-	InitialStreamReceiveWindow     uint64                `yaml:"initial-stream-receive-window,omitempty"`
-	MaxStreamReceiveWindow         uint64                `yaml:"max-stream-receive-window,omitempty"`
-	InitialConnectionReceiveWindow uint64                `yaml:"initial-connection-receive-window,omitempty"`
-	MaxConnectionReceiveWindow     uint64                `yaml:"max-connection-receive-window,omitempty"`
+	Name                  string                `yaml:"name"`
+	Type                  string                `yaml:"type"`
+	Listen                string                `yaml:"listen"`
+	Port                  string                `yaml:"port"`
+	Users                 map[string]string     `yaml:"users,omitempty"`
+	Obfs                  string                `yaml:"obfs,omitempty"`
+	ObfsPassword          string                `yaml:"obfs-password,omitempty"`
+	Certificate           string                `yaml:"certificate"`
+	PrivateKey            string                `yaml:"private-key"`
+	ClientAuthType        string                `yaml:"client-auth-type,omitempty"`
+	ClientAuthCert        string                `yaml:"client-auth-cert,omitempty"`
+	ECHKey                string                `yaml:"ech-key,omitempty"`
+	MaxIdleTime           int                   `yaml:"max-idle-time,omitempty"`
+	ALPN                  []string              `yaml:"alpn,omitempty"`
+	Up                    string                `yaml:"up,omitempty"`
+	Down                  string                `yaml:"down,omitempty"`
+	IgnoreClientBandwidth bool                  `yaml:"ignore-client-bandwidth,omitempty"`
+	Masquerade            string                `yaml:"masquerade,omitempty"`
+	BBRProfile            string                `yaml:"bbr-profile,omitempty"`
+	Mux                   *muxConfig            `yaml:"mux-option,omitempty"`
+	Realm                 *hysteria2RealmConfig `yaml:"realm-opts,omitempty"`
 }
 
+// hysteria2RealmConfig emits the client-side `realm-opts` block per
+// proxies-hysteria2 wiki. The `proxy` field is intentionally absent on the
+// client side (only listener configs document it under realm-opts); the
+// m-ui bridge path only ever emits the client YAML shape.
 type hysteria2RealmConfig struct {
 	Enable         bool     `yaml:"enable,omitempty"`
 	ServerURL      string   `yaml:"server-url,omitempty"`
@@ -153,7 +151,6 @@ type hysteria2RealmConfig struct {
 	Certificate    string   `yaml:"certificate,omitempty"`
 	PrivateKey     string   `yaml:"private-key,omitempty"`
 	ALPN           []string `yaml:"alpn,omitempty"`
-	Proxy          string   `yaml:"proxy,omitempty"`
 }
 
 func compileHysteria2Realm(config domain.Hysteria2RealmConfig) *hysteria2RealmConfig {
@@ -165,7 +162,7 @@ func compileHysteria2Realm(config domain.Hysteria2RealmConfig) *hysteria2RealmCo
 		STUNServers: append([]string(nil), config.STUNServers...), ServerName: config.ServerName,
 		SkipCertVerify: config.SkipCertVerify, NameCertVerify: config.NameCertVerify,
 		Fingerprint: config.Fingerprint, Certificate: config.Certificate, PrivateKey: config.PrivateKey,
-		ALPN: append([]string(nil), config.ALPN...), Proxy: config.Proxy,
+		ALPN: append([]string(nil), config.ALPN...),
 	}
 }
 
@@ -173,20 +170,27 @@ type hysteria2ClientDocument struct {
 	Proxies []hysteria2ClientProxy `yaml:"proxies"`
 }
 type hysteria2ClientProxy struct {
-	Name           string                `yaml:"name"`
-	Type           string                `yaml:"type"`
-	Server         string                `yaml:"server"`
-	Port           uint16                `yaml:"port"`
-	Password       string                `yaml:"password"`
-	Up             string                `yaml:"up,omitempty"`
-	Down           string                `yaml:"down,omitempty"`
-	BBRProfile     string                `yaml:"bbr-profile,omitempty"`
-	Obfs           string                `yaml:"obfs,omitempty"`
-	ObfsPassword   string                `yaml:"obfs-password,omitempty"`
-	ServerName     string                `yaml:"sni,omitempty"`
-	SkipCertVerify bool                  `yaml:"skip-cert-verify,omitempty"`
-	ALPN           []string              `yaml:"alpn,omitempty"`
-	Realm          *hysteria2RealmConfig `yaml:"realm-opts,omitempty"`
+	Name              string                `yaml:"name"`
+	Type              string                `yaml:"type"`
+	Server            string                `yaml:"server"`
+	Port              uint16                `yaml:"port"`
+	Password          string                `yaml:"password"`
+	Up                string                `yaml:"up,omitempty"`
+	Down              string                `yaml:"down,omitempty"`
+	BBRProfile        string                `yaml:"bbr-profile,omitempty"`
+	Obfs              string                `yaml:"obfs,omitempty"`
+	ObfsPassword      string                `yaml:"obfs-password,omitempty"`
+	ServerName        string                `yaml:"sni,omitempty"`
+	SkipCertVerify    bool                  `yaml:"skip-cert-verify,omitempty"`
+	ALPN              []string              `yaml:"alpn,omitempty"`
+	Realm             *hysteria2RealmConfig `yaml:"realm-opts,omitempty"`
+	Ports             string                `yaml:"ports,omitempty"`
+	HopInterval       int                   `yaml:"hop-interval,omitempty"`
+	ObfsMinPacketSize int                   `yaml:"obfs-min-packet-size,omitempty"`
+	ObfsMaxPacketSize int                   `yaml:"obfs-max-packet-size,omitempty"`
+	NameCertVerify    string                `yaml:"name-cert-verify,omitempty"`
+	Fingerprint       string                `yaml:"fingerprint,omitempty"`
+	HandshakeTimeout  int                   `yaml:"handshake-timeout,omitempty"`
 }
 
 func hysteria2RealmOrZero(spec *domain.Hysteria2Spec) domain.Hysteria2RealmConfig {

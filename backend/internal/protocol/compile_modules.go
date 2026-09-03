@@ -33,9 +33,9 @@ func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	skip := managedKeys()
 	copyConfigPassthrough(m, in.Config, skip)
-	if in.UDP {
-		m["udp"] = true
-	}
+	// Per official MetaCubeX wiki (inbound-vless), the listener YAML does NOT
+	// carry a top-level `udp` field — mihomo allows UDP by default when absent.
+	delete(m, "udp")
 	// Official VLESS listener has no top-level "tls" field; TLS is implied by
 	// certificate/private-key, reality-config, or wrappers — never emit tls: true.
 	delete(m, "tls")
@@ -53,9 +53,9 @@ func (VMessCompiler) Capability() ProtocolCapability { return vmessCapability() 
 func (VMessCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	if in.UDP {
-		m["udp"] = true
-	}
+	// Per official MetaCubeX wiki (inbound-vmess), the listener YAML does NOT
+	// carry a top-level `udp` field — mihomo allows UDP by default when absent.
+	delete(m, "udp")
 	// Official VMess listener: no top-level tls boolean.
 	delete(m, "tls")
 	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
@@ -72,9 +72,9 @@ func (TrojanCompiler) Capability() ProtocolCapability { return trojanCapability(
 func (TrojanCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	if in.UDP {
-		m["udp"] = true
-	}
+	// Per official MetaCubeX wiki (inbound-trojan), the listener YAML does NOT
+	// carry a top-level `udp` field — mihomo allows UDP by default when absent.
+	delete(m, "udp")
 	// Official Trojan listener: no top-level tls boolean.
 	delete(m, "tls")
 	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)

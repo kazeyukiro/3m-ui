@@ -197,6 +197,17 @@ func TestVLESSShareClientYAMLUsesMihomoWSOptions(t *testing.T) {
 	if !strings.Contains(share.ClientYAML, "ws-opts:") || !strings.Contains(share.ClientYAML, "path: /vless") || !strings.Contains(share.ClientYAML, "Host: cdn.example.com") {
 		t.Fatalf("Mihomo WS options missing: %s", share.ClientYAML)
 	}
+	// Per mihomo wiki proxies-transport ws-opts, Host must be nested under
+	// `headers:` — not placed at the top level of ws-opts. Verify both that the
+	// `headers:` key exists AND that `Host:` appears AFTER it (not before).
+	if !strings.Contains(share.ClientYAML, "headers:") {
+		t.Fatalf("ws-opts.headers nesting missing: %s", share.ClientYAML)
+	}
+	idxHeaders := strings.Index(share.ClientYAML, "headers:")
+	idxHost := strings.Index(share.ClientYAML, "Host: cdn.example.com")
+	if idxHeaders < 0 || idxHost < 0 || idxHost < idxHeaders {
+		t.Fatalf("Host must be nested under headers (headers: should precede Host:): %s", share.ClientYAML)
+	}
 	if strings.Contains(share.ClientYAML, "serviceName:") || strings.Contains(share.ClientYAML, "host: cdn.example.com") {
 		t.Fatalf("URI-only transport fields leaked into Mihomo YAML: %s", share.ClientYAML)
 	}
