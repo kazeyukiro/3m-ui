@@ -30,7 +30,7 @@ const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'tuic-v4', 'tuic-v5',
 const OPTIONAL_SECURITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const TRANSPORT_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
-const UDP_PROTOCOLS = new Set(['shadowsocks', 'snell', 'vmess', 'vless', 'trojan']);
+const UDP_PROTOCOLS = new Set(['shadowsocks', 'snell']);
 /** Protocols that support shadow-tls / res-tls / jls-config wrappers */
 const WRAPPER_TLS_PROTOCOLS = new Set([
   'shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'anytls',
@@ -213,6 +213,9 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.mekya_max_write_duration_ms = m['max-write-duration-ms'];
     values.mekya_max_simultaneous_write_connection = m['max-simultaneous-write-connection'];
     values.mekya_packet_writing_buffer = m['packet-writing-buffer'];
+    // R-M3 client-metadata fields (vmess only)
+    if (m['polling-interval-initial'] != null) values['mekya-polling-interval-initial'] = m['polling-interval-initial'];
+    if (m['h2-pool-size'] != null) values['mekya-h2-pool-size'] = m['h2-pool-size'];
     const kcp = m.kcp && typeof m.kcp === 'object' ? m.kcp : {};
     values.mekya_kcp_mtu = kcp.mtu;
     values.mekya_kcp_tti = kcp.tti;
@@ -290,6 +293,14 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
   if (cfg['bbr-profile']) values['bbr-profile'] = cfg['bbr-profile'];
   if (cfg['quic-versions']) values['quic-versions'] = asStringList(cfg['quic-versions']);
   if (cfg.cwnd != null) values.cwnd = cfg.cwnd;
+  // R-M4 grpc-opts client-metadata fields (vmess/vless/trojan). The top-level
+  // scalar loop above already copies them; these explicit reads are redundant
+  // but kept for clarity and to survive any future change to that loop.
+  if (cfg['grpc-user-agent'] != null) values['grpc-user-agent'] = cfg['grpc-user-agent'];
+  if (cfg['ping-interval'] != null) values['ping-interval'] = cfg['ping-interval'];
+  if (cfg['max-connections'] != null) values['max-connections'] = cfg['max-connections'];
+  if (cfg['min-streams'] != null) values['min-streams'] = cfg['min-streams'];
+  if (cfg['max-streams'] != null) values['max-streams'] = cfg['max-streams'];
 
   // ALPN
   if (cfg.alpn && !Array.isArray(cfg.alpn)) {
@@ -421,6 +432,13 @@ export function formValuesToConfig(
       }
       set('ws-path', values['ws-path']);
       set('grpc-service-name', values['grpc-service-name']);
+      // R-M4 grpc-opts client-metadata fields (panel-side; converter emits them
+      // into the client-side grpc-opts block).
+      set('grpc-user-agent', values['grpc-user-agent']);
+      set('ping-interval', toInt(values['ping-interval']));
+      set('max-connections', toInt(values['max-connections']));
+      set('min-streams', toInt(values['min-streams']));
+      set('max-streams', toInt(values['max-streams']));
       break;
     case 'vless':
       set('flow', values.flow);
@@ -428,10 +446,22 @@ export function formValuesToConfig(
       set('grpc-service-name', values['grpc-service-name']);
       set('decryption', values.decryption);
       set('encryption', values.encryption);
+      // R-M4 grpc-opts client-metadata fields
+      set('grpc-user-agent', values['grpc-user-agent']);
+      set('ping-interval', toInt(values['ping-interval']));
+      set('max-connections', toInt(values['max-connections']));
+      set('min-streams', toInt(values['min-streams']));
+      set('max-streams', toInt(values['max-streams']));
       break;
     case 'trojan':
       set('ws-path', values['ws-path']);
       set('grpc-service-name', values['grpc-service-name']);
+      // R-M4 grpc-opts client-metadata fields
+      set('grpc-user-agent', values['grpc-user-agent']);
+      set('ping-interval', toInt(values['ping-interval']));
+      set('max-connections', toInt(values['max-connections']));
+      set('min-streams', toInt(values['min-streams']));
+      set('max-streams', toInt(values['max-streams']));
       if (values.ss_option_enabled) {
         cfg['ss-option'] = cleanObj({
           enabled: true,
@@ -448,8 +478,10 @@ export function formValuesToConfig(
       set('obfs-password', values['obfs-password']);
       set('masquerade', values.masquerade);
       set('alpn', values.alpn);
-      set('max-idle-time', values['max-idle-time']);
-      set('handshake-timeout', values['handshake-timeout']);
+      // HIGH-1 / HIGH-2: max-idle-time + handshake-timeout removed from hy2 —
+      // backend hy2 schema (listener_schema_registry.go:161-163) does NOT
+      // whitelist them and HARD-REJECTs every save. They are CLIENT-side or
+      // TUIC/Sudoku-only fields per wiki + fix-A HIGH-5.
       set('bbr-profile', values['bbr-profile']);
       break;
     case 'tuic':
@@ -722,6 +754,10 @@ export function formValuesToConfig(
       'max-write-duration-ms': values.mekya_max_write_duration_ms,
       'max-simultaneous-write-connection': values.mekya_max_simultaneous_write_connection,
       'packet-writing-buffer': values.mekya_packet_writing_buffer,
+      // R-M3 client-metadata fields (vmess only; converter reads them for
+      // client-side mekya-opts emission).
+      'polling-interval-initial': values['mekya-polling-interval-initial'],
+      'h2-pool-size': values['mekya-h2-pool-size'],
       kcp,
     }) || { enable: true };
   }
@@ -934,9 +970,29 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
                   </Form.Item>
                 )}
                 {layer === 'grpc' && (
-                  <Form.Item name="grpc-service-name" label={t('listeners.grpcServiceName')} tooltip={t('listeners.grpcHint')} rules={[{ required: true }]}>
-                    <Input placeholder="GunService" />
-                  </Form.Item>
+                  <>
+                    <Form.Item name="grpc-service-name" label={t('listeners.grpcServiceName')} tooltip={t('listeners.grpcHint')} rules={[{ required: true }]}>
+                      <Input placeholder="GunService" />
+                    </Form.Item>
+                    {/* R-M4 grpc-opts client-metadata fields (vmess/vless/trojan).
+                        These are panel-side metadata consumed by converter/client.go
+                        to populate the client-side grpc-opts block. */}
+                    <Form.Item name="grpc-user-agent" label={t('listeners.grpcUserAgent')} tooltip={t('listeners.grpcUserAgentHint')}>
+                      <Input placeholder="Go-http-client/1.1" />
+                    </Form.Item>
+                    <Form.Item name="ping-interval" label={t('listeners.pingInterval')} tooltip={t('listeners.pingIntervalHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                    <Form.Item name="max-connections" label={t('listeners.maxConnections')} tooltip={t('listeners.maxConnectionsHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                    <Form.Item name="min-streams" label={t('listeners.minStreams')} tooltip={t('listeners.minStreamsHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                    <Form.Item name="max-streams" label={t('listeners.maxStreams')} tooltip={t('listeners.maxStreamsHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                  </>
                 )}
               </>
             );
@@ -981,12 +1037,6 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           </Form.Item>
           <Form.Item name="alpn" label={t('listeners.alpn')}>
             <Select mode="tags" placeholder="h3" tokenSeparators={[',']} />
-          </Form.Item>
-          <Form.Item name="max-idle-time" label={t('listeners.maxIdleTime')}>
-            <InputNumber min={0} style={{ width: '100%' }} placeholder="15000" />
-          </Form.Item>
-          <Form.Item name="handshake-timeout" label={t('listeners.handshakeTimeout')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="bbr-profile" label={t('listeners.bbrProfile')}>
             <Input />
@@ -1503,6 +1553,13 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           </Form.Item>
           <Form.Item name="mekya_packet_writing_buffer" label={t('listeners.mekyaPacketBuffer')} tooltip={t('listeners.mekyaPacketBufferHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="65536" />
+          </Form.Item>
+          {/* R-M3 client-metadata fields (vmess only) */}
+          <Form.Item name="mekya-polling-interval-initial" label={t('listeners.mekyaPollingInterval')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mekya-h2-pool-size" label={t('listeners.mekyaH2PoolSize')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Divider titlePlacement="start" plain style={{ marginTop: 8 }}>{t('listeners.mekyaKcpSection')}</Divider>
           <Form.Item name="mekya_kcp_mtu" label="MTU">
