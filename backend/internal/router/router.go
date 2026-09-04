@@ -45,7 +45,11 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	apiV1 := r.Group("/api/v1")
 	{
 		apiV1.GET("/openapi.yaml", func(c *gin.Context) {
-			c.Data(http.StatusOK, "application/yaml; charset=utf-8", docs.OpenAPI)
+			// text/plain so browsers show the document instead of hanging on
+			// application/yaml (many UAs have no inline YAML preview).
+			c.Header("Cache-Control", "public, max-age=60")
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Data(http.StatusOK, "text/plain; charset=utf-8", docs.OpenAPI)
 		})
 		auth.NewHandler(db, cfg).RegisterRoutes(apiV1.Group("/auth"))
 
