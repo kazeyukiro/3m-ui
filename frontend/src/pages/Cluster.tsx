@@ -4,6 +4,7 @@ import { Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popcon
 import { PlusOutlined, DeleteOutlined, EditOutlined, HeartOutlined } from '@ant-design/icons';
 import {
   fetchCluster, createClusterNode, updateClusterNode, deleteClusterNode, healthClusterNode,
+  syncRemoteNodes,
   healthAllCluster, fetchRemoteDashboard, fetchRemoteUsers, remoteStartCore, remoteStopCore, remoteRestartCore,
   RemoteServer,
 } from '../api/cluster';
@@ -116,6 +117,13 @@ const ClusterPage: React.FC = () => {
             } catch (e: any) { message.error(e.message || t('common.error')); }
           }}>{t('cluster.dashboard') || 'Dashboard'}</Button>
           <Button size="small" onClick={() => loadRemoteNodes(r.id)}>{t('cluster.remoteNodes') || 'Nodes'}</Button>
+          <Button size="small" onClick={async () => {
+            try {
+              const rows = await syncRemoteNodes(r.id);
+              message.success((t('cluster.syncDone') || 'Synced') + `: ${rows?.length ?? 0}`);
+              load();
+            } catch (e: any) { message.error(e.message || t('common.error')); }
+          }}>{t('cluster.syncNodes') || 'Sync nodes'}</Button>
           <Button size="small" onClick={async () => {
             try {
               setCtrlId(r.id);

@@ -22,12 +22,14 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.List)
 	rg.POST("", h.Create)
 	rg.POST("/health-all", h.HealthAll)
+	rg.GET("/mirrored-nodes", h.ListMirroredNodes)
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
 	rg.POST("/:id/health", h.Health)
 	rg.GET("/:id/dashboard", h.RemoteDashboard)
 	rg.GET("/:id/users", h.RemoteUsers)
 	rg.GET("/:id/nodes", h.RemoteNodes)
+	rg.POST("/:id/sync-nodes", h.SyncNodes)
 	rg.POST("/:id/nodes", h.RemoteCreateNode)
 	rg.PUT("/:id/nodes/:nodeId", h.RemoteUpdateNode)
 	rg.DELETE("/:id/nodes/:nodeId", h.RemoteDeleteNode)
@@ -303,4 +305,33 @@ func writeRemoteErr(c *gin.Context, err error) {
 	}
 	log.Printf("cluster remote operation failed: %v", err)
 	c.JSON(http.StatusBadGateway, gin.H{"error": "upstream cluster operation failed"})
+}
+
+
+func (h *Handler) SyncNodes(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	rows, err := h.svc.SyncRemoteNodes(id)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, rows)
+}
+
+func (h *Handler) ListMirroredNodes(c *gin.Context) {
+	var remoteID uint
+	if v := c.Query("remote_server_id"); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 32); err == nil {
+			remoteID = uint(n)
+		}
+	}
+	rows, err := h.svc.ListMirroredNodes(remoteID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, rows)
 }

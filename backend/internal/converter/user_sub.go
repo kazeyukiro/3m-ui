@@ -65,8 +65,11 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 		return nil, fmt.Errorf("user is not active")
 	}
 	listeners, filtered, err := userBoundListeners(db, pu)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "not bound") && !strings.Contains(err.Error(), "no exportable") {
 		return nil, err
+	}
+	if err != nil {
+		listeners, filtered = nil, map[uint][]user.Credential{}
 	}
 	serverHost := ResolveServerAddress(config.GlobalConfig, req)
 
@@ -89,6 +92,10 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 			}
 			allProxies = append(allProxies, p)
 		}
+	}
+	// Merge mirrored remote cluster nodes bound to this user.
+	if mirrors, mErr := loadBoundRemoteMirrors(db, pu.ID); mErr == nil && len(mirrors) > 0 {
+		allProxies, names = appendRemoteProxyMaps(mirrors, allProxies, names)
 	}
 	if len(allProxies) == 0 {
 		return nil, fmt.Errorf("no exportable proxies for user")
@@ -146,6 +153,9 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 				links = append(links, u)
 			}
 		}
+	}
+	if mirrors, mErr := loadBoundRemoteMirrors(db, pu.ID); mErr == nil && len(mirrors) > 0 {
+		links = appendRemoteShareURIs(mirrors, links)
 	}
 	if len(links) == 0 {
 		return nil, fmt.Errorf("no exportable share links for user")

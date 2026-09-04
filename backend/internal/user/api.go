@@ -37,6 +37,8 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/:id/listeners", h.BindListeners)
 	rg.GET("/:id/listeners", h.GetListeners)
 	rg.POST("/:id/nodes", h.BindListeners)
+	rg.POST("/:id/remote-nodes", h.BindRemoteNodes)
+	rg.GET("/:id/remote-nodes", h.ListRemoteNodes)
 	rg.GET("/:id/nodes", h.GetListeners)
 	rg.POST("/:id/reset-traffic", h.ResetTraffic)
 	rg.GET("/:id/subscription", h.GetSubscription)
@@ -361,4 +363,42 @@ func (h *Handler) UnbindTelegram(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+
+func (h *Handler) BindRemoteNodes(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		MirrorIDs []uint `json:"mirror_ids"`
+		RemoteNodeIDs []uint `json:"remote_node_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ids := req.MirrorIDs
+	if len(ids) == 0 {
+		ids = req.RemoteNodeIDs
+	}
+	if err := h.svc.BindRemoteNodes(id, ids); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "mirror_ids": ids})
+}
+
+func (h *Handler) ListRemoteNodes(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	ids, err := h.svc.ListRemoteNodeIDs(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mirror_ids": ids})
 }
