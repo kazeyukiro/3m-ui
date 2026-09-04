@@ -1,16 +1,44 @@
 openapi: 3.0.3
 info:
   title: 3m-ui API
-  version: "1.0"
+  version: "1.1"
   description: |
     REST API for the 3m-ui Mihomo management panel.
-    Authenticated endpoints require `Authorization: Bearer <jwt>`.
+
+    - Base path: `/api/v1`
+    - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login`
+    - Public subscription routes use path tokens (no JWT)
+
+    Cross-machine subscription: sync remote nodes via `/cluster/{id}/sync-nodes`,
+    bind with `/users/{id}/remote-nodes`, then the user's sub URL merges local + remote.
 servers:
   - url: /api/v1
+tags:
+  - name: auth
+  - name: health
+  - name: users
+  - name: nodes
+  - name: cluster
+  - name: subscription
+  - name: traffic
+  - name: mihomo
+  - name: config
+  - name: system
+  - name: telegram
 paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: '{ "status": "ok" }'
+
   /auth/login:
     post:
-      summary: Login
+      tags: [auth]
+      summary: Login (returns JWT)
       security: []
       requestBody:
         required: true
@@ -24,57 +52,80 @@ paths:
                 password: { type: string }
       responses:
         "200":
-          description: JWT session
+          description: token, expires_at, username
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Current admin profile
+      responses:
+        "200":
+          description: Admin user info
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change admin password
+      responses:
+        "200":
+          description: Password updated
+
+  /dashboard:
+    get:
+      tags: [system]
+      summary: Dashboard snapshot (core + system + traffic)
+      responses:
+        "200":
+          description: DashboardResponse
+
   /users:
     get:
+      tags: [users]
       summary: List proxy users
       responses:
         "200":
           description: SafeUser array
     post:
+      tags: [users]
       summary: Create proxy user
       responses:
         "201":
           description: Created user
+
   /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users]
+      summary: Get proxy user
+      responses:
+        "200":
+          description: SafeUser
     put:
-      summary: Update proxy user (traffic_limit, expire_time, enabled, password)
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      tags: [users]
+      summary: Update proxy user
       responses:
         "200":
           description: Updated user
     delete:
+      tags: [users]
       summary: Delete proxy user
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
       responses:
         "200":
           description: Deleted
+
   /users/{id}/nodes:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
     get:
-      summary: List nodes bound to user
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      tags: [users]
+      summary: List local listeners bound to user
       responses:
         "200":
           description: Node list
     post:
-      summary: Replace node bindings
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+      tags: [users]
+      summary: Replace local node bindings
       requestBody:
         content:
           application/json:
@@ -87,86 +138,528 @@ paths:
       responses:
         "200":
           description: Bindings updated
+
+  /users/{id}/remote-nodes:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users, cluster]
+      summary: List mirrored remote node IDs bound to user
+      responses:
+        "200":
+          description: '{ "mirror_ids": [1,2] }'
+    post:
+      tags: [users, cluster]
+      summary: Replace remote node mirror bindings (cross-machine sub merge)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mirror_ids:
+                  type: array
+                  items: { type: integer }
+                remote_node_ids:
+                  type: array
+                  items: { type: integer }
+                  description: Alias of mirror_ids
+      responses:
+        "200":
+          description: Bindings updated
+
   /users/{id}/reset-traffic:
     post:
-      summary: Reset traffic counters for a proxy user
+      tags: [users]
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
+        - $ref: "#/components/parameters/IdPath"
+      summary: Reset traffic counters
       responses:
         "200":
           description: Counters cleared
+
+  /users/{id}/subscription:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users, subscription]
+      summary: Get user subscription token and URL
+      responses:
+        "200":
+          description: token, url
+
+  /users/{id}/subscription/rotate:
+    post:
+      tags: [users, subscription]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Rotate subscription token
+      responses:
+        "200":
+          description: New token and url
+
   /nodes:
     get:
-      summary: List listeners
+      tags: [nodes]
+      summary: List listeners (alias /listeners)
       responses:
         "200":
           description: Listener list
     post:
+      tags: [nodes]
       summary: Create listener
       responses:
         "201":
           description: Created
+
   /nodes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [nodes]
+      summary: Get listener
+      responses:
+        "200":
+          description: Listener
     put:
+      tags: [nodes]
       summary: Update listener
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
       responses:
         "200":
           description: Updated
     delete:
+      tags: [nodes]
       summary: Delete listener
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
       responses:
         "200":
           description: Deleted
+
+  /nodes/{id}/uri:
+    get:
+      tags: [nodes]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Export share URI / client_yaml
+      responses:
+        "200":
+          description: uri, uris, client_yaml
+
+  /listeners:
+    get:
+      tags: [nodes]
+      summary: List listeners (same as /nodes)
+      responses:
+        "200":
+          description: Listener list
+    post:
+      tags: [nodes]
+      summary: Create listener
+      responses:
+        "201":
+          description: Created
+
+  /cluster:
+    get:
+      tags: [cluster]
+      summary: List remote 3m-ui panels
+      responses:
+        "200":
+          description: RemoteServer array
+    post:
+      tags: [cluster]
+      summary: Register remote panel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, base_url]
+              properties:
+                name: { type: string }
+                base_url: { type: string, example: "https://panel.example.com:8080" }
+                api_token:
+                  type: string
+                  description: JWT from remote POST /auth/login (not a sub token)
+                enabled: { type: boolean }
+                remark: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /cluster/health-all:
+    post:
+      tags: [cluster]
+      summary: Health-check all remotes
+      responses:
+        "200":
+          description: Updated RemoteServer list
+
+  /cluster/mirrored-nodes:
+    get:
+      tags: [cluster]
+      summary: List synced remote node mirrors (for sub merge)
+      parameters:
+        - in: query
+          name: remote_server_id
+          schema: { type: integer }
+      responses:
+        "200":
+          description: RemoteNodeMirror array
+
+  /cluster/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    put:
+      tags: [cluster]
+      summary: Update remote panel
+      responses:
+        "200":
+          description: Updated
+    delete:
+      tags: [cluster]
+      summary: Remove remote panel registration
+      responses:
+        "200":
+          description: Deleted
+
+  /cluster/{id}/health:
+    post:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Health-check one remote
+      responses:
+        "200":
+          description: RemoteServer with last_status
+
+  /cluster/{id}/sync-nodes:
+    post:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Pull remote nodes + URI/client_yaml into local mirrors
+      responses:
+        "200":
+          description: RemoteNodeMirror array
+        "502":
+          description: upstream cluster operation failed
+
+  /cluster/{id}/nodes:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [cluster]
+      summary: Proxy list nodes on remote panel
+      responses:
+        "200":
+          description: Remote raw JSON
+    post:
+      tags: [cluster]
+      summary: Proxy create node on remote
+      responses:
+        "200":
+          description: Remote response
+
+  /cluster/{id}/dashboard:
+    get:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Proxy remote dashboard
+      responses:
+        "200":
+          description: Remote dashboard JSON
+
+  /cluster/{id}/users:
+    get:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Proxy remote users list
+      responses:
+        "200":
+          description: Remote users JSON
+
+  /cluster/{id}/mihomo/restart:
+    post:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Restart Mihomo on remote
+      responses:
+        "200":
+          description: OK / upstream error
+
+  /client/sub/{token}:
+    get:
+      tags: [subscription]
+      summary: User subscription (UA or ?target= selects format)
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+        - in: query
+          name: target
+          schema:
+            type: string
+            enum: [mihomo, clash, meta, v2ray, base64, singbox, html]
+        - in: query
+          name: html
+          schema: { type: string, enum: ["1"] }
+      responses:
+        "200":
+          description: YAML / base64 / JSON / HTML; headers include Subscription-Userinfo
+
+  /client/clash/{token}:
+    get:
+      tags: [subscription]
+      security: []
+      summary: Force Clash/Meta YAML
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/yaml
+
+  /client/v2ray/{token}:
+    get:
+      tags: [subscription]
+      security: []
+      summary: Force v2ray Base64 URI list
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/plain base64
+
+  /client/json/{token}:
+    get:
+      tags: [subscription]
+      security: []
+      summary: Force sing-box JSON
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: application/json
+
   /traffic/status:
     get:
+      tags: [traffic]
       summary: Global traffic snapshot
       responses:
         "200":
           description: Rates and totals
   /traffic/users:
     get:
+      tags: [traffic]
       summary: Per-user traffic
       responses:
         "200":
           description: UserTraffic array
   /traffic/connections:
     get:
+      tags: [traffic]
       summary: Active connections
       responses:
         "200":
           description: Connection list
+
+  /mihomo/status:
+    get:
+      tags: [mihomo]
+      summary: Core process status
+      responses:
+        "200":
+          description: running, pid, version
+  /mihomo/start:
+    post:
+      tags: [mihomo]
+      summary: Start core
+      responses:
+        "200":
+          description: OK
+  /mihomo/stop:
+    post:
+      tags: [mihomo]
+      summary: Stop core
+      responses:
+        "200":
+          description: OK
+  /mihomo/restart:
+    post:
+      tags: [mihomo]
+      summary: Restart core
+      responses:
+        "200":
+          description: OK
+  /mihomo/logs:
+    get:
+      tags: [mihomo]
+      summary: Recent core logs
+      responses:
+        "200":
+          description: Log lines
+
+  /config:
+    get:
+      tags: [config]
+      summary: Current generated / stored config view
+      responses:
+        "200":
+          description: Config payload
+  /config/generate:
+    post:
+      tags: [config]
+      summary: Generate Mihomo config from DB
+      responses:
+        "200":
+          description: Generated YAML/text
+  /config/preview:
+    post:
+      tags: [config]
+      summary: Preview config without applying
+      responses:
+        "200":
+          description: Preview
+  /config/validate:
+    post:
+      tags: [config]
+      summary: Validate candidate config
+      responses:
+        "200":
+          description: Validation result
+  /config/apply:
+    post:
+      tags: [config]
+      summary: Apply config (with rollback on failure)
+      responses:
+        "200":
+          description: Applied
+  /config/rollback:
+    post:
+      tags: [config]
+      summary: Rollback last config
+      responses:
+        "200":
+          description: Rolled back
+
   /system/status:
     get:
+      tags: [system]
       summary: Host metrics
       responses:
         "200":
           description: CPU/mem/disk
+  /system/panel-server:
+    get:
+      tags: [system]
+      summary: Panel listen port / public_url
+      responses:
+        "200":
+          description: Panel server settings
+    put:
+      tags: [system]
+      summary: Update panel server settings (may require restart)
+      responses:
+        "200":
+          description: Saved
   /system/backup:
     get:
+      tags: [system]
       summary: Download zip backup (SQLite + Mihomo config)
       responses:
         "200":
           description: application/zip
   /system/backup/restore-db:
     post:
-      summary: Restore SQLite database from multipart field `database`
+      tags: [system]
+      summary: Restore SQLite from multipart field `database`
       responses:
         "200":
-          description: Restored (restart recommended)
+          description: Restored (restart required)
+  /system/ssl:
+    get:
+      tags: [system]
+      summary: Panel SSL settings
+      responses:
+        "200":
+          description: SSL settings
+    put:
+      tags: [system]
+      summary: Update panel SSL (restart to apply)
+      responses:
+        "200":
+          description: Saved
+  /system/subscription-page:
+    get:
+      tags: [system, subscription]
+      summary: Subscription HTML page settings
+      responses:
+        "200":
+          description: Settings
+    put:
+      tags: [system, subscription]
+      summary: Update subscription page settings
+      responses:
+        "200":
+          description: Saved
+  /system/geofiles/update:
+    post:
+      tags: [system]
+      summary: Download MetaCubeX geo databases
+      responses:
+        "200":
+          description: Updated
+
+  /telegram/settings:
+    get:
+      tags: [telegram]
+      summary: Telegram bot settings
+      responses:
+        "200":
+          description: Settings
+    put:
+      tags: [telegram]
+      summary: Save Telegram settings
+      responses:
+        "200":
+          description: Saved
+  /telegram/test:
+    post:
+      tags: [telegram]
+      summary: Send test message
+      responses:
+        "200":
+          description: OK
+
+  /openapi.yaml:
+    get:
+      tags: [system]
+      summary: This OpenAPI document
+      security: []
+      responses:
+        "200":
+          description: application/yaml
+
 components:
+  parameters:
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer }
   securitySchemes:
     bearerAuth:
       type: http
