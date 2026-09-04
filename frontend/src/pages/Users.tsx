@@ -10,6 +10,7 @@ import {
   fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
+import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
 import { useI18n } from '../i18n';
 import { useNavigate } from 'react-router-dom';
 import { copyText } from '../utils/clipboard';
@@ -140,8 +141,8 @@ const Users: React.FC = () => {
       const [nodes, bound, mirrors, remoteBound] = await Promise.all([
         fetchListeners(),
         fetchUserNodes(record.id),
-        fetchMirroredNodes().catch(() => []),
-        fetchUserRemoteNodes(record.id).catch(() => ({ mirror_ids: [] })),
+        fetchMirroredNodes().catch(() => [] as RemoteNodeMirror[]),
+        fetchUserRemoteNodes(record.id).catch(() => ({ mirror_ids: [] as number[] })),
       ]);
       setAllNodes(nodes || []);
       setSelectedNodeIds((bound || []).map((n) => n.id));
@@ -404,26 +405,13 @@ const Users: React.FC = () => {
       </Modal>
 
       <Modal
-        open={bi
-        <p style={{ marginTop: 16, marginBottom: 8, opacity: 0.65 }}>{t('users.bindRemoteHint') || 'Remote cluster nodes (synced mirrors)'}</p>
-        <Select
-          mode="multiple"
-          style={{ width: '100%' }}
-          placeholder={t('users.selectRemoteNodes') || 'Select remote nodes'}
-          optionFilterProp="label"
-          value={selectedRemoteIds}
-          onChange={(v) => setSelectedRemoteIds(v)}
-          options={(remoteMirrors || []).filter((m) => m.enabled).map((m) => ({
-            value: m.id,
-            label: `${m.remote_server_name || m.remote_server_id} / ${m.name} (${m.protocol || '?'})`,
-          }))}
-        />
-ndOpen}
+        open={bindOpen}
         title={bindUser ? `${t('users.bindNodes')} — ${bindUser.username}` : t('users.bindNodes')}
         onCancel={() => {
           setBindOpen(false);
           setBindUser(null);
           setSelectedNodeIds([]);
+          setSelectedRemoteIds([]);
         }}
         onOk={onBindSave}
         confirmLoading={bindLoading}
@@ -442,6 +430,21 @@ ndOpen}
           options={allNodes.map((n) => ({
             value: n.id,
             label: `${n.name} (${n.protocol}:${n.port})`,
+          }))}
+        />
+        <p style={{ marginTop: 16, marginBottom: 8, opacity: 0.65 }}>
+          {t('users.bindRemoteHint') || 'Remote cluster nodes (synced mirrors)'}
+        </p>
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          placeholder={t('users.selectRemoteNodes') || 'Select remote nodes'}
+          optionFilterProp="label"
+          value={selectedRemoteIds}
+          onChange={(ids: number[]) => setSelectedRemoteIds(ids)}
+          options={(remoteMirrors || []).filter((m) => m.enabled).map((m) => ({
+            value: m.id,
+            label: `${m.remote_server_name || m.remote_server_id} / ${m.name} (${m.protocol || '?'})`,
           }))}
         />
       </Modal>
