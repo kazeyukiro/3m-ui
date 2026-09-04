@@ -150,7 +150,12 @@ func clientOnlyListenerKey(k string) bool {
 	case "sni", "servername", "skip-cert-verify", "name-cert-verify",
 		"fingerprint", "client-fingerprint", "reality-opts",
 		"shadow-tls-opts", "restls-opts", "jls-opts", "ss-opts",
-		"plugin", "plugin-opts", "encryption":
+		"plugin", "plugin-opts", "encryption",
+		// Client grpc-opts extras (proxies transport); listener only has grpc-service-name.
+		"grpc-user-agent", "ping-interval", "max-connections", "min-streams", "max-streams",
+		// Client-only TUIC/Hy2 hints sometimes stored in panel JSON.
+		"udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval",
+		"fast-open", "max-open-streams", "disable-sni", "ip":
 		return true
 	default:
 		return false

@@ -374,7 +374,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		// client YAML with `ip: ""` placeholders.
 		if token, ok := opts["token"]; ok {
 			p := makeProxy("")
-			p["token"] = token
+			p["token"] = normalizeTUICToken(token)
 			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
 				copyOption(p, opts, key)
 			}
@@ -805,6 +805,26 @@ func decodeOptions(raw string) (map[string]interface{}, error) {
 
 // ensureTUICClientDefaults fills alpn/congestion and skip-cert-verify for
 // panel self-signed certificates. TUIC is QUIC/UDP and typically uses ALPN h3.
+func normalizeTUICToken(token interface{}) interface{} {
+	// Listener stores token as []string; proxies-tuic client uses a single string.
+	switch v := token.(type) {
+	case string:
+		return v
+	case []string:
+		if len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	case []interface{}:
+		if len(v) > 0 {
+			return fmt.Sprint(v[0])
+		}
+		return ""
+	default:
+		return token
+	}
+}
+
 func ensureTUICClientDefaults(p, opts map[string]interface{}) {
 	if p["alpn"] == nil {
 		p["alpn"] = []string{"h3"}
