@@ -594,6 +594,14 @@ export function formValuesToConfig(
   if (!XHTTP_PROTOCOLS.has(protocol)) {
     values.xhttp_enabled = false;
   }
+  // Vision flow is TCP-only (MetaCubeX / Xray); strip on ws/grpc/xhttp/mkcp/mekya.
+  const layerNow = values.transport_layer || 'raw';
+  if (layerNow !== 'raw' && layerNow !== 'tcp') {
+    values.flow = undefined;
+  }
+  if (values.mkcp_enabled || values.mekya_enabled) {
+    values.flow = undefined;
+  }
   const realityOn = REALITY_PROTOCOLS.has(protocol) && (!!values.reality_enabled || values.security_layer === 'reality');
   const wantTLSMaterial =
     ALWAYS_TLS_PROTOCOLS.has(protocol) ||
@@ -616,6 +624,17 @@ export function formValuesToConfig(
     set('client-auth-cert', values['client-auth-cert']);
     set('ech-key', values['ech-key']);
     if (ALLOW_INSECURE_PROTOCOLS.has(protocol) && values['allow-insecure'] === true) cfg['allow-insecure'] = true;
+  }
+
+  // Reality is exclusive with cert/wrappers (MetaCubeX trojan/vless listener notes).
+  if (realityOn) {
+    values.shadow_tls_enabled = false;
+    values.res_tls_enabled = false;
+    values.jls_enabled = false;
+    values.tlsmirror_enabled = false;
+    values['allow-insecure'] = false;
+    values.certificate = undefined;
+    values['private-key'] = undefined;
   }
 
   // simple-obfs
@@ -976,8 +995,24 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       {protocol === 'vless' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="flow" label={t('listeners.flow')} tooltip={t('listeners.flowHint')}>
-            <Select allowClear options={[{ value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' }]} />
+          <Form.Item noStyle shouldUpdate={(a, b) => a.transport_layer !== b.transport_layer}>
+            {({ getFieldValue }) => {
+              const layer = getFieldValue('transport_layer') || 'raw';
+              const tcpOnly = layer === 'raw' || layer === 'tcp';
+              return (
+                <Form.Item
+                  name="flow"
+                  label={t('listeners.flow')}
+                  tooltip={t('listeners.flowHint') || 'xtls-rprx-vision requires TCP (raw). Cleared for ws/grpc/xhttp.'}
+                >
+                  <Select
+                    allowClear
+                    disabled={!tcpOnly}
+                    options={[{ value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' }]}
+                  />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
                     <Form.Item
             name="decryption"
