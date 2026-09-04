@@ -18,9 +18,10 @@ run_script() {
     shift
     [ -x "$script" ] || {
         printf '%s\n' "3m-ui management script is missing: $script" >&2
-        exit 1
+        return 1
     }
-    exec "$script" "$@"
+    # Keep menu alive after child scripts finish.
+    "$script" "$@"
 }
 
 menu() {
@@ -170,8 +171,10 @@ enable_bbr() {
         return 0
     fi
     modprobe tcp_bbr 2>/dev/null || true
-    printf '%s\n' 'net.core.default_qdisc=fq' >> /etc/sysctl.d/99-3m-ui-bbr.conf
-    printf '%s\n' 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.d/99-3m-ui-bbr.conf
+    if [ ! -f /etc/sysctl.d/99-3m-ui-bbr.conf ]; then
+        printf '%s\n' 'net.core.default_qdisc=fq' > /etc/sysctl.d/99-3m-ui-bbr.conf
+        printf '%s\n' 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.d/99-3m-ui-bbr.conf
+    fi
     sysctl --system >/dev/null 2>&1 || sysctl -p /etc/sysctl.d/99-3m-ui-bbr.conf 2>/dev/null || true
     sysctl net.ipv4.tcp_congestion_control 2>/dev/null || true
     printf '%s\n' '已尝试启用 BBR。'
