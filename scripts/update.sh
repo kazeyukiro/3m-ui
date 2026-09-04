@@ -352,8 +352,10 @@ install -m 0755 "$BASE/3m-ui" "$ENTRY"
 if [ -n "$mihomo_tmp" ] && [ -s "$mihomo_tmp" ]; then install -m 0755 "$mihomo_tmp" "$MIHOMO_BIN"; fi
 chmod 0600 "$VERSION_FILE" "$MODE_FILE"
 
-if ! start || ! ok; then
-  echo "[ERROR] New version failed to start; restoring the complete previous installation." >&2
+# Give the new binary time to migrate DB / bind ports before health checks.
+# A too-eager is-active check was rolling back healthy installs ("panel dead after update").
+if ! start; then
+  echo "[ERROR] systemctl/rc-service failed to start 3m-ui; restoring previous installation." >&2
   stop
   rm -rf "$BASE"
   cp -a "$backup/base" "$BASE"
@@ -364,9 +366,18 @@ if ! start || ! ok; then
 fi
 
 echo "[4/5] Verifying service health..."
-sleep 1
-if ! ok; then
-  echo "[ERROR] Service stopped immediately after update; restoring backup." >&2
+ready=0
+i=0
+while [ "$i" -lt 15 ]; do
+  i=$((i + 1))
+  if ok; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+if [ "$ready" -ne 1 ]; then
+  echo "[ERROR] Service not active after ~15s; restoring backup. Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
   stop
   rm -rf "$BASE"
   cp -a "$backup/base" "$BASE"
