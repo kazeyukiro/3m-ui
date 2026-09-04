@@ -330,7 +330,9 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 func detectSubTarget(ua string) string {
 	u := strings.ToLower(ua)
 	switch {
-	case strings.Contains(u, "clash") || strings.Contains(u, "mihomo") || strings.Contains(u, "stash") || strings.Contains(u, "meta"):
+	case strings.Contains(u, "clash") || strings.Contains(u, "mihomo") || strings.Contains(u, "stash") ||
+		strings.Contains(u, "meta") || strings.Contains(u, "clashmeta") || strings.Contains(u, "verge") ||
+		strings.Contains(u, "flclash") || strings.Contains(u, "prizmdotdev"):
 		return "mihomo"
 	case strings.Contains(u, "surge"):
 		return "surge"
@@ -340,14 +342,17 @@ func detectSubTarget(ua string) string {
 		return "loon"
 	case strings.Contains(u, "shadowrocket"):
 		return "mihomo"
-	case strings.Contains(u, "sing-box") || strings.Contains(u, "sfa") || strings.Contains(u, "sfm") || strings.Contains(u, "sfi"):
+	case strings.Contains(u, "sing-box") || strings.Contains(u, "sfa") || strings.Contains(u, "sfm") ||
+		strings.Contains(u, "sfi") || strings.Contains(u, "singbox"):
 		return "singbox"
-	// Classic v2ray / Xray clients expect base64 list of share links (classic client subscription).
+	// Classic v2ray / Xray clients expect base64 list of share links.
 	case strings.Contains(u, "v2ray") || strings.Contains(u, "v2rayng") || strings.Contains(u, "v2rayn") ||
 		strings.Contains(u, "streisand") || strings.Contains(u, "hiddify") || strings.Contains(u, "nekobox") ||
-		strings.Contains(u, "nekoray"):
+		strings.Contains(u, "nekoray") || strings.Contains(u, "v2box") || strings.Contains(u, "passwall") ||
+		strings.Contains(u, "napsternet") || strings.Contains(u, "foXray") || strings.Contains(u, "foxray"):
 		return "v2ray"
 	default:
+		// Prefer Clash/Meta YAML for generic downloaders; clients that need base64 use ?target=v2ray.
 		return "mihomo"
 	}
 }

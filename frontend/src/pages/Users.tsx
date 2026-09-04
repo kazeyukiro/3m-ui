@@ -244,6 +244,19 @@ const Users: React.FC = () => {
       title: t('common.status'),
       key: 'status',
       width: 140,
+      filters: [
+        { text: t('users.online'), value: 'online' },
+        { text: t('users.offline'), value: 'offline' },
+        { text: t('users.enabled') || 'Enabled', value: 'enabled' },
+        { text: t('users.disabled') || 'Disabled', value: 'disabled' },
+      ],
+      onFilter: (value: any, r: ProxyUser) => {
+        if (value === 'online') return !!r.online;
+        if (value === 'offline') return !r.online;
+        if (value === 'enabled') return !!r.enabled;
+        if (value === 'disabled') return !r.enabled;
+        return true;
+      },
       render: (_: any, r: ProxyUser) => (
         <Space size={4} wrap>
           {r.online ? <Tag color="success">{t('users.online')}</Tag> : <Tag>{t('users.offline')}</Tag>}

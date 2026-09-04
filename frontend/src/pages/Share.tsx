@@ -154,7 +154,7 @@ const SharePage: React.FC = () => {
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t('share.subHint') || 'Copy a URL into the client. Default (no target) is Mihomo YAML. Use target=v2ray for classic Base64 URI list.'}
+            message={t('share.subHint') || 'Copy into the client. Without ?target=, format follows User-Agent (Clash/Mihomo → YAML, v2rayNG → Base64, sing-box → JSON). Headers include traffic/expiry (Subscription-Userinfo).'}
           />
           <CopyField label={t('users.subMihomo') || 'Mihomo / Clash YAML'} value={shareUrl} qr />
           <CopyField label={t('users.subV2ray') || 'V2Ray / Base64'} value={withTarget(shareUrl, 'v2ray')} />

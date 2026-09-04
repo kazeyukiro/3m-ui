@@ -325,6 +325,13 @@ const Settings: React.FC = () => {
             message.success(t('common.saved'));
           } catch (e: any) { message.error(e.message || t('common.error')); }
         }}>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('settings.subscriptionFormatHint') || 'Subscription auto-format'}
+            description={t('settings.subscriptionFormatHintDesc') || 'Clients are detected via User-Agent (Clash Meta / Mihomo / v2rayNG / sing-box…). Force format with ?target=clash|v2ray|singbox|html. Traffic/expiry are sent as Subscription-Userinfo headers.'}
+          />
           <Form.Item name="theme_dir" label={t('settings.subThemeDir') || 'Theme directory'}><Input placeholder="/var/lib/3m-ui/sub-theme" /></Form.Item>
           <Form.Item name="title" label={t('settings.subTitle') || 'Page title'}><Input placeholder="My VPN Subscription" /></Form.Item>
           <Form.Item name="support_url" label={t('settings.subSupportUrl') || 'Support URL'}><Input placeholder="https://t.me/support" /></Form.Item>

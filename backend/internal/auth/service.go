@@ -91,3 +91,29 @@ func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password s
 func EncodePassword(password string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(password))
 }
+
+
+// ResetAdminPassword sets the first administrator password to the given plaintext
+// (default "admin") and forces password change on next login. Does not create
+// an admin if none exists.
+func ResetAdminPassword(db *gorm.DB, plaintext string) error {
+	if db == nil {
+		return fmt.Errorf("database is nil")
+	}
+	if strings.TrimSpace(plaintext) == "" {
+		plaintext = "admin"
+	}
+	var u models.User
+	if err := db.Where("role = ?", "admin").Order("id asc").First(&u).Error; err != nil {
+		return fmt.Errorf("no administrator found: %w", err)
+	}
+	hash, err := HashPassword(plaintext)
+	if err != nil {
+		return err
+	}
+	return db.Model(&u).Updates(map[string]interface{}{
+		"password_hash":        hash,
+		"must_change_password": true,
+		"session_version":      u.SessionVersion + 1,
+	}).Error
+}

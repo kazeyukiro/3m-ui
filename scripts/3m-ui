@@ -40,9 +40,14 @@ menu() {
         printf '%s\n' '  7. 查看日志'
         printf '%s\n' '  8. 查看版本'
         printf '%s\n' '  9. 修改面板端口'
+        printf '%s\n' ' 10. 显示面板访问地址'
+        printf '%s\n' ' 11. 重置管理员密码为 admin（需改密登录）'
+        printf '%s\n' ' 12. 启用 BBR（Linux）'
+        printf '%s\n' ' 13. 更新 Geo 规则文件'
+        printf '%s\n' ' 14. 设置 public_url（订阅外网地址）'
         printf '%s\n' '  a. 卸载 3m-ui'
         printf '%s\n' '  0. 退出'
-        printf '\n请选择 [0-9a]: '
+        printf '\n请选择: '
         IFS= read -r choice || exit 0
         case "$choice" in
             1) run_script "$INSTALLER" ;;
@@ -54,6 +59,11 @@ menu() {
             7) run_script "$MANAGER" logs ;;
             8) run_script "$MANAGER" version ;;
             9) change_port ;;
+            10) show_access ;;
+            11) reset_admin ;;
+            12) enable_bbr ;;
+            13) update_geo ;;
+            14) set_public_url ;;
             a|A) run_script "$UNINSTALLER" ;;
             0) exit 0 ;;
             *) printf '%s\n' '无效选择，请重新输入。' ;;
@@ -115,6 +125,97 @@ version() {
 need_root() {
     [ "$(id -u)" -eq 0 ] || { printf '%s\n' '请使用 root 运行 3m-ui 管理命令。' >&2; exit 1; }
 }
+
+
+show_access() {
+    port=$(awk '/^  port:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+    pub=$(awk '/^  public_url:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null | tr -d '"' || true)
+    printf '%s\n' "配置端口: $port"
+    if [ -n "$pub" ] && [ "$pub" != "null" ]; then
+        printf '%s\n' "public_url: $pub"
+    fi
+    printf '%s\n' '本机地址:'
+    printf '  http://127.0.0.1:%s/\n' "$port"
+    # Best-effort public IPs
+    ips=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+    if [ -z "$ips" ]; then
+        ips=$(hostname -I 2>/dev/null || true)
+    fi
+    for ip in $ips; do
+        [ -n "$ip" ] && printf '  http://%s:%s/\n' "$ip" "$port"
+    done
+    printf '%s\n' '管理命令: 3m-ui'
+    printf '%s\n' '初始管理员保持 admin / admin（首次登录须改密）；可用菜单 11 重置为 admin。'
+}
+
+reset_admin() {
+    if [ ! -x "$APP_BIN" ]; then
+        printf '%s\n' "未找到程序: $APP_BIN" >&2
+        return 1
+    fi
+    printf '%s\n' '将把管理员密码重置为 admin，并要求下次登录修改密码。'
+    printf '确认? [y/N] '
+    IFS= read -r ans || return 0
+    case "$ans" in y|Y|yes|YES) ;; *) printf '%s\n' '已取消。'; return 0 ;; esac
+    THREE_M_UI_CONFIG="$CONFIG_FILE" "$APP_BIN" reset-admin || return 1
+}
+
+enable_bbr() {
+    if [ "$(uname -s)" != Linux ]; then
+        printf '%s\n' '仅支持 Linux。' >&2
+        return 1
+    fi
+    if sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q bbr; then
+        printf '%s\n' 'BBR 已启用。'
+        return 0
+    fi
+    modprobe tcp_bbr 2>/dev/null || true
+    printf '%s\n' 'net.core.default_qdisc=fq' >> /etc/sysctl.d/99-3m-ui-bbr.conf
+    printf '%s\n' 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.d/99-3m-ui-bbr.conf
+    sysctl --system >/dev/null 2>&1 || sysctl -p /etc/sysctl.d/99-3m-ui-bbr.conf 2>/dev/null || true
+    sysctl net.ipv4.tcp_congestion_control 2>/dev/null || true
+    printf '%s\n' '已尝试启用 BBR。'
+}
+
+update_geo() {
+    dir="/var/lib/3m-ui/mihomo"
+    mkdir -p "$dir"
+    base="https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest"
+    printf '%s\n' "下载 Geo 到 $dir ..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "$dir/geoip.metadb" "$base/geoip.metadb" || curl -fsSL -o "$dir/geoip.dat" "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat" || true
+        curl -fsSL -o "$dir/geosite.dat" "$base/geosite.dat" || true
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$dir/geoip.metadb" "$base/geoip.metadb" || true
+        wget -q -O "$dir/geosite.dat" "$base/geosite.dat" || true
+    else
+        printf '%s\n' '需要 curl 或 wget' >&2
+        return 1
+    fi
+    ls -la "$dir"/geoip* "$dir"/geosite* 2>/dev/null || true
+    printf '%s\n' '完成。如内核已在运行，可在面板重启 Mihomo 使规则生效。'
+}
+
+set_public_url() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        printf '%s\n' "配置不存在: $CONFIG_FILE" >&2
+        return 1
+    fi
+    cur=$(awk '/^  public_url:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null | tr -d '"' || true)
+    printf '当前 public_url: %s\n' "${cur:-<empty>}"
+    printf '输入新的 public_url (例如 https://example.com:8443 ，回车取消): '
+    IFS= read -r url || return 0
+    [ -z "$url" ] && return 0
+    if grep -q '^  public_url:' "$CONFIG_FILE" 2>/dev/null; then
+        sed -i "s|^  public_url:.*|  public_url: \"$url\"|" "$CONFIG_FILE"
+    else
+        # insert under server:
+        sed -i "/^server:/a\\  public_url: \"$url\"" "$CONFIG_FILE"
+    fi
+    printf '%s\n' "已写入 public_url。重启面板后订阅外链将使用该地址。"
+    service_action restart
+}
+
 
 change_port() {
     if [ ! -f "$CONFIG_FILE" ]; then
