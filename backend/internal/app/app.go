@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -68,6 +69,13 @@ func Run(frontendFS fs.FS) error {
 			result[listenerID] = converted
 		}
 		return result, nil
+	}
+
+	// Restore listener TLS PEMs from disk (and last mihomo config.yaml) before
+	// generating core config — binary-only updates must not mint new identities.
+	certstore.HydrateListenersFromDisk(db)
+	if cfg.Mihomo.Config != "" {
+		certstore.HydrateFromMihomoYAML(db, cfg.Mihomo.Config)
 	}
 
 	// Configuration generation must not block the panel. A bad custom fragment
