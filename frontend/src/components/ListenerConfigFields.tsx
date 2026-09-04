@@ -560,17 +560,33 @@ export function formValuesToConfig(
   } else if (values.security_layer === 'none' || values.security_layer === 'tls') {
     values.reality_enabled = false;
   }
-  if (values.transport_layer === 'ws') {
+  // One transport at a time (MetaCubeX). mkcp/mekya conflict with ws/grpc/xhttp.
+  const layer = values.transport_layer || 'raw';
+  if (values.mkcp_enabled && values.mekya_enabled) {
+    values.mekya_enabled = false;
+  }
+  if (values.mkcp_enabled || values.mekya_enabled) {
+    values.transport_layer = 'raw';
+    values['ws-path'] = undefined;
     values['grpc-service-name'] = undefined;
     values.xhttp_enabled = false;
-  } else if (values.transport_layer === 'grpc') {
+  } else if (layer === 'ws') {
+    values['grpc-service-name'] = undefined;
+    values.xhttp_enabled = false;
+    values.mkcp_enabled = false;
+    values.mekya_enabled = false;
+  } else if (layer === 'grpc') {
     values['ws-path'] = undefined;
     values.xhttp_enabled = false;
-  } else if (values.transport_layer === 'xhttp' && XHTTP_PROTOCOLS.has(protocol)) {
+    values.mkcp_enabled = false;
+    values.mekya_enabled = false;
+  } else if (layer === 'xhttp' && XHTTP_PROTOCOLS.has(protocol)) {
     values['ws-path'] = undefined;
     values['grpc-service-name'] = undefined;
     values.xhttp_enabled = true;
-  } else if (values.transport_layer === 'raw') {
+    values.mkcp_enabled = false;
+    values.mekya_enabled = false;
+  } else {
     values['ws-path'] = undefined;
     values['grpc-service-name'] = undefined;
     values.xhttp_enabled = false;
@@ -856,9 +872,23 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
             name="transport_layer"
             label={t('listeners.transportLayer') || 'Transport'}
             initialValue="raw"
-            extra={XHTTP_PROTOCOLS.has(protocol) ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS.') : undefined}
+            extra={
+              XHTTP_PROTOCOLS.has(protocol)
+                ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS.')
+                : (t('listeners.transportExclusiveHint') || 'One transport only. mKCP/Mekya (VMess) require TCP.')
+            }
           >
-            <Radio.Group optionType="button" buttonStyle="solid">
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v !== 'raw') {
+                  form.setFieldsValue({ mkcp_enabled: false, mekya_enabled: false });
+                }
+                form.setFieldsValue({ xhttp_enabled: v === 'xhttp' });
+              }}
+            >
               <Radio.Button value="raw">TCP</Radio.Button>
               <Radio.Button value="ws">WebSocket</Radio.Button>
               <Radio.Button value="grpc">gRPC</Radio.Button>
@@ -949,11 +979,19 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="flow" label={t('listeners.flow')} tooltip={t('listeners.flowHint')}>
             <Select allowClear options={[{ value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' }]} />
           </Form.Item>
-          <Form.Item name="decryption" label={t('listeners.decryption')} tooltip={t('listeners.decryptionHint')}>
+                    <Form.Item
+            name="decryption"
+            label={t('listeners.decryption') || 'decryption (server)'}
+            tooltip={t('listeners.decryptionHint') || 'Server-side VLESS decryption written to the listener.'}
+          >
             <Input.TextArea rows={2} placeholder="mlkem768x25519plus...." />
           </Form.Item>
-          <Form.Item name="encryption" label={t('listeners.encryption')} tooltip={t('listeners.encryptionHint')}>
-            <Input.TextArea rows={2} placeholder="mlkem768x25519plus...." />
+          <Form.Item
+            name="encryption"
+            label={t('listeners.encryption') || 'encryption (client)'}
+            tooltip={t('listeners.encryptionHint') || 'Client-only; used in subscription export, not inbound YAML.'}
+          >
+            <Input.TextArea rows={2} placeholder="client export only" />
           </Form.Item>
         </>
       )}
@@ -974,23 +1012,36 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
                     <Form.Item name="grpc-service-name" label={t('listeners.grpcServiceName')} tooltip={t('listeners.grpcHint')} rules={[{ required: true }]}>
                       <Input placeholder="GunService" />
                     </Form.Item>
-                    {/* R-M4 grpc-opts client-metadata fields (vmess/vless/trojan).
-                        These are panel-side metadata consumed by converter/client.go
-                        to populate the client-side grpc-opts block. */}
-                    <Form.Item name="grpc-user-agent" label={t('listeners.grpcUserAgent')} tooltip={t('listeners.grpcUserAgentHint')}>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                      {t('listeners.clientExportOnlyHint') || 'Below: client subscription only — not written to Mihomo inbound YAML.'}
+                    </Text>
+                    <Form.Item name="grpc-user-agent" label={t('listeners.grpcUserAgent')} tooltip={t('listeners.clientExportOnlyHint')}>
                       <Input placeholder="Go-http-client/1.1" />
                     </Form.Item>
-                    <Form.Item name="ping-interval" label={t('listeners.pingInterval')} tooltip={t('listeners.pingIntervalHint')}>
+                    <Form.Item name="ping-interval" label={t('listeners.pingInterval')} tooltip={t('listeners.clientExportOnlyHint')}>
                       <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
-                    <Form.Item name="max-connections" label={t('listeners.maxConnections')} tooltip={t('listeners.maxConnectionsHint')}>
+                    <Form.Item name="max-connections" label={t('listeners.maxConnections')} tooltip={t('listeners.clientExportOnlyHint')}>
                       <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
-                    <Form.Item name="min-streams" label={t('listeners.minStreams')} tooltip={t('listeners.minStreamsHint')}>
+                    <Form.Item name="min-streams" label={t('listeners.minStreams')} tooltip={t('listeners.clientExportOnlyHint')}>
                       <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
-                    <Form.Item name="max-streams" label={t('listeners.maxStreams')} tooltip={t('listeners.maxStreamsHint')}>
+                    <Form.Item name="max-streams" label={t('listeners.maxStreams')} tooltip={t('listeners.clientExportOnlyHint')}>
                       <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                  </>
+                )}
+                {layer === 'xhttp' && XHTTP_PROTOCOLS.has(protocol) && (
+                  <>
+                    <Form.Item name="xhttp_path" label={t('listeners.xhttpPath')} rules={[{ required: true }]}>
+                      <Input placeholder="/" />
+                    </Form.Item>
+                    <Form.Item name="xhttp_host" label={t('listeners.xhttpHost')}>
+                      <Input placeholder="example.com" />
+                    </Form.Item>
+                    <Form.Item name="xhttp_mode" label={t('listeners.xhttpMode')}>
+                      <Select allowClear options={['auto', 'stream-one', 'stream-up', 'packet-up'].map((v) => ({ value: v, label: v }))} />
                     </Form.Item>
                   </>
                 )}
@@ -1487,26 +1538,11 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       )}
 
       {/* ---- xhttp (VLESS) ---- */}
-      {XHTTP_PROTOCOLS.has(protocol) && (
-        <EnableSection name="xhttp_enabled" label={t('listeners.sectionXHTTP')} hint={t('listeners.xhttpHint')}>
-          <Form.Item name="xhttp_path" label={t('listeners.xhttpPath')}>
-            <Input placeholder="/" />
-          </Form.Item>
-          <Form.Item name="xhttp_host" label={t('listeners.xhttpHost')}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="xhttp_mode" label={t('listeners.xhttpMode')}>
-            <Select
-              allowClear
-              options={['auto', 'stream-one', 'stream-up', 'packet-up'].map((v) => ({ value: v, label: v }))}
-            />
-          </Form.Item>
-        </EnableSection>
-      )}
+      {/* XHTTP path/host/mode are under transport_layer === 'xhttp' */}
 
       {/* ---- mkcp (VMess) ---- */}
       {MKCP_PROTOCOLS.has(protocol) && (
-        <EnableSection name="mkcp_enabled" label={t('listeners.sectionMkcp')} hint={t('listeners.mkcpHint')}>
+        <EnableSection name="mkcp_enabled" label={t('listeners.sectionMkcp')} hint={t('listeners.mkcpExclusiveHint') || 'Requires TCP transport; exclusive with WS/gRPC/Mekya. Enabling clears other transports on save.'}>
           <Form.Item name="mkcp_mtu" label="MTU">
             <InputNumber min={0} style={{ width: '100%' }} placeholder="1350" />
           </Form.Item>
@@ -1541,7 +1577,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
       )}
 
       {MEKYA_PROTOCOLS.has(protocol) && (
-        <EnableSection name="mekya_enabled" label={t('listeners.sectionMekya')} hint={t('listeners.mekyaHint')}>
+        <EnableSection name="mekya_enabled" label={t('listeners.sectionMekya')} hint={t('listeners.mekyaExclusiveHint') || 'Requires TCP transport; exclusive with WS/gRPC/mKCP. Enabling clears other transports on save.'}>
           <Form.Item name="mekya_max_write_size" label={t('listeners.mekyaMaxWriteSize')} tooltip={t('listeners.mekyaMaxWriteSizeHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="10485760" />
           </Form.Item>
