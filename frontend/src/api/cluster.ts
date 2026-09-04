@@ -34,3 +34,28 @@ export const remoteStopCore = (id: number) =>
   client.post(`/cluster/${id}/mihomo/stop`).then((r) => r.data);
 export const remoteRestartCore = (id: number) =>
   client.post(`/cluster/${id}/mihomo/restart`).then((r) => r.data);
+
+export interface RemoteNodeMirror {
+  id: number;
+  remote_server_id: number;
+  remote_node_id: number;
+  name: string;
+  protocol?: string;
+  port?: string;
+  public_host?: string;
+  enabled: boolean;
+  share_uri?: string;
+  client_yaml?: string;
+  last_sync_at?: string;
+  last_error?: string;
+  remote_server_name?: string;
+}
+
+export const syncRemoteNodes = (id: number) =>
+  client.post<RemoteNodeMirror[]>(`/cluster/${id}/sync-nodes`).then((r) => r.data);
+export const fetchMirroredNodes = (remoteServerId?: number) =>
+  client
+    .get<RemoteNodeMirror[]>('/cluster/mirrored-nodes', {
+      params: remoteServerId ? { remote_server_id: remoteServerId } : undefined,
+    })
+    .then((r) => r.data);

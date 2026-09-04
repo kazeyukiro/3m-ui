@@ -59,3 +59,8 @@ export const deleteDepletedUsers = () =>
 /** bulk actions: enable | disable | reset-traffic | delete */
 export const batchUsers = (action: string, ids: number[]) =>
   client.post<{ affected: number; action: string }>('/users/batch', { action, ids }).then((r) => r.data);
+
+export const fetchUserRemoteNodes = (userId: number) =>
+  client.get<{ mirror_ids: number[] }>(`/users/${userId}/remote-nodes`).then((r) => r.data);
+export const bindUserRemoteNodes = (userId: number, mirrorIds: number[]) =>
+  client.post(`/users/${userId}/remote-nodes`, { mirror_ids: mirrorIds }).then((r) => r.data);

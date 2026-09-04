@@ -7,7 +7,7 @@ import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
-  fetchUserNodes, bindUserNodes, ProxyUser,
+  fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { useI18n } from '../i18n';
@@ -30,6 +30,8 @@ const Users: React.FC = () => {
   const [bindUser, setBindUser] = useState<ProxyUser | null>(null);
   const [allNodes, setAllNodes] = useState<Listener[]>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<number[]>([]);
+  const [remoteMirrors, setRemoteMirrors] = useState<RemoteNodeMirror[]>([]);
+  const [selectedRemoteIds, setSelectedRemoteIds] = useState<number[]>([]);
   const [bindLoading, setBindLoading] = useState(false);
 
   const load = async () => {
@@ -135,9 +137,16 @@ const Users: React.FC = () => {
     setBindOpen(true);
     setBindLoading(true);
     try {
-      const [nodes, bound] = await Promise.all([fetchListeners(), fetchUserNodes(record.id)]);
+      const [nodes, bound, mirrors, remoteBound] = await Promise.all([
+        fetchListeners(),
+        fetchUserNodes(record.id),
+        fetchMirroredNodes().catch(() => []),
+        fetchUserRemoteNodes(record.id).catch(() => ({ mirror_ids: [] })),
+      ]);
       setAllNodes(nodes || []);
       setSelectedNodeIds((bound || []).map((n) => n.id));
+      setRemoteMirrors(mirrors || []);
+      setSelectedRemoteIds(remoteBound?.mirror_ids || []);
     } catch (e: any) {
       message.error(e.message || t('common.error'));
       setBindOpen(false);
@@ -152,6 +161,7 @@ const Users: React.FC = () => {
     setBindLoading(true);
     try {
       await bindUserNodes(bindUser.id, selectedNodeIds);
+      await bindUserRemoteNodes(bindUser.id, selectedRemoteIds);
       message.success(t('users.bindSuccess'));
       setBindOpen(false);
       setBindUser(null);
@@ -394,7 +404,21 @@ const Users: React.FC = () => {
       </Modal>
 
       <Modal
-        open={bindOpen}
+        open={bi
+        <p style={{ marginTop: 16, marginBottom: 8, opacity: 0.65 }}>{t('users.bindRemoteHint') || 'Remote cluster nodes (synced mirrors)'}</p>
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          placeholder={t('users.selectRemoteNodes') || 'Select remote nodes'}
+          optionFilterProp="label"
+          value={selectedRemoteIds}
+          onChange={(v) => setSelectedRemoteIds(v)}
+          options={(remoteMirrors || []).filter((m) => m.enabled).map((m) => ({
+            value: m.id,
+            label: `${m.remote_server_name || m.remote_server_id} / ${m.name} (${m.protocol || '?'})`,
+          }))}
+        />
+ndOpen}
         title={bindUser ? `${t('users.bindNodes')} — ${bindUser.username}` : t('users.bindNodes')}
         onCancel={() => {
           setBindOpen(false);
