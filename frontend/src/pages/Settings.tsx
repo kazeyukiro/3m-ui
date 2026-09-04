@@ -78,6 +78,10 @@ const Settings: React.FC = () => {
   const [sslForm] = Form.useForm();
   const [subPageForm] = Form.useForm();
   const [sslStatus, setSslStatus] = useState<Record<string, unknown> | null>(null);
+  const [openapiOpen, setOpenapiOpen] = useState(false);
+  const [openapiText, setOpenapiText] = useState('');
+  const [openapiLoading, setOpenapiLoading] = useState(false);
+
 
   useEffect(() => {
     client
@@ -561,9 +565,60 @@ const Settings: React.FC = () => {
                 </Space>
               </Card>
               <Card title={<><ApiOutlined /> {t('settings.apiDocs') || 'API'}</>}>
-                <Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">
-                  {t('settings.openApi') || 'OpenAPI'}
-                </Button>
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    loading={openapiLoading}
+                    onClick={async () => {
+                      setOpenapiLoading(true);
+                      try {
+                        // Public route — plain fetch avoids axios auth/interceptors and shows text in-app.
+                        const res = await fetch(openApiUrl, { credentials: 'same-origin' });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const text = await res.text();
+                        setOpenapiText(text);
+                        setOpenapiOpen(true);
+                      } catch (e: any) {
+                        message.error(e?.message || t('common.error'));
+                      } finally {
+                        setOpenapiLoading(false);
+                      }
+                    }}
+                  >
+                    {t('settings.openOpenAPI') || 'Preview openapi.yaml'}
+                  </Button>
+                  <Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">
+                    {t('settings.openApiNewTab') || 'Open in new tab'}
+                  </Button>
+                </Space>
+                <Modal
+                  open={openapiOpen}
+                  title="openapi.yaml"
+                  width={900}
+                  onCancel={() => setOpenapiOpen(false)}
+                  footer={[
+                    <Button
+                      key="copy"
+                      onClick={async () => {
+                        const ok = await copyText(openapiText);
+                        if (ok) message.success(t('common.copied'));
+                        else message.error(t('common.copyFailed') || 'Copy failed');
+                      }}
+                    >
+                      {t('common.copy')}
+                    </Button>,
+                    <Button key="close" type="primary" onClick={() => setOpenapiOpen(false)}>
+                      {t('common.close') || 'Close'}
+                    </Button>,
+                  ]}
+                >
+                  <Input.TextArea
+                    value={openapiText}
+                    readOnly
+                    autoSize={{ minRows: 16, maxRows: 28 }}
+                    style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}
+                  />
+                </Modal>
               </Card>
             </Space>
           )}
