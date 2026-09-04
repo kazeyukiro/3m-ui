@@ -456,13 +456,11 @@ KillMode=control-group
 UMask=0077
 # Sandbox hardening (H-2). The service still runs as root because Mihomo TUN
 # mode requires CAP_NET_ADMIN, which is hard to delegate to a non-root user.
-# A future revision should add a dedicated 3m-ui system user with ambient
-# capabilities; for now we apply the full Protect*/Restrict*/SystemCallFilter
-# set, which is a meaningful improvement even for a root process.
+# Sandbox without SystemCallFilter: pure-Go + modernc SQLite needs syscalls
+# outside @system-service; seccomp was killing the process with SIGSYS (31).
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-PrivateDevices=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true
@@ -474,8 +472,6 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
 SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged @resources
 NoNewPrivileges=true
 LimitNOFILE=65535
 # Allow binding privileged ports (80/443) for optional panel ACME/SSL,

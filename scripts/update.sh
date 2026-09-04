@@ -225,6 +225,25 @@ prune_backups(){
   done || true
 }
 
+
+# Drop seccomp filters that kill pure-Go/modernc builds (SIGSYS / status=31).
+fix_systemd_unit(){
+  unit="/etc/systemd/system/${SERVICE_NAME}.service"
+  [ -f "$unit" ] || return 0
+  case "$(init_system)" in systemd) ;; *) return 0;; esac
+  if grep -q '^SystemCallFilter=' "$unit" 2>/dev/null; then
+    echo "Patching $unit: removing SystemCallFilter (prevents SIGSYS crash)"
+    # Portable: rewrite unit without SystemCallFilter / PrivateDevices lines
+    tmp="$(mktemp)"
+    grep -v -E '^(SystemCallFilter=|PrivateDevices=)' "$unit" > "$tmp" || true
+    if [ -s "$tmp" ]; then
+      install -m 0644 "$tmp" "$unit"
+      systemctl daemon-reload || true
+    fi
+    rm -f "$tmp"
+  fi
+}
+
 stop(){ case "$(init_system)" in systemd) systemctl stop "$SERVICE_NAME" 2>/dev/null || true;; openrc) rc-service "$SERVICE_NAME" stop 2>/dev/null || true;; esac; }
 start(){ case "$(init_system)" in systemd) systemctl start "$SERVICE_NAME";; openrc) rc-service "$SERVICE_NAME" start;; *) return 1;; esac; }
 ok(){ case "$(init_system)" in systemd) systemctl is-active --quiet "$SERVICE_NAME";; openrc) rc-service "$SERVICE_NAME" status >/dev/null 2>&1;; *) return 1;; esac; }
@@ -354,6 +373,7 @@ chmod 0600 "$VERSION_FILE" "$MODE_FILE"
 
 # Give the new binary time to migrate DB / bind ports before health checks.
 # A too-eager is-active check was rolling back healthy installs ("panel dead after update").
+fix_systemd_unit
 if ! start; then
   echo "[ERROR] systemctl/rc-service failed to start 3m-ui; restoring previous installation." >&2
   stop
