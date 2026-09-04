@@ -142,6 +142,16 @@ func sanitizeServerConfig(cfg map[string]interface{}) {
 		delete(raw, "public-key")
 		delete(raw, "public_key")
 		cfg["reality-config"] = raw
+		// MetaCubeX: reality-config must NOT coexist with certificate/private-key.
+		delete(cfg, "certificate")
+		delete(cfg, "private-key")
+		delete(cfg, "private_key")
+		// Prefer Reality over alternate TLS wrappers when both were left on by the panel.
+		delete(cfg, "shadow-tls")
+		delete(cfg, "res-tls")
+		delete(cfg, "jls-config")
+		delete(cfg, "tlsmirror-config")
+		delete(cfg, "allow-insecure")
 	}
 	// Incomplete JLS blocks make Mihomo reject the whole config:
 	// "jls-config has unset fields: dest, users".
@@ -592,6 +602,16 @@ func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bo
 	if _, ok := cfg["reality-config"]; ok {
 		return false
 	}
+	// Panel security_layer is still present before sanitizeServerConfig runs.
+	if layer, _ := cfg["security_layer"].(string); strings.EqualFold(strings.TrimSpace(layer), "none") {
+		switch strings.ToLower(strings.TrimSpace(proto)) {
+		case "vless", "vmess", "trojan":
+			return false
+		}
+	}
+	if layer, _ := cfg["security_layer"].(string); strings.EqualFold(strings.TrimSpace(layer), "reality") {
+		return false
+	}
 	if b, ok := cfg["allow-insecure"].(bool); ok && b {
 		switch strings.ToLower(strings.TrimSpace(proto)) {
 		case "anytls", "trojan", "vmess", "vless":
@@ -617,7 +637,8 @@ func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bo
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(proto)) {
-	case "hysteria2", "anytls", "tuic", "tuic-v4", "tuic-v5", "trusttunnel", "trojan":
+	case "hysteria2", "anytls", "tuic", "tuic-v4", "tuic-v5", "trusttunnel", "trojan", "vless", "vmess":
+		// VLESS/VMess need cert when using plain TLS (security_layer=tls, no Reality/wrappers).
 		return true
 	default:
 		return false
