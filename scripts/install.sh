@@ -525,10 +525,24 @@ main(){
   install_service
   say ""
   say "3m-ui installed successfully."
-  say "Command: 3m-ui"
+  say "Command: 3m-ui   (interactive menu: start/stop/logs/port/BBR/geo/…)"
   panel_port="${PANEL_PORT:-${THREE_M_UI_PORT:-8080}}"
-  say "Panel: http://SERVER_IP:${panel_port}/"
-  say "Custom port: PANEL_PORT=8443 curl ... | bash   or edit server.port in $CONFIG_DIR/config.yaml"
-  say "Initial administrator: admin / admin. You MUST change the password on first login."
+  # Prefer config file port if present
+  if [ -f "$CONFIG_DIR/config.yaml" ]; then
+    cfg_port=$(awk '/^  port:/ {print $2; exit}' "$CONFIG_DIR/config.yaml" 2>/dev/null || true)
+    [ -n "$cfg_port" ] && panel_port="$cfg_port"
+  fi
+  say "Panel port: ${panel_port}"
+  say "Local:  http://127.0.0.1:${panel_port}/"
+  ips=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+  if [ -z "$ips" ]; then
+    ips=$(hostname -I 2>/dev/null || true)
+  fi
+  for ip in $ips; do
+    [ -n "$ip" ] && say "Panel:  http://${ip}:${panel_port}/"
+  done
+  say "Custom port: PANEL_PORT=8443 curl ... | bash   or: 3m-ui (menu → 修改面板端口)"
+  say "Initial administrator: admin / admin (unchanged). You MUST change the password on first login."
+  say "Subscription formats auto-detect User-Agent; override with ?target=clash|v2ray|singbox"
 }
 main "$@"
