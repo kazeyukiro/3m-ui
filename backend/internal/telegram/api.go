@@ -1,7 +1,10 @@
 package telegram
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +35,40 @@ func (h *Handler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+// flexInt accepts JSON numbers or numeric strings (Ant Design Input type=number).
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
+		*f = 0
+		return nil
+	}
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			*f = 0
+			return nil
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return err
+		}
+		*f = flexInt(n)
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	*f = flexInt(n)
+	return nil
+}
+
 type putSettingsBody struct {
 	Enabled           bool     `json:"enabled"`
 	BotToken          string   `json:"bot_token"`
@@ -43,15 +80,15 @@ type putSettingsBody struct {
 	NotifyOnTraffic   bool     `json:"notify_on_traffic"`
 	NotifyDailyDigest bool     `json:"notify_daily_digest"`
 	NotifyOnCPU       bool     `json:"notify_on_cpu"`
-	TrafficWarnPct    int      `json:"traffic_warn_pct"`
-	ExpiryWarnHours   int      `json:"expiry_warn_hours"`
-	CPUWarnPct        int      `json:"cpu_warn_pct"`
+	TrafficWarnPct    flexInt  `json:"traffic_warn_pct"`
+	ExpiryWarnHours   flexInt  `json:"expiry_warn_hours"`
+	CPUWarnPct        flexInt  `json:"cpu_warn_pct"`
 	Schedule          string   `json:"schedule"`
 	AttachBackup      bool     `json:"attach_backup"`
 	Language          string   `json:"language"`
 	EnabledEvents     string   `json:"enabled_events"`
-	ExpiryWarnDays    int      `json:"expiry_warn_days"`
-	TrafficWarnGB     int      `json:"traffic_warn_gb"`
+	ExpiryWarnDays    flexInt  `json:"expiry_warn_days"`
+	TrafficWarnGB     flexInt  `json:"traffic_warn_gb"`
 	ProxyURL          string   `json:"proxy_url"`
 	APIServer         string   `json:"api_server"`
 	KeepToken         bool     `json:"keep_token"`
@@ -71,14 +108,14 @@ func (h *Handler) PutSettings(c *gin.Context) {
 		NotifyOnExpiry: body.NotifyOnExpiry, NotifyOnTraffic: body.NotifyOnTraffic,
 		NotifyDailyDigest: body.NotifyDailyDigest,
 		NotifyOnCPU:       body.NotifyOnCPU,
-		TrafficWarnPct:    body.TrafficWarnPct, ExpiryWarnHours: body.ExpiryWarnHours,
-		CPUWarnPct:     body.CPUWarnPct,
+		TrafficWarnPct:    int(body.TrafficWarnPct), ExpiryWarnHours: int(body.ExpiryWarnHours),
+		CPUWarnPct:     int(body.CPUWarnPct),
 		Schedule:       strings.TrimSpace(body.Schedule),
 		AttachBackup:   body.AttachBackup,
 		Language:       strings.TrimSpace(body.Language),
 		EnabledEvents:  strings.TrimSpace(body.EnabledEvents),
-		ExpiryWarnDays: body.ExpiryWarnDays,
-		TrafficWarnGB:  body.TrafficWarnGB,
+		ExpiryWarnDays: int(body.ExpiryWarnDays),
+		TrafficWarnGB:  int(body.TrafficWarnGB),
 		ProxyURL:       strings.TrimSpace(body.ProxyURL),
 		APIServer:      strings.TrimSpace(body.APIServer),
 	}

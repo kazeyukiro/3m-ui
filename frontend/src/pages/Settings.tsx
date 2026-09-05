@@ -395,6 +395,12 @@ const Settings: React.FC = () => {
                       .split(/[,;\s]+/)
                       .map((s: string) => s.trim())
                       .filter(Boolean);
+                    const toInt = (v: unknown, fallback = 0) => {
+                      if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
+                      if (v === '' || v == null) return fallback;
+                      const n = parseInt(String(v), 10);
+                      return Number.isFinite(n) ? n : fallback;
+                    };
                     await saveTelegramSettings({
                       ...values,
                       chat_ids,
@@ -404,6 +410,11 @@ const Settings: React.FC = () => {
                         ? values.enabled_events.join(',')
                         : values.enabled_events || '',
                       attach_backup: !!values.attach_backup,
+                      cpu_warn_pct: toInt(values.cpu_warn_pct, 0),
+                      traffic_warn_pct: toInt(values.traffic_warn_pct, 80),
+                      expiry_warn_hours: toInt(values.expiry_warn_hours, 72),
+                      expiry_warn_days: toInt(values.expiry_warn_days, 0),
+                      traffic_warn_gb: toInt(values.traffic_warn_gb, 0),
                     });
                     message.success(t('settings.telegramSaved'));
                   } catch (e: any) {
@@ -427,7 +438,7 @@ const Settings: React.FC = () => {
                   <Switch />
                 </Form.Item>
                 <Form.Item name="cpu_warn_pct" label={t('settings.cpuWarnPct') || 'CPU warn %'} initialValue={0}>
-                  <Input type="number" min={0} max={100} />
+                  <InputNumber min={0} max={100} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked">
                   <Switch />
