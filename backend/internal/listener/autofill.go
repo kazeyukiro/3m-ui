@@ -1,22 +1,16 @@
 package listener
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
-	"math/big"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"golang.org/x/crypto/curve25519"
 )
@@ -81,6 +75,17 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		}
 		if m, _ := cfg["aead-method"].(string); strings.TrimSpace(m) == "" {
 			cfg["aead-method"] = "chacha20-poly1305"
+		}
+	}
+
+	if strings.TrimSpace(l.AccessSNI) != "" {
+		if s, _ := cfg["sni"].(string); strings.TrimSpace(s) == "" {
+			cfg["sni"] = strings.TrimSpace(l.AccessSNI)
+		}
+	}
+	if strings.TrimSpace(l.PublicHost) != "" {
+		if s, _ := cfg["sni"].(string); strings.TrimSpace(s) == "" {
+			cfg["sni"] = strings.TrimSpace(l.PublicHost)
 		}
 	}
 
@@ -582,12 +587,11 @@ func ensureServerTLSCertificate(cfg map[string]interface{}, proto string) error 
 	}
 
 	host := "localhost"
-	if sni, _ := cfg["sni"].(string); strings.TrimSpace(sni) != "" {
-		host = strings.TrimSpace(sni)
-	} else if names := asStringSlice(cfg["server-names"]); len(names) > 0 {
-		host = names[0]
+	hints := certutil.HostHintsFromConfig(cfg)
+	if len(hints) > 0 {
+		host = hints[0]
 	}
-	certPEM, keyPEM, err := generateSelfSignedTLS(host)
+	certPEM, keyPEM, err := certutil.GenerateSelfSigned(host, hints...)
 	if err != nil {
 		return fmt.Errorf("generate self-signed certificate for %s: %w", proto, err)
 	}
@@ -660,35 +664,4 @@ func enabledMap(cfg map[string]interface{}, key string) bool {
 		return len(m) > 0
 	}
 	return true
-}
-
-func generateSelfSignedTLS(host string) (certPEM, keyPEM string, err error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", "", err
-	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return "", "", err
-	}
-	tmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: host, Organization: []string{"3m-ui"}},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{host},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		return "", "", err
-	}
-	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	keyBytes, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return "", "", err
-	}
-	keyPEM = string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes}))
-	return certPEM, keyPEM, nil
 }

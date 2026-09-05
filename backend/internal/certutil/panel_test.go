@@ -1,47 +1,38 @@
 package certutil
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"math/big"
+	"strings"
 	"testing"
-	"time"
 )
 
-func TestIsPanelSelfSignedPEM(t *testing.T) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+func TestGenerateSelfSignedAndDetect(t *testing.T) {
+	cert, key, err := GenerateSelfSigned("example.com", "1.2.3.4", "localhost")
 	if err != nil {
 		t.Fatal(err)
 	}
-	serial, _ := rand.Int(rand.Reader, big.NewInt(1<<62))
-	tpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "localhost", Organization: []string{"3m-ui"}},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{"localhost"},
+	if !strings.Contains(cert, "BEGIN CERTIFICATE") || !strings.Contains(key, "BEGIN EC PRIVATE KEY") {
+		t.Fatalf("unexpected pem shapes")
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
+	if !IsPanelSelfSignedPEM(cert) {
+		t.Fatal("expected panel org tag")
 	}
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	if !IsPanelSelfSignedPEM(string(pemBytes)) {
-		t.Fatal("expected panel self-signed detection")
+	if !ShouldSkipCertVerify(map[string]interface{}{"certificate": cert}) {
+		t.Fatal("self-signed should skip verify")
+	}
+	if !ShouldSkipCertVerify(map[string]interface{}{"skip-cert-verify": true}) {
+		t.Fatal("explicit skip")
 	}
 	if IsPanelSelfSignedPEM("") {
 		t.Fatal("empty should be false")
 	}
-	if !ShouldSkipCertVerify(map[string]interface{}{"certificate": string(pemBytes)}) {
-		t.Fatal("should skip verify for panel cert")
-	}
-	if !ShouldSkipCertVerify(map[string]interface{}{"skip-cert-verify": true}) {
-		t.Fatal("explicit skip")
+}
+
+func TestHostHintsFromConfig(t *testing.T) {
+	h := HostHintsFromConfig(map[string]interface{}{
+		"sni":          "a.example",
+		"server-names": []interface{}{"b.example"},
+	})
+	if len(h) < 2 {
+		t.Fatalf("hints=%v", h)
 	}
 }

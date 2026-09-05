@@ -223,6 +223,18 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 				delete(configMap, "private_key")
 			}
 		}
+		// Prefer existing disk pair; only mint when still incomplete after Load.
+		// Fold listener access profile into SNI hints for SAN when minting.
+		if strings.TrimSpace(l.AccessSNI) != "" {
+			if s, _ := configMap["sni"].(string); strings.TrimSpace(s) == "" {
+				configMap["sni"] = strings.TrimSpace(l.AccessSNI)
+			}
+		}
+		if strings.TrimSpace(l.PublicHost) != "" {
+			if s, _ := configMap["sni"].(string); strings.TrimSpace(s) == "" {
+				configMap["sni"] = strings.TrimSpace(l.PublicHost)
+			}
+		}
 		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
 			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
 			continue
