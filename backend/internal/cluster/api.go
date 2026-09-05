@@ -30,6 +30,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/:id/users", h.RemoteUsers)
 	rg.GET("/:id/nodes", h.RemoteNodes)
 	rg.POST("/:id/sync-nodes", h.SyncNodes)
+	rg.POST("/:id/push-node", h.PushNode)
 	rg.POST("/:id/nodes", h.RemoteCreateNode)
 	rg.PUT("/:id/nodes/:nodeId", h.RemoteUpdateNode)
 	rg.DELETE("/:id/nodes/:nodeId", h.RemoteDeleteNode)
@@ -334,4 +335,23 @@ func (h *Handler) ListMirroredNodes(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, rows)
+}
+
+
+func (h *Handler) PushNode(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var in PushNodeInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := h.svc.PushLocalNodeToRemote(id, in)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }

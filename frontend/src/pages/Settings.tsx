@@ -35,8 +35,13 @@ import {
   LinkOutlined,
   ClusterOutlined,
   FileTextOutlined,
-  DashboardOutlined,
-} from '@ant-design/icons';
+  DashboardOutlined,,
+  AppstoreOutlined,
+  SendOutlined,
+  SafetyOutlined,
+  ProfileOutlined,
+  CloudServerOutlined,
+  FieldTimeOutlined} from '@ant-design/icons';
 import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
@@ -153,27 +158,27 @@ const Settings: React.FC = () => {
     () => [
       {
         key: 'panel',
-        icon: <DashboardOutlined />,
+        icon: <AppstoreOutlined />,
         label: t('settings.navPanel') || '面板 / 外观',
       },
       {
         key: 'access',
-        icon: <LinkOutlined />,
+        icon: <GlobalOutlined />,
         label: t('settings.navAccess') || '访问档案',
       },
       {
         key: 'telegram',
-        icon: <BellOutlined />,
+        icon: <SendOutlined />,
         label: t('settings.navTelegram') || 'Telegram',
       },
       {
         key: 'security',
-        icon: <LockOutlined />,
+        icon: <SafetyOutlined />,
         label: t('settings.navSecurity') || '安全与备份',
       },
       {
         key: 'subscription',
-        icon: <FileTextOutlined />,
+        icon: <ProfileOutlined />,
         label: t('settings.navSubscription') || '订阅页',
       },
       {
@@ -183,12 +188,12 @@ const Settings: React.FC = () => {
       },
       {
         key: 'network',
-        icon: <ClusterOutlined />,
+        icon: <CloudServerOutlined />,
         label: t('settings.navNetwork') || '反代与 Geo',
       },
       {
         key: 'traffic',
-        icon: <SettingOutlined />,
+        icon: <FieldTimeOutlined />,
         label: t('settings.navTraffic') || '流量重置',
       },
       {

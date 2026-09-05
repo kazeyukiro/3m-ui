@@ -188,14 +188,14 @@ const Users: React.FC = () => {
     }
   };
 
-  const onBatch = async (action: string) => {
+  const onBatch = async (action: string, extra?: { days?: number; traffic_gb?: number }) => {
     const ids = selectedRowKeys.map((k) => Number(k)).filter((n) => n > 0);
     if (!ids.length) {
       message.warning(t('users.batchNeedSelect') || 'Select users first');
       return;
     }
     try {
-      const res = await batchUsers(action, ids);
+      const res = await batchUsers(action, ids, extra);
       message.success((t('users.batchDone') || 'Batch done') + `: ${res.affected}`);
       setSelectedRowKeys([]);
       load();
@@ -324,6 +324,24 @@ const Users: React.FC = () => {
             </Button>
             <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('reset-traffic')}>
               {t('users.batchResetTraffic') || 'Reset traffic'}
+            </Button>
+            <Button
+              disabled={!selectedRowKeys.length}
+              onClick={() => {
+                const days = Number(window.prompt(t('users.batchExtendPrompt') || 'Extend by how many days?', '30') || 0);
+                if (days > 0) onBatch('extend-days', { days });
+              }}
+            >
+              {t('users.batchExtend') || 'Extend days'}
+            </Button>
+            <Button
+              disabled={!selectedRowKeys.length}
+              onClick={() => {
+                const gb = Number(window.prompt(t('users.batchAddTrafficPrompt') || 'Add how many GiB to limit?', '10') || 0);
+                if (gb > 0) onBatch('add-traffic', { traffic_gb: gb });
+              }}
+            >
+              {t('users.batchAddTraffic') || 'Add traffic'}
             </Button>
             <Popconfirm
               title={t('users.batchDeleteConfirm') || 'Delete selected users?'}
