@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](./backend/go.mod)
 
-> 文档站点（若已发布）：[3m-ui-docs](https://github.com/kazeyukiro/3m-ui-docs) · Wiki：项目 Issues / Discussions
+> 文档站：[3m-ui-docs](https://github.com/kazeyukiro/3m-ui-docs) · Wiki：项目 Issues / Discussions
 
 ---
 
