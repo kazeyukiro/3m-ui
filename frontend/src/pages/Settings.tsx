@@ -35,13 +35,14 @@ import {
   LinkOutlined,
   ClusterOutlined,
   FileTextOutlined,
-  DashboardOutlined,,
+  DashboardOutlined,
   AppstoreOutlined,
   SendOutlined,
   SafetyOutlined,
   ProfileOutlined,
   CloudServerOutlined,
-  FieldTimeOutlined} from '@ant-design/icons';
+  FieldTimeOutlined,
+} from '@ant-design/icons';
 import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
