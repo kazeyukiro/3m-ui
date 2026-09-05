@@ -264,6 +264,9 @@ func (n *Notifier) emitCPUWarning(client *Client, settings Settings) {
 	if client == nil || !settings.NotifyOnCPU || settings.CPUWarnPct <= 0 {
 		return
 	}
+	if !settings.EventEnabled("cpu") {
+		return
+	}
 	stats := systemStatsCPU()
 	if stats < float64(settings.CPUWarnPct) {
 		return
