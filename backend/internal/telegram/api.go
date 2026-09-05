@@ -69,10 +69,46 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+
+// flexChatIDs accepts a JSON string array or a single comma-separated string.
+type flexChatIDs []string
+
+func (f *flexChatIDs) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
+		*f = nil
+		return nil
+	}
+	if b[0] == '[' {
+		var arr []string
+		if err := json.Unmarshal(b, &arr); err != nil {
+			return err
+		}
+		*f = flexChatIDs(arr)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t'
+	})
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	*f = flexChatIDs(out)
+	return nil
+}
+
 type putSettingsBody struct {
 	Enabled           bool     `json:"enabled"`
 	BotToken          string   `json:"bot_token"`
-	ChatIDs           []string `json:"chat_ids"`
+	ChatIDs           flexChatIDs `json:"chat_ids"`
 	NotifyOnLogin     bool     `json:"notify_on_login"`
 	NotifyOnBlock     bool     `json:"notify_on_block"`
 	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
@@ -102,7 +138,7 @@ func (h *Handler) PutSettings(c *gin.Context) {
 	}
 	current, _ := LoadSettings(h.db)
 	s := Settings{
-		Enabled: body.Enabled, BotToken: strings.TrimSpace(body.BotToken), ChatIDs: body.ChatIDs,
+		Enabled: body.Enabled, BotToken: strings.TrimSpace(body.BotToken), ChatIDs: []string(body.ChatIDs),
 		NotifyOnLogin: body.NotifyOnLogin,
 		NotifyOnBlock: body.NotifyOnBlock, NotifyOnUnblock: body.NotifyOnUnblock,
 		NotifyOnExpiry: body.NotifyOnExpiry, NotifyOnTraffic: body.NotifyOnTraffic,
@@ -121,6 +157,9 @@ func (h *Handler) PutSettings(c *gin.Context) {
 	}
 	if body.KeepToken || s.BotToken == "" || strings.Contains(s.BotToken, "…") || strings.Contains(s.BotToken, "...") {
 		s.BotToken = current.BotToken
+	}
+	if strings.TrimSpace(s.EnabledEvents) == "" {
+		s.EnabledEvents = "login,cpu,crash"
 	}
 	if s.Enabled && s.BotToken == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Telegram bot token is required when notifications are enabled"})

@@ -159,7 +159,11 @@ func (s Settings) EventEnabled(name string) bool {
 	if name == "" {
 		return false
 	}
-	for _, ev := range strings.Split(s.EnabledEvents, ",") {
+	raw := strings.TrimSpace(s.EnabledEvents)
+	if raw == "" {
+		raw = "login,cpu,crash"
+	}
+	for _, ev := range strings.Split(raw, ",") {
 		if strings.ToLower(strings.TrimSpace(ev)) == name {
 			return true
 		}

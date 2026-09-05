@@ -8,7 +8,7 @@ type RemoteServer struct {
 
 	Name        string     `gorm:"size:100;not null" json:"name"`
 	BaseURL     string     `gorm:"size:512;not null" json:"base_url"`
-	APIToken    string     `gorm:"size:256" json:"-"`
+	APIToken    string     `gorm:"type:text" json:"-"`
 	APITokenSet bool       `gorm:"-" json:"api_token_set"`
 	Enabled     bool       `gorm:"not null;default:true" json:"enabled"`
 	Remark      string     `gorm:"size:255" json:"remark"`
