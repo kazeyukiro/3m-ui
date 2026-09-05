@@ -4,11 +4,10 @@
 
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
 
-[![Release](https://img.shields.io/github/v/release/kazeyukiro/3m-ui?include_prereleases)](https://github.com/kazeyukiro/3m-ui/releases)
 [![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
 [![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](./backend/go.mod)
 
-> 文档站：[3m-ui-docs](https://github.com/kazeyukiro/3m-ui-docs) · Wiki：项目 Issues / Discussions
+> 文档站：[3m-ui-docs](https://github.com/kazeyukiro/3m-ui-docs) 
 
 ---
 
