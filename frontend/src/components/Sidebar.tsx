@@ -44,15 +44,19 @@ export function useSidebarMenuItems(onNavigate?: () => void) {
   return { items, selectedKeys: [location.pathname], onMenuClick, onLogout, t };
 }
 
-export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSProperties }> = ({
+export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSProperties; collapsed?: boolean }> = ({
   onNavigate,
   style,
+  collapsed,
 }) => {
   const { items, selectedKeys, onMenuClick, onLogout, t } = useSidebarMenuItems(onNavigate);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...style }}>
-      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18, flexShrink: 0 }}>3M-UI</div>
+      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: 18, flexShrink: 0, padding: '0 12px' }}>
+        <img src="/logo.png" alt="" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} />
+        {!collapsed && <span>3M-UI</span>}
+      </div>
       <Menu mode="inline" selectedKeys={selectedKeys} items={items} onClick={onMenuClick} style={{ flex: 1, borderInlineEnd: 'none' }} />
       <Menu mode="inline" selectable={false} items={[{ key: 'logout', icon: <LogoutOutlined />, label: t('nav.logout'), onClick: onLogout }]} style={{ borderInlineEnd: 'none', borderTop: '1px solid rgba(5,5,5,0.06)' }} />
     </div>
@@ -62,7 +66,7 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
 const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
   <Sider trigger={null} collapsible collapsed={collapsed} theme="light" breakpoint="md" collapsedWidth={80} width={220}
     style={{ overflow: 'auto', height: '100vh', position: 'sticky', insetInlineStart: 0, top: 0, bottom: 0 }}>
-    <SidebarMenu />
+    <SidebarMenu collapsed={collapsed} />
   </Sider>
 );
 

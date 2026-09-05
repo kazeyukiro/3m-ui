@@ -25,7 +25,14 @@ const Login: React.FC = () => {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f5', padding: '16px 0' }}>
       <Card style={{ width: '100%', maxWidth: 420, margin: '0 16px' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={3}>{t('login.title')}</Title>
+          <img
+            src="/logo.png"
+            alt="3m-ui"
+            width={96}
+            height={96}
+            style={{ display: 'block', margin: '0 auto 12px', objectFit: 'contain' }}
+          />
+          <Title level={3} style={{ marginBottom: 4 }}>{t('login.title')}</Title>
           <Typography.Text type="secondary">{t('login.subtitle')}</Typography.Text>
         </div>
         <Form onFinish={onFinish}>
