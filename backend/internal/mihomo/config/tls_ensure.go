@@ -103,21 +103,6 @@ func completeJLS(cfg map[string]interface{}) bool {
 	return hasJLSUsers(jls)
 }
 
-func hasJLSUsers(jls map[string]interface{}) bool {
-	raw, ok := jls["users"]
-	if !ok || raw == nil {
-		return false
-	}
-	switch u := raw.(type) {
-	case map[string]interface{}:
-		return len(u) > 0
-	case []interface{}:
-		return len(u) > 0
-	default:
-		return false
-	}
-}
-
 func completeResTLS(cfg map[string]interface{}) bool {
 	rt, ok := cfg["res-tls"].(map[string]interface{})
 	if !ok || rt == nil {

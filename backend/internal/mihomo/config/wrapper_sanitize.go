@@ -139,6 +139,19 @@ func hasJLSUsers(m map[string]interface{}) bool {
 		return false
 	}
 	switch users := raw.(type) {
+	case map[string]interface{}:
+		// username -> password map form
+		for user, pass := range users {
+			if strings.TrimSpace(user) == "" {
+				continue
+			}
+			switch p := pass.(type) {
+			case string:
+				if strings.TrimSpace(p) != "" {
+					return true
+				}
+			}
+		}
 	case []interface{}:
 		for _, item := range users {
 			u, ok := item.(map[string]interface{})
