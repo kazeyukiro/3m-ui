@@ -135,6 +135,26 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 
 ---
 
+
+## 致谢
+
+特别感谢以下开源项目和社区：
+
+- [Mihomo](https://github.com/MetaCubeX/mihomo) — 核心代理引擎及 Listener 配置模型
+- [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — Listener 配置示例与协议参考
+- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) / [m-ui](https://github.com/Aethersailor/m-ui) — 面板交互与运维思路参考
+- [Gin](https://github.com/gin-gonic/gin) — 后端 HTTP 框架
+- [GORM](https://github.com/go-gorm/gorm) — 数据库 ORM
+- [React](https://github.com/facebook/react) — 前端基础
+- [Ant Design](https://github.com/ant-design/ant-design) — UI 组件
+- [Zustand](https://github.com/pmndrs/zustand) — 前端状态管理
+- [golang-jwt/jwt](https://github.com/golang-jwt/jwt) — JWT
+- Go、Node.js 以及整个开源社区
+
+维护：[kazeyukiro](https://github.com/kazeyukiro)
+
+---
+
 ## 许可证
 
 [Eclipse Public License 2.0](./LICENSE)
@@ -166,6 +186,19 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 ```
 
 Static Linux binaries are published on the [Releases](https://github.com/kazeyukiro/3m-ui/releases) page for multiple architectures.
+
+
+### Acknowledgements
+
+Special thanks to:
+
+- [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
+- [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples and protocol references
+- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) / [m-ui](https://github.com/Aethersailor/m-ui) — panel UX and ops inspiration
+- [Gin](https://github.com/gin-gonic/gin), [GORM](https://github.com/go-gorm/gorm), [React](https://github.com/facebook/react), [Ant Design](https://github.com/ant-design/ant-design), [Zustand](https://github.com/pmndrs/zustand), [golang-jwt/jwt](https://github.com/golang-jwt/jwt)
+- The Go, Node.js, and wider open-source communities
+
+Maintained by [kazeyukiro](https://github.com/kazeyukiro).
 
 ### License
 
