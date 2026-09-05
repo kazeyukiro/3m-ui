@@ -1,5 +1,9 @@
 # 3m-ui
 
+<p align="center">
+  <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
+</p>
+
 **Mihomo 服务端 Web 管理面板**
 
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
@@ -52,8 +56,11 @@ curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/insta
 更新：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/update.sh | bash
-# 或: 3m-ui update
+# 推荐（已安装后）
+sudo 3m-ui update
+# 指定版本: sudo 3m-ui update v1.0.0
+# 或:
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/update.sh | sudo bash
 ```
 
 卸载：
@@ -145,6 +152,8 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | bash
 ```
+
+Update after install: `sudo 3m-ui update` (optional tag: `sudo 3m-ui update v1.0.0`).
 
 Default panel: `http://SERVER_IP:8080/` — user `admin` / password `admin` (**change on first login**).
 
