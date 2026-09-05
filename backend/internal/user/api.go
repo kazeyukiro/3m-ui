@@ -90,17 +90,21 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Batch runs enable|disable|reset-traffic|delete on multiple users .
+// Batch runs enable|disable|reset-traffic|delete|extend-days|add-traffic on multiple users.
 func (h *Handler) Batch(c *gin.Context) {
 	var req struct {
-		Action string `json:"action" binding:"required"`
-		IDs    []uint `json:"ids" binding:"required"`
+		Action    string `json:"action" binding:"required"`
+		IDs       []uint `json:"ids" binding:"required"`
+		Days      int    `json:"days"`
+		TrafficGB int64  `json:"traffic_gb"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	n, err := h.svc.Batch(BatchAction(strings.ToLower(strings.TrimSpace(req.Action))), req.IDs)
+	n, err := h.svc.Batch(BatchAction(strings.ToLower(strings.TrimSpace(req.Action))), req.IDs, BatchOpts{
+		Days: req.Days, TrafficGB: req.TrafficGB,
+	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

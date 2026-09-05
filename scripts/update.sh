@@ -235,7 +235,7 @@ fix_systemd_unit(){
     echo "Patching $unit: removing SystemCallFilter (prevents SIGSYS crash)"
     # Portable: rewrite unit without SystemCallFilter / PrivateDevices lines
     tmp="$(mktemp)"
-    grep -v -E '^(SystemCallFilter=|PrivateDevices=)' "$unit" > "$tmp" || true
+    grep -v -E '^(SystemCallFilter=|PrivateDevices=|MemoryDenyWriteExecute=|RestrictNamespaces=)' "$unit" > "$tmp" || true
     if [ -s "$tmp" ]; then
       install -m 0644 "$tmp" "$unit"
       systemctl daemon-reload || true
@@ -388,7 +388,7 @@ fi
 echo "[4/5] Verifying service health..."
 ready=0
 i=0
-while [ "$i" -lt 15 ]; do
+while [ "$i" -lt 30 ]; do
   i=$((i + 1))
   if ok; then
     ready=1

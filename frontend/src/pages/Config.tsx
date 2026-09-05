@@ -3,7 +3,7 @@ import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popcon
 import { PlusOutlined, DeleteOutlined, EditOutlined, DownloadOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
 import {
   fetchProxies, createProxy, updateProxy, deleteProxy,
-  fetchConfigYAML, generateConfig, validateConfigYAML,
+  fetchConfigYAML, generateConfig, validateConfigYAML, applyConfigYAML, rollbackConfig,
   ProxyEntry,
 } from '../api/config';
 import { useI18n } from '../i18n';
@@ -74,8 +74,40 @@ const ConfigPage: React.FC = () => {
   const handleGenerate = async () => {
     setYamlLoading(true);
     try {
-      await generateConfig();
-      message.success(t('config.generateSuccess'));
+      const res = await generateConfig();
+      if (typeof res?.config === 'string' && res.config) {
+        setYaml(res.config);
+      } else {
+        const y = await fetchConfigYAML();
+        setYaml(typeof y?.config === 'string' ? y.config : '');
+      }
+      message.success(t('config.generateSuccess') || 'Generated (not applied)');
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setYamlLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    setYamlLoading(true);
+    try {
+      await applyConfigYAML(yaml || undefined);
+      message.success(t('config.applySuccess') || 'Applied');
+      const y = await fetchConfigYAML();
+      setYaml(typeof y?.config === 'string' ? y.config : yaml);
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setYamlLoading(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    setYamlLoading(true);
+    try {
+      await rollbackConfig();
+      message.success(t('config.rollbackSuccess') || 'Rolled back');
       const y = await fetchConfigYAML();
       setYaml(typeof y?.config === 'string' ? y.config : '');
     } catch (e: any) {
@@ -164,11 +196,17 @@ const ConfigPage: React.FC = () => {
           <Card style={{ marginTop: 16 }} title={t('config.yamlPreview') || 'YAML preview'} loading={yamlLoading}>
             {yamlEditor}
             <Space style={{ marginTop: 12 }} wrap>
-              <Button type="primary" icon={<FileTextOutlined />} loading={yamlLoading} onClick={handleGenerate}>
-                {t('config.generate')}
+              <Button type="default" icon={<FileTextOutlined />} loading={yamlLoading} onClick={handleGenerate}>
+                {t('config.generate') || 'Generate'}
               </Button>
               <Button icon={<CheckOutlined />} onClick={handleValidate}>
                 {t('config.validate') || 'Validate'}
+              </Button>
+              <Button type="primary" loading={yamlLoading} onClick={handleApply}>
+                {t('config.apply') || 'Apply'}
+              </Button>
+              <Button danger loading={yamlLoading} onClick={handleRollback}>
+                {t('config.rollback') || 'Rollback'}
               </Button>
               <Button
                 icon={<DownloadOutlined />}
@@ -190,11 +228,17 @@ const ConfigPage: React.FC = () => {
         <TabPane tab={t('config.yaml') || 'YAML'} key="yaml">
           <Card loading={yamlLoading}>{yamlEditor}</Card>
           <Space style={{ marginTop: 12 }} wrap>
-            <Button type="primary" icon={<FileTextOutlined />} loading={yamlLoading} onClick={handleGenerate}>
-              {t('config.generate')}
+            <Button type="default" icon={<FileTextOutlined />} loading={yamlLoading} onClick={handleGenerate}>
+              {t('config.generate') || 'Generate'}
             </Button>
             <Button icon={<CheckOutlined />} onClick={handleValidate}>
               {t('config.validate') || 'Validate'}
+            </Button>
+            <Button type="primary" loading={yamlLoading} onClick={handleApply}>
+              {t('config.apply') || 'Apply'}
+            </Button>
+            <Button danger loading={yamlLoading} onClick={handleRollback}>
+              {t('config.rollback') || 'Rollback'}
             </Button>
             <Button
               icon={<DownloadOutlined />}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
@@ -55,9 +56,17 @@ const (
 	BatchDisable      BatchAction = "disable"
 	BatchResetTraffic BatchAction = "reset-traffic"
 	BatchDelete       BatchAction = "delete"
+	BatchExtendDays   BatchAction = "extend-days"
+	BatchAddTraffic   BatchAction = "add-traffic"
 )
 
-func (s *Service) Batch(action BatchAction, ids []uint) (int, error) {
+// BatchOpts optional parameters for extend-days / add-traffic.
+type BatchOpts struct {
+	Days      int   // extend expiry by N days
+	TrafficGB int64 // add N GiB to traffic_limit (0 means unlimited stays unlimited)
+}
+
+func (s *Service) Batch(action BatchAction, ids []uint, opts BatchOpts) (int, error) {
 	if len(ids) == 0 {
 		return 0, errors.New("ids is required")
 	}
@@ -126,7 +135,57 @@ func (s *Service) Batch(action BatchAction, ids []uint) (int, error) {
 			log.Printf("warning: credentials changed notification failed: %v", err)
 		}
 		return len(clean), nil
+	case BatchExtendDays:
+		if opts.Days <= 0 {
+			return 0, errors.New("days must be > 0")
+		}
+		var users []models.ProxyUser
+		if err := s.db.Where("id IN ?", clean).Find(&users).Error; err != nil {
+			return 0, err
+		}
+		n := 0
+		base := time.Now().UTC()
+		for _, u := range users {
+			start := base
+			if !u.ExpireTime.IsZero() && u.ExpireTime.After(base) {
+				start = u.ExpireTime
+			}
+			u.ExpireTime = start.Add(time.Duration(opts.Days) * 24 * time.Hour)
+			if err := s.db.Model(&u).Update("expire_time", u.ExpireTime).Error; err != nil {
+				return n, err
+			}
+			n++
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return n, nil
+	case BatchAddTraffic:
+		if opts.TrafficGB <= 0 {
+			return 0, errors.New("traffic_gb must be > 0")
+		}
+		add := opts.TrafficGB * 1024 * 1024 * 1024
+		var users []models.ProxyUser
+		if err := s.db.Where("id IN ?", clean).Find(&users).Error; err != nil {
+			return 0, err
+		}
+		n := 0
+		for _, u := range users {
+			// 0 = unlimited; leave unlimited alone
+			if u.TrafficLimit <= 0 {
+				continue
+			}
+			newLim := u.TrafficLimit + add
+			if err := s.db.Model(&u).Update("traffic_limit", newLim).Error; err != nil {
+				return n, err
+			}
+			n++
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return n, nil
 	default:
-		return 0, fmt.Errorf("unknown batch action %q (enable|disable|reset-traffic|delete)", action)
+		return 0, fmt.Errorf("unknown batch action %q (enable|disable|reset-traffic|delete|extend-days|add-traffic)", action)
 	}
 }

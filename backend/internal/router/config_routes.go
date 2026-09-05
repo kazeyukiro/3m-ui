@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
@@ -122,8 +123,8 @@ func registerConfigRoutes(api *gin.RouterGroup, d Deps, cfg *config.Config) {
 		c.JSON(http.StatusOK, gin.H{"config": yamlStr})
 	})
 
-	// /generate is kept for backward compatibility, but it now uses the same
-	// guarded service path as /apply instead of writing config.yaml directly.
+	// /generate only builds YAML from DB (preview). It does NOT apply to disk/core.
+	// Use POST /config/validate then POST /config/apply for a safe publish path.
 	group.POST("/generate", func(c *gin.Context) {
 		engine := mihomoConfig.NewConfigEngine(db)
 		yamlStr, err := engine.GenerateFinalConfig()
@@ -131,11 +132,7 @@ func registerConfigRoutes(api *gin.RouterGroup, d Deps, cfg *config.Config) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if err := d.mihomoService().ApplyConfig(yamlStr); err != nil {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Configuration generated, validated and applied successfully"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "config": yamlStr, "message": "Configuration generated (not applied)"})
 	})
 	group.POST("/preview", func(c *gin.Context) {
 		var req struct {
@@ -166,11 +163,19 @@ func registerConfigRoutes(api *gin.RouterGroup, d Deps, cfg *config.Config) {
 		c.JSON(http.StatusOK, gin.H{"valid": true})
 	})
 	group.POST("/apply", func(c *gin.Context) {
-		engine := mihomoConfig.NewConfigEngine(db)
-		yamlStr, err := engine.GenerateFinalConfig()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+		var req struct {
+			Config string `json:"config"`
+		}
+		_ = c.ShouldBindJSON(&req)
+		yamlStr := strings.TrimSpace(req.Config)
+		if yamlStr == "" {
+			engine := mihomoConfig.NewConfigEngine(db)
+			var err error
+			yamlStr, err = engine.GenerateFinalConfig()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
 		}
 		if err := d.mihomoService().ApplyConfig(yamlStr); err != nil {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})

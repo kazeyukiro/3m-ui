@@ -28,6 +28,10 @@ export const fetchVisualConfig = () =>
 export const saveVisualConfig = (payload: VisualConfig) =>
   client.post('/config/visual', payload).then((r) => r.data);
 export const fetchConfigYAML = () => client.get<{ config: string }>('/config').then((r) => r.data);
-export const generateConfig = () => client.post('/config/generate').then((r) => r.data);
+export const generateConfig = () =>
+  client.post<{ status: string; config?: string; message?: string }>('/config/generate').then((r) => r.data);
+export const applyConfigYAML = (config?: string) =>
+  client.post('/config/apply', config != null ? { config } : {}).then((r) => r.data);
+export const rollbackConfig = () => client.post('/config/rollback').then((r) => r.data);
 export const validateConfigYAML = (config: string) =>
   client.post<{ valid: boolean; error?: string }>('/config/validate', { config }).then((r) => r.data);

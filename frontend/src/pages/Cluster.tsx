@@ -5,6 +5,7 @@ import { PlusOutlined, DeleteOutlined, EditOutlined, HeartOutlined } from '@ant-
 import {
   fetchCluster, createClusterNode, updateClusterNode, deleteClusterNode, healthClusterNode,
   syncRemoteNodes,
+  pushClusterNode,
   healthAllCluster, fetchRemoteDashboard, fetchRemoteUsers, remoteStartCore, remoteStopCore, remoteRestartCore,
   RemoteServer,
 } from '../api/cluster';
@@ -124,6 +125,17 @@ const ClusterPage: React.FC = () => {
               load();
             } catch (e: any) { message.error(e.message || t('common.error')); }
           }}>{t('cluster.syncNodes') || 'Sync nodes'}</Button>
+          <Button size="small" onClick={async () => {
+            const idStr = window.prompt(t('cluster.pushNodePrompt') || 'Local node ID to push (disabled on remote)?', '');
+            const localId = Number(idStr || 0);
+            if (!localId) return;
+            try {
+              const dry = await pushClusterNode(r.id, { local_node_id: localId, dry_run: true });
+              if (!window.confirm((t('cluster.pushNodeConfirm') || 'Push this node to remote?') + '\n' + JSON.stringify(dry?.payload || dry, null, 2).slice(0, 800))) return;
+              await pushClusterNode(r.id, { local_node_id: localId, dry_run: false });
+              message.success(t('cluster.pushNodeDone') || 'Pushed (created disabled on remote)');
+            } catch (e: any) { message.error(e.message || t('common.error')); }
+          }}>{t('cluster.pushNode') || 'Push node'}</Button>
           <Button size="small" onClick={async () => {
             try {
               setCtrlId(r.id);

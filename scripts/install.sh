@@ -521,6 +521,18 @@ main(){
   install_service
   say ""
   say "3m-ui installed successfully."
+  # Automation: write install result (default admin/admin unchanged by policy).
+  result_file="${THREE_M_UI_INSTALL_RESULT:-/etc/3m-ui/install-result.env}"
+  mkdir -p "$(dirname "$result_file")" 2>/dev/null || true
+  {
+    echo "PANEL_PORT=${panel_port:-8080}"
+    echo "INSTALL_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date)"
+    echo "ADMIN_USER=admin"
+    echo "ADMIN_PASSWORD_NOTE=unchanged_default_must_change_on_first_login"
+  } >"$result_file" 2>/dev/null || true
+  if [ "${THREE_M_UI_NONINTERACTIVE:-}" = "1" ] || [ ! -t 0 ]; then
+    say "Non-interactive install result: $result_file"
+  fi
   say "Command: 3m-ui   (interactive menu: start/stop/logs/port/BBR/geo/…)"
   panel_port="${PANEL_PORT:-${THREE_M_UI_PORT:-8080}}"
   # Prefer config file port if present
