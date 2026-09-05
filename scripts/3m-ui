@@ -264,14 +264,45 @@ main() {
         logs) logs ;;
         version) version ;;
         config) shift; run_script "$MANAGER" config "$@" ;;
+        update|upgrade)
+            shift
+            run_script "$UPDATER" "$@"
+            ;;
+        install|fix)
+            shift
+            run_script "$INSTALLER" "$@"
+            ;;
+        uninstall|remove)
+            shift
+            run_script "$UNINSTALLER" "$@"
+            ;;
+        menu)
+            menu
+            ;;
         help|-h|--help)
-            printf '%s\n' '用法: 3m-ui [status|start|restart|stop|logs|version|config|help]'
-            printf '%s\n' '  3m-ui config show              查看配置'
-            printf '%s\n' '  3m-ui config port <端口号>      修改端口并重启'
-            printf '%s\n' '不带参数直接运行 3m-ui 将进入交互式管理菜单。'
+            printf '%s\n' '用法: 3m-ui <命令> [参数]'
+            printf '%s\n' ''
+            printf '%s\n' '服务:'
+            printf '%s\n' '  status | start | restart | stop | logs | version'
+            printf '%s\n' '配置:'
+            printf '%s\n' '  config show                 查看配置'
+            printf '%s\n' '  config port <端口>          修改端口并重启'
+            printf '%s\n' '安装与更新:'
+            printf '%s\n' '  update [vX.Y.Z] [--yes]     更新到指定或最新 Release'
+            printf '%s\n' '  install                     安装 / 修复'
+            printf '%s\n' '  uninstall                   卸载'
+            printf '%s\n' '其他:'
+            printf '%s\n' '  menu                        交互式管理菜单'
+            printf '%s\n' '  help                        显示本帮助'
+            printf '%s\n' ''
+            printf '%s\n' '不带参数时进入交互式菜单（等同于 menu）。'
             ;;
         '') menu ;;
-        *) printf '%s\n' "未知命令: $cmd" >&2; exit 2 ;;
+        *)
+            printf '%s\n' "未知命令: $cmd" >&2
+            printf '%s\n' '运行: 3m-ui help' >&2
+            exit 2
+            ;;
     esac
 }
 
