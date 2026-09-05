@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
 
@@ -46,6 +47,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 	if len(alpn) == 0 {
 		alpn = stringListFrom(cfg, "alpn")
 	}
+	skipCert := certutil.ShouldSkipCertVerify(cfg)
 
 	switch n.Protocol {
 	case "vless":
@@ -54,7 +56,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			Flow:        strFrom(cfg, "flow"),
 			Transport:   decodeTransport(cfg),
 			Reality:     decodeReality(cfg),
-			SkipCert:    boolFrom(cfg, "skip-cert-verify"),
+			SkipCert:    skipCert,
 			SNI:         sni,
 			Fingerprint: fp,
 			ALPN:        alpn,
@@ -65,7 +67,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			AlterID:     intFrom(cfg, "alterId"),
 			Transport:   decodeTransport(cfg),
 			Reality:     decodeReality(cfg),
-			SkipCert:    boolFrom(cfg, "skip-cert-verify"),
+			SkipCert:    skipCert,
 			SNI:         sni,
 			Fingerprint: fp,
 			ALPN:        alpn,
@@ -74,7 +76,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 		n.Trojan = &TrojanSpec{
 			Transport:   decodeTransport(cfg),
 			Reality:     decodeReality(cfg),
-			SkipCert:    boolFrom(cfg, "skip-cert-verify"),
+			SkipCert:    skipCert,
 			SNI:         sni,
 			Fingerprint: fp,
 			ALPN:        alpn,
@@ -88,7 +90,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 	case "hysteria2":
 		n.Hysteria2 = &Hysteria2Spec{
 			SNI:          sni,
-			SkipCert:     boolFrom(cfg, "skip-cert-verify"),
+			SkipCert:     skipCert,
 			Obfs:         strFrom(cfg, "obfs"),
 			ObfsPassword: strFrom(cfg, "obfs-password"),
 			Up:           strFrom(cfg, "up"),

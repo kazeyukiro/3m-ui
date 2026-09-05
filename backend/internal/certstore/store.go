@@ -9,6 +9,8 @@ import (
 )
 
 // Dir returns the directory for durable per-listener TLS material.
+// Operators must back up this directory together with 3m-ui.db; losing it
+// forces re-minting self-signed certs and breaks existing clients.
 // Override with env 3M_UI_CERT_DIR or derive from 3M_UI_DATA / default data root.
 func Dir() string {
 	if d := strings.TrimSpace(os.Getenv("3M_UI_CERT_DIR")); d != "" {
