@@ -236,7 +236,6 @@ func loadTemplate(themeDir string) (*template.Template, error) {
 	return template.New("sub").Parse(defaultHTML)
 }
 
-
 func formatBytes(n int64) string {
 	if n < 0 {
 		n = 0
@@ -250,7 +249,36 @@ func formatBytes(n int64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.2f %ciB", float64(n)/float64(div), "KMGTPE"[exp])const defaultHTML = `<!DOCTYPE html>
+	return fmt.Sprintf("%.2f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+func formatBytesLimit(n int64) string {
+	if n <= 0 {
+		return "∞"
+	}
+	return formatBytes(n)
+}
+
+// localSubQRDataURI encodes the subscription URL as a PNG data-URI using an
+// in-process QR library — no third-party HTTP API.
+func localSubQRDataURI(subURL string) string {
+	subURL = strings.TrimSpace(subURL)
+	if subURL == "" {
+		return ""
+	}
+	png, err := qrcode.Encode(subURL, qrcode.Medium, 256)
+	if err != nil || len(png) == 0 {
+		return ""
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+}
+
+// DefaultTemplate returns the built-in HTML for documentation / preview.
+func DefaultTemplate() string {
+	return defaultHTML
+}
+
+const defaultHTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
@@ -266,7 +294,6 @@ func formatBytes(n int64) string {
     --text: #e8eef9;
     --muted: #93a0b8;
     --accent: #3b82f6;
-    --accent2: #60a5fa;
     --ok: #34d399;
     --warn: #fbbf24;
     --danger: #f87171;
@@ -302,42 +329,27 @@ func formatBytes(n int64) string {
     background: linear-gradient(135deg, var(--accent), #1d4ed8);
     display: grid; place-items: center;
     box-shadow: 0 8px 24px rgba(59,130,246,.35);
-    font-weight: 800; font-size: 1.1rem; color: #fff; letter-spacing: .02em;
+    font-weight: 800; font-size: 1.1rem; color: #fff;
   }
-  h1 { margin: 0 0 6px; font-size: 1.45rem; font-weight: 700; letter-spacing: -.02em; }
+  h1 { margin: 0 0 6px; font-size: 1.45rem; font-weight: 700; }
   .sub { margin: 0; color: var(--muted); font-size: .95rem; }
   .announce {
-    margin: 16px 0 0;
-    padding: 12px 14px;
-    border-radius: 12px;
-    background: rgba(59,130,246,.12);
-    border: 1px solid rgba(59,130,246,.25);
-    color: var(--text);
-    font-size: .9rem;
-    line-height: 1.5;
+    margin: 16px 0 0; padding: 12px 14px; border-radius: 12px;
+    background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.25);
+    font-size: .9rem; line-height: 1.5;
   }
   .card {
-    background: var(--card);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 16px 18px;
-    margin-top: 16px;
-    backdrop-filter: blur(8px);
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 16px 18px; margin-top: 16px; backdrop-filter: blur(8px);
   }
   .card h2 {
-    margin: 0 0 12px;
-    font-size: .78rem;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    color: var(--muted);
-    font-weight: 600;
+    margin: 0 0 12px; font-size: .78rem; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); font-weight: 600;
   }
   .row {
     display: flex; justify-content: space-between; gap: 12px; align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--card-border);
-    font-size: .95rem;
+    padding: 10px 0; border-bottom: 1px solid var(--card-border); font-size: .95rem;
   }
   .row:last-child { border-bottom: 0; padding-bottom: 0; }
   .row > span:first-child { color: var(--muted); flex-shrink: 0; }
@@ -348,7 +360,6 @@ func formatBytes(n int64) string {
     background: rgba(148,163,184,.2); color: var(--muted);
   }
   .badge.ok { background: rgba(52,211,153,.18); color: var(--ok); }
-  .badge.warn { background: rgba(251,191,36,.18); color: var(--warn); }
   .badge.off { background: rgba(248,113,113,.15); color: var(--danger); }
   .links a, .btn {
     display: block; width: 100%; text-align: center; text-decoration: none;
@@ -359,14 +370,12 @@ func formatBytes(n int64) string {
   }
   .links a.secondary, .btn.secondary {
     background: transparent; color: var(--text);
-    border: 1px solid var(--card-border);
-    box-shadow: none;
+    border: 1px solid var(--card-border); box-shadow: none;
   }
   .qr-box { text-align: center; padding: 8px 0 4px; }
   .qr-box img {
     width: 180px; height: 180px; border-radius: 12px;
     background: #fff; padding: 10px;
-    box-shadow: 0 4px 16px rgba(0,0,0,.12);
   }
   .hint { margin-top: 10px; font-size: .8rem; color: var(--muted); text-align: center; line-height: 1.4; }
   .uri {
@@ -459,26 +468,6 @@ document.getElementById('copy-sub') && document.getElementById('copy-sub').addEv
   copyText(this.getAttribute('data-url') || '');
 });
 </script>
-</body>
-</html>
-
-    <div class="row"><span>Traffic</span>
-      <span>{{.TrafficUsed}} / {{if gt .TrafficLimit 0}}{{.TrafficLimit}}{{else}}∞{{end}} bytes</span>
-    </div>
-    <div class="row"><span>Expire</span><span>{{if .ExpireTime}}{{.ExpireTime}}{{else}}Never{{end}}</span></div>
-    <div class="row"><span>IP limit</span><span>{{if gt .IPLimit 0}}{{.IPLimit}}{{else}}∞{{end}}</span></div>
-  </div>
-
-  <div class="card links">
-    <div class="row"><span>Formats</span></div>
-    <a href="{{.SubURL}}">Mihomo / Clash (YAML)</a>
-    <a href="{{.SubV2RayURL}}">V2Ray / Base64</a>
-    <a href="{{.SubClashURL}}">Clash target</a>
-    {{if .SubSupportURL}}<a href="{{.SubSupportURL}}" rel="noopener">Support</a>{{end}}
-  </div>
-
-  <footer>Powered by 3m-ui · refresh client subscription to pick up changes</footer>
-</div>
 </body>
 </html>
 `
