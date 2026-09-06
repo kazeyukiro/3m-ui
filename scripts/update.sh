@@ -424,7 +424,32 @@ while [ "$i" -lt 30 ]; do
   sleep 1
 done
 if [ "$ready" -ne 1 ]; then
-  echo "[ERROR] Service not active after ~15s; restoring backup. Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
+  echo "[ERROR] Service not active after ~30s; restoring backup. Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
+  stop
+  rm -rf "$BASE"
+  cp -a "$backup/base" "$BASE"
+  [ -f "$backup/3m-ui.db" ] && cp -p "$backup/3m-ui.db" "$DATA_DIR/3m-ui.db" || true
+  [ -f "$backup/mihomo" ] && install -m 0755 "$backup/mihomo" "$MIHOMO_BIN" || true
+  start || true
+  exit 1
+fi
+
+# HTTP probe: process active is not enough — API must answer (avoids "service up but panel dead").
+panel_port=$(awk '/^[[:space:]]*port:/ {print $2; exit}' "$CONFIG_DIR/config.yaml" 2>/dev/null || echo "8080")
+panel_port=${panel_port:-8080}
+http_ok=0
+j=0
+while [ "$j" -lt 20 ]; do
+  j=$((j + 1))
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3     "http://127.0.0.1:${panel_port}/api/v1/health" 2>/dev/null || true)"
+  case "$code" in
+    200|204|401|403) http_ok=1; break ;;
+  esac
+  sleep 1
+done
+if [ "$http_ok" -ne 1 ]; then
+  echo "[ERROR] Service active but panel HTTP health failed on 127.0.0.1:${panel_port}; restoring backup." >&2
+  echo "        Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
   stop
   rm -rf "$BASE"
   cp -a "$backup/base" "$BASE"
