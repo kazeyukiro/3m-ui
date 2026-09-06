@@ -26,7 +26,7 @@ for arg in "$@"; do
       printf '%s\n' '  VERSION   optional tag such as v1.0.0 (default: newest pre-release (test channel))'
       exit 0
       ;;
-    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*)
+    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*)
       [ -z "$REQUESTED_VERSION" ] || { echo "Error: only one version may be specified." >&2; exit 1; }
       REQUESTED_VERSION="$arg"
       ;;
