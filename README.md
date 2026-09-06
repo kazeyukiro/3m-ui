@@ -142,7 +142,7 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — 核心代理引擎及 Listener 配置模型
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — Listener 配置示例与协议参考
-- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) / [m-ui](https://github.com/Aethersailor/m-ui) — 面板交互与运维思路参考
+- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — 面板交互与运维思路参考
 - [Gin](https://github.com/gin-gonic/gin) — 后端 HTTP 框架
 - [GORM](https://github.com/go-gorm/gorm) — 数据库 ORM
 - [React](https://github.com/facebook/react) — 前端基础
@@ -194,7 +194,7 @@ Special thanks to:
 
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples and protocol references
-- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) / [m-ui](https://github.com/Aethersailor/m-ui) — panel UX and ops inspiration
+- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX and ops inspiration
 - [Gin](https://github.com/gin-gonic/gin), [GORM](https://github.com/go-gorm/gorm), [React](https://github.com/facebook/react), [Ant Design](https://github.com/ant-design/ant-design), [Zustand](https://github.com/pmndrs/zustand), [golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 - The Go, Node.js, and wider open-source communities
 
