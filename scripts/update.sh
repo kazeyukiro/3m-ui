@@ -26,7 +26,7 @@ for arg in "$@"; do
       printf '%s\n' '  VERSION   optional tag such as v1.0.0 (default: newest pre-release (test channel))'
       exit 0
       ;;
-    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*)
+    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|pre)
       [ -z "$REQUESTED_VERSION" ] || { echo "Error: only one version may be specified." >&2; exit 1; }
       REQUESTED_VERSION="$arg"
       ;;
@@ -54,22 +54,34 @@ arch(){
 init_system(){ if [ -d /run/systemd/system ] && command_exists systemctl; then echo systemd; elif command_exists rc-service; then echo openrc; else echo unsupported; fi; }
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
 latest_tag(){
-  # test-branch scripts: prefer newest GitHub *pre-release*, then fall back to /releases/latest.
+  # test-branch scripts: prefer fixed rolling Pre-release tag "pre", then other prereleases, then /releases/latest.
   base="${1:-https://github.com/$REPO}"
   repo_path="${base#https://github.com/}"
   repo_path="${repo_path%/}"
+  # 1) Rolling pre tag (single mutable Pre-release)
+  if [ "$repo_path" = "kazeyukiro/3m-ui" ] || [ "$repo_path" = "${REPO:-kazeyukiro/3m-ui}" ]; then
+    code="$(curl -fsSLI -o /dev/null -w '%{http_code}' "https://github.com/${repo_path}/releases/download/pre/SHA256SUMS" 2>/dev/null || true)"
+    if [ "$code" = "200" ]; then
+      printf '%s' "pre"
+      return 0
+    fi
+    # API fallback for tag existence
+    if curl -fsSL -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/${repo_path}/releases/tags/pre" >/dev/null 2>&1; then
+      printf '%s' "pre"
+      return 0
+    fi
+  fi
   api="https://api.github.com/repos/${repo_path}/releases?per_page=30"
   body="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" 2>/dev/null)" || body=""
   tag=""
   if [ -n "$body" ]; then
-    # First non-draft release (API returns newest first); prefer prerelease=true.
     tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
       echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
       echo "$block" | grep -q '"prerelease"[[:space:]]*:[[:space:]]*true' || continue
       echo "$block" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
       break
     done)"
-    # If no pre-release, take newest non-draft
     if [ -z "$tag" ]; then
       tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
         echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
@@ -86,6 +98,7 @@ latest_tag(){
   fi
   printf '%s' "$tag"
 }
+
 
 
 file_sha256(){
