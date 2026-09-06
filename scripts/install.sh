@@ -65,7 +65,7 @@ for arg in "$@"; do
     --static) STATIC=1;;
     --dynamic) STATIC=1;; # official artifacts are always static pure-Go
     -h|--help) usage; exit 0;;
-    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*) [ -z "$REQUESTED_VERSION" ] || err "Only one version may be specified."; REQUESTED_VERSION="$arg";;
+    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*) [ -z "$REQUESTED_VERSION" ] || err "Only one version may be specified."; REQUESTED_VERSION="$arg";;
     *) err "Unknown option: $arg";;
   esac
 done
