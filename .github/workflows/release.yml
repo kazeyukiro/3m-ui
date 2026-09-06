@@ -3,12 +3,14 @@ name: Release · Ant Design
 # works on glibc and musl (Alpine), old and new distros, without system libsqlite3.
 on:
   push:
+    branches:
+      - test
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag (e.g. v1.0.0). Required for manual runs on a branch.
+        description: Pre-release tag (e.g. v1.0.1-test.1). Empty = auto test-<run_id>.
         required: false
         type: string
 permissions:
@@ -128,14 +130,20 @@ jobs:
       - name: Resolve tag
         id: meta
         run: |
+          set -euo pipefail
           if [ -n "${{ inputs.tag }}" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            TAG="${{ inputs.tag }}"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            TAG="${{ github.ref_name }}"
+          elif [ "${{ github.ref_name }}" = "test" ]; then
+            # Auto pre-release tag for pushes to test
+            TAG="test-${{ github.run_number }}-${GITHUB_SHA::7}"
           else
-            echo "tag is required for workflow_dispatch on a branch" >&2
+            echo "tag is required for workflow_dispatch on a non-test branch" >&2
             exit 1
           fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: ${TAG}"
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
       - name: Sign SHA256SUMS (keyless OIDC)
@@ -155,10 +163,14 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }} (pre-release)
           generate_release_notes: true
+          prerelease: true
+          make_latest: false
           body: |
             ## Packages
+
+            **Channel: pre-release (test branch).**
 
             Official frontend: **Ant Design**.
 

@@ -6,6 +6,9 @@
 
 **Mihomo 服务端 Web 管理面板**
 
+
+> **开发通道 `test`：** 该分支的 Release 为 **Pre-release**；`install.sh` / `update.sh` / `3m-ui update` 默认安装**最新预发布版**，不会把正式 `latest` 换成预发布。正式用户请继续使用 `main` 与正式 Release。
+
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
 
 [![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
