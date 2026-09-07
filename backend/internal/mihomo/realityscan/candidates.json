@@ -1,0 +1,385 @@
+[
+  {
+    "hostname": "www.libreoffice.org",
+    "sources": [
+      "https://www.libreoffice.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "LibreOffice project homepage; HTTP 200 HTML observed, with download links leading to a separate selection page.",
+    "service_kind": "website",
+    "auto_select": true,
+    "review": {
+      "checked_at": "2026-09-07T15:28:43.780347Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: www.libreoffice.org.; target IP: 65.109.131.19. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Checks are from one development network only; latency, availability and hosting may differ on another node.",
+        "No arbitrary-SNI forwarding or bulk-content exhaustion test was performed; absence of known CDN signals is not proof of dedicated or abuse-proof hosting."
+      ],
+      "decision": "Enabled after two local probes and homepage inspection; fresh node-side checks remain mandatory.",
+      "probe": {
+        "target": "www.libreoffice.org:443",
+        "server_name": "www.libreoffice.org",
+        "latency_ms": 800,
+        "eligible": true,
+        "evidence": {
+          "cname": "www.libreoffice.org.",
+          "ip": "65.109.131.19",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519MLKEM768",
+          "certificate_valid": true,
+          "certificate_expires": "2026-11-19T02:08:56Z",
+          "http_status": 200,
+          "server": "nginx",
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.debian.org",
+    "sources": [
+      "https://www.debian.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Debian project homepage; HTTP 200 HTML observed. The displayed ISO link points to cdimage.debian.org, not this hostname.",
+    "service_kind": "website",
+    "auto_select": true,
+    "review": {
+      "checked_at": "2026-09-07T15:28:45.200504Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: www.debian.org.; target IP: 140.211.166.200. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Checks are from one development network only; latency, availability and hosting may differ on another node.",
+        "No arbitrary-SNI forwarding or bulk-content exhaustion test was performed; absence of known CDN signals is not proof of dedicated or abuse-proof hosting."
+      ],
+      "decision": "Enabled after two local probes and homepage inspection; fresh node-side checks remain mandatory.",
+      "probe": {
+        "target": "www.debian.org:443",
+        "server_name": "www.debian.org",
+        "latency_ms": 643,
+        "eligible": true,
+        "evidence": {
+          "cname": "www.debian.org.",
+          "ip": "140.211.166.200",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519",
+          "certificate_valid": true,
+          "certificate_expires": "2026-10-31T00:54:52Z",
+          "http_status": 200,
+          "server": "Apache",
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.videolan.org",
+    "sources": [
+      "https://www.videolan.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "VideoLAN project homepage; HTTP 200 HTML observed. Displayed binary download links use get.videolan.org.",
+    "service_kind": "website",
+    "auto_select": true,
+    "review": {
+      "checked_at": "2026-09-07T15:28:46.963729Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: www.videolan.org.; target IP: 213.36.253.2. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Checks are from one development network only; latency, availability and hosting may differ on another node.",
+        "No arbitrary-SNI forwarding or bulk-content exhaustion test was performed; absence of known CDN signals is not proof of dedicated or abuse-proof hosting."
+      ],
+      "decision": "Enabled after two local probes and homepage inspection; fresh node-side checks remain mandatory.",
+      "probe": {
+        "target": "www.videolan.org:443",
+        "server_name": "www.videolan.org",
+        "latency_ms": 856,
+        "eligible": true,
+        "evidence": {
+          "cname": "www.videolan.org.",
+          "ip": "213.36.253.2",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519",
+          "certificate_valid": true,
+          "certificate_expires": "2026-12-03T01:36:59Z",
+          "http_status": 200,
+          "server": "nginx/1.31.4",
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.gimp.org",
+    "sources": [
+      "https://www.gimp.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Previously passed the handshake check; DNS inspection provides contrary hosting evidence.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:46.965492Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: dualstack.n.sni.global.fastly.net.; target IP: not dialed: DNS exclusion. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed Fastly DNS alias; handshake success alone is insufficient."
+      ],
+      "decision": "Disabled: observed Fastly DNS alias; handshake success alone is insufficient.",
+      "probe": {
+        "target": "www.gimp.org:443",
+        "server_name": "www.gimp.org",
+        "latency_ms": 0,
+        "eligible": false,
+        "reason": "shared_delivery_cname",
+        "evidence": {
+          "cname": "dualstack.n.sni.global.fastly.net.",
+          "certificate_valid": false,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.esa.int",
+    "sources": [
+      "https://www.esa.int/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Previously passed the handshake check; DNS inspection provides a delivery-network signal.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:46.966424Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: wb.esa.cdnmix.net.; target IP: not dialed: DNS exclusion. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed cdnmix.net alias; shared delivery behavior has not been reviewed."
+      ],
+      "decision": "Disabled: observed cdnmix.net alias; shared delivery behavior has not been reviewed.",
+      "probe": {
+        "target": "www.esa.int:443",
+        "server_name": "www.esa.int",
+        "latency_ms": 0,
+        "eligible": false,
+        "reason": "shared_delivery_cname",
+        "evidence": {
+          "cname": "wb.esa.cdnmix.net.",
+          "certificate_valid": false,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.cisco.com",
+    "sources": [
+      "https://www.v2ray-agent.com/archives/1689439383686",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Historical community candidate; audited rather than approved based on the brand.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:46.967149Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: www.cisco.com.akadns.net.; target IP: not dialed: DNS exclusion. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed akadns.net alias; conservative exclusion of a delivery-network DNS signal, not a claim of exploitable forwarding."
+      ],
+      "decision": "Disabled: observed akadns.net alias; conservative exclusion of a delivery-network DNS signal, not a claim of exploitable forwarding.",
+      "probe": {
+        "target": "www.cisco.com:443",
+        "server_name": "www.cisco.com",
+        "latency_ms": 0,
+        "eligible": false,
+        "reason": "shared_delivery_cname",
+        "evidence": {
+          "cname": "www.cisco.com.akadns.net.",
+          "certificate_valid": false,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.python.org",
+    "sources": [
+      "https://www.v2ray-agent.com/archives/1689439383686",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Historical community candidate; audited rather than approved based on the project type.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:46.967873Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: dualstack.python.map.fastly.net.; target IP: not dialed: DNS exclusion. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed Fastly DNS alias."
+      ],
+      "decision": "Disabled: observed Fastly DNS alias.",
+      "probe": {
+        "target": "www.python.org:443",
+        "server_name": "www.python.org",
+        "latency_ms": 0,
+        "eligible": false,
+        "reason": "shared_delivery_cname",
+        "evidence": {
+          "cname": "dualstack.python.map.fastly.net.",
+          "certificate_valid": false,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.caltech.edu",
+    "sources": [
+      "https://www.v2ray-agent.com/archives/1689439383686",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Historical community candidate; audited rather than approved based on being a university.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:46.969008Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: www.caltech.edu.cdn.cloudflare.net.; target IP: not dialed: DNS exclusion. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed Cloudflare DNS and response-header signals."
+      ],
+      "decision": "Disabled: observed Cloudflare DNS and response-header signals.",
+      "probe": {
+        "target": "www.caltech.edu:443",
+        "server_name": "www.caltech.edu",
+        "latency_ms": 0,
+        "eligible": false,
+        "reason": "shared_delivery_cname",
+        "evidence": {
+          "cname": "www.caltech.edu.cdn.cloudflare.net.",
+          "certificate_valid": false,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "one-piece.com",
+    "sources": [
+      "https://www.v2ray-agent.com/archives/1689439383686",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Historical community candidate; a successful TLS handshake initially hid its delivery-network signal.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:47.39897Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: one-piece.com.; target IP: 54.239.163.101. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed CloudFront response headers even though CNAME equals the hostname."
+      ],
+      "decision": "Disabled: observed CloudFront response headers even though CNAME equals the hostname.",
+      "probe": {
+        "target": "one-piece.com:443",
+        "server_name": "one-piece.com",
+        "latency_ms": 313,
+        "eligible": false,
+        "reason": "shared_delivery_headers",
+        "evidence": {
+          "cname": "one-piece.com.",
+          "ip": "54.239.163.101",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519MLKEM768",
+          "certificate_valid": true,
+          "certificate_expires": "2027-02-11T23:59:59Z",
+          "http_status": 200,
+          "server": "nginx",
+          "cloudflare": false,
+          "delivery_signal": "cloudfront"
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.fom-international.com",
+    "sources": [
+      "https://www.v2ray-agent.com/archives/1689439383686",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Historical community candidate; a successful TLS handshake initially hid its cache signal.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:48.085143Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: www.fom-international.com.; target IP: 151.101.67.10. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: observed X-Served-By plus X-Timer (Fastly-style cache); no inference of exploitable forwarding."
+      ],
+      "decision": "Disabled: observed X-Served-By plus X-Timer (Fastly-style cache); no inference of exploitable forwarding.",
+      "probe": {
+        "target": "www.fom-international.com:443",
+        "server_name": "www.fom-international.com",
+        "latency_ms": 611,
+        "eligible": false,
+        "reason": "shared_delivery_headers",
+        "evidence": {
+          "cname": "www.fom-international.com.",
+          "ip": "151.101.67.10",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519MLKEM768",
+          "certificate_valid": true,
+          "certificate_expires": "2026-11-12T23:59:59Z",
+          "http_status": 200,
+          "cloudflare": false,
+          "delivery_signal": "fastly_style_cache"
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.r-project.org",
+    "sources": [
+      "https://www.r-project.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Project homepage evaluated as a possible candidate, with a CRAN archive DNS alias observed.",
+    "service_kind": "website",
+    "auto_select": false,
+    "review": {
+      "checked_at": "2026-09-07T15:28:49.295844Z",
+      "vantage_point": "Local development machine; egress geographic region unverified; not a production VPS.",
+      "hosting_observation": "Observed CNAME: cran.wu-wien.ac.at.; target IP: 137.208.57.37. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Disabled: hostname aliases a package archive host; possible bulk-content exposure has not been reviewed."
+      ],
+      "decision": "Disabled: hostname aliases a package archive host; possible bulk-content exposure has not been reviewed.",
+      "probe": {
+        "target": "www.r-project.org:443",
+        "server_name": "www.r-project.org",
+        "latency_ms": 704,
+        "eligible": true,
+        "evidence": {
+          "cname": "cran.wu-wien.ac.at.",
+          "ip": "137.208.57.37",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519MLKEM768",
+          "certificate_valid": true,
+          "certificate_expires": "2027-01-16T23:59:59Z",
+          "http_status": 200,
+          "server": "Apache",
+          "cloudflare": false
+        }
+      }
+    }
+  }
+]

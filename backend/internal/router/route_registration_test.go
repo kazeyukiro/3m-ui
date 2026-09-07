@@ -1,6 +1,8 @@
 package router_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
@@ -28,9 +30,26 @@ func TestSetupRouterWithListenerAndNodeServices(t *testing.T) {
 		}
 	}()
 
-	_ = router.SetupRouterWithDeps(router.Deps{
+	engine := router.SetupRouterWithDeps(router.Deps{
 		Config:   cfg,
 		Listener: listenerSvc,
 		Node:     nodeSvc,
 	})
+	for _, path := range []string{"/api/v1/listeners/reality/scan", "/api/v1/nodes/reality/scan"} {
+		registered := false
+		for _, route := range engine.Routes() {
+			if route.Method == http.MethodPost && route.Path == path {
+				registered = true
+			}
+		}
+		if !registered {
+			t.Fatalf("scan route missing: %s", path)
+		}
+		res := httptest.NewRecorder()
+		engine.ServeHTTP(res, httptest.NewRequest(http.MethodPost, path, nil))
+		if res.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthenticated scan status: %d", res.Code)
+		}
+	}
+
 }

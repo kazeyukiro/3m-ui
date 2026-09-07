@@ -69,7 +69,6 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-
 // flexChatIDs accepts a JSON string array or a single comma-separated string.
 type flexChatIDs []string
 
@@ -106,28 +105,28 @@ func (f *flexChatIDs) UnmarshalJSON(b []byte) error {
 }
 
 type putSettingsBody struct {
-	Enabled           bool     `json:"enabled"`
-	BotToken          string   `json:"bot_token"`
+	Enabled           bool        `json:"enabled"`
+	BotToken          string      `json:"bot_token"`
 	ChatIDs           flexChatIDs `json:"chat_ids"`
-	NotifyOnLogin     bool     `json:"notify_on_login"`
-	NotifyOnBlock     bool     `json:"notify_on_block"`
-	NotifyOnUnblock   bool     `json:"notify_on_unblock"`
-	NotifyOnExpiry    bool     `json:"notify_on_expiry"`
-	NotifyOnTraffic   bool     `json:"notify_on_traffic"`
-	NotifyDailyDigest bool     `json:"notify_daily_digest"`
-	NotifyOnCPU       bool     `json:"notify_on_cpu"`
-	TrafficWarnPct    flexInt  `json:"traffic_warn_pct"`
-	ExpiryWarnHours   flexInt  `json:"expiry_warn_hours"`
-	CPUWarnPct        flexInt  `json:"cpu_warn_pct"`
-	Schedule          string   `json:"schedule"`
-	AttachBackup      bool     `json:"attach_backup"`
-	Language          string   `json:"language"`
-	EnabledEvents     string   `json:"enabled_events"`
-	ExpiryWarnDays    flexInt  `json:"expiry_warn_days"`
-	TrafficWarnGB     flexInt  `json:"traffic_warn_gb"`
-	ProxyURL          string   `json:"proxy_url"`
-	APIServer         string   `json:"api_server"`
-	KeepToken         bool     `json:"keep_token"`
+	NotifyOnLogin     bool        `json:"notify_on_login"`
+	NotifyOnBlock     bool        `json:"notify_on_block"`
+	NotifyOnUnblock   bool        `json:"notify_on_unblock"`
+	NotifyOnExpiry    bool        `json:"notify_on_expiry"`
+	NotifyOnTraffic   bool        `json:"notify_on_traffic"`
+	NotifyDailyDigest bool        `json:"notify_daily_digest"`
+	NotifyOnCPU       bool        `json:"notify_on_cpu"`
+	TrafficWarnPct    flexInt     `json:"traffic_warn_pct"`
+	ExpiryWarnHours   flexInt     `json:"expiry_warn_hours"`
+	CPUWarnPct        flexInt     `json:"cpu_warn_pct"`
+	Schedule          string      `json:"schedule"`
+	AttachBackup      bool        `json:"attach_backup"`
+	Language          string      `json:"language"`
+	EnabledEvents     string      `json:"enabled_events"`
+	ExpiryWarnDays    flexInt     `json:"expiry_warn_days"`
+	TrafficWarnGB     flexInt     `json:"traffic_warn_gb"`
+	ProxyURL          string      `json:"proxy_url"`
+	APIServer         string      `json:"api_server"`
+	KeepToken         bool        `json:"keep_token"`
 }
 
 func (h *Handler) PutSettings(c *gin.Context) {

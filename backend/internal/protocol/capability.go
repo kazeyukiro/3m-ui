@@ -157,7 +157,6 @@ func transportComponentsCore(withXHTTP bool) []ComponentCapability {
 	return comps
 }
 
-
 func securityComponents(withReality bool) []ComponentCapability {
 	comps := []ComponentCapability{
 		{Group: ComponentSecurity, Kind: "none", Label: "None", SelectionPath: "security_layer"},

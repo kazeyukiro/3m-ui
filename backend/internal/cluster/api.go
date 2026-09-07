@@ -308,7 +308,6 @@ func writeRemoteErr(c *gin.Context, err error) {
 	c.JSON(http.StatusBadGateway, gin.H{"error": "upstream cluster operation failed"})
 }
 
-
 func (h *Handler) SyncNodes(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -336,7 +335,6 @@ func (h *Handler) ListMirroredNodes(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, rows)
 }
-
 
 func (h *Handler) PushNode(c *gin.Context) {
 	id, ok := parseID(c)

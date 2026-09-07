@@ -92,7 +92,6 @@ func EncodePassword(password string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(password))
 }
 
-
 // ResetAdminPassword sets the first administrator password to the given plaintext
 // (default "admin") and forces password change on next login. Does not create
 // an admin if none exists.

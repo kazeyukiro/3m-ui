@@ -34,3 +34,21 @@ export const rollbackListenerVersion = (id: number, version: number) => client.p
 
 export const generateMaterial = (payload: { kind: string; cipher?: string }) =>
   client.post('/listeners/generate', payload).then((r) => r.data as Record<string, string>);
+
+export interface RealityTarget {
+  target: string;
+  server_name: string;
+  latency_ms: number;
+  eligible: boolean;
+  reason?: string;
+}
+
+export interface RealityScanResponse {
+  selected: RealityTarget | null;
+  candidates: RealityTarget[];
+  scanned: number;
+  checked_at: string;
+}
+
+export const scanRealityTargets = (signal: AbortSignal) =>
+  client.post<RealityScanResponse>('/listeners/reality/scan', {}, { signal, timeout: 40000 }).then(r => r.data);

@@ -75,7 +75,7 @@ const Listeners: React.FC = () => {
     if (port) form.setFieldsValue({ port });
   };
 
-  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, reality_dest: 'www.microsoft.com:443', client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
   const openEdit = (record: Listener) => { setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
     try {
@@ -83,11 +83,12 @@ const Listeners: React.FC = () => {
       const proto = String(values.protocol || '').trim();
       if (!proto) { message.error(t('listeners.selectProtocolFirst')); return; }
       if (!values.name || !String(values.port || '').trim()) { message.error(t('listeners.portHint')); return; }
-      // REALITY keys / dest: leave empty → backend AutofillListenerDefaults generates them.
+      // REALITY credentials can be generated on save; the destination must be explicit.
       if (REALITY_PROTOCOLS.has(proto) && firstNonEmpty(values.security_layer) === 'reality') {
         values.reality_enabled = true;
         const dest = firstNonEmpty(values.reality_dest, values['reality-config']?.dest, values['reality-config.dest']);
-        if (dest) values.reality_dest = dest;
+        if (!dest) { message.error(t('realityScan.required')); return; }
+        values.reality_dest = dest;
       }
       const previous = editing ? parseConfig(editing.config) : null;
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
@@ -209,7 +210,7 @@ const columns = [
         <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
         <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome"><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
         <Form.Item name="access_alpn" label={t('listeners.alpn')}><Input placeholder="h2,http/1.1" /></Form.Item>
-        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} />}
+        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} autoSelectReality={modalOpen && !editing} />}
       </Form>
     </Modal>
     <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>

@@ -19,7 +19,7 @@ type RemoteNodeMirror struct {
 	// ShareURIsJSON is a JSON array of additional share links.
 	ShareURIsJSON string `gorm:"type:text" json:"-"`
 	// ClientYAML is a Mihomo client proxy document snippet from the remote export.
-	ClientYAML string `gorm:"type:text" json:"client_yaml,omitempty"`
+	ClientYAML string     `gorm:"type:text" json:"client_yaml,omitempty"`
 	LastSyncAt *time.Time `json:"last_sync_at"`
 	LastError  string     `gorm:"type:text" json:"last_error,omitempty"`
 
@@ -30,6 +30,6 @@ type RemoteNodeMirror struct {
 // ProxyUserRemoteNode binds a local proxy user to a mirrored remote node.
 type ProxyUserRemoteNode struct {
 	BaseModel
-	ProxyUserID      uint `gorm:"not null;uniqueIndex:uidx_user_remote_node" json:"proxy_user_id"`
+	ProxyUserID        uint `gorm:"not null;uniqueIndex:uidx_user_remote_node" json:"proxy_user_id"`
 	RemoteNodeMirrorID uint `gorm:"not null;uniqueIndex:uidx_user_remote_node;index" json:"remote_node_mirror_id"`
 }

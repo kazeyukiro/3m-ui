@@ -5,6 +5,7 @@ import { message,
 import { generateMaterial } from '../api/listeners';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useI18n } from '../i18n';
+import RealityTargetFields from './RealityTargetFields';
 
 const { Text } = Typography;
 
@@ -608,7 +609,8 @@ export function formValuesToConfig(
     (!realityOn && TLS_PROTOCOLS.has(protocol) && values.security_layer === 'tls');
   if (realityOn) {
     // Always emit reality-config so backend Autofill can fill empty private-key / short-id.
-    const dest = (values.reality_dest && String(values.reality_dest).trim()) || 'www.microsoft.com:443';
+    const dest = (values.reality_dest && String(values.reality_dest).trim()) || '';
+    if (!dest) throw new Error('REALITY destination is required');
     const reality: Record<string, any> = { dest, 'private-key': values.reality_private_key || '' };
     if (values.reality_short_id != null && values.reality_short_id !== '') {
       reality['short-id'] = values.reality_short_id;
@@ -849,9 +851,9 @@ const EnableSection: React.FC<{
   </>
 );
 
-type Props = { protocol?: string };
+type Props = { protocol?: string; autoSelectReality?: boolean };
 
-const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
+const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = false }) => {
   const { t } = useI18n();
   const form = Form.useFormInstance();
   const gen = async (kind: string, cipher?: string) => {
@@ -1353,14 +1355,9 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
 
       {/* ---- Reality ---- */}
       {REALITY_PROTOCOLS.has(protocol) && (
-        <EnableSection
-          name="reality_enabled"
-          label={t('listeners.sectionReality')}
-          hint={t('listeners.realityExclusiveHint')}
-        >
-          <Form.Item name="reality_dest" label={t('listeners.realityDest')} tooltip="Default: www.microsoft.com:443">
-            <Input placeholder="www.microsoft.com:443" />
-          </Form.Item>
+        <Form.Item noStyle shouldUpdate={(prev, cur) => prev.security_layer !== cur.security_layer}>
+          {({ getFieldValue }) => getFieldValue('security_layer') === 'reality' ? <Card size="small" title={t('listeners.sectionReality')} style={{ marginBottom: 16 }}>
+          <RealityTargetFields autoSelect={autoSelectReality} />
           <Form.Item name="reality_private_key" label={t('listeners.realityPrivateKey')}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('reality')}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
@@ -1370,7 +1367,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol }) => {
           <Form.Item name="reality_server_names" label={t('listeners.realityServerNames')}>
             <Select mode="tags" placeholder="www.example.com" tokenSeparators={[',']} />
           </Form.Item>
-        </EnableSection>
+          </Card> : null}
+        </Form.Item>
       )}
 
       {/* ---- tlsmirror (VMess) ---- */}

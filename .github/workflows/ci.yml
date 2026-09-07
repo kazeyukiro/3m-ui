@@ -43,6 +43,7 @@ jobs:
           cache-dependency-path: frontend/package.json
       - run: npm install
       - run: npm run lint
+      - run: npm run test:unit
       - run: npm run build
 
   scripts:
