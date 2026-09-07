@@ -171,7 +171,7 @@ const ClusterPage: React.FC = () => {
         }} icon={<HeartOutlined />}>{t('cluster.healthAll') || 'Check all'}</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); form.setFieldsValue({ enabled: true }); setOpen(true); }}>{t('cluster.create')}</Button>
       </Space>}>
-        <Table rowKey="id" loading={loading} dataSource={data} columns={columns} scroll={{ x: 720 }} />
+        <Table rowKey="id" loading={loading} dataSource={data} columns={columns} scroll={{ x: 720 }} size={isMobile ? "small" : "middle"} />
       </Card>
       <Modal open={open} title={editing ? t('cluster.edit') : t('cluster.create')} onCancel={() => setOpen(false)} onOk={() => form.submit()} destroyOnClose>
         <Form form={form} layout="vertical" onFinish={onSubmit}>
