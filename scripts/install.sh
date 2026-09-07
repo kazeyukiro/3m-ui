@@ -109,6 +109,7 @@ install_deps(){
 }
 
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
+download_quiet(){ if command_exists curl; then curl -fsSL --retry 2 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
 
 latest_tag(){
   # test-branch scripts: prefer fixed rolling Pre-release tag "pre", then other prereleases, then /releases/latest.

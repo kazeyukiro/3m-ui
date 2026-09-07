@@ -53,6 +53,7 @@ arch(){
 }
 init_system(){ if [ -d /run/systemd/system ] && command_exists systemctl; then echo systemd; elif command_exists rc-service; then echo openrc; else echo unsupported; fi; }
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
+download_quiet(){ if command_exists curl; then curl -fsSL --retry 2 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
 latest_tag(){
   # test-branch scripts: prefer fixed rolling Pre-release tag "pre", then other prereleases, then /releases/latest.
   base="${1:-https://github.com/$REPO}"
@@ -76,9 +77,10 @@ latest_tag(){
   body="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" 2>/dev/null)" || body=""
   tag=""
   if [ -n "$body" ]; then
+    # Prefer non-prerelease (stable) first; only then fall back to any release.
     tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
       echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
-      echo "$block" | grep -q '"prerelease"[[:space:]]*:[[:space:]]*true' || continue
+      echo "$block" | grep -q '"prerelease"[[:space:]]*:[[:space:]]*true' && continue
       echo "$block" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
       break
     done)"
@@ -347,21 +349,32 @@ for spec in "3m-ui.sh:$manager_tmp" "install.sh:$installer_tmp" "update.sh:$upda
 done
 
 if [ "$UPDATE_MIHOMO" -eq 1 ] && [ -x "$MIHOMO_BIN" ]; then
-  mtag="$(latest_tag https://github.com/MetaCubeX/mihomo)" || true
+  # Always use MetaCubeX /releases/latest (stable); do not reuse 3m-ui pre-channel tag logic.
+  mtag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/MetaCubeX/mihomo/releases/latest 2>/dev/null | sed 's#.*/##; s/[[:space:][:cntrl:]]*$//')" || true
+  case "$mtag" in http*|HTML|*latest*|"") mtag="$(curl -fsSL https://api.github.com/repos/MetaCubeX/mihomo/releases/latest 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)" || true;; esac
   if [ -n "$mtag" ]; then
     mihomo_tmp="$(mktemp)"
     case "$(uname -m)" in
-      x86_64|amd64) mihomo_asset="mihomo-linux-amd64-compatible";;
-      aarch64|arm64) mihomo_asset="mihomo-linux-arm64";;
-      armv7l|armv7*) mihomo_asset="mihomo-linux-armv7";;
-      armv6l|armv6*) mihomo_asset="mihomo-linux-armv6";;
-      i386|i486|i586|i686|x86) mihomo_asset="mihomo-linux-386";;
-      riscv64) mihomo_asset="mihomo-linux-riscv64";;
-      loongarch64|loong64) mihomo_asset="mihomo-linux-loong64-abi2.0";;
-      *) mihomo_asset="";;
+      x86_64|amd64) mihomo_candidates="mihomo-linux-amd64-compatible mihomo-linux-amd64";;
+      aarch64|arm64) mihomo_candidates="mihomo-linux-arm64";;
+      armv7l|armv7*) mihomo_candidates="mihomo-linux-armv7";;
+      armv6l|armv6*) mihomo_candidates="mihomo-linux-armv6";;
+      i386|i486|i586|i686|x86) mihomo_candidates="mihomo-linux-386";;
+      riscv64) mihomo_candidates="mihomo-linux-riscv64";;
+      loongarch64|loong64) mihomo_candidates="mihomo-linux-loong64-abi2.0 mihomo-linux-loong64";;
+      *) mihomo_candidates="";;
     esac
-    mihomo_gzname="${mihomo_asset}-${mtag}.gz"
-    if [ -n "$mihomo_asset" ] && download "https://github.com/MetaCubeX/mihomo/releases/download/${mtag}/${mihomo_gzname}" "$mihomo_tmp.gz"; then
+    mihomo_gzname=""
+    mihomo_asset=""
+    for cand in $mihomo_candidates; do
+      try="${cand}-${mtag}.gz"
+      if download_quiet "https://github.com/MetaCubeX/mihomo/releases/download/${mtag}/${try}" "$mihomo_tmp.gz"; then
+        mihomo_asset="$cand"
+        mihomo_gzname="$try"
+        break
+      fi
+    done
+    if [ -n "$mihomo_gzname" ]; then
       # Verify the .gz checksum if possible (Mihomo does not publish SHA256SUMS;
       # we query GitHub Release API for the per-asset digest). Best-effort by
       # default because anonymous GitHub API is rate-limited (60/hour/IP).
@@ -384,6 +397,7 @@ if [ "$UPDATE_MIHOMO" -eq 1 ] && [ -x "$MIHOMO_BIN" ]; then
         mihomo_tmp=""
       fi
     else
+      echo "Note: could not download Mihomo ${mtag} for this arch (asset missing or network); keeping existing binary."
       mihomo_tmp=""
     fi
   fi
