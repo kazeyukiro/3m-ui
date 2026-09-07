@@ -21,6 +21,8 @@ type ProxyUser struct {
 	Enabled           bool       `gorm:"not null;default:true" json:"enabled"`
 	// IPLimit is max concurrent client IPs (0 = unlimited). Max concurrent client IPs.
 	IPLimit int `gorm:"not null;default:0" json:"ip_limit"`
+	// HWIDLimit is max devices allowed via subscription HWID headers (0 = unlimited / tracking only when seen).
+	HWIDLimit int `gorm:"not null;default:0" json:"hwid_limit"`
 	// Remark is an admin-facing note (not used for auth).
 	Remark string `gorm:"size:255" json:"remark"`
 	// SubToken is the public subscription credential (client sub).

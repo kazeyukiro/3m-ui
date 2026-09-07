@@ -14,6 +14,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/hwid"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
@@ -72,6 +73,19 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				return
 			}
 			isProxyUser = true
+			// HWID device registration (Happ / Remnawave-compatible headers).
+			info := hwid.ParseRequest(c.Request)
+			if err := hwid.Enforce(db, pu.ID, pu.HWIDLimit, info, c.Writer.Header()); err != nil {
+				if errors.Is(err, hwid.ErrMaxDevices) {
+					c.Header(hwid.HeaderMaxDevicesReached, "true")
+					if pu.HWIDLimit > 0 {
+						c.Header(hwid.HeaderActive, "true")
+					}
+					c.JSON(http.StatusForbidden, gin.H{"error": "hwid device limit reached"})
+					return
+				}
+				log.Printf("hwid enforce: %v", err)
+			}
 			if wantsHTML {
 				writeSubHTML(c, db, cfg, pu, tok)
 				return
