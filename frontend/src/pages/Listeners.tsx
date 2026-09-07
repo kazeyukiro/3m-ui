@@ -63,7 +63,7 @@ const Listeners: React.FC = () => {
   useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
 
   const suggestPort = (current = '') => {
-    const port = randomListenerPort([...data.map(listener => String(listener.port)), current]);
+    const port = randomListenerPort([...data.map((listener) => String(listener.port)), current]);
     if (!port) message.warning(t('listeners.noAvailablePort'));
     return port;
   };

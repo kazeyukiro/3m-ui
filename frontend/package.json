@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:unit": "node --experimental-strip-types --test src/utils/listenerPort.test.mjs || node --experimental-strip-types src/utils/listenerPort.test.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
