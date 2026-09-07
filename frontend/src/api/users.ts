@@ -15,6 +15,7 @@ export interface ProxyUser {
   expire_time?: string;
   blocked?: boolean;
   ip_limit?: number;
+  hwid_limit?: number;
   remark?: string;
   sub_token?: string;
   telegram_id?: number;

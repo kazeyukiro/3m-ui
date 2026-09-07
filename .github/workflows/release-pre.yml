@@ -1,23 +1,20 @@
-name: Release · Ant Design
+name: Pre-release · rolling (pre)
 # Pure-Go static binaries (CGO_ENABLED=0 + modernc sqlite) for maximum Linux portability:
 # works on glibc and musl (Alpine), old and new distros, without system libsqlite3.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release tag (e.g. v1.0.2). Required for manual runs.
-        required: true
+      note:
+        description: Optional note for this pre build
+        required: false
         type: string
 permissions:
   contents: write
   id-token: write   # required for cosign keyless OIDC signing
 
 concurrency:
-  group: release-formal-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-pre-rolling
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -133,24 +130,13 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
-          if [ -n "${{ inputs.tag }}" ]; then
-            TAG="${{ inputs.tag }}"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            echo "Formal release requires a v* tag or workflow_dispatch tag input" >&2
-            exit 1
-          fi
-          case "$TAG" in
-            v*) ;;
-            *) echo "Formal release tag must start with v (got: $TAG)" >&2; exit 1 ;;
-          esac
+          TAG=pre
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          echo "make_latest=true" >> "$GITHUB_OUTPUT"
-          echo "release_name=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Resolved formal release: ${TAG} @ ${GITHUB_SHA}"
+          echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          echo "make_latest=false" >> "$GITHUB_OUTPUT"
+          echo "release_name=Pre-release (rolling)" >> "$GITHUB_OUTPUT"
+          echo "Resolved rolling pre @ ${GITHUB_SHA}"
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
       - name: Sign SHA256SUMS (keyless OIDC)
@@ -167,6 +153,12 @@ jobs:
             SHA256SUMS
           echo "=== Signature artifacts ==="
           ls -la SHA256SUMS.pem SHA256SUMS.sig
+      - name: Point rolling tag at this commit
+        run: |
+          set -euo pipefail
+          git fetch --tags origin 2>/dev/null || true
+          git tag -f pre "${GITHUB_SHA}"
+          git push -f origin refs/tags/pre
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
@@ -179,9 +171,10 @@ jobs:
           body: |
             ## Packages
 
-            **Tag:** `${{ steps.meta.outputs.tag }}`
+            **Channel: rolling Pre-release** (tag `pre`).
 
-            See release notes for the changelog.
+            Triggered via Actions → Pre-release · rolling (pre).
+            ${{ inputs.note }}
 
             Official frontend: **Ant Design**.
 

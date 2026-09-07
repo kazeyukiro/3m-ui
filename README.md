@@ -7,7 +7,7 @@
 **Mihomo 服务端 Web 管理面板**
 
 
-> **开发通道 `test`：** 使用**单一滚动 Pre-release**（固定标签 `pre`，每次推送覆盖同一次发布，不新建多个 pre）。`install.sh` / `update.sh` 优先安装 `pre`。正式用户请使用 `main` 与正式 Release。
+> **测试通道：** 使用 GitHub Actions「Pre-release · rolling (pre)」手动发布滚动预发布（标签 `pre`）。正式版打 `v*` 标签发布。安装/更新可用 `3m-ui channel pre|stable` 切换。
 
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
 
