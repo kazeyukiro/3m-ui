@@ -51,7 +51,8 @@ type ViewModel struct {
 	IsOnline      bool
 	Links         []string
 	// SubQRDataURI is a data:image/png;base64,... QR of SubURL, generated locally (no external API).
-	SubQRDataURI string
+	// template.URL prevents html/template from percent-encoding the base64 payload in src="...".
+	SubQRDataURI template.URL
 }
 
 // Settings holds subscription page branding options stored in PanelSetting.
@@ -260,16 +261,17 @@ func formatBytesLimit(n int64) string {
 
 // localSubQRDataURI encodes the subscription URL as a PNG data-URI using an
 // in-process QR library — no third-party HTTP API.
-func localSubQRDataURI(subURL string) string {
+func localSubQRDataURI(subURL string) template.URL {
 	subURL = strings.TrimSpace(subURL)
 	if subURL == "" {
 		return ""
 	}
+	// Medium is denser; Long is safer for longer public_url paths.
 	png, err := qrcode.Encode(subURL, qrcode.Medium, 256)
 	if err != nil || len(png) == 0 {
 		return ""
 	}
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png))
 }
 
 // DefaultTemplate returns the built-in HTML for documentation / preview.
