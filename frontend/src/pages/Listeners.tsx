@@ -11,6 +11,7 @@ import {
 } from '../api/listeners';
 import { useI18n } from '../i18n';
 import { copyText } from '../utils/clipboard';
+import { randomListenerPort } from '../utils/listenerPort';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
@@ -61,7 +62,17 @@ const Listeners: React.FC = () => {
   const loadTemplates = async () => { setTemplateLoading(true); try { setTemplates(await listListenerTemplates()); } catch (e: any) { message.error(e.message); } finally { setTemplateLoading(false); } };
   useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
 
-  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, reality_dest: 'www.microsoft.com:443', client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const suggestPort = (current = '') => {
+    const port = randomListenerPort([...data.map((listener) => String(listener.port)), current]);
+    if (!port) message.warning(t('listeners.noAvailablePort'));
+    return port;
+  };
+  const regeneratePort = () => {
+    const port = suggestPort(String(form.getFieldValue('port') || ''));
+    if (port) form.setFieldsValue({ port });
+  };
+
+  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, reality_dest: 'www.microsoft.com:443', client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
   const openEdit = (record: Listener) => { setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
     try {
@@ -125,7 +136,7 @@ const columns = [
       <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
         <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
-        <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" /></Form.Item>
+        <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" addonAfter={!editing ? <Button type="link" size="small" onClick={regeneratePort}>{t('listeners.randomPort')}</Button> : undefined} /></Form.Item>
         <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip="IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1"><Input placeholder="0.0.0.0 or ::" /></Form.Item>
         <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
