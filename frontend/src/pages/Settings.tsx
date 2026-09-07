@@ -19,6 +19,7 @@ import {
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { useThemeStore } from '../stores/themeStore';
 import {
@@ -72,6 +73,7 @@ const Settings: React.FC = () => {
   }>({});
   const [panelForm] = Form.useForm();
   const { t, locale, setLocale } = useI18n();
+  const isMobile = useIsMobile();
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
   const [tgForm] = Form.useForm();
@@ -211,6 +213,25 @@ const Settings: React.FC = () => {
       <h2>{t('settings.title')}</h2>
       <p style={{ color: 'rgba(0,0,0,0.45)', marginBottom: 16 }}>{t('settings.subtitle')}</p>
 
+      {isMobile && (
+        <Select
+          className="settings-section-select"
+          value={section}
+          onChange={(v) => setSection(v as SectionKey)}
+          options={menuItems.map((it: any) => ({
+            value: it.key,
+            label: (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                {it.icon}
+                {it.label}
+              </span>
+            ),
+          }))}
+          style={{ width: '100%', marginBottom: 12 }}
+          size="large"
+        />
+      )}
+
       <Layout
         className="settings-layout"
         style={{
@@ -219,6 +240,7 @@ const Settings: React.FC = () => {
           gap: 16,
         }}
       >
+        {!isMobile && (
         <Sider
           className="settings-sider"
           width={220}
@@ -229,8 +251,6 @@ const Settings: React.FC = () => {
             padding: '8px 0',
             border: '1px solid var(--ant-color-border-secondary, #f0f0f0)',
           }}
-          breakpoint="md"
-          collapsedWidth={0}
         >
           <Menu
             className="settings-menu"
@@ -241,6 +261,7 @@ const Settings: React.FC = () => {
             style={{ border: 'none' }}
           />
         </Sider>
+        )}
 
         <Content style={{ minWidth: 0, flex: 1 }}>
           {section === 'panel' && (

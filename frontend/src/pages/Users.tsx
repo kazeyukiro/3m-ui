@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
-  InputNumber, DatePicker, Progress, Tooltip,
+  InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
@@ -312,14 +312,100 @@ const Users: React.FC = () => {
       <h2>{t('users.title')}</h2>
       <Card
         extra={
-          <Space wrap>
+          <Space wrap style={{ width: isMobile ? '100%' : undefined }}>
             <Input.Search
               allowClear
               placeholder={t('common.search')}
               onSearch={setKeyword}
               onChange={(e) => { if (!e.target.value) setKeyword(''); }}
-              style={{ width: 200 }}
+              style={{ width: isMobile ? '100%' : 200 }}
             />
+            {isMobile ? (
+              <>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  block
+                  onClick={() => {
+                    setEditing(null);
+                    form.resetFields();
+                    form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0 });
+                    setModalOpen(true);
+                  }}
+                >
+                  {t('users.create')}
+                </Button>
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'enable',
+                        label: t('users.batchEnable') || 'Enable',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => onBatch('enable'),
+                      },
+                      {
+                        key: 'disable',
+                        label: t('users.batchDisable') || 'Disable',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => onBatch('disable'),
+                      },
+                      {
+                        key: 'reset',
+                        label: t('users.batchResetTraffic') || 'Reset traffic',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => onBatch('reset-traffic'),
+                      },
+                      {
+                        key: 'extend',
+                        label: t('users.batchExtend') || 'Extend days',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => {
+                          const days = Number(window.prompt(t('users.batchExtendPrompt') || 'Extend by how many days?', '30') || 0);
+                          if (days > 0) onBatch('extend-days', { days });
+                        },
+                      },
+                      {
+                        key: 'addtf',
+                        label: t('users.batchAddTraffic') || 'Add traffic',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => {
+                          const gb = Number(window.prompt(t('users.batchAddTrafficPrompt') || 'Add how many GiB to limit?', '10') || 0);
+                          if (gb > 0) onBatch('add-traffic', { traffic_gb: gb });
+                        },
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'del',
+                        danger: true,
+                        label: t('users.batchDelete') || 'Delete selected',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => {
+                          Modal.confirm({
+                            title: t('users.batchDeleteConfirm') || 'Delete selected users?',
+                            onOk: () => onBatch('delete'),
+                          });
+                        },
+                      },
+                      {
+                        key: 'depleted',
+                        danger: true,
+                        label: t('users.deleteDepleted') || 'Delete depleted',
+                        onClick: () => {
+                          Modal.confirm({
+                            title: t('users.deleteDepletedConfirm') || 'Delete all expired / over-quota users?',
+                            onOk: onDeleteDepleted,
+                          });
+                        },
+                      },
+                    ],
+                  }}
+                >
+                  <Button block>{t('users.batch') || 'Batch'} ({selectedRowKeys.length})</Button>
+                </Dropdown>
+              </>
+            ) : (
+              <>
             <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('enable')}>
               {t('users.batchEnable') || 'Enable'}
             </Button>
@@ -376,10 +462,148 @@ const Users: React.FC = () => {
             >
               {t('users.create')}
             </Button>
+              </>
+            )}
           </Space>
         }
       >
-        <Table scroll={{ x: 960 }} size={isMobile ? "small" : "middle"} dataSource={filtered} columns={columns} rowKey="id" loading={loading} rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} />
+        {isMobile ? (
+          <Spin spinning={loading}>
+            <div className="mobile-entity-list">
+              {filtered.length === 0 && !loading ? (
+                <div className="mobile-empty">{t('common.empty')}</div>
+              ) : filtered.map((record) => {
+                const id = record.id;
+                const checked = selectedRowKeys.includes(id);
+                const used = Number(record.traffic_used || 0);
+                const limit = Number(record.traffic_limit || 0);
+                return (
+                  <div className="mobile-entity-card" key={id}>
+                    <div className="mobile-entity-card-main">
+                      <Checkbox
+                        checked={checked}
+                        onChange={(e) => {
+                          setSelectedRowKeys((keys) =>
+                            e.target.checked ? [...keys, id] : keys.filter((k) => k !== id),
+                          );
+                        }}
+                      />
+                      <div
+                        className="mobile-entity-card-body"
+                        onClick={() => {
+                          setEditing(record);
+                          form.setFieldsValue({
+                            username: record.username,
+                            password: undefined,
+                            enabled: record.enabled,
+                            traffic_limit: record.traffic_limit
+                              ? Number((record.traffic_limit / (1024 ** 3)).toFixed(2))
+                              : 0,
+                            expire_time:
+                              record.expire_time && !String(record.expire_time).startsWith('0001')
+                                ? dayjs(record.expire_time)
+                                : undefined,
+                            ip_limit: record.ip_limit || 0,
+                            hwid_limit: record.hwid_limit || 0,
+                            remark: record.remark,
+                          });
+                          setModalOpen(true);
+                        }}
+                      >
+                        <div className="mobile-entity-title">
+                          {record.username}
+                          {record.remark ? (
+                            <span className="mobile-entity-sub"> · {record.remark}</span>
+                          ) : null}
+                        </div>
+                        <div className="mobile-entity-meta">
+                          <Tag color={record.online ? 'success' : 'default'}>
+                            {record.online ? t('users.online') : t('users.offline')}
+                          </Tag>
+                          <Tag color={record.enabled ? 'processing' : 'default'}>
+                            {record.enabled ? t('common.enabled') : t('common.disabled')}
+                          </Tag>
+                          <span className="mobile-entity-sub">
+                            {formatBytes(used)}
+                            {limit > 0 ? ` / ${formatBytes(limit)}` : ` / ${t('users.unlimited')}`}
+                          </span>
+                        </div>
+                      </div>
+                      <Dropdown
+                        menu={{
+                          items: [
+                            {
+                              key: 'edit',
+                              icon: <EditOutlined />,
+                              label: t('common.edit'),
+                              onClick: () => {
+                                setEditing(record);
+                                form.setFieldsValue({
+                                  username: record.username,
+                                  password: undefined,
+                                  enabled: record.enabled,
+                                  traffic_limit: record.traffic_limit
+                                    ? Number((record.traffic_limit / (1024 ** 3)).toFixed(2))
+                                    : 0,
+                                  expire_time:
+                                    record.expire_time && !String(record.expire_time).startsWith('0001')
+                                      ? dayjs(record.expire_time)
+                                      : undefined,
+                                  ip_limit: record.ip_limit || 0,
+                                  hwid_limit: record.hwid_limit || 0,
+                                  remark: record.remark,
+                                });
+                                setModalOpen(true);
+                              },
+                            },
+                            {
+                              key: 'nodes',
+                              icon: <LinkOutlined />,
+                              label: t('users.bindNodes') || 'Bind nodes',
+                              onClick: () => openBind(record),
+                            },
+                            {
+                              key: 'reset',
+                              icon: <ClearOutlined />,
+                              label: t('users.resetTraffic') || 'Reset traffic',
+                              onClick: () => onResetTraffic(record.id),
+                            },
+                            { type: 'divider' },
+                            {
+                              key: 'del',
+                              icon: <DeleteOutlined />,
+                              danger: true,
+                              label: t('common.delete'),
+                              onClick: () => {
+                                Modal.confirm({
+                                  title: t('users.deleteConfirm') || t('common.confirmDelete'),
+                                  onOk: () => onDelete(record.id),
+                                });
+                              },
+                            },
+                          ],
+                        }}
+                        trigger={['click']}
+                      >
+                        <Button type="text" icon={<MoreOutlined />} aria-label="actions" />
+                      </Dropdown>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Spin>
+        ) : (
+          <Table
+            scroll={{ x: 960 }}
+            size="middle"
+            dataSource={filtered}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          />
+        )}
       </Card>
 
       <Modal
@@ -392,6 +616,9 @@ const Users: React.FC = () => {
         }}
         onOk={() => form.submit()}
         destroyOnClose
+        width={isMobile ? '100%' : 520}
+        style={isMobile ? { top: 8, maxWidth: '100vw' } : undefined}
+        className={isMobile ? 'mobile-full-modal' : undefined}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
           <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
