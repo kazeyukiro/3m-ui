@@ -10,9 +10,11 @@ import {
   RemoteServer,
 } from '../api/cluster';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
 
 const ClusterPage: React.FC = () => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [remoteNodes, setRemoteNodes] = useState<any[] | null>(null);
   const [remoteServerId, setRemoteServerId] = useState<number | null>(null);
   const [remoteForm] = Form.useForm();

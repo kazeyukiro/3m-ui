@@ -30,8 +30,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           onOpenMobileNav={() => setDrawerOpen(true)}
         />
         <Content
+          className="app-page-content"
           style={{
-            margin: isMobile ? 12 : 24,
+            margin: isMobile ? 8 : 24,
             padding: isMobile ? 12 : 24,
             background: colorBgContainer,
             borderRadius: borderRadiusLG,
@@ -48,11 +49,12 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         placement="left"
         open={isMobile && drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={260}
+        width={280}
         styles={{ body: { padding: 0 } }}
         title={null}
         closable={false}
       >
+        <div className="mobile-nav-brand">3M-UI</div>
         <SidebarMenu onNavigate={() => setDrawerOpen(false)} />
       </Drawer>
     </Layout>

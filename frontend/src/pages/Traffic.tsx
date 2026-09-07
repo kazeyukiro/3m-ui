@@ -3,10 +3,12 @@ import { Card, Table, Tag, Space, Statistic, Row, Col, message, Button } from 'a
 import { ReloadOutlined } from '@ant-design/icons';
 import { fetchTrafficStatus, fetchTrafficUsers, fetchConnections, UserTraffic, ConnectionView, TrafficStatus } from '../api/traffic';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
 import { formatBytes } from '../utils/format';
 
 const TrafficPage: React.FC = () => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [status, setStatus] = useState<TrafficStatus | null>(null);
   const [users, setUsers] = useState<UserTraffic[]>([]);
   const [connections, setConnections] = useState<ConnectionView[]>([]);
@@ -124,7 +126,7 @@ const TrafficPage: React.FC = () => {
         </Col>
       </Row>
       <Card title={t('traffic.byUser')} style={{ marginBottom: 16 }}>
-        <Table rowKey="user_id" loading={loading} dataSource={users} columns={userColumns} scroll={{ x: 720 }} size="middle" />
+        <Table rowKey="user_id" loading={loading} dataSource={users} columns={userColumns} scroll={{ x: 720 }} size={isMobile ? "small" : "middle"} />
       </Card>
       <Card title={t('traffic.connections')}>
         <Table
@@ -133,7 +135,7 @@ const TrafficPage: React.FC = () => {
           dataSource={connections}
           columns={connColumns}
           scroll={{ x: 800 }}
-          size="middle"
+          size={isMobile ? "small" : "middle"}
           pagination={{ pageSize: 20 }}
         />
       </Card>

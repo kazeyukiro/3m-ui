@@ -43,19 +43,20 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
 
   return (
     <Header
+      className="app-header-bar"
       style={{
-        padding: isMobile ? '0 12px' : '0 24px',
+        padding: isMobile ? '0 8px' : '0 24px',
         background: 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 8,
-        height: 64,
-        lineHeight: '64px',
+        height: isMobile ? 52 : 64,
+        lineHeight: isMobile ? '52px' : '64px',
       }}
     >
       {isMobile ? (
-        <Button type="text" icon={<MenuOutlined />} onClick={onOpenMobileNav} aria-label="menu" />
+        <Button type="text" size="large" icon={<MenuOutlined />} onClick={onOpenMobileNav} aria-label="Open menu" />
       ) : (
         <Button
           type="text"

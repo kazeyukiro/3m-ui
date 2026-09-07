@@ -12,6 +12,7 @@ import {
 import { fetchListeners, Listener } from '../api/nodes';
 import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
 import { useNavigate } from 'react-router-dom';
 import { copyText } from '../utils/clipboard';
 import { formatBytes } from '../utils/format';
@@ -19,6 +20,7 @@ import { formatBytes } from '../utils/format';
 const Users: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [data, setData] = useState<ProxyUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -377,7 +379,7 @@ const Users: React.FC = () => {
           </Space>
         }
       >
-        <Table scroll={{ x: 960 }} size="middle" dataSource={filtered} columns={columns} rowKey="id" loading={loading} rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} />
+        <Table scroll={{ x: 960 }} size={isMobile ? "small" : "middle"} dataSource={filtered} columns={columns} rowKey="id" loading={loading} rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} />
       </Card>
 
       <Modal

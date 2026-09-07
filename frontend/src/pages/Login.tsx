@@ -22,7 +22,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f5', padding: '16px 0' }}>
+    <div className="login-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f5', padding: '16px 0' }}>
       <Card style={{ width: '100%', maxWidth: 420, margin: '0 16px' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <img

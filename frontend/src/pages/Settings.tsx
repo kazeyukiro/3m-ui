@@ -212,6 +212,7 @@ const Settings: React.FC = () => {
       <p style={{ color: 'rgba(0,0,0,0.45)', marginBottom: 16 }}>{t('settings.subtitle')}</p>
 
       <Layout
+        className="settings-layout"
         style={{
           background: 'transparent',
           minHeight: 480,
@@ -219,6 +220,7 @@ const Settings: React.FC = () => {
         }}
       >
         <Sider
+          className="settings-sider"
           width={220}
           theme="light"
           style={{
@@ -231,6 +233,7 @@ const Settings: React.FC = () => {
           collapsedWidth={0}
         >
           <Menu
+            className="settings-menu"
             mode="inline"
             selectedKeys={[section]}
             items={menuItems}
