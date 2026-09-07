@@ -149,7 +149,19 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Resolved release tag: ${TAG} @ ${GITHUB_SHA}"
+          case "$TAG" in
+            pre|test-*)
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+              echo "make_latest=false" >> "$GITHUB_OUTPUT"
+              echo "release_name=Pre-release (rolling)" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+              echo "make_latest=true" >> "$GITHUB_OUTPUT"
+              echo "release_name=${TAG}" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          echo "Resolved release tag: ${TAG} @ ${GITHUB_SHA} (prerelease=$([ "$TAG" = pre ] && echo true || echo false))"
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
       - name: Sign SHA256SUMS (keyless OIDC)
@@ -177,15 +189,17 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: Pre-release (rolling)
+          name: ${{ steps.meta.outputs.release_name }}
           generate_release_notes: true
-          prerelease: true
-          make_latest: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          make_latest: ${{ steps.meta.outputs.make_latest }}
           # Overwrite assets on the same tag instead of accumulating duplicates
           body: |
             ## Packages
 
-            **Channel: rolling Pre-release** (fixed tag `pre`; each test push overwrites this release).
+            **Tag:** `${{ steps.meta.outputs.tag }}`
+
+            See release notes for the changelog.
 
             Official frontend: **Ant Design**.
 
