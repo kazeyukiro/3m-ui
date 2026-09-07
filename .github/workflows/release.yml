@@ -3,17 +3,24 @@ name: Release · Ant Design
 # works on glibc and musl (Alpine), old and new distros, without system libsqlite3.
 on:
   push:
+    branches:
+      - test
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag (e.g. v1.0.0). Required for manual runs on a branch.
+        description: Tag name. Empty on test branch = rolling tag "pre". Prefer leave empty.
         required: false
         type: string
 permissions:
   contents: write
   id-token: write   # required for cosign keyless OIDC signing
+
+# One rolling Pre-release at a time (tag: pre). Avoid parallel duplicate drafts.
+concurrency:
+  group: release-pre-rolling
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -128,14 +135,21 @@ jobs:
       - name: Resolve tag
         id: meta
         run: |
+          set -euo pipefail
+          # Rolling Pre-release: single tag "pre", assets overwritten each push to test.
           if [ -n "${{ inputs.tag }}" ]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            TAG="${{ inputs.tag }}"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            TAG="${{ github.ref_name }}"
+          elif [ "${{ github.ref_name }}" = "test" ]; then
+            TAG="pre"
           else
-            echo "tag is required for workflow_dispatch on a branch" >&2
+            echo "tag is required for workflow_dispatch on a non-test branch" >&2
             exit 1
           fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: ${TAG} @ ${GITHUB_SHA}"
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
       - name: Sign SHA256SUMS (keyless OIDC)
@@ -152,13 +166,26 @@ jobs:
             SHA256SUMS
           echo "=== Signature artifacts ==="
           ls -la SHA256SUMS.pem SHA256SUMS.sig
+      - name: Point rolling tag at this commit
+        if: steps.meta.outputs.tag == 'pre'
+        run: |
+          set -euo pipefail
+          git fetch --tags origin 2>/dev/null || true
+          git tag -f pre "${GITHUB_SHA}"
+          git push -f origin refs/tags/pre
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Pre-release (rolling)
           generate_release_notes: true
+          prerelease: true
+          make_latest: false
+          # Overwrite assets on the same tag instead of accumulating duplicates
           body: |
             ## Packages
+
+            **Channel: rolling Pre-release** (fixed tag `pre`; each test push overwrites this release).
 
             Official frontend: **Ant Design**.
 

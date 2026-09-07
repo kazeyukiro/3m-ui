@@ -49,6 +49,7 @@ Options:
   -h, --help         Show this help
 
 Environment:
+  THREE_M_UI_CHANNEL=prerelease  Prefer pre-release (default on test scripts)
   THREE_M_UI_STATIC=1      Prefer static build (default)
   THREE_M_UI_INSECURE=1    Bypass SHA256SUMS verification (NOT recommended; supply-chain risk)
 
@@ -64,7 +65,7 @@ for arg in "$@"; do
     --static) STATIC=1;;
     --dynamic) STATIC=1;; # official artifacts are always static pure-Go
     -h|--help) usage; exit 0;;
-    v[0-9]*|manual-[0-9]*) [ -z "$REQUESTED_VERSION" ] || err "Only one version may be specified."; REQUESTED_VERSION="$arg";;
+    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|pre) [ -z "$REQUESTED_VERSION" ] || err "Only one version may be specified."; REQUESTED_VERSION="$arg";;
     *) err "Unknown option: $arg";;
   esac
 done
@@ -110,15 +111,52 @@ install_deps(){
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
 
 latest_tag(){
-  tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${1}/releases/latest" 2>/dev/null | sed 's#.*/##; s/[[:space:][:cntrl:]]*$//')" || true
-  case "$tag" in
-    v[0-9]*|manual-[0-9]*) printf '%s' "$tag";;
-    *)
-      tag="$(curl -fsSL "${1}/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)" || true
-      printf '%s' "$tag"
-      ;;
-  esac
+  # test-branch scripts: prefer fixed rolling Pre-release tag "pre", then other prereleases, then /releases/latest.
+  base="${1:-https://github.com/$REPO}"
+  repo_path="${base#https://github.com/}"
+  repo_path="${repo_path%/}"
+  # 1) Rolling pre tag (single mutable Pre-release)
+  if [ "$repo_path" = "kazeyukiro/3m-ui" ] || [ "$repo_path" = "${REPO:-kazeyukiro/3m-ui}" ]; then
+    code="$(curl -fsSLI -o /dev/null -w '%{http_code}' "https://github.com/${repo_path}/releases/download/pre/SHA256SUMS" 2>/dev/null || true)"
+    if [ "$code" = "200" ]; then
+      printf '%s' "pre"
+      return 0
+    fi
+    # API fallback for tag existence
+    if curl -fsSL -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/${repo_path}/releases/tags/pre" >/dev/null 2>&1; then
+      printf '%s' "pre"
+      return 0
+    fi
+  fi
+  api="https://api.github.com/repos/${repo_path}/releases?per_page=30"
+  body="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" 2>/dev/null)" || body=""
+  tag=""
+  if [ -n "$body" ]; then
+    tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
+      echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
+      echo "$block" | grep -q '"prerelease"[[:space:]]*:[[:space:]]*true' || continue
+      echo "$block" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+      break
+    done)"
+    if [ -z "$tag" ]; then
+      tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
+        echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
+        echo "$block" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+        break
+      done)"
+    fi
+  fi
+  if [ -z "$tag" ]; then
+    tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$base/releases/latest" 2>/dev/null | sed 's#.*/##; s/[[:space:][:cntrl:]]*$//')" || true
+    case "$tag" in
+      http*|HTML|*latest*|"") tag="$(curl -fsSL "$base/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)" || true;;
+    esac
+  fi
+  printf '%s' "$tag"
 }
+
+
 
 random_hex(){ dd if=/dev/urandom bs=1 count="${1:-32}" 2>/dev/null | od -An -tx1 | tr -d ' \n'; }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/hwid"
 	"gorm.io/gorm"
 )
 
@@ -43,6 +44,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/:id/reset-traffic", h.ResetTraffic)
 	rg.GET("/:id/subscription", h.GetSubscription)
 	rg.POST("/:id/subscription/rotate", h.RotateSubscription)
+	rg.GET("/:id/hwid-devices", h.ListHWIDDevices)
+	rg.DELETE("/:id/hwid-devices", h.ClearHWIDDevices)
+	rg.DELETE("/:id/hwid-devices/:deviceId", h.DeleteHWIDDevice)
 }
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -369,14 +373,13 @@ func (h *Handler) UnbindTelegram(c *gin.Context) {
 	c.JSON(http.StatusOK, ToSafeUser(u))
 }
 
-
 func (h *Handler) BindRemoteNodes(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
 		return
 	}
 	var req struct {
-		MirrorIDs []uint `json:"mirror_ids"`
+		MirrorIDs     []uint `json:"mirror_ids"`
 		RemoteNodeIDs []uint `json:"remote_node_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -405,4 +408,50 @@ func (h *Handler) ListRemoteNodes(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"mirror_ids": ids})
+}
+
+func (h *Handler) ListHWIDDevices(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if h.svc == nil || h.svc.DB() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "service unavailable"})
+		return
+	}
+	rows, err := hwid.List(h.svc.DB(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": rows})
+}
+
+func (h *Handler) DeleteHWIDDevice(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	did, err := strconv.ParseUint(c.Param("deviceId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid device id"})
+		return
+	}
+	if err := hwid.Delete(h.svc.DB(), id, uint(did)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) ClearHWIDDevices(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := hwid.DeleteAll(h.svc.DB(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

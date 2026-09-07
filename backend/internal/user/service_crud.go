@@ -53,6 +53,7 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		UUID:              uuid,
 		TrafficLimit:      in.TrafficLimit,
 		IPLimit:           max0(in.IPLimit),
+		HWIDLimit:         max0(in.HWIDLimit),
 		Remark:            strings.TrimSpace(in.Remark),
 		ExpireTime:        expire,
 		Enabled:           enabled,
@@ -97,6 +98,9 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	}
 	if in.IPLimit != nil {
 		u.IPLimit = max0(*in.IPLimit)
+	}
+	if in.HWIDLimit != nil {
+		u.HWIDLimit = max0(*in.HWIDLimit)
 	}
 	if in.Remark != nil {
 		u.Remark = strings.TrimSpace(*in.Remark)

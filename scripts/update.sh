@@ -23,10 +23,10 @@ for arg in "$@"; do
     --no-mihomo) UPDATE_MIHOMO=0;;
     -h|--help)
       printf '%s\n' 'Usage: update.sh [VERSION] [--yes] [--no-mihomo]'
-      printf '%s\n' '  VERSION   optional tag such as v1.0.0 (default: latest)'
+      printf '%s\n' '  VERSION   optional tag such as v1.0.0 (default: newest pre-release (test channel))'
       exit 0
       ;;
-    v[0-9]*|manual-[0-9]*)
+    v[0-9]*|manual-[0-9]*|test-[0-9a-zA-Z._-]*|pre)
       [ -z "$REQUESTED_VERSION" ] || { echo "Error: only one version may be specified." >&2; exit 1; }
       REQUESTED_VERSION="$arg"
       ;;
@@ -54,12 +54,52 @@ arch(){
 init_system(){ if [ -d /run/systemd/system ] && command_exists systemctl; then echo systemd; elif command_exists rc-service; then echo openrc; else echo unsupported; fi; }
 download(){ if command_exists curl; then curl -fL --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" -o "$2"; else wget -qO "$2" "$1"; fi; }
 latest_tag(){
-  tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$1/releases/latest" 2>/dev/null | sed 's#.*/##; s/[[:space:][:cntrl:]]*$//')" || true
-  case "$tag" in
-    v[0-9]*|manual-[0-9]*) printf '%s' "$tag";;
-    *) curl -fsSL "$1/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 || true;;
-  esac
+  # test-branch scripts: prefer fixed rolling Pre-release tag "pre", then other prereleases, then /releases/latest.
+  base="${1:-https://github.com/$REPO}"
+  repo_path="${base#https://github.com/}"
+  repo_path="${repo_path%/}"
+  # 1) Rolling pre tag (single mutable Pre-release)
+  if [ "$repo_path" = "kazeyukiro/3m-ui" ] || [ "$repo_path" = "${REPO:-kazeyukiro/3m-ui}" ]; then
+    code="$(curl -fsSLI -o /dev/null -w '%{http_code}' "https://github.com/${repo_path}/releases/download/pre/SHA256SUMS" 2>/dev/null || true)"
+    if [ "$code" = "200" ]; then
+      printf '%s' "pre"
+      return 0
+    fi
+    # API fallback for tag existence
+    if curl -fsSL -H 'Accept: application/vnd.github+json' \
+      "https://api.github.com/repos/${repo_path}/releases/tags/pre" >/dev/null 2>&1; then
+      printf '%s' "pre"
+      return 0
+    fi
+  fi
+  api="https://api.github.com/repos/${repo_path}/releases?per_page=30"
+  body="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$api" 2>/dev/null)" || body=""
+  tag=""
+  if [ -n "$body" ]; then
+    tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
+      echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
+      echo "$block" | grep -q '"prerelease"[[:space:]]*:[[:space:]]*true' || continue
+      echo "$block" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+      break
+    done)"
+    if [ -z "$tag" ]; then
+      tag="$(printf '%s' "$body" | tr '\n' ' ' | sed 's/},[[:space:]]*{/\n/g' | while IFS= read -r block; do
+        echo "$block" | grep -q '"draft"[[:space:]]*:[[:space:]]*true' && continue
+        echo "$block" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+        break
+      done)"
+    fi
+  fi
+  if [ -z "$tag" ]; then
+    tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$base/releases/latest" 2>/dev/null | sed 's#.*/##; s/[[:space:][:cntrl:]]*$//')" || true
+    case "$tag" in
+      http*|HTML|*latest*|"") tag="$(curl -fsSL "$base/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)" || true;;
+    esac
+  fi
+  printf '%s' "$tag"
 }
+
+
 
 file_sha256(){
   f="$1"
@@ -397,7 +437,32 @@ while [ "$i" -lt 30 ]; do
   sleep 1
 done
 if [ "$ready" -ne 1 ]; then
-  echo "[ERROR] Service not active after ~15s; restoring backup. Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
+  echo "[ERROR] Service not active after ~30s; restoring backup. Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
+  stop
+  rm -rf "$BASE"
+  cp -a "$backup/base" "$BASE"
+  [ -f "$backup/3m-ui.db" ] && cp -p "$backup/3m-ui.db" "$DATA_DIR/3m-ui.db" || true
+  [ -f "$backup/mihomo" ] && install -m 0755 "$backup/mihomo" "$MIHOMO_BIN" || true
+  start || true
+  exit 1
+fi
+
+# HTTP probe: process active is not enough — API must answer (avoids "service up but panel dead").
+panel_port=$(awk '/^[[:space:]]*port:/ {print $2; exit}' "$CONFIG_DIR/config.yaml" 2>/dev/null || echo "8080")
+panel_port=${panel_port:-8080}
+http_ok=0
+j=0
+while [ "$j" -lt 20 ]; do
+  j=$((j + 1))
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3     "http://127.0.0.1:${panel_port}/api/v1/health" 2>/dev/null || true)"
+  case "$code" in
+    200|204|401|403) http_ok=1; break ;;
+  esac
+  sleep 1
+done
+if [ "$http_ok" -ne 1 ]; then
+  echo "[ERROR] Service active but panel HTTP health failed on 127.0.0.1:${panel_port}; restoring backup." >&2
+  echo "        Check: journalctl -u 3m-ui -n 80 --no-pager" >&2
   stop
   rm -rf "$BASE"
   cp -a "$backup/base" "$BASE"

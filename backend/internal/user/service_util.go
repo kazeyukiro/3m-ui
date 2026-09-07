@@ -31,6 +31,7 @@ type SafeUser struct {
 	Enabled       bool       `json:"enabled"`
 	Blocked       bool       `json:"blocked"`
 	IPLimit       int        `json:"ip_limit"`
+	HWIDLimit     int        `json:"hwid_limit"`
 	Remark        string     `json:"remark"`
 	SubToken      string     `json:"sub_token"`
 	TelegramID    int64      `json:"telegram_id"`
@@ -52,6 +53,7 @@ func ToSafeUser(u *models.ProxyUser) SafeUser {
 		Enabled:       u.Enabled,
 		Blocked:       !IsCredentialActive(*u),
 		IPLimit:       u.IPLimit,
+		HWIDLimit:     u.HWIDLimit,
 		Remark:        u.Remark,
 		SubToken:      u.SubToken,
 		TelegramID:    u.TelegramID,

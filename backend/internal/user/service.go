@@ -49,6 +49,7 @@ type CreateInput struct {
 	UUID         string     `json:"uuid"`
 	TrafficLimit int64      `json:"traffic_limit"`
 	IPLimit      int        `json:"ip_limit"`
+	HWIDLimit    int        `json:"hwid_limit"`
 	Remark       string     `json:"remark"`
 	ExpireTime   *time.Time `json:"expire_time"`
 	Enabled      *bool      `json:"enabled"`
@@ -62,6 +63,7 @@ type UpdateInput struct {
 	UUID         string     `json:"uuid"`
 	TrafficLimit *int64     `json:"traffic_limit"`
 	IPLimit      *int       `json:"ip_limit"`
+	HWIDLimit    *int       `json:"hwid_limit"`
 	Remark       *string    `json:"remark"`
 	ExpireTime   *time.Time `json:"expire_time"`
 	Enabled      *bool      `json:"enabled"`
@@ -70,6 +72,13 @@ type UpdateInput struct {
 }
 
 type Credential struct{ Username, Password, UUID string }
+
+func (s *Service) DB() *gorm.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
 
 func (s *Service) GetAll() ([]models.ProxyUser, error) {
 	var users []models.ProxyUser

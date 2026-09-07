@@ -67,6 +67,7 @@ const Users: React.FC = () => {
         enabled: !!values.enabled,
         traffic_limit: trafficGB && trafficGB > 0 ? Math.round(Number(trafficGB) * 1024 * 1024 * 1024) : 0,
         ip_limit: values.ip_limit != null ? Number(values.ip_limit) : 0,
+        hwid_limit: values.hwid_limit != null ? Number(values.hwid_limit) : 0,
         remark: values.remark || '',
       };
       if (values.password) payload.password = values.password;
@@ -128,6 +129,7 @@ const Users: React.FC = () => {
       expire_time: exp,
       password: undefined,
       ip_limit: record.ip_limit || 0,
+      hwid_limit: record.hwid_limit || 0,
       remark: record.remark || '',
     });
     setModalOpen(true);
@@ -366,7 +368,7 @@ const Users: React.FC = () => {
               onClick={() => {
                 setEditing(null);
                 form.resetFields();
-                form.setFieldsValue({ enabled: true, ip_limit: 0 });
+                form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0 });
                 setModalOpen(true);
               }}
             >
@@ -409,6 +411,13 @@ const Users: React.FC = () => {
             tooltip={t('users.ipLimitHint') || '0 = unlimited concurrent client IPs'}
           >
             <InputNumber min={0} step={1} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="hwid_limit"
+            label={t('users.hwidLimit') || 'HWID device limit'}
+            tooltip={t('users.hwidLimitHint') || '0 = unlimited. Compatible with Happ x-hwid import headers (Remnawave-style).'}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="remark" label={t('users.remark') || 'Remark'}>
             <Input maxLength={255} />
