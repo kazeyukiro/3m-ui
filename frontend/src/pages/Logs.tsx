@@ -29,7 +29,7 @@ const Logs: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title={t('logs.title')} />
+      <PageHeader title={t('logs.title')} subtitle={t('logs.subtitle')} />
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ReloadOutlined />} onClick={load}>{t('common.refresh')}</Button>
         <Button icon={<ClearOutlined />} onClick={() => setLogs([])}>{t('logs.clear')}</Button>

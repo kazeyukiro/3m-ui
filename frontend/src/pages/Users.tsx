@@ -310,7 +310,7 @@ const Users: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title={t('users.title')} subtitle={t('users.subtitle') || undefined} />
+      <PageHeader title={t('users.title')} subtitle={t('users.subtitle', 'Manage accounts, traffic limits, node bindings and subscriptions.')} />
       <Card
         extra={
           <Space wrap style={{ width: isMobile ? '100%' : undefined }}>

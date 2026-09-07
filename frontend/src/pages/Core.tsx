@@ -41,7 +41,7 @@ export default function Core() {
 
   return (
     <div>
-      <PageHeader title={t('core.title')} />
+      <PageHeader title={t('core.title')} subtitle={t('core.subtitle')} />
       {loading ? <Spin /> : (
         <Card>
           <Space direction="vertical" style={{ width: '100%' }} size="large">

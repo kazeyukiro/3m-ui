@@ -2,7 +2,7 @@ import React from 'react';
 import { Typography, Space } from 'antd';
 import useIsMobile from '../hooks/useIsMobile';
 
-const { Title, Paragraph } = Typography;
+const { Title } = Typography;
 
 /** Consistent page title + optional subtitle/actions for mobile & desktop. */
 const PageHeader: React.FC<{
@@ -11,6 +11,11 @@ const PageHeader: React.FC<{
   extra?: React.ReactNode;
 }> = ({ title, subtitle, extra }) => {
   const isMobile = useIsMobile();
+  const sub =
+    subtitle === undefined || subtitle === null || subtitle === false || subtitle === ''
+      ? null
+      : subtitle;
+
   return (
     <div
       className="page-header"
@@ -27,10 +32,19 @@ const PageHeader: React.FC<{
         <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
           {title}
         </Title>
-        {subtitle ? (
-          <Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: isMobile ? 13 : 14 }}>
-            {subtitle}
-          </Paragraph>
+        {sub != null ? (
+          <p
+            className="page-header-subtitle"
+            style={{
+              margin: '6px 0 0',
+              fontSize: isMobile ? 13 : 14,
+              lineHeight: 1.45,
+              opacity: 0.7,
+              color: 'var(--ant-color-text-secondary, inherit)',
+            }}
+          >
+            {sub}
+          </p>
         ) : null}
       </div>
       {extra ? (

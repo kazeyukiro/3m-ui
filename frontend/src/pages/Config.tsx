@@ -175,7 +175,7 @@ const ConfigPage: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title={t('config.title')} />
+      <PageHeader title={t('config.title')} subtitle={t('config.subtitle')} />
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <TabPane tab={t('config.visual') || 'Visual'} key="visual">
           <Card

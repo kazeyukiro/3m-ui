@@ -45,8 +45,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title={t('dashboard.title')} />
-      <p style={{ color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.subtitle')}</p>
+      <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12} lg={8}>
           <Card title={t('dashboard.users') || 'Users'}>

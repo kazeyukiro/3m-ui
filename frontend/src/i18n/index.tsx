@@ -7,9 +7,23 @@ type Translations = Record<string, any>;
 
 const translations: Record<Locale, Translations> = { en, zh };
 
+function resolveKey(dict: Translations | undefined, key: string): string | undefined {
+  if (!dict || !key) return undefined;
+  const parts = key.split('.');
+  let value: any = dict;
+  for (const k of parts) {
+    if (value && typeof value === 'object' && k in value) {
+      value = value[k];
+    } else {
+      return undefined;
+    }
+  }
+  return typeof value === 'string' ? value : undefined;
+}
+
 interface I18nContextType {
   locale: Locale;
-  /** Resolve a dotted key. Optional fallback is used when the key is missing. */
+  /** Resolve a dotted key. Falls back to English, then optional fallback, then the key itself. */
   t: (key: string, fallback?: string) => string;
   setLocale: (locale: Locale) => void;
 }
@@ -30,18 +44,14 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const t = useCallback(
     (key: string, fallback?: string) => {
-      const keys = key.split('.');
-      let value: any = translations[locale];
-      for (const k of keys) {
-        if (value && typeof value === 'object' && k in value) {
-          value = value[k];
-        } else {
-          return fallback ?? key;
-        }
-      }
-      return typeof value === 'string' ? value : (fallback ?? key);
+      return (
+        resolveKey(translations[locale], key) ??
+        (locale !== 'en' ? resolveKey(translations.en, key) : undefined) ??
+        fallback ??
+        key
+      );
     },
-    [locale]
+    [locale],
   );
 
   return (

@@ -134,7 +134,7 @@ const columns = [
     { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
   ];
   return <div>
-    <PageHeader title={t('listeners.title')} />
+    <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
     <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
             <Spin spinning={loading}>
               <div className="mobile-entity-list">

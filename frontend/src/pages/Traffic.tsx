@@ -99,7 +99,7 @@ const TrafficPage: React.FC = () => {
   return (
     <div>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
-        <PageHeader title={t('traffic.title')} />
+        <PageHeader title={t('traffic.title')} subtitle={t('traffic.subtitle')} />
         <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
           {t('common.refresh')}
         </Button>

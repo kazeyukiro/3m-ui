@@ -163,8 +163,7 @@ const ClusterPage: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title={t('cluster.title')} />
-      <p style={{ opacity: 0.65 }}>{t('cluster.subtitle')}</p>
+      <PageHeader title={t('cluster.title')} subtitle={t('cluster.subtitle')} />
       <Card extra={<Space>
         <Button onClick={async () => {
           try { setData(await healthAllCluster()); message.success(t('cluster.healthAllDone') || 'Health check done'); }

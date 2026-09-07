@@ -68,8 +68,7 @@ const RoutingPage: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title={t('routing.title')} />
-      <p style={{ opacity: 0.65 }}>{t('routing.subtitle')}</p>
+      <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
       <Card title={t('routing.groups')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setGroupOpen(true)}>{t('routing.addGroup')}</Button>} style={{ marginBottom: 16 }}>
         <Table size={isMobile ? "small" : "middle"} loading={loading} rowKey={(_, i) => String(i)} dataSource={groups} columns={[
           { title: t('common.name'), dataIndex: 'name' },
