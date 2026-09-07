@@ -55,7 +55,6 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         title={null}
         closable={false}
       >
-        <div className="mobile-nav-brand">3M-UI</div>
         <SidebarMenu onNavigate={() => setDrawerOpen(false)} />
       </Drawer>
     </Layout>
