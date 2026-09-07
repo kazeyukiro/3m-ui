@@ -38,6 +38,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             borderRadius: borderRadiusLG,
             overflow: 'auto',
             minWidth: 0,
+            maxWidth: isMobile ? undefined : 1400,
           }}
         >
           {children}

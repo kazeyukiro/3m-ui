@@ -4,6 +4,8 @@ import { ReloadOutlined, ClearOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../api/client';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 
 interface LogEntry { timestamp: string; level: string; payload: string; }
 
@@ -11,6 +13,7 @@ const levelColor: Record<string, string> = { debug: 'default', info: 'blue', war
 
 const Logs: React.FC = () => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -26,7 +29,7 @@ const Logs: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('logs.title')}</h2>
+      <PageHeader title={t('logs.title')} />
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ReloadOutlined />} onClick={load}>{t('common.refresh')}</Button>
         <Button icon={<ClearOutlined />} onClick={() => setLogs([])}>{t('logs.clear')}</Button>

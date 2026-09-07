@@ -12,6 +12,7 @@ import {
 import { fetchListeners, Listener } from '../api/nodes';
 import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
 import { useI18n } from '../i18n';
+import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { useNavigate } from 'react-router-dom';
 import { copyText } from '../utils/clipboard';
@@ -309,7 +310,7 @@ const Users: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('users.title')}</h2>
+      <PageHeader title={t('users.title')} subtitle={t('users.subtitle') || undefined} />
       <Card
         extra={
           <Space wrap style={{ width: isMobile ? '100%' : undefined }}>

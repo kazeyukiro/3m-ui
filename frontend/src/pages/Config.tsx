@@ -7,6 +7,8 @@ import {
   ProxyEntry,
 } from '../api/config';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -15,6 +17,7 @@ const PROXY_TYPES = ['shadowsocks', 'vmess', 'vless', 'trojan', 'hysteria2', 'tu
 
 const ConfigPage: React.FC = () => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [proxies, setProxies] = useState<ProxyEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -172,7 +175,7 @@ const ConfigPage: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('config.title') || 'Config engine'}</h2>
+      <PageHeader title={t('config.title')} />
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <TabPane tab={t('config.visual') || 'Visual'} key="visual">
           <Card
@@ -267,7 +270,7 @@ const ConfigPage: React.FC = () => {
           form.resetFields();
         }}
         onOk={() => form.submit()}
-        destroyOnClose
+        destroyOnClose width={isMobile ? '100%' : 640} style={isMobile ? { top: 8 } : undefined}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
           <Form.Item name="name" label={t('config.proxyName')} rules={[{ required: true }]}>

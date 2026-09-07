@@ -19,6 +19,7 @@ import {
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
+import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { useThemeStore } from '../stores/themeStore';
@@ -210,8 +211,7 @@ const Settings: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('settings.title')}</h2>
-      <p style={{ color: 'rgba(0,0,0,0.45)', marginBottom: 16 }}>{t('settings.subtitle')}</p>
+      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle') || undefined} />
 
       {isMobile && (
         <Select

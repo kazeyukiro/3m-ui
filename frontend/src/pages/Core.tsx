@@ -3,11 +3,14 @@ import { Alert, Button, Card, Descriptions, Space, Spin, message } from 'antd';
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import client from '../api/client';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 
 type Status = { running: boolean; version: string; pid: number; uptime: string };
 
 export default function Core() {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -38,7 +41,7 @@ export default function Core() {
 
   return (
     <div>
-      <h2>{t('core.title')}</h2>
+      <PageHeader title={t('core.title')} />
       {loading ? <Spin /> : (
         <Card>
           <Space direction="vertical" style={{ width: '100%' }} size="large">

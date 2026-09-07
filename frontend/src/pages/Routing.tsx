@@ -3,9 +3,12 @@ import { Card, Table, Button, Space, Modal, Form, Input, InputNumber, Select, me
 import { PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
 import { fetchGroups, saveGroups, fetchRules, saveRules, GroupEntry } from '../api/routing';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 
 const RoutingPage: React.FC = () => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [groups, setGroups] = useState<GroupEntry[]>([]);
   const [rulesText, setRulesText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -65,10 +68,10 @@ const RoutingPage: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('routing.title')}</h2>
+      <PageHeader title={t('routing.title')} />
       <p style={{ opacity: 0.65 }}>{t('routing.subtitle')}</p>
       <Card title={t('routing.groups')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setGroupOpen(true)}>{t('routing.addGroup')}</Button>} style={{ marginBottom: 16 }}>
-        <Table loading={loading} rowKey={(_, i) => String(i)} dataSource={groups} columns={[
+        <Table size={isMobile ? "small" : "middle"} loading={loading} rowKey={(_, i) => String(i)} dataSource={groups} columns={[
           { title: t('common.name'), dataIndex: 'name' },
           { title: t('common.type'), dataIndex: 'type' },
           { title: t('routing.proxies'), dataIndex: 'proxies', render: (v: string[]) => (v || []).join(', ') },
@@ -83,7 +86,7 @@ const RoutingPage: React.FC = () => {
         <Input.TextArea rows={12} value={rulesText} onChange={(e) => setRulesText(e.target.value)} placeholder={'GEOIP,CN,DIRECT\nMATCH,PROXY'} />
         <div style={{ marginTop: 8, opacity: 0.65, fontSize: 12 }}>{t('routing.rulesHint')}</div>
       </Card>
-      <Modal open={groupOpen} title={t('routing.addGroup')} onCancel={() => setGroupOpen(false)} onOk={() => form.submit()} destroyOnClose>
+      <Modal open={groupOpen} title={t('routing.addGroup')} onCancel={() => setGroupOpen(false)} onOk={() => form.submit()} destroyOnClose width={isMobile ? '100%' : 520} style={isMobile ? { top: 8 } : undefined}>
         <Form form={form} layout="vertical" onFinish={onAddGroup} initialValues={{ type: 'select' }}>
           <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="type" label={t('common.type')}>

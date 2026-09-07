@@ -5,6 +5,8 @@ import {
 import { CopyOutlined, QrcodeOutlined, ReloadOutlined, LinkOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 import { copyText } from '../utils/clipboard';
 import {
   fetchUsers, fetchUserSubscription, rotateUserSubscription, fetchUserNodes,
@@ -23,6 +25,7 @@ function withTarget(base: string, target: string) {
 
 const CopyField: React.FC<{ label: string; value: string; qr?: boolean }> = ({ label, value, qr }) => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   if (!value) return null;
   return (
     <div style={{ marginBottom: 16 }}>
@@ -216,13 +219,7 @@ const SharePage: React.FC = () => {
 
   return (
     <div>
-      <Title level={3} style={{ marginTop: 0 }}>
-        <QrcodeOutlined style={{ marginRight: 8 }} />
-        {t('share.title') || 'Share / Subscription'}
-      </Title>
-      <Paragraph type="secondary">
-        {t('share.subtitle') || 'Unified view: user subscription links and per-node share URIs.'}
-      </Paragraph>
+      <PageHeader title={t('share.title')} subtitle={t('share.subtitle') || undefined} />
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap style={{ width: '100%' }} align="center">

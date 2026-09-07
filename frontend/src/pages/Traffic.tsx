@@ -3,6 +3,7 @@ import { Card, Table, Tag, Space, Statistic, Row, Col, message, Button } from 'a
 import { ReloadOutlined } from '@ant-design/icons';
 import { fetchTrafficStatus, fetchTrafficUsers, fetchConnections, UserTraffic, ConnectionView, TrafficStatus } from '../api/traffic';
 import { useI18n } from '../i18n';
+import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { formatBytes } from '../utils/format';
 
@@ -98,7 +99,7 @@ const TrafficPage: React.FC = () => {
   return (
     <div>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>{t('traffic.title')}</h2>
+        <PageHeader title={t('traffic.title')} />
         <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
           {t('common.refresh')}
         </Button>

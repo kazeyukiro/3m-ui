@@ -10,6 +10,7 @@ import {
   RemoteServer,
 } from '../api/cluster';
 import { useI18n } from '../i18n';
+import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 
 const ClusterPage: React.FC = () => {
@@ -162,7 +163,7 @@ const ClusterPage: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('cluster.title')}</h2>
+      <PageHeader title={t('cluster.title')} />
       <p style={{ opacity: 0.65 }}>{t('cluster.subtitle')}</p>
       <Card extra={<Space>
         <Button onClick={async () => {
@@ -173,7 +174,7 @@ const ClusterPage: React.FC = () => {
       </Space>}>
         <Table rowKey="id" loading={loading} dataSource={data} columns={columns} scroll={{ x: 720 }} size={isMobile ? "small" : "middle"} />
       </Card>
-      <Modal open={open} title={editing ? t('cluster.edit') : t('cluster.create')} onCancel={() => setOpen(false)} onOk={() => form.submit()} destroyOnClose>
+      <Modal open={open} title={editing ? t('cluster.edit') : t('cluster.create')} onCancel={() => setOpen(false)} onOk={() => form.submit()} destroyOnClose width={isMobile ? '100%' : 520} style={isMobile ? { top: 8 } : undefined}>
         <Form form={form} layout="vertical" onFinish={onSubmit}>
           <Form.Item name="name" label={t('cluster.name')} rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="base_url" label={t('cluster.baseUrl')} rules={[{ required: true }]}><Input placeholder="https://panel.example.com:8080" /></Form.Item>
@@ -182,7 +183,7 @@ const ClusterPage: React.FC = () => {
           <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked"><Switch /></Form.Item>
         </Form>
       </Modal>
-      <Modal open={!!remoteNodes} onCancel={() => { setRemoteNodes(null); setRemoteServerId(null); }} footer={null} title={t('cluster.remoteNodes') || 'Remote nodes'} width={800}>
+      <Modal open={!!remoteNodes} onCancel={() => { setRemoteNodes(null); setRemoteServerId(null); }} footer={null} title={t('cluster.remoteNodes') || 'Remote nodes'} width={isMobile ? '100%' : 800}>
         <Form form={remoteForm} layout="inline" onFinish={createRemoteNode} style={{ marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
           <Form.Item name="name" rules={[{ required: true }]}><Input placeholder="name" /></Form.Item>
           <Form.Item name="protocol" initialValue="vless" rules={[{ required: true }]}>
@@ -223,7 +224,7 @@ const ClusterPage: React.FC = () => {
       ) : null} title={t('cluster.dashboard') || 'Remote dashboard'} width={720}>
         <pre style={{ maxHeight: 420, overflow: 'auto', fontSize: 12 }}>{dashData ? JSON.stringify(dashData, null, 2) : ''}</pre>
       </Modal>
-      <Modal open={usersOpen} onCancel={() => { setUsersOpen(false); setRemoteUsers([]); }} footer={null} title={t('cluster.users') || 'Remote users'} width={800}>
+      <Modal open={usersOpen} onCancel={() => { setUsersOpen(false); setRemoteUsers([]); }} footer={null} title={t('cluster.users') || 'Remote users'} width={isMobile ? '100%' : 800}>
         <Table size="small" rowKey={(r: any) => r.id || r.username} dataSource={remoteUsers} pagination={{ pageSize: 10 }}
           columns={[
             { title: 'ID', dataIndex: 'id', width: 60 },

@@ -3,6 +3,8 @@ import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, message } from
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
 import { formatBytes } from '../utils/format';
 
 const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
@@ -15,6 +17,7 @@ const clampPct = (v: unknown) => {
 
 const Dashboard: React.FC = () => {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState(false);
 
@@ -42,7 +45,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <h2>{t('dashboard.title')}</h2>
+      <PageHeader title={t('dashboard.title')} />
       <p style={{ color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.subtitle')}</p>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12} lg={8}>

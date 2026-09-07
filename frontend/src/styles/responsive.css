@@ -1,16 +1,38 @@
-/* Global mobile-friendly baseline for 3m-ui */
+/* 3m-ui global layout polish — mobile + desktop */
+
 html, body, #root {
   max-width: 100vw;
   overflow-x: hidden;
 }
 
-/* Safe area for notched phones */
 body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+/* Desktop readability */
+@media (min-width: 768px) {
+  .app-page-content {
+    max-width: 1400px;
+  }
+  .page-header h3.ant-typography {
+    letter-spacing: -0.01em;
+  }
+  .ant-card {
+    border-radius: 10px;
+  }
+  .ant-table-wrapper {
+    border-radius: 8px;
+  }
+  /* Comfortable row density */
+  .ant-table-thead > tr > th {
+    font-weight: 600;
+  }
+  .ant-card + .ant-card {
+    margin-top: 16px;
+  }
+}
+
 @media (max-width: 767px) {
-  /* Prevent iOS zoom on form focus */
   input.ant-input,
   .ant-input,
   .ant-input-number-input,
@@ -20,7 +42,6 @@ body {
     font-size: 16px !important;
   }
 
-  /* Sticky header */
   .app-header-bar {
     position: sticky !important;
     top: 0;
@@ -37,25 +58,15 @@ body {
     min-height: 40px;
   }
 
-  /* Page content */
   .app-page-content {
     margin: 8px !important;
     padding: 12px !important;
     border-radius: 12px !important;
   }
 
-  /* Page titles */
-  .app-page-content > h2,
-  .app-page-content > h1 {
-    font-size: 1.25rem !important;
-    margin-bottom: 8px !important;
-  }
-
-  /* Tables */
   .ant-table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin-inline: -4px;
   }
   .ant-table {
     font-size: 13px;
@@ -69,15 +80,10 @@ body {
     row-gap: 8px;
   }
 
-  /* Modal nearly full-screen */
   .ant-modal {
     max-width: calc(100vw - 12px) !important;
     margin: 6px auto !important;
-    padding-bottom: 0;
     top: 8px !important;
-  }
-  .ant-modal .ant-modal-content {
-    border-radius: 12px;
   }
   .ant-modal-body {
     max-height: calc(100dvh - 120px) !important;
@@ -94,7 +100,6 @@ body {
     margin: 0 !important;
   }
 
-  /* Cards */
   .ant-card {
     border-radius: 12px;
   }
@@ -119,22 +124,16 @@ body {
     padding: 12px !important;
   }
 
-  /* Space / buttons wrap */
   .ant-space {
     flex-wrap: wrap !important;
   }
-  .ant-space-item .ant-btn {
-    margin-bottom: 0;
-  }
 
-  /* Search inputs full width in toolbars */
   .ant-card-extra .ant-input-search,
   .ant-card-extra .ant-input-affix-wrapper {
     width: 100% !important;
     max-width: 100% !important;
   }
 
-  /* Tabs */
   .ant-tabs-nav {
     margin-bottom: 8px !important;
   }
@@ -142,64 +141,35 @@ body {
     padding: 8px 10px !important;
   }
 
-  /* Forms denser */
   .ant-form-item {
     margin-bottom: 12px !important;
   }
-  .ant-form-item-label {
-    padding-bottom: 2px !important;
-  }
 
-  /* Stats / dashboard */
   .ant-statistic-content {
     font-size: 20px !important;
   }
 
-  /* Settings: stack menu above content */
-  .settings-layout {
-    flex-direction: column !important;
-  }
-  .settings-layout .settings-sider {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin-bottom: 12px;
-  }
-  .settings-layout .settings-sider .ant-layout-sider-children {
-    width: 100%;
-  }
-  .settings-menu.ant-menu-inline {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-inline-end: none !important;
-  }
-  .settings-menu.ant-menu-inline .ant-menu-item {
-    flex: 0 0 auto;
-    width: auto !important;
-    margin: 0 4px !important;
-    padding-inline: 12px !important;
+  .settings-section-select .ant-select-selector {
+    min-height: 44px !important;
+    align-items: center;
   }
 
-  /* Drawer */
-  .app-mobile-drawer .ant-drawer-body {
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+  .mobile-full-modal.ant-modal {
+    max-width: 100vw !important;
+    margin: 0 !important;
+    top: 0 !important;
   }
-  .app-mobile-drawer .mobile-nav-brand {
-    padding: 16px 16px 12px;
-    font-weight: 700;
-    font-size: 1.05rem;
-    border-bottom: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  .mobile-full-modal .ant-modal-content {
+    border-radius: 0 0 12px 12px;
   }
-  .app-mobile-drawer .ant-menu {
-    border-inline-end: none !important;
-    flex: 1;
+  .mobile-full-modal .ant-modal-body {
+    max-height: calc(100dvh - 110px) !important;
   }
 
-  /* Login */
+  .ant-dropdown-menu-item {
+    padding: 10px 14px !important;
+  }
+
   .login-page {
     padding: 24px 12px !important;
     align-items: flex-start !important;
@@ -210,25 +180,11 @@ body {
     max-width: 100% !important;
   }
 
-  /* Touch-friendly primary actions */
   .ant-btn-primary {
     min-height: 36px;
   }
-}
 
-@media (max-width: 480px) {
-  .app-page-content {
-    margin: 6px !important;
-    padding: 10px !important;
-  }
-  .ant-table-thead > tr > th,
-  .ant-table-tbody > tr > td {
-    padding: 6px 8px !important;
-  }
-}
-
-/* ===== Mobile entity lists (nodes / users) ===== */
-@media (max-width: 767px) {
+  /* Entity lists */
   .mobile-entity-list {
     display: flex;
     flex-direction: column;
@@ -275,48 +231,11 @@ body {
     padding: 32px 12px;
     opacity: 0.55;
   }
+}
 
-  /* Card toolbar: stack actions */
-  .ant-card-extra > .ant-space {
-    width: 100%;
-  }
-  .ant-card-extra .ant-btn {
-    flex: 1 1 auto;
-  }
-
-  /* Settings section picker */
-  .settings-section-select {
-    width: 100%;
-  }
-  .settings-section-select .ant-select-selector {
-    min-height: 44px !important;
-    align-items: center;
-  }
-
-  /* Full-width modals on phone */
-  .mobile-full-modal.ant-modal {
-    max-width: 100vw !important;
-    margin: 0 !important;
-    top: 0 !important;
-    padding-bottom: 0;
-  }
-  .mobile-full-modal .ant-modal-content {
-    border-radius: 0 0 12px 12px;
-    min-height: 40vh;
-  }
-  .mobile-full-modal .ant-modal-body {
-    max-height: calc(100dvh - 110px) !important;
-  }
-
-  /* Dropdown menus: larger touch rows */
-  .ant-dropdown-menu-item {
-    padding: 10px 14px !important;
-  }
-
-  /* Batch bar hint */
-  .mobile-batch-hint {
-    font-size: 12px;
-    opacity: 0.7;
-    margin-bottom: 8px;
+@media (max-width: 480px) {
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
   }
 }
