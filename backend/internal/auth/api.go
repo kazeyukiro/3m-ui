@@ -261,7 +261,26 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	}
 	resetPasswordChangeLimit(clientID)
 
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "password changed successfully"})
+	// Issue a fresh token bound to the new session_version. Without this, the
+	// browser keeps the pre-change JWT and every subsequent API call returns 401
+	// ("session has been invalidated"), which looks like "cannot enter the panel".
+	token, exp, err := GenerateToken(h.secret, user.ID, user.Username, user.Role, nextSessionVersion, DefaultTokenTTL)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"message": "password changed successfully; please log in again",
+			"relogin": true,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":               "ok",
+		"message":              "password changed successfully",
+		"token":                token,
+		"expires_at":           exp,
+		"username":             user.Username,
+		"must_change_password": false,
+	})
 }
 
 func (h *Handler) Me(c *gin.Context) {
