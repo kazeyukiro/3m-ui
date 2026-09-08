@@ -70,6 +70,7 @@ func (pm *ProcessManager) SetCrashHandler(fn func(exitErr error)) {
 // production. It prevents an attacker from tricking 3m-ui into executing an
 // arbitrary file by manipulating the configured binary path.
 var productionAllowedBinaryPrefixes = []string{
+	"/usr/local/lib/3m-ui/",
 	"/usr/local/bin/",
 	"/usr/bin/",
 	"/opt/",

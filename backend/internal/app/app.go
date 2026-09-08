@@ -13,10 +13,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
-	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
+	"github.com/kazeyukiro/3m-ui/backend/internal/bootstrap"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/database"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
 	dbconfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
@@ -27,19 +26,12 @@ import (
 // Run boots the application and serves the embedded frontend.
 func Run(frontendFS fs.FS) error {
 	configPath := defaultConfigPath()
-	cfg, err := config.LoadConfig(configPath)
+	initialized, err := bootstrap.Initialize(configPath)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return err
 	}
-	db, err := database.InitDB(cfg.Database.Path)
-	if err != nil {
-		return fmt.Errorf("initialize database: %w", err)
-	}
-	if created, username, _, err := auth.EnsureAdmin(db, cfg.Database.Path); err != nil {
-		return fmt.Errorf("initialize administrator: %w", err)
-	} else if created {
-		log.Printf("initial administrator created: username=%s", username)
-	}
+	cfg, db := initialized.Config, initialized.DB
+	initialized.PrintCredentials(os.Stdout)
 	security.InitCredentialKey(cfg.Security.CredentialKey)
 	container := NewContainer(db, cfg)
 
@@ -192,15 +184,7 @@ func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error
 }
 
 func defaultConfigPath() string {
-	if value := os.Getenv("THREE_M_UI_CONFIG"); value != "" {
-		return value
-	}
-	for _, candidate := range []string{"/etc/3m-ui/config.yaml", "config/config.yaml", "backend/config/config.yaml"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return "config/config.yaml"
+	return config.ConfigPath()
 }
 
 func mountFrontend(r *gin.Engine, frontendFS fs.FS) {

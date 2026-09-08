@@ -6,11 +6,14 @@
 set -eu
 
 APP_NAME="3m-ui"
-BASE="/usr/local/lib/3m-ui"
+ROOT="${THREE_M_UI_ROOT:-}"
+BASE="$ROOT/usr/local/lib/3m-ui"
 APP_BIN="$BASE/3m-ui-bin"
 VERSION_FILE="$BASE/VERSION"
-DATA_DIR="/var/lib/3m-ui"
-CONFIG_DIR="/etc/3m-ui"
+DATA_DIR="${THREE_M_UI_DATA_DIR:-}"
+if [ -z "$DATA_DIR" ] && [ -s "$BASE/DATA_DIRECTORY" ]; then DATA_DIR="$(cat "$BASE/DATA_DIRECTORY")"; fi
+DATA_DIR="${DATA_DIR:-$ROOT/var/lib/3m-ui}"
+CONFIG_DIR="$ROOT/etc/3m-ui"
 CONFIG_FILE="$CONFIG_DIR/config.yaml"
 SERVICE="3m-ui"
 
@@ -22,7 +25,7 @@ need_root() {
 }
 
 init_system() {
-  if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  if command -v systemctl >/dev/null 2>&1 && [ -d "$ROOT/run/systemd/system" ]; then
     printf '%s' systemd
   elif command -v rc-service >/dev/null 2>&1; then
     printf '%s' openrc
@@ -82,24 +85,7 @@ version() {
 }
 
 uninstall() {
-  service_action stop 2>/dev/null || true
-  case "$(init_system)" in
-    systemd)
-      systemctl disable "$SERVICE" 2>/dev/null || true
-      rm -f "/etc/systemd/system/$SERVICE.service"
-      systemctl daemon-reload
-      ;;
-    openrc)
-      rc-update del "$SERVICE" default 2>/dev/null || true
-      rm -f "/etc/init.d/$SERVICE"
-      ;;
-  esac
-  rm -f /usr/local/bin/3m-ui
-  rm -rf "$BASE"
-  say "3m-ui application and management command removed."
-  say "Data preserved at: $DATA_DIR"
-  say "Configuration preserved at: $CONFIG_DIR"
-  say "Mihomo was not removed."
+  "$BASE/uninstall.sh" "$@"
 }
 
 config() {
@@ -134,7 +120,7 @@ config() {
       service_action restart
       sleep 1
       if service_is_active; then
-        say "✓ 3m-ui restarted. Access: http://0.0.0.0:$new_port"
+        say "✓ 3m-ui restarted. Configured port: $new_port (a separate HTTPS listener follows the panel TLS settings)."
       else
         say "✗ 3m-ui failed to start. Check logs: 3m-ui logs"
       fi
@@ -165,7 +151,11 @@ Commands:
   logs         Show recent service logs
   version      Show installed 3m-ui version
   config       Show or edit config (see below)
-  uninstall    Remove 3m-ui but preserve data/config
+  uninstall    Remove 3m-ui but preserve data/config (use --purge to delete)
+  backup       Stop service, snapshot data/config/binaries, resume service
+  restore      Restore a complete snapshot: restore /path/snapshot.tar.gz
+  reset-admin  Generate and display a new random administrator password
+  healthcheck  Probe the actual configured HTTP/HTTPS panel
   help         Show this help
 
 Config sub-commands:
@@ -187,7 +177,10 @@ main() {
     logs) logs ;;
     version) version ;;
     config) shift; config "$@" ;;
-    uninstall) uninstall ;;
+    uninstall) shift; uninstall "$@" ;;
+    backup) shift; "$BASE/install.sh" --backup "$@" ;;
+    restore) shift; "$BASE/install.sh" --restore "$@" ;;
+    init|reset-admin|healthcheck) (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd") ;;
     help|-h|--help) usage ;;
     '')
       if [ -x /usr/local/bin/3m-ui ] && [ "$(readlink -f /usr/local/bin/3m-ui 2>/dev/null || true)" = "$APP_BIN" ]; then

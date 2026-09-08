@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 )
 
 // Dir returns the directory for durable per-listener TLS material.
@@ -18,6 +20,9 @@ func Dir() string {
 	}
 	if d := strings.TrimSpace(os.Getenv("3M_UI_DATA")); d != "" {
 		return filepath.Join(d, "listener-certs")
+	}
+	if cfg := config.GlobalConfig; cfg != nil && cfg.Database.Path != "" {
+		return filepath.Join(filepath.Dir(cfg.Database.Path), "listener-certs")
 	}
 	return "/var/lib/3m-ui/listener-certs"
 }

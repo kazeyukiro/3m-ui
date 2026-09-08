@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"golang.org/x/crypto/acme/autocert"
 	"gorm.io/gorm"
@@ -32,8 +33,12 @@ type Settings struct {
 }
 
 func DefaultSettings() Settings {
+	cacheDir := "/var/lib/3m-ui/acme"
+	if cfg := config.GlobalConfig; cfg != nil && cfg.Database.Path != "" {
+		cacheDir = filepath.Join(filepath.Dir(cfg.Database.Path), "acme")
+	}
 	return Settings{
-		CacheDir:   "/var/lib/3m-ui/acme",
+		CacheDir:   cacheDir,
 		ListenHTTP: ":80",
 		ListenTLS:  ":443",
 	}

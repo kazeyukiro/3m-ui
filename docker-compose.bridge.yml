@@ -1,14 +1,16 @@
-# Recommended for Linux VPS: newly-created listeners are available on the host
-# without changing port mappings. Allow their TCP/UDP ports in your firewall.
-# Run: docker compose up -d && docker compose logs 3m-ui
-# The initial random administrator password appears once in the first-start log.
-# Pin a version with THREE_M_UI_IMAGE=ghcr.io/<owner>/3m-ui:v1.2.3.
+# Standalone alternative: docker compose -f docker-compose.bridge.yml up -d
+# The panel is reachable locally at http://127.0.0.1:8080. Use a TLS reverse proxy
+# for remote access, or change the panel mapping to your intended host address.
+# Add a TCP and UDP mapping for every listener (or a planned port range).
 services:
   3m-ui:
     image: ${THREE_M_UI_IMAGE:-ghcr.io/kazeyukiro/3m-ui:latest}
     init: true
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "127.0.0.1:8080:8080"
+      # - "10000-10100:10000-10100/tcp"
+      # - "10000-10100:10000-10100/udp"
     environment:
       THREE_M_UI_CONFIG: /etc/3m-ui/config.yaml
       TZ: ${TZ:-UTC}

@@ -7,7 +7,7 @@
 **Mihomo 服务端 Web 管理面板**
 
 
-> **测试通道：** 使用 GitHub Actions「Pre-release · rolling (pre)」手动发布滚动预发布（标签 `pre`）。正式版打 `v*` 标签发布。安装/更新可用 `3m-ui channel pre|stable` 切换。
+> **稳定版优先：** 默认安装和更新只使用正式 Release。预发布需要主动选择。完整安装包及 Docker 镜像包含固定版本的 Mihomo；详见 [安装、升级与恢复](docs/installation.md)。
 
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
 
@@ -31,30 +31,30 @@
 | **运维** | 核心启停/更新、日志、仪表盘资源占用、Geo 文件、面板 SSL/ACME、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、同步节点镜像、合并订阅、可选推送节点（默认远程禁用） |
-| **安全** | JWT、首登改密、凭据加密、CORS；安装后请立即修改默认管理员密码 |
+| **安全** | JWT、首登改密、凭据加密、CORS；随机初始密码、首登改密 |
 
 前端：**React + Ant Design**（`frontend/`），构建后嵌入单一 Go 二进制。
 
 发布产物：**纯静态链接**（`CGO_ENABLED=0` + modernc SQLite），无需系统 `libsqlite3`，兼容 glibc / musl。
 
-架构：`linux/amd64` · `arm64` · `armv7` · `armv6` · `386` · `riscv64` · `loong64` · `ppc64le` · `s390x`
+完整安装包 / Docker：`linux/amd64` · `arm64`。高级独立面板二进制另外支持 `armv7` · `armv6` · `386` · `riscv64` · `loong64` · `ppc64le` · `s390x`，需要自行准备兼容内核。
 
 ---
 
 ## 快速安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
 ```
 
-生产环境请先审查脚本。非交互安装可设置 `THREE_M_UI_NONINTERACTIVE=1`（结果写入 `/etc/3m-ui/install-result.env`）。
+完整安装支持 Linux amd64 / arm64，自动安装面板、配套 Mihomo 和系统服务。首次配置和管理员密码由程序统一生成；配置已存在时保持原值。其他架构可使用独立二进制和自行准备的内核，见 [详细安装说明](docs/installation.md)。
 
 安装完成后：
 
 ```text
 面板地址   http://SERVER_IP:8080/
 默认账号   admin
-默认密码   admin   ← 首次登录必须修改
+初始密码   安装时随机生成并显示一次，首次登录必须修改
 管理命令   3m-ui
 ```
 
@@ -64,15 +64,27 @@ curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/insta
 # 推荐（已安装后）
 sudo 3m-ui update
 # 指定版本: sudo 3m-ui update v1.0.0
-# 或:
-curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/update.sh | sudo bash
+# 从旧安装脚本迁移时，先重新执行上面的最新安装命令，配置和账号会保留。
 ```
 
 卸载：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/uninstall.sh | bash
+sudo 3m-ui uninstall
 ```
+
+---
+
+## Docker 安装
+
+Linux VPS 下载发布版本中的 `docker-compose.yml`，在同一目录执行：
+
+```bash
+docker compose up -d
+docker compose logs 3m-ui
+```
+
+镜像为 `ghcr.io/kazeyukiro/3m-ui:latest`，包含面板及固定版本的 Mihomo；`latest` 只跟随稳定版。配置、随机密钥和管理员会自动初始化，首次密码只在首次启动输出一次。默认 host 网络，新增节点后放行实际使用的 TCP/UDP 端口。另提供 `docker-compose.bridge.yml`，以及版本固定、证书配置和持久化恢复说明，见 [安装文档](docs/installation.md)。
 
 ---
 
@@ -177,12 +189,12 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
 ```
 
 Update after install: `sudo 3m-ui update` (optional tag: `sudo 3m-ui update v1.0.0`).
 
-Default panel: `http://SERVER_IP:8080/` — user `admin` / password `admin` (**change on first login**).
+Default panel: `http://SERVER_IP:8080/` — user `admin` with a randomly generated initial password, printed once (**change on first login**). Native bundles and Docker images include the pinned Mihomo core. See [installation, upgrade and recovery](docs/installation.md).
 
 ### Build
 

@@ -1,6 +1,4 @@
-name: Release · Ant Design
-# Pure-Go static binaries (CGO_ENABLED=0 + modernc sqlite) for maximum Linux portability:
-# works on glibc and musl (Alpine), old and new distros, without system libsqlite3.
+name: Release stable or release candidate
 on:
   push:
     tags:
@@ -8,212 +6,114 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag (e.g. v1.0.2). Required for manual runs.
+        description: Existing SemVer tag to build (v1.2.3 or v1.3.0-rc.1)
         required: true
         type: string
 permissions:
-  contents: write
-  id-token: write   # required for cosign keyless OIDC signing
-
+  contents: read
 concurrency:
-  group: release-formal-${{ github.ref }}
+  group: release-formal-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
-
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # x86_64 — GOAMD64=v1 for broadest CPU compatibility (pre-AVX hosts)
-          - goarch: amd64
-            goamd64: v1
-            artifact: linux-amd64
-          - goarch: arm64
-            artifact: linux-arm64
-          - goarch: arm
-            goarm: '7'
-            artifact: linux-armv7
-          - goarch: arm
-            goarm: '6'
-            artifact: linux-armv6
-          - goarch: '386'
-            artifact: linux-386
-          - goarch: riscv64
-            artifact: linux-riscv64
-          - goarch: loong64
-            artifact: linux-loong64
-          - goarch: ppc64le
-            artifact: linux-ppc64le
-          - goarch: s390x
-            artifact: linux-s390x
+  metadata:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      latest: ${{ steps.meta.outputs.latest }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
+      # Manual runs must build the requested tag, not the branch selected in UI.
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package.json
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.x'
-      - name: Build Ant Design frontend
-        working-directory: frontend
-        run: npm install && npm run build
-      - name: Embed frontend
-        run: |
-          rm -rf backend/cmd/server/web/dist
-          cp -r frontend/dist backend/cmd/server/web/dist
-      - name: Build static backend (${{ matrix.artifact }})
-        working-directory: backend
-        env:
-          CGO_ENABLED: '0'
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
-          GOAMD64: ${{ matrix.goamd64 }}
-        run: |
-          go build -tags sqlite_modernc -trimpath -ldflags='-s -w' \
-            -o "../3m-ui-${{ matrix.artifact }}" ./cmd/server
-          file "../3m-ui-${{ matrix.artifact }}" || true
-          if command -v ldd >/dev/null 2>&1; then
-            if ldd "../3m-ui-${{ matrix.artifact }}" 2>&1 | grep -qiE 'not a dynamic|statically linked'; then
-              echo "OK: static binary"
-            else
-              echo "WARN: binary may be dynamically linked:"
-              ldd "../3m-ui-${{ matrix.artifact }}" || true
-            fi
-          fi
-      - name: Archive
-        run: tar -czf "3m-ui-${{ matrix.artifact }}.tar.gz" "3m-ui-${{ matrix.artifact }}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: archive-${{ matrix.artifact }}
-          path: |
-            3m-ui-${{ matrix.artifact }}
-            3m-ui-${{ matrix.artifact }}.tar.gz
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: Flatten artifacts & generate SHA256SUMS
-        run: |
-          set -euo pipefail
-          mkdir -p release-files
-          # download-artifact may nest by job; collect every binary/tarball
-          find artifacts -type f \( -name '3m-ui-linux-*' -o -name 'SHA256SUMS' \) -print0 |
-            while IFS= read -r -d '' f; do
-              cp -a "$f" "release-files/$(basename "$f")"
-            done
-          # Ship management scripts with the release (install.sh falls back to main if missing)
-          if [ -d scripts ]; then
-            for s in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do
-              [ -f "scripts/$s" ] && cp -a "scripts/$s" "release-files/$s"
-            done
-          fi
-          cd release-files
-          # Hash with bare filenames (no ./ prefix) so installers can match assets
-          : > SHA256SUMS
-          for f in $(ls -1 | sort); do
-            [ -f "$f" ] || continue
-            [ "$f" = SHA256SUMS ] && continue
-            sha256sum "$f" >> SHA256SUMS
-          done
-          echo "=== SHA256SUMS ==="
-          cat SHA256SUMS
-          ls -la
-      - name: Resolve tag
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - name: Resolve exact tag and channel
         id: meta
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-          if [ -n "${{ inputs.tag }}" ]; then
-            TAG="${{ inputs.tag }}"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            echo "Formal release requires a v* tag or workflow_dispatch tag input" >&2
+          python3 scripts/release-metadata.py "$TAG"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>release-error; then
+            echo "Release $TAG already exists. Published versions cannot be replaced." >&2
             exit 1
           fi
-          case "$TAG" in
-            v*) ;;
-            *) echo "Formal release tag must start with v (got: $TAG)" >&2; exit 1 ;;
-          esac
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          echo "make_latest=true" >> "$GITHUB_OUTPUT"
-          echo "release_name=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Resolved formal release: ${TAG} @ ${GITHUB_SHA}"
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-      - name: Sign SHA256SUMS (keyless OIDC)
-        run: |
-          set -euo pipefail
-          cd release-files
-          # Keyless signing: uses the GitHub Actions OIDC token as identity.
-          # No long-lived secret is stored on GitHub. The resulting certificate
-          # binds the signature to this workflow + tag ref, so installers can
-          # verify authenticity with cosign verify-blob.
-          cosign sign-blob --yes \
-            --output-certificate SHA256SUMS.pem \
-            --output-signature SHA256SUMS.sig \
-            SHA256SUMS
-          echo "=== Signature artifacts ==="
-          ls -la SHA256SUMS.pem SHA256SUMS.sig
-      - uses: softprops/action-gh-release@v2
+          if ! grep -qiE 'release not found|HTTP 404' release-error; then
+            cat release-error >&2
+            exit 1
+          fi
+  build:
+    needs: metadata
+    uses: ./.github/workflows/release-build.yml
+    with:
+      source_sha: ${{ needs.metadata.outputs.sha }}
+      version: ${{ needs.metadata.outputs.tag }}
+  release:
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: ${{ steps.meta.outputs.release_name }}
-          generate_release_notes: true
-          prerelease: ${{ steps.meta.outputs.prerelease }}
-          make_latest: ${{ steps.meta.outputs.make_latest }}
-          # Overwrite assets on the same tag instead of accumulating duplicates
-          body: |
-            ## Packages
-
-            **Tag:** `${{ steps.meta.outputs.tag }}`
-
-            See release notes for the changelog.
-
-            Official frontend: **Ant Design**.
-
-            All binaries are **pure-Go static** (`CGO_ENABLED=0` + `modernc` SQLite):
-            run on glibc *and* musl (Alpine), without system `libsqlite3`.
-
-            Integrity: download `SHA256SUMS` and verify with `sha256sum -c SHA256SUMS`.
-
-            **Authenticity (cosign keyless):** `SHA256SUMS.pem` + `SHA256SUMS.sig`
-            are produced via Sigstore keyless OIDC. Verify end-to-end:
-            ```bash
-            cosign verify-blob \\
-              --certificate SHA256SUMS.pem \\
-              --signature SHA256SUMS.sig \\
-              --certificate-identity 'https://github.com/kazeyukiro/3m-ui/.github/workflows/release.yml@refs/tags/<tag>' \\
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
-              SHA256SUMS
-            ```
-            (replace `<tag>` with this release tag)
-
-            | Artifact | Architecture |
-            |---|---|
-            | `3m-ui-linux-amd64` | x86_64 (GOAMD64=v1) |
-            | `3m-ui-linux-arm64` | aarch64 |
-            | `3m-ui-linux-armv7` | ARMv7 |
-            | `3m-ui-linux-armv6` | ARMv6 (e.g. older Pi) |
-            | `3m-ui-linux-386` | i386 / i686 |
-            | `3m-ui-linux-riscv64` | RISC-V 64 |
-            | `3m-ui-linux-loong64` | LoongArch64 |
-            | `3m-ui-linux-ppc64le` | POWER little-endian |
-            | `3m-ui-linux-s390x` | IBM Z |
-
-            Each arch is also published as `.tar.gz`.
-          files: |
-            release-files/*
+          ref: ${{ needs.metadata.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: Collect scripts and checksum every public asset
+        env:
+          VERSION: ${{ needs.metadata.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          cp scripts/{install.sh,update.sh,uninstall.sh,3m-ui.sh,3m-ui} release-files/
+          cp docker-compose*.yml release-files/
+          cp distribution/mihomo.env release-files/
+          sed -i "s#ghcr.io/kazeyukiro/3m-ui#ghcr.io/${REPOSITORY,,}#g" release-files/docker-compose*.yml
+          sed -i "s#kazeyukiro/3m-ui#${REPOSITORY}#g" release-files/install.sh
+          printf '%s\n' "$VERSION" > release-files/VERSION
+          printf '%s\n' "$REPOSITORY" > release-files/REPOSITORY
+          cd release-files
+          sha256sum * > SHA256SUMS
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign checksums using this workflow identity
+        working-directory: release-files
+        run: |
+          cosign sign-blob --yes --output-certificate SHA256SUMS.pem \
+            --output-signature SHA256SUMS.sig SHA256SUMS
+      - name: Publish once without overwriting assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+          LATEST: ${{ needs.metadata.outputs.latest }}
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Complete Linux installation bundles are provided for amd64 and arm64.
+          Each bundle includes the panel, its pinned Mihomo core and lifecycle scripts.
+          Other architectures are standalone panel builds for advanced installations.
+          Verify downloads against SHA256SUMS. SHA256SUMS.pem and SHA256SUMS.sig
+          provide Sigstore keyless verification for this release workflow.
+          Docker images are published to ghcr.io/<owner>/<repository>:<tag>.
+          The latest image and default installer follow stable releases only.
+          NOTES
+          # Reserve a new release; no --clobber or action asset overwrite behavior.
+          # A failed upload leaves a draft that maintainers must inspect explicitly.
+          gh release create "$TAG" --verify-tag --draft --title "$TAG" \
+            --notes-file release-notes.md --generate-notes
+          gh release upload "$TAG" release-files/*
+          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST"
+  image:
+    needs: [metadata, release]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      source_sha: ${{ needs.metadata.outputs.sha }}
+      version: ${{ needs.metadata.outputs.tag }}
+      image_tag: ${{ needs.metadata.outputs.image_tag }}
+      latest: ${{ needs.metadata.outputs.latest == 'true' }}

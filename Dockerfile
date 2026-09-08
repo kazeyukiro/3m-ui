@@ -1,45 +1,62 @@
-# Multi-stage build: pure-Go static 3m-ui binary with embedded Ant Design frontend.
-# Compatible with glibc and musl hosts (scratch/alpine/distroless).
-
-# TODO(supply-chain, H-3): pin base images to immutable digests for reproducible
-# builds. Floating tags (node:22-alpine, golang:1.25-alpine, alpine:3.21) are
-# mutable — only @sha256:<digest> guarantees byte-identical rebuilds. Compute
-# digests with `docker pull <image> && docker inspect --format='{{.RepoDigests}}' <image>`
-# and replace each `FROM` line below with `<image>@sha256:<digest>`.
-FROM node:22-alpine AS frontend
+# Build frontend and Go on the builder's native architecture; only the final
+# runtime stage needs emulation when producing the other supported platform.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /src/frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-FROM golang:1.25-alpine AS backend
-WORKDIR /src
-RUN apk add --no-cache git ca-certificates
-COPY backend/go.mod backend/go.sum ./backend/
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_TIME=unknown
 WORKDIR /src/backend
+RUN apk add --no-cache ca-certificates
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 COPY --from=frontend /src/frontend/dist ./cmd/server/web/dist
-ENV CGO_ENABLED=0
-RUN go build -tags sqlite_modernc -trimpath -ldflags='-s -w' -o /out/3m-ui ./cmd/server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOAMD64=v1 \
+    go build -tags sqlite_modernc -trimpath \
+    -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT -X main.buildTime=$BUILD_TIME" \
+    -o /out/3m-ui ./cmd/server
+
+FROM --platform=$BUILDPLATFORM alpine:3.21 AS mihomo
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates curl
+COPY distribution/mihomo.env /src/distribution/mihomo.env
+COPY scripts/download-mihomo.sh /src/scripts/download-mihomo.sh
+RUN sh /src/scripts/download-mihomo.sh "$TARGETARCH" /out
 
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates tzdata
-# Run as a non-root user (H-2 / C-4). The panel binary does not need root in
-# container mode. Mihomo TUN mode requires CAP_NET_ADMIN and is expected to run
-# on the host (or in a privileged sidecar) — not inside this panel container.
-RUN addgroup -S -g 10001 3m-ui && adduser -S -D -H -u 10001 -G 3m-ui 3m-ui
-WORKDIR /app
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG REPOSITORY=kazeyukiro/3m-ui
+LABEL org.opencontainers.image.title="3m-ui" \
+      org.opencontainers.image.source="https://github.com/${REPOSITORY}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}"
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -S -g 10001 3m-ui && adduser -S -D -H -u 10001 -G 3m-ui 3m-ui && \
+    mkdir -p /etc/3m-ui /var/lib/3m-ui /var/log/3m-ui /usr/local/lib/3m-ui && \
+    chown -R 10001:10001 /etc/3m-ui /var/lib/3m-ui /var/log/3m-ui
 COPY --from=backend /out/3m-ui /usr/local/bin/3m-ui
-# Pre-create the volume mount points with correct ownership so named volumes
-# (docker-compose) inherit UID 10001 on first creation. Bind-mounted host dirs
-# must also be `chown 10001:10001` on the host by the operator.
-RUN mkdir -p /etc/3m-ui /var/lib/3m-ui /var/log/3m-ui && \
-    chown -R 3m-ui:3m-ui /app /usr/local/bin/3m-ui /etc/3m-ui /var/lib/3m-ui /var/log/3m-ui
-# Default paths match the installer layout.
-ENV THREE_M_UI_CONFIG=/etc/3m-ui/config.yaml
+COPY --from=mihomo /out/mihomo /usr/local/lib/3m-ui/mihomo
+COPY --from=mihomo /out/MIHOMO_VERSION /usr/local/lib/3m-ui/MIHOMO_VERSION
+COPY distribution/MIHOMO_LICENSE /usr/local/share/licenses/mihomo/LICENSE
+COPY LICENSE /usr/local/share/licenses/3m-ui/LICENSE
+RUN printf 'Mihomo source and build scripts: https://github.com/MetaCubeX/mihomo/tree/%s\n' \
+    "$(cat /usr/local/lib/3m-ui/MIHOMO_VERSION)" > /usr/local/share/licenses/mihomo/SOURCE
+# Immutable image files remain root-owned. Upgrade the reviewed panel/core pair
+# by replacing the image; only configuration, state and logs are writable.
+ENV THREE_M_UI_CONFIG=/etc/3m-ui/config.yaml \
+    THREE_M_UI_CONTAINER=1
 VOLUME ["/etc/3m-ui", "/var/lib/3m-ui", "/var/log/3m-ui"]
 EXPOSE 8080
 USER 10001:10001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["/usr/local/bin/3m-ui", "healthcheck"]
 ENTRYPOINT ["/usr/local/bin/3m-ui"]

@@ -1,0 +1,151 @@
+name: Publish reviewed multiarch image
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+      latest:
+        required: true
+        type: boolean
+permissions:
+  contents: read
+  packages: write
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+      - name: Build metadata
+        id: build-meta
+        run: echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          platforms: linux/${{ matrix.arch }}
+          tags: local/3m-ui:smoke
+          build-args: |
+            VERSION=${{ inputs.version }}
+            GIT_COMMIT=${{ inputs.source_sha }}
+            BUILD_TIME=${{ steps.build-meta.outputs.build_time }}
+            REPOSITORY=${{ github.repository }}
+          cache-from: type=gha,scope=image-${{ matrix.arch }}
+          cache-to: type=gha,scope=image-${{ matrix.arch }},mode=max
+      - name: Verify image initialization, permissions and persistent restart
+        run: |
+          set -euo pipefail
+          docker run -d --name 3m-ui-smoke --init --cap-drop ALL \
+            --security-opt no-new-privileges local/3m-ui:smoke
+          trap 'docker rm -fv 3m-ui-smoke >/dev/null' EXIT
+          test "$(docker inspect --format '{{.Config.User}}' 3m-ui-smoke)" = 10001:10001
+          docker exec 3m-ui-smoke /usr/local/lib/3m-ui/mihomo -v
+          wait_healthy() {
+            for attempt in $(seq 1 60); do
+              if docker exec 3m-ui-smoke /usr/local/bin/3m-ui healthcheck >/dev/null 2>&1; then return; fi
+              sleep 1
+            done
+            docker logs 3m-ui-smoke 2>&1 | sed '/^Initial password: /d' >&2
+            return 1
+          }
+          wait_healthy
+          docker exec 3m-ui-smoke pidof mihomo >/dev/null
+          docker exec 3m-ui-smoke sha256sum /etc/3m-ui/config.yaml > config-before.sha256
+          docker restart 3m-ui-smoke
+          wait_healthy
+          docker exec 3m-ui-smoke sha256sum /etc/3m-ui/config.yaml > config-after.sha256
+          cmp config-before.sha256 config-after.sha256
+          test "$(docker logs 3m-ui-smoke 2>&1 | grep -c '^Initial password: ')" = 1
+      - name: Save the verified image without rebuilding it
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: docker save local/3m-ui:smoke -o "$RUNNER_TEMP/3m-ui-$ARCH.tar"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: container-${{ matrix.arch }}
+          path: ${{ runner.temp }}/3m-ui-${{ matrix.arch }}.tar
+          compression-level: 0
+          retention-days: 1
+  image:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+      - name: Image metadata
+        id: meta
+        env:
+          REPOSITORY: ${{ github.repository }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          IS_LATEST: ${{ inputs.latest }}
+        run: |
+          IMAGE="ghcr.io/${REPOSITORY,,}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          {
+            echo 'tags<<EOF'
+            echo "$IMAGE:$IMAGE_TAG"
+            if [ "$IS_LATEST" = true ]; then echo "$IMAGE:latest"; fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse replacement of a formal version image
+        if: inputs.image_tag != 'pre'
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$IMAGE_TAG" >/dev/null 2>registry-error; then
+            echo "Image tag already exists: $IMAGE:$IMAGE_TAG. Publish a new version." >&2
+            exit 1
+          fi
+          # Authentication/network errors must not be mistaken for a missing tag.
+          if ! grep -qiE 'not found|manifest unknown' registry-error; then
+            cat registry-error >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: container-*
+          path: verified-images
+          merge-multiple: true
+      - name: Publish the exact images that passed verification
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          IS_LATEST: ${{ inputs.latest }}
+        run: |
+          set -euo pipefail
+          for ARCH in amd64 arm64; do
+            docker load --input "verified-images/3m-ui-$ARCH.tar"
+            STAGING="$IMAGE:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH"
+            docker tag local/3m-ui:smoke "$STAGING"
+            docker push "$STAGING"
+            docker image inspect "$STAGING" --format '{{index .RepoDigests 0}}' >> image-digests
+          done
+          mapfile -t DIGESTS < image-digests
+          TAGS=(--tag "$IMAGE:$IMAGE_TAG")
+          if [ "$IS_LATEST" = true ]; then TAGS+=(--tag "$IMAGE:latest"); fi
+          docker buildx imagetools create "${TAGS[@]}" "${DIGESTS[@]}"

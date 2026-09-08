@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -130,7 +131,7 @@ func ConfigPath() string {
 			return candidate
 		}
 	}
-	return "config/config.yaml"
+	return DefaultConfigPath
 }
 
 // UpdateServerFile writes server.port / listen / public_url into the YAML config
@@ -191,6 +192,14 @@ func Validate(cfg *Config) error {
 	}
 	if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
 		return fmt.Errorf("server.port must be between 1 and 65535")
+	}
+	if address := strings.TrimSpace(os.Getenv("THREE_M_UI_MIHOMO_CONTROLLER")); address != "" {
+		host, portText, err := net.SplitHostPort(address)
+		port, portErr := strconv.Atoi(portText)
+		ip := net.ParseIP(host)
+		if err != nil || portErr != nil || port < 1 || port > 65535 || ip == nil || !ip.IsLoopback() {
+			return fmt.Errorf("THREE_M_UI_MIHOMO_CONTROLLER must be a loopback IP and port")
+		}
 	}
 	if strings.TrimSpace(cfg.Database.Path) == "" {
 		return fmt.Errorf("database.path is required")

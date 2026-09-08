@@ -1,212 +1,88 @@
-name: Pre-release · rolling (pre)
-# Pure-Go static binaries (CGO_ENABLED=0 + modernc sqlite) for maximum Linux portability:
-# works on glibc and musl (Alpine), old and new distros, without system libsqlite3.
+name: Development release (rolling pre)
 on:
   workflow_dispatch:
-    inputs:
-      note:
-        description: Optional note for this pre build
-        required: false
-        type: string
 permissions:
-  contents: write
-  id-token: write   # required for cosign keyless OIDC signing
-
+  contents: read
 concurrency:
   group: release-pre-rolling
-  cancel-in-progress: true
-
+  cancel-in-progress: false
 jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Identify the explicit development build
+        id: meta
+        run: echo "version=pre-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # x86_64 — GOAMD64=v1 for broadest CPU compatibility (pre-AVX hosts)
-          - goarch: amd64
-            goamd64: v1
-            artifact: linux-amd64
-          - goarch: arm64
-            artifact: linux-arm64
-          - goarch: arm
-            goarm: '7'
-            artifact: linux-armv7
-          - goarch: arm
-            goarm: '6'
-            artifact: linux-armv6
-          - goarch: '386'
-            artifact: linux-386
-          - goarch: riscv64
-            artifact: linux-riscv64
-          - goarch: loong64
-            artifact: linux-loong64
-          - goarch: ppc64le
-            artifact: linux-ppc64le
-          - goarch: s390x
-            artifact: linux-s390x
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package.json
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.x'
-      - name: Build Ant Design frontend
-        working-directory: frontend
-        run: npm install && npm run build
-      - name: Embed frontend
-        run: |
-          rm -rf backend/cmd/server/web/dist
-          cp -r frontend/dist backend/cmd/server/web/dist
-      - name: Build static backend (${{ matrix.artifact }})
-        working-directory: backend
-        env:
-          CGO_ENABLED: '0'
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
-          GOAMD64: ${{ matrix.goamd64 }}
-        run: |
-          go build -tags sqlite_modernc -trimpath -ldflags='-s -w' \
-            -o "../3m-ui-${{ matrix.artifact }}" ./cmd/server
-          file "../3m-ui-${{ matrix.artifact }}" || true
-          if command -v ldd >/dev/null 2>&1; then
-            if ldd "../3m-ui-${{ matrix.artifact }}" 2>&1 | grep -qiE 'not a dynamic|statically linked'; then
-              echo "OK: static binary"
-            else
-              echo "WARN: binary may be dynamically linked:"
-              ldd "../3m-ui-${{ matrix.artifact }}" || true
-            fi
-          fi
-      - name: Archive
-        run: tar -czf "3m-ui-${{ matrix.artifact }}.tar.gz" "3m-ui-${{ matrix.artifact }}"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: archive-${{ matrix.artifact }}
-          path: |
-            3m-ui-${{ matrix.artifact }}
-            3m-ui-${{ matrix.artifact }}.tar.gz
-
+    needs: metadata
+    uses: ./.github/workflows/release-build.yml
+    with:
+      source_sha: ${{ github.sha }}
+      version: ${{ needs.metadata.outputs.version }}
   release:
-    needs: build
+    needs: [metadata, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: release-files
           merge-multiple: true
-      - name: Flatten artifacts & generate SHA256SUMS
+      - name: Collect and checksum all assets
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          mkdir -p release-files
-          # download-artifact may nest by job; collect every binary/tarball
-          find artifacts -type f \( -name '3m-ui-linux-*' -o -name 'SHA256SUMS' \) -print0 |
-            while IFS= read -r -d '' f; do
-              cp -a "$f" "release-files/$(basename "$f")"
-            done
-          # Ship management scripts with the release (install.sh falls back to main if missing)
-          if [ -d scripts ]; then
-            for s in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do
-              [ -f "scripts/$s" ] && cp -a "scripts/$s" "release-files/$s"
-            done
-          fi
+          cp scripts/{install.sh,update.sh,uninstall.sh,3m-ui.sh,3m-ui} release-files/
+          cp docker-compose*.yml release-files/
+          cp distribution/mihomo.env release-files/
+          sed -i "s#ghcr.io/kazeyukiro/3m-ui#ghcr.io/${REPOSITORY,,}#g" release-files/docker-compose*.yml
+          sed -i "s#kazeyukiro/3m-ui#${REPOSITORY}#g" release-files/install.sh
+          printf '%s\n' "$VERSION" > release-files/VERSION
+          printf '%s\n' "$REPOSITORY" > release-files/REPOSITORY
           cd release-files
-          # Hash with bare filenames (no ./ prefix) so installers can match assets
-          : > SHA256SUMS
-          for f in $(ls -1 | sort); do
-            [ -f "$f" ] || continue
-            [ "$f" = SHA256SUMS ] && continue
-            sha256sum "$f" >> SHA256SUMS
-          done
-          echo "=== SHA256SUMS ==="
-          cat SHA256SUMS
-          ls -la
-      - name: Resolve tag
-        id: meta
+          sha256sum * > SHA256SUMS
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign checksums using this development workflow identity
+        working-directory: release-files
         run: |
-          set -euo pipefail
-          TAG=pre
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          echo "make_latest=false" >> "$GITHUB_OUTPUT"
-          echo "release_name=Pre-release (rolling)" >> "$GITHUB_OUTPUT"
-          echo "Resolved rolling pre @ ${GITHUB_SHA}"
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-      - name: Sign SHA256SUMS (keyless OIDC)
+          cosign sign-blob --yes --output-certificate SHA256SUMS.pem \
+            --output-signature SHA256SUMS.sig SHA256SUMS
+      - name: Move the explicitly mutable development tag
         run: |
-          set -euo pipefail
-          cd release-files
-          # Keyless signing: uses the GitHub Actions OIDC token as identity.
-          # No long-lived secret is stored on GitHub. The resulting certificate
-          # binds the signature to this workflow + tag ref, so installers can
-          # verify authenticity with cosign verify-blob.
-          cosign sign-blob --yes \
-            --output-certificate SHA256SUMS.pem \
-            --output-signature SHA256SUMS.sig \
-            SHA256SUMS
-          echo "=== Signature artifacts ==="
-          ls -la SHA256SUMS.pem SHA256SUMS.sig
-      - name: Point rolling tag at this commit
-        run: |
-          set -euo pipefail
-          git fetch --tags origin 2>/dev/null || true
-          git tag -f pre "${GITHUB_SHA}"
+          git tag -f pre "$GITHUB_SHA"
           git push -f origin refs/tags/pre
-      - uses: softprops/action-gh-release@v2
+      - name: Publish explicit development channel
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
+          tag_name: pre
           target_commitish: ${{ github.sha }}
-          name: ${{ steps.meta.outputs.release_name }}
-          generate_release_notes: true
-          prerelease: ${{ steps.meta.outputs.prerelease }}
-          make_latest: ${{ steps.meta.outputs.make_latest }}
-          # Overwrite assets on the same tag instead of accumulating duplicates
+          name: Development build ${{ needs.metadata.outputs.version }}
+          prerelease: true
+          make_latest: false
           body: |
-            ## Packages
-
-            **Channel: rolling Pre-release** (tag `pre`).
-
-            Triggered via Actions → Pre-release · rolling (pre).
-            ${{ inputs.note }}
-
-            Official frontend: **Ant Design**.
-
-            All binaries are **pure-Go static** (`CGO_ENABLED=0` + `modernc` SQLite):
-            run on glibc *and* musl (Alpine), without system `libsqlite3`.
-
-            Integrity: download `SHA256SUMS` and verify with `sha256sum -c SHA256SUMS`.
-
-            **Authenticity (cosign keyless):** `SHA256SUMS.pem` + `SHA256SUMS.sig`
-            are produced via Sigstore keyless OIDC. Verify end-to-end:
-            ```bash
-            cosign verify-blob \\
-              --certificate SHA256SUMS.pem \\
-              --signature SHA256SUMS.sig \\
-              --certificate-identity 'https://github.com/kazeyukiro/3m-ui/.github/workflows/release.yml@refs/tags/<tag>' \\
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
-              SHA256SUMS
-            ```
-            (replace `<tag>` with this release tag)
-
-            | Artifact | Architecture |
-            |---|---|
-            | `3m-ui-linux-amd64` | x86_64 (GOAMD64=v1) |
-            | `3m-ui-linux-arm64` | aarch64 |
-            | `3m-ui-linux-armv7` | ARMv7 |
-            | `3m-ui-linux-armv6` | ARMv6 (e.g. older Pi) |
-            | `3m-ui-linux-386` | i386 / i686 |
-            | `3m-ui-linux-riscv64` | RISC-V 64 |
-            | `3m-ui-linux-loong64` | LoongArch64 |
-            | `3m-ui-linux-ppc64le` | POWER little-endian |
-            | `3m-ui-linux-s390x` | IBM Z |
-
-            Each arch is also published as `.tar.gz`.
-          files: |
-            release-files/*
+            Rolling development build, selected explicitly with THREE_M_UI_CHANNEL=pre.
+            This tag and its assets may change; ordinary installs use stable releases.
+            Panel version: ${{ needs.metadata.outputs.version }}
+            Commit: ${{ github.sha }}
+            Complete amd64/arm64 bundles include the pinned Mihomo core.
+            Docker image: ghcr.io/<owner>/<repository>:pre.
+          files: release-files/*
+  image:
+    needs: [metadata, release]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      source_sha: ${{ github.sha }}
+      version: ${{ needs.metadata.outputs.version }}
+      image_tag: pre
+      latest: false

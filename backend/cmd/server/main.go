@@ -8,6 +8,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/app"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
+	"github.com/kazeyukiro/3m-ui/backend/internal/bootstrap"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database"
 )
@@ -32,8 +33,8 @@ func main() {
 				log.Fatalf("set config path: %v", err)
 			}
 			i++
-		case "reset-admin":
-			cmd = "reset-admin"
+		case "reset-admin", "init", "healthcheck", "storage-paths":
+			cmd = args[i]
 		default:
 			if cmd == "" && !hasPrefixDash(args[i]) {
 				cmd = args[i]
@@ -41,6 +42,33 @@ func main() {
 				log.Fatalf("unknown argument: %s", args[i])
 			}
 		}
+	}
+	if configPath == "" {
+		configPath = config.ConfigPath()
+	}
+	if cmd == "init" {
+		initialized, err := bootstrap.Initialize(configPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if sqlDB, err := initialized.DB.DB(); err == nil {
+			defer sqlDB.Close()
+		}
+		initialized.PrintCredentials(os.Stdout)
+		fmt.Printf("Configuration: %s\nPanel port: %d\n", configPath, initialized.Config.Server.Port)
+		return
+	}
+	if cmd == "healthcheck" {
+		if err := runHealthcheck(configPath); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if cmd == "storage-paths" {
+		if err := printStoragePaths(configPath, os.Stdout); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 
 	if cmd == "reset-admin" {
@@ -78,11 +106,17 @@ func runResetAdmin(configPath string) error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	// Keep initial default password semantics: admin / admin
-	if err := auth.ResetAdminPassword(db, "admin"); err != nil {
+	if sqlDB, err := db.DB(); err == nil {
+		defer sqlDB.Close()
+	}
+	password, err := auth.GeneratePassword()
+	if err != nil {
 		return err
 	}
-	fmt.Println("Administrator password reset to: admin")
+	if err := auth.ResetAdminPassword(db, password); err != nil {
+		return err
+	}
+	fmt.Printf("Administrator password reset to: %s\n", password)
 	fmt.Println("You must change the password on next login.")
 	return nil
 }

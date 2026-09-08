@@ -1,6 +1,6 @@
 # Binaries
-server
-server.exe
+/server
+/server.exe
 
 # SQLite database and dynamic config data
 data/
@@ -10,3 +10,6 @@ backend/data/
 # Logs
 *.log
 backend_run.log
+
+# Generated embedded frontend (the tracked placeholder remains in Git)
+/cmd/server/web/dist/

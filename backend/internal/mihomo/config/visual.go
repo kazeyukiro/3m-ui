@@ -95,7 +95,7 @@ func DefaultVisualConfig() VisualConfig {
 			Nameserver: []string{"119.29.29.29", "223.5.5.5"},
 		},
 		Proxies: []ProxyEntry{}, Groups: []GroupEntry{},
-		Rules: []string{"GEOIP,CN,DIRECT", "MATCH,DIRECT"},
+		Rules: []string{"MATCH,DIRECT"},
 	}
 }
 

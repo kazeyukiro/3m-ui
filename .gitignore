@@ -4,3 +4,6 @@ node_modules/
 *.log
 
 frontend-variants/
+
+# Python helper bytecode
+__pycache__/

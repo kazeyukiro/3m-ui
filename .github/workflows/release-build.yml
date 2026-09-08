@@ -1,0 +1,116 @@
+name: Build release packages
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            goamd64: v1
+            artifact: linux-amd64
+          - goarch: arm64
+            artifact: linux-arm64
+            runner: ubuntu-24.04-arm
+          - goarch: arm
+            goarm: '7'
+            artifact: linux-armv7
+          - goarch: arm
+            goarm: '6'
+            artifact: linux-armv6
+          - goarch: '386'
+            artifact: linux-386
+          - goarch: riscv64
+            artifact: linux-riscv64
+          - goarch: loong64
+            artifact: linux-loong64
+          - goarch: ppc64le
+            artifact: linux-ppc64le
+          - goarch: s390x
+            artifact: linux-s390x
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache-dependency-path: backend/go.sum
+      - name: Verify distribution policy and checksum rejection
+        if: matrix.goarch == 'amd64'
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p test_distribution.py -v
+      - name: Build and embed frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          rm -rf ../backend/cmd/server/web/dist
+          cp -r dist ../backend/cmd/server/web/dist
+      - name: Build static panel
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          GOAMD64: ${{ matrix.goamd64 }}
+          VERSION: ${{ inputs.version }}
+          GIT_COMMIT: ${{ inputs.source_sha }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          mkdir -p ../release-files
+          go build -tags sqlite_modernc -trimpath \
+            -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT -X main.buildTime=$BUILD_TIME" \
+            -o "../release-files/3m-ui-$ARTIFACT" ./cmd/server
+          # A dynamic interpreter makes the advertised static package invalid.
+          if readelf -l "../release-files/3m-ui-$ARTIFACT" | grep -q INTERP; then
+            echo 'Unexpected dynamically linked panel' >&2
+            exit 1
+          fi
+      - name: Archive advanced standalone binary
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: tar -czf "release-files/3m-ui-$ARTIFACT.tar.gz" -C release-files "3m-ui-$ARTIFACT"
+      - name: Package complete panel and Mihomo bundle
+        if: matrix.goarch == 'amd64' || matrix.goarch == 'arm64'
+        env:
+          VERSION: ${{ inputs.version }}
+          REPOSITORY: ${{ github.repository }}
+          ARCH: ${{ matrix.goarch }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: sh scripts/build-release-bundle.sh "$ARCH" "release-files/3m-ui-$ARTIFACT" release-files
+      - name: Verify real core connections, restart and data restoration
+        if: matrix.goarch == 'amd64' || matrix.goarch == 'arm64'
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p smoke
+          tar -xzf "release-files/3m-ui-bundle-$ARTIFACT.tar.gz" -C smoke
+          smoke/3m-ui-bin --version 2>&1 | grep -F "$VERSION"
+          sudo mkdir -p /opt/3m-ui-release-smoke
+          sudo install -m 0755 smoke/mihomo /opt/3m-ui-release-smoke/mihomo
+          trap 'sudo rm -rf /opt/3m-ui-release-smoke' EXIT
+          python3 scripts/smoke-runtime.py "$PWD/smoke/3m-ui-bin" /opt/3m-ui-release-smoke/mihomo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.artifact }}
+          path: release-files/*
+          if-no-files-found: error

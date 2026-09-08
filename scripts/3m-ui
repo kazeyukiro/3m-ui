@@ -5,13 +5,17 @@
 
 set -eu
 
-BASE="/usr/local/lib/3m-ui"
+ROOT="${THREE_M_UI_ROOT:-}"
+BASE="$ROOT/usr/local/lib/3m-ui"
 MANAGER="$BASE/3m-ui.sh"
 INSTALLER="$BASE/install.sh"
 UPDATER="$BASE/update.sh"
 UNINSTALLER="$BASE/uninstall.sh"
 APP_BIN="$BASE/3m-ui-bin"
-CONFIG_FILE="/etc/3m-ui/config.yaml"
+CONFIG_FILE="$ROOT/etc/3m-ui/config.yaml"
+DATA_DIR="${THREE_M_UI_DATA_DIR:-}"
+if [ -z "$DATA_DIR" ] && [ -s "$BASE/DATA_DIRECTORY" ]; then DATA_DIR="$(cat "$BASE/DATA_DIRECTORY")"; fi
+DATA_DIR="${DATA_DIR:-$ROOT/var/lib/3m-ui}"
 
 run_script() {
     script="$1"
@@ -41,8 +45,8 @@ menu() {
         printf '%s\n' '  7. 查看日志'
         printf '%s\n' '  8. 查看版本'
         printf '%s\n' '  9. 修改面板端口'
-        printf '%s\n' ' 10. 显示面板访问地址'
-        printf '%s\n' ' 11. 重置管理员密码为 admin（需改密登录）'
+        printf '%s\n' ' 10. 查看面板端口与 public_url'
+        printf '%s\n' ' 11. 重置管理员密码（随机生成，需改密登录）'
         printf '%s\n' ' 12. 启用 BBR（Linux）'
         printf '%s\n' ' 13. 更新 Geo 规则文件'
         printf '%s\n' ' 14. 设置 public_url（订阅外网地址）'
@@ -73,7 +77,7 @@ menu() {
 }
 
 init_system() {
-    if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+    if [ -d "$ROOT/run/systemd/system" ] && command -v systemctl >/dev/null 2>&1; then
         printf '%s' systemd
     elif command -v rc-service >/dev/null 2>&1; then
         printf '%s' openrc
@@ -117,6 +121,9 @@ logs() {
 version() {
     if [ -x "$APP_BIN" ]; then
         "$APP_BIN" --version
+        if [ -s "$BASE/MIHOMO_VERSION" ]; then printf 'Bundled Mihomo: %s\n' "$(cat "$BASE/MIHOMO_VERSION")"; fi
+        if [ -s "$BASE/CHANNEL" ]; then printf 'Update channel: %s\n' "$(cat "$BASE/CHANNEL")"; fi
+        if [ -s "$BASE/REPOSITORY" ]; then printf 'Release source: %s\n' "$(cat "$BASE/REPOSITORY")"; fi
     else
         printf '%s\n' '3m-ui 未安装。' >&2
         exit 1
@@ -135,18 +142,12 @@ show_access() {
     if [ -n "$pub" ] && [ "$pub" != "null" ]; then
         printf '%s\n' "public_url: $pub"
     fi
-    printf '%s\n' '本机地址:'
-    printf '  http://127.0.0.1:%s/\n' "$port"
-    # Best-effort public IPs
-    ips=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
-    if [ -z "$ips" ]; then
-        ips=$(hostname -I 2>/dev/null || true)
+    printf '%s\n' '面板启用 HTTPS 后，请使用面板中配置的域名和 HTTPS 端口。'
+    if (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" "$APP_BIN" healthcheck) >/dev/null 2>&1; then
+        printf '%s\n' '面板健康检查通过。'
     fi
-    for ip in $ips; do
-        [ -n "$ip" ] && printf '  http://%s:%s/\n' "$ip" "$port"
-    done
     printf '%s\n' '管理命令: 3m-ui'
-    printf '%s\n' '初始管理员保持 admin / admin（首次登录须改密）；可用菜单 11 重置为 admin。'
+    printf '%s\n' '初始密码在首次安装时随机生成；若遗失，可用 3m-ui reset-admin 生成新密码。'
 }
 
 reset_admin() {
@@ -154,11 +155,11 @@ reset_admin() {
         printf '%s\n' "未找到程序: $APP_BIN" >&2
         return 1
     fi
-    printf '%s\n' '将把管理员密码重置为 admin，并要求下次登录修改密码。'
+    printf '%s\n' '将随机生成新的管理员密码，并要求下次登录修改密码。'
     printf '确认? [y/N] '
     IFS= read -r ans || return 0
     case "$ans" in y|Y|yes|YES) ;; *) printf '%s\n' '已取消。'; return 0 ;; esac
-    THREE_M_UI_CONFIG="$CONFIG_FILE" "$APP_BIN" reset-admin || return 1
+    (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" "$APP_BIN" reset-admin) || return 1
 }
 
 enable_bbr() {
@@ -181,7 +182,7 @@ enable_bbr() {
 }
 
 update_geo() {
-    dir="/var/lib/3m-ui/mihomo"
+    dir="$DATA_DIR/mihomo"
     mkdir -p "$dir"
     base="https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest"
     printf '%s\n' "下载 Geo 到 $dir ..."
@@ -247,7 +248,7 @@ change_port() {
     service_action restart
     sleep 1
     if service_action status >/dev/null 2>&1; then
-        printf '%s\n' "✓ 3m-ui 已重启。新地址: http://0.0.0.0:$new_port"
+        printf '%s\n' "✓ 3m-ui 已重启。配置端口: $new_port（独立 HTTPS 端口以面板设置为准）"
     else
         printf '%s\n' '✗ 3m-ui 启动失败，请检查日志。' >&2
     fi
@@ -264,6 +265,9 @@ main() {
         logs) logs ;;
         version) version ;;
         config) shift; run_script "$MANAGER" config "$@" ;;
+        backup) shift; run_script "$INSTALLER" --backup "$@" ;;
+        restore) shift; run_script "$INSTALLER" --restore "$@" ;;
+        init|reset-admin|healthcheck) (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd") ;;
         update|upgrade)
             shift
             run_script "$UPDATER" "$@"
@@ -288,9 +292,14 @@ main() {
             printf '%s\n' '  config show                 查看配置'
             printf '%s\n' '  config port <端口>          修改端口并重启'
             printf '%s\n' '安装与更新:'
-            printf '%s\n' '  update [vX.Y.Z] [--yes]     更新到指定或最新 Release'
+            printf '%s\n' '  update [vX.Y.Z] [--yes]     更新到指定版本或所选通道最新版本'
             printf '%s\n' '  install                     安装 / 修复'
-            printf '%s\n' '  uninstall                   卸载'
+            printf '%s\n' '  uninstall [--purge]         卸载，默认保留配置、密钥和数据'
+            printf '%s\n' '备份与恢复:'
+            printf '%s\n' '  backup                      停服创建完整快照，然后恢复运行'
+            printf '%s\n' '  restore /path/snapshot.tar.gz [--yes]  恢复快照'
+            printf '%s\n' '  reset-admin                 生成并显示新的随机管理员密码'
+            printf '%s\n' '  healthcheck                 检查实际 HTTP/HTTPS 面板健康状态'
             printf '%s\n' '其他:'
             printf '%s\n' '  menu                        交互式管理菜单'
             printf '%s\n' '  help                        显示本帮助'

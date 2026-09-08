@@ -1,10 +1,10 @@
 package auth
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -54,7 +54,8 @@ func Login(db *gorm.DB, jwtSecret string, input LoginInput) (*LoginResult, error
 
 // EnsureAdmin creates the first administrator only when the database has no
 // administrator. An explicit THREE_M_UI_ADMIN_PASSWORD is preferred.
-// When THREE_M_UI_ADMIN_PASSWORD is unset, the initial password is "admin".
+// When THREE_M_UI_ADMIN_PASSWORD is unset, a random password is returned once
+// to the caller. Only its bcrypt hash is stored in the database.
 // RequireAuth forces a password change on first login (MustChangePassword=true)
 // before any other API can be used. Change it immediately on first login.
 func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password string, err error) {
@@ -72,7 +73,13 @@ func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password s
 	}
 	password = os.Getenv("THREE_M_UI_ADMIN_PASSWORD")
 	if password == "" {
-		password = "admin"
+		password, err = GeneratePassword()
+		if err != nil {
+			return false, "", "", err
+		}
+	}
+	if len(password) < 8 || len(password) > 72 {
+		return false, "", "", fmt.Errorf("initial administrator password must be between 8 and 72 bytes")
 	}
 
 	hash, err := HashPassword(password)
@@ -83,9 +90,16 @@ func EnsureAdmin(db *gorm.DB, dbPath string) (created bool, username, password s
 		return false, "", "", fmt.Errorf("create initial admin: %w", err)
 	}
 
-	log.Printf("[SECURITY] Initial administrator created: %s. Password is 'admin' (or THREE_M_UI_ADMIN_PASSWORD). Change it immediately on first login.", username)
-
 	return true, username, password, nil
+}
+
+// GeneratePassword creates a cryptographically random initial or reset password.
+func GeneratePassword() (string, error) {
+	var raw [24]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("generate administrator password: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
 
 func EncodePassword(password string) string {
@@ -93,14 +107,14 @@ func EncodePassword(password string) string {
 }
 
 // ResetAdminPassword sets the first administrator password to the given plaintext
-// (default "admin") and forces password change on next login. Does not create
+// and forces password change on next login. Does not create
 // an admin if none exists.
 func ResetAdminPassword(db *gorm.DB, plaintext string) error {
 	if db == nil {
 		return fmt.Errorf("database is nil")
 	}
-	if strings.TrimSpace(plaintext) == "" {
-		plaintext = "admin"
+	if len(plaintext) < 8 || len(plaintext) > 72 {
+		return fmt.Errorf("administrator password must be between 8 and 72 bytes")
 	}
 	var u models.User
 	if err := db.Where("role = ?", "admin").Order("id asc").First(&u).Error; err != nil {

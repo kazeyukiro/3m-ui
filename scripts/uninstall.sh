@@ -2,13 +2,15 @@
 set -eu
 umask 077
 
-BASE="/usr/local/lib/3m-ui"
+ROOT="${THREE_M_UI_ROOT:-}"
+BASE="$ROOT/usr/local/lib/3m-ui"
 APP_BIN="$BASE/3m-ui-bin"
-ENTRY="/usr/local/bin/3m-ui"
-CONFIG_DIR="/etc/3m-ui"
-DATA_DIR="/var/lib/3m-ui"
-LOG_DIR="/var/log/3m-ui"
-MIHOMO_BIN="/usr/local/bin/mihomo"
+ENTRY="$ROOT/usr/local/bin/3m-ui"
+CONFIG_DIR="$ROOT/etc/3m-ui"
+DATA_DIR="${THREE_M_UI_DATA_DIR:-}"
+if [ -z "$DATA_DIR" ] && [ -s "$BASE/DATA_DIRECTORY" ]; then DATA_DIR="$(cat "$BASE/DATA_DIRECTORY")"; fi
+DATA_DIR="${DATA_DIR:-$ROOT/var/lib/3m-ui}"
+LOG_DIR="$ROOT/var/log/3m-ui"
 SERVICE_NAME="3m-ui"
 PURGE=0
 YES=0
@@ -22,8 +24,11 @@ for arg in "$@"; do
   esac
 done
 
+for path in "$BASE" "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"; do
+  case "$path" in /|/etc|/usr|/var|*/../*|*/..|*[[:space:]]*) echo "Unsafe installation path: $path" >&2; exit 1;; esac
+done
 [ "$(id -u)" -eq 0 ] || { echo "Error: please run as root." >&2; exit 1; }
-init_system(){ if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then echo systemd; elif command -v rc-service >/dev/null 2>&1; then echo openrc; else echo unsupported; fi; }
+init_system(){ if [ -d "$ROOT/run/systemd/system" ] && command -v systemctl >/dev/null 2>&1; then echo systemd; elif command -v rc-service >/dev/null 2>&1; then echo openrc; else echo unsupported; fi; }
 
 if [ "$YES" -ne 1 ]; then
   [ -t 0 ] || { echo "Non-interactive uninstall requires --yes." >&2; exit 1; }
@@ -32,9 +37,9 @@ if [ "$YES" -ne 1 ]; then
   echo "  Application: $APP_BIN"
   echo "  Config: $CONFIG_DIR"
   if [ "$PURGE" -eq 1 ]; then
-    echo "  Data: $DATA_DIR [WILL BE DELETED — irreversible]"
+    echo "  Config and data: $CONFIG_DIR, $DATA_DIR [WILL BE DELETED — irreversible]"
   else
-    echo "  Data: $DATA_DIR [KEPT]"
+    echo "  Config and data: $CONFIG_DIR, $DATA_DIR [KEPT]"
   fi
   printf 'Continue? [y/N] '; read -r answer
   case "$answer" in y|Y|yes|YES) ;; *) echo "Aborted."; exit 0;; esac
@@ -47,26 +52,27 @@ fi
 
 case "$(init_system)" in
   systemd)
-    systemctl disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
-    rm -f "/etc/systemd/system/$SERVICE_NAME.service"
+    if [ -f "$ROOT/etc/systemd/system/$SERVICE_NAME.service" ]; then systemctl stop "$SERVICE_NAME"; fi
+    systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true
+    rm -f "$ROOT/etc/systemd/system/$SERVICE_NAME.service"
     systemctl daemon-reload >/dev/null 2>&1 || true
     ;;
   openrc)
-    rc-service "$SERVICE_NAME" stop >/dev/null 2>&1 || true
+    if [ -f "$ROOT/etc/init.d/$SERVICE_NAME" ]; then rc-service "$SERVICE_NAME" stop; fi
     rc-update del "$SERVICE_NAME" default >/dev/null 2>&1 || true
-    rm -f "/etc/init.d/$SERVICE_NAME"
+    rm -f "$ROOT/etc/init.d/$SERVICE_NAME"
     ;;
 esac
 
 rm -f "$ENTRY"
-rm -rf "$BASE" "$CONFIG_DIR" "$LOG_DIR"
+rm -rf "$BASE" "$LOG_DIR"
 
 if [ "$PURGE" -eq 1 ]; then
-  rm -rf "$DATA_DIR"
+  rm -rf "$DATA_DIR" "$CONFIG_DIR"
   echo "3m-ui uninstalled and application data purged."
 else
-  echo "3m-ui uninstalled. Persistent data kept at: $DATA_DIR"
+  echo "3m-ui uninstalled. Data kept at: $DATA_DIR; configuration, keys and certificates kept at: $CONFIG_DIR"
 fi
 
-echo "Mihomo was left untouched: $MIHOMO_BIN"
+echo "The managed Mihomo binary was removed with 3m-ui; external cores were left untouched."
 echo "Done."
