@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/google/uuid"
@@ -263,6 +264,12 @@ func autofillReality(cfg map[string]interface{}) error {
 	if raw == nil {
 		raw = map[string]interface{}{}
 	}
+	dest, _ := raw["dest"].(string)
+	dest = strings.TrimSpace(dest)
+	if dest == "" {
+		return fmt.Errorf("REALITY destination is required: scan for a target or enter one explicitly")
+	}
+	raw["dest"] = dest
 	priv, _ := raw["private-key"].(string)
 	// public-key may be present from older clients; only use it to skip re-derive, never persist.
 	pubHint, _ := raw["public-key"].(string)
@@ -275,18 +282,10 @@ func autofillReality(cfg map[string]interface{}) error {
 	// public-key is client-only and rejected by ValidateListenerConfig.
 	delete(raw, "public-key")
 	delete(raw, "public_key")
-	if dest, _ := raw["dest"].(string); strings.TrimSpace(dest) == "" {
-		if sni, _ := cfg["sni"].(string); strings.TrimSpace(sni) != "" {
-			raw["dest"] = strings.TrimSpace(sni) + ":443"
-		} else {
-			raw["dest"] = "www.microsoft.com:443"
-		}
-	}
 	if names := asStringSlice(raw["server-names"]); len(names) == 0 {
-		dest, _ := raw["dest"].(string)
-		host := strings.Split(dest, ":")[0]
-		if host == "" {
-			host = "www.microsoft.com"
+		host, _, err := net.SplitHostPort(dest)
+		if err != nil {
+			host = dest
 		}
 		raw["server-names"] = []string{host}
 	}

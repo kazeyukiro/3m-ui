@@ -1,6 +1,7 @@
 package listener
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -8,15 +9,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo/realityscan"
 )
 
-type Handler struct{ svc *Service }
+type Handler struct {
+	svc            *Service
+	realityScanner *realityscan.Scanner
+}
 
-func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
+func NewHandler(svc *Service) *Handler { return &Handler{svc: svc, realityScanner: realityscan.New()} }
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.ListListeners)
 	rg.POST("", h.CreateListener)
 	rg.POST("/generate", h.GenerateMaterial)
+	rg.POST("/reality/scan", h.ScanRealityTargets)
 	rg.GET("/templates", h.ListTemplates)
 	rg.POST("/templates", h.CreateTemplate)
 	rg.GET("/templates/:id", h.GetTemplate)
@@ -32,6 +38,20 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/:id/versions", h.ListVersions)
 	rg.GET("/:id/versions/:version/diff", h.DiffVersion)
 	rg.POST("/:id/versions/:version/rollback", h.RollbackVersion)
+}
+
+func (h *Handler) ScanRealityTargets(c *gin.Context) {
+	result, err := h.realityScanner.Scan(c.Request.Context())
+	if errors.Is(err, realityscan.ErrBusy) {
+		c.Header("Retry-After", "5")
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusRequestTimeout, gin.H{"error": "REALITY target scan interrupted; retry or enter a target manually"})
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 func parseID(c *gin.Context, key string) (uint, bool) {
 	n, err := strconv.ParseUint(c.Param(key), 10, 32)

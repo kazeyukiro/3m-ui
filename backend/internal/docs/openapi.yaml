@@ -208,9 +208,19 @@ paths:
     post:
       tags: [nodes]
       summary: Create listener
+      description: |
+        Alias of POST /listeners. For REALITY, supply a nonempty
+        reality-config.dest inside config, which is a JSON-encoded string.
+        The former Microsoft and SNI-derived destination defaults are removed.
+        Call POST /nodes/reality/scan first and copy selected.target into dest,
+        or choose a target manually. If selected is null, retry or enter a target
+        manually. Creation does not run a scan; missing credentials are still
+        generated on save. See the scan endpoint for selection details.
       responses:
         "201":
           description: Created
+        "400":
+          description: Invalid listener, including a missing or blank REALITY destination
 
   /nodes/{id}:
     parameters:
@@ -224,9 +234,18 @@ paths:
     put:
       tags: [nodes]
       summary: Update listener
+      description: |
+        Alias of PUT /listeners/{id}. Submit the full listener, preserving its
+        other fields and credentials. For REALITY, config is a JSON-encoded
+        string and must contain a nonempty reality-config.dest. Retain the saved
+        destination unless deliberately changing it. An omitted destination is
+        no longer filled from Microsoft or SNI. Updating does not run a scan or
+        automatically rotate the destination.
       responses:
         "200":
           description: Updated
+        "400":
+          description: Invalid listener, including a missing or blank REALITY destination
     delete:
       tags: [nodes]
       summary: Delete listener
@@ -244,6 +263,58 @@ paths:
         "200":
           description: uri, uris, client_yaml
 
+  /listeners/reality/scan:
+    post:
+      tags: [nodes]
+      summary: Find REALITY targets from this node's network
+      description: |
+        Samples only auto_select entries from the reviewed candidate catalog,
+        10 at a time, up to 30 probes with
+        5 concurrent target probes and 5 seconds per probe. Each probe races at
+        most 2 validated IPs with a 200ms fallback delay and a 1-second TCP
+        connection timeout per address. Stops after finding
+        at least 3 eligible targets. Selects randomly within a latency window
+        (max 300ms or 3x fastest, capped at 1500ms). Checks TLS 1.3, h2, X25519,
+        certificates, HTTP redirects and known delivery-network DNS/header signals.
+        Disabled catalog entries are never probed by this endpoint. Not proof against
+        fallback abuse. No custom target input; does not modify a listener.
+        Runs on the receiving panel, also when called via the cluster proxy.
+        Alias: POST /nodes/reality/scan. After a successful selection, copy
+        selected.target into reality-config.dest inside the listener's
+        JSON-encoded config string and submit a separate create/update request.
+        If selected is null, retry or enter a target manually; there is no default
+        fallback. Saving a listener never implicitly calls this endpoint.
+      responses:
+        "200":
+          description: Completed; selected is null if no target qualified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [selected, candidates, scanned, checked_at]
+                properties:
+                  selected:
+                    allOf:
+                      - $ref: '#/components/schemas/RealityTarget'
+                    nullable: true
+                  candidates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RealityTarget'
+                  scanned:
+                    type: integer
+                    maximum: 30
+                  checked_at:
+                    type: string
+                    format: date-time
+        "408":
+          description: Scan interrupted or timed out
+        "429":
+          description: A scan is already running; retry later
+
+  /nodes/reality/scan:
+    $ref: '#/paths/~1listeners~1reality~1scan'
+
   /listeners:
     get:
       tags: [nodes]
@@ -254,9 +325,32 @@ paths:
     post:
       tags: [nodes]
       summary: Create listener
+      description: |
+        Alias of POST /nodes. For REALITY, supply a nonempty reality-config.dest
+        inside config, which is a JSON-encoded string. The former Microsoft and
+        SNI-derived destination defaults are removed. Call POST
+        /listeners/reality/scan first and copy selected.target into dest, or
+        choose a target manually. If selected is null, retry or enter a target
+        manually. Creation does not run a scan; missing credentials are still
+        generated on save. The example target is a placeholder and must be replaced.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: reality-node
+              protocol: vless
+              port: "10443"
+              enabled: true
+              config: '{"reality-config":{"dest":"chosen.example.com:443"}}'
       responses:
         "201":
           description: Created
+        "400":
+          description: Invalid listener, including a missing or blank REALITY destination
+
+  /listeners/{id}:
+    $ref: '#/paths/~1nodes~1{id}'
 
   /cluster:
     get:
@@ -654,6 +748,40 @@ paths:
           description: application/yaml
 
 components:
+  schemas:
+    RealityTarget:
+      type: object
+      required: [target, server_name, latency_ms, eligible]
+      properties:
+        target:
+          type: string
+          example: chosen.example.com:443
+        server_name:
+          type: string
+          example: chosen.example.com
+        latency_ms:
+          type: integer
+        eligible:
+          type: boolean
+        reason:
+          type: string
+          description: Rejection code, when ineligible
+        evidence:
+          type: object
+          description: Observed DNS, TLS, certificate, HTTP and delivery-network signals; not a hosting safety attestation
+          properties:
+            cname: { type: string }
+            ip: { type: string }
+            tls_version: { type: string }
+            alpn: { type: string }
+            key_exchange: { type: string }
+            certificate_valid: { type: boolean }
+            certificate_expires: { type: string, format: date-time }
+            http_status: { type: integer }
+            server: { type: string }
+            redirect: { type: string }
+            cloudflare: { type: boolean }
+            delivery_signal: { type: string }
   parameters:
     IdPath:
       in: path
