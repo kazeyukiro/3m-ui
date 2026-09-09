@@ -103,5 +103,5 @@ const zh: typeof en = {
 };
 
 export function useListenerRuntimeMessages() {
-  return useI18n().locale === 'zh' ? zh : en;
+  return useI18n().locale.startsWith('zh') ? zh : en;
 }

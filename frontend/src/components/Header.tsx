@@ -10,7 +10,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore, ThemeMode } from '../stores/themeStore';
-import { useI18n } from '../i18n';
+import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
 
 const { Header } = Layout;
@@ -27,10 +27,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
   const username = useAuthStore((s) => s.username);
   const isMobile = useIsMobile();
 
-  const langItems = [
-    { key: 'zh', label: '中文' },
-    { key: 'en', label: 'English' },
-  ];
+  const langItems = LOCALE_OPTIONS.map((o) => ({ key: o.key, label: o.label }));
 
   const themeItems = [
     { key: 'light', label: t('settings.light') },
@@ -81,11 +78,11 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
           menu={{
             items: langItems,
             selectedKeys: [locale],
-            onClick: (e) => setLocale(e.key as 'en' | 'zh'),
+            onClick: (e) => setLocale(e.key as Locale),
           }}
         >
           <Button type="text" icon={<GlobalOutlined />}>
-            {!isMobile && (locale === 'zh' ? '中文' : 'English')}
+            {!isMobile && (LOCALE_OPTIONS.find((o) => o.key === locale)?.label || locale)}
           </Button>
         </Dropdown>
         <Tag icon={<UserOutlined />} style={{ marginInlineEnd: 0 }}>
