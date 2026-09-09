@@ -4,6 +4,9 @@
   <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
 </p>
 
+> Languages / 语言: **README** · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
+
+
 **Mihomo 服务端 Web 管理面板**
 
 
@@ -16,7 +19,7 @@
 <a href="https://linux.do" alt="LINUX DO">
       <img src="https://img.shields.io/badge/LINUX-DO-FFB003.svg?logo=data:image/svg%2bxml;base64,DQo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPjxwYXRoIGQ9Ik00Ni44Mi0uMDU1aDYuMjVxMjMuOTY5IDIuMDYyIDM4IDIxLjQyNmM1LjI1OCA3LjY3NiA4LjIxNSAxNi4xNTYgOC44NzUgMjUuNDV2Ni4yNXEtMi4wNjQgMjMuOTY4LTIxLjQzIDM4LTExLjUxMiA3Ljg4NS0yNS40NDUgOC44NzRoLTYuMjVxLTIzLjk3LTIuMDY0LTM4LjAwNC0yMS40M1EuOTcxIDY3LjA1Ni0uMDU0IDUzLjE4di02LjQ3M0MxLjM2MiAzMC43ODEgOC41MDMgMTguMTQ4IDIxLjM3IDguODE3IDI5LjA0NyAzLjU2MiAzNy41MjcuNjA0IDQ2LjgyMS0uMDU2IiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZWNlY2VjO2ZpbGwtb3BhY2l0eToxIi8+PHBhdGggZD0iTTQ3LjI2NiAyLjk1N3EyMi41My0uNjUgMzcuNzc3IDE1LjczOGE0OS43IDQ5LjcgMCAwIDEgNi44NjcgMTAuMTU3cS00MS45NjQuMjIyLTgzLjkzIDAgOS43NS0xOC42MTYgMzAuMDI0LTI0LjM4N2E2MSA2MSAwIDAgMSA5LjI2Mi0xLjUwOCIgc3R5bGU9InN0cm9rZTpub25lO2ZpbGwtcnVsZTpldmVub2RkO2ZpbGw6IzE5MTkxOTtmaWxsLW9wYWNpdHk6MSIvPjxwYXRoIGQ9Ik03Ljk4IDcwLjkyNmMyNy45NzctLjAzNSA1NS45NTQgMCA4My45My4xMTNRODMuNDI2IDg3LjQ3MyA2Ni4xMyA5NC4wODZxLTE4LjgxIDYuNTQ0LTM2LjgzMi0xLjg5OC0xNC4yMDMtNy4wOS0yMS4zMTctMjEuMjYyIiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZjlhZjAwO2ZpbGwtb3BhY2l0eToxIi8+PC9zdmc+" />
     </a>
-> 文档站：[3m-ui-docs](https://github.com/kazeyukiro/3m-ui-docs) 
+> 文档：[https://3m-ui.top/docs/](https://3m-ui.top/docs/) · 官网：[https://3m-ui.top/](https://3m-ui.top/) 
 
 ---
 
@@ -182,43 +185,10 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 
 ---
 
-## English
 
-**3m-ui** is a lightweight, self-hosted web panel for managing a [Mihomo](https://github.com/MetaCubeX/mihomo) server: listeners, users, subscriptions, traffic, Telegram alerts, multi-node registry, and safe config apply/rollback.
+---
 
-### Install
+## English & other languages
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
-```
+Full translations (18 languages): see the language links at the top, or open [README.en.md](./README.en.md).
 
-Update after install: `sudo 3m-ui update` (optional tag: `sudo 3m-ui update v1.0.0`).
-
-Default panel: `http://SERVER_IP:8080/` — user `admin` with a randomly generated initial password, printed once (**change on first login**). Native bundles and Docker images include the pinned Mihomo core. See [installation, upgrade and recovery](docs/installation.md).
-
-### Build
-
-```bash
-cd frontend && npm install && npm run build
-cp -r dist ../backend/cmd/server/web/dist
-cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags='-s -w' -o ../3m-ui ./cmd/server
-```
-
-Static Linux binaries are published on the [Releases](https://github.com/kazeyukiro/3m-ui/releases) page for multiple architectures.
-
-
-### Acknowledgements
-
-Special thanks to:
-
-- [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
-- [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples and protocol references
-- [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX and ops inspiration
-- [Gin](https://github.com/gin-gonic/gin), [GORM](https://github.com/go-gorm/gorm), [React](https://github.com/facebook/react), [Ant Design](https://github.com/ant-design/ant-design), [Zustand](https://github.com/pmndrs/zustand), [golang-jwt/jwt](https://github.com/golang-jwt/jwt)
-- The Go, Node.js, and wider open-source communities
-
-Contributors: [kazeyukiro](https://github.com/kazeyukiro), [freephilx](https://github.com/freephilx).
-
-### License
-
-Eclipse Public License 2.0 — see [LICENSE](./LICENSE).
