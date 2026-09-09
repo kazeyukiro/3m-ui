@@ -184,8 +184,18 @@ func (s *Service) CheckConnection(ctx context.Context, l models.Listener, export
 		return finish("config_unavailable")
 	}
 	if exportErr != nil {
-		check.Steps = append(check.Steps, ConnectionStep{"client_config", "unknown", "client_config_unavailable"})
-		return finish("client_config_unavailable")
+		reason := "client_config_unavailable"
+		msg := strings.ToLower(exportErr.Error())
+		switch {
+		case strings.Contains(msg, "host is not configured"), strings.Contains(msg, "access host"):
+			reason = "client_access_host_missing"
+		case strings.Contains(msg, "no active credentials"):
+			reason = "no_active_credentials"
+		case strings.Contains(msg, "client yaml unavailable"):
+			reason = "client_yaml_unavailable"
+		}
+		check.Steps = append(check.Steps, ConnectionStep{"client_config", "failed", reason})
+		return finish(reason)
 	}
 	proxy, address, err := exportedClientProxy(clientYAML)
 	if err != nil {

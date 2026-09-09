@@ -29,6 +29,10 @@ const en = {
   reasons: {
     client_config_ready: 'The exported client address, port, credentials and protocol settings are used unchanged.',
     client_config_unavailable: 'No usable client configuration could be exported. Check the public access address, active credentials and protocol export support.',
+    client_access_host_missing: 'Set the node public host or panel public_url so the test uses the same address clients use.',
+    no_active_credentials: 'Bind at least one active user with valid credentials to this node before testing.',
+    client_yaml_unavailable: 'Client YAML could not be exported for this protocol. Check protocol settings and credentials.',
+    check_busy: 'Another connection test is already running. Wait and retry.',
     client_endpoint_unavailable: 'The exported profile needs a valid server and single port, without a dependent proxy. Correct the client access settings and retry.',
     client_started: 'The isolated Mihomo client started successfully.',
     client_start_failed: 'The test client could not start. This does not establish a node failure.',
@@ -80,6 +84,10 @@ const zh: typeof en = {
   reasons: {
     client_config_ready: '使用导出配置中的实际地址、端口、凭证和协议参数，保持客户端连接设置不变。',
     client_config_unavailable: '无法导出可用的客户端配置，请检查公网访问地址、有效凭证，以及协议是否支持导出。',
+    client_access_host_missing: '请先设置节点公网地址或面板 public_url（订阅外网地址），测试会使用与客户端相同的地址。',
+    no_active_credentials: '请先为该节点绑定至少一个有效用户凭证，再进行连接测试。',
+    client_yaml_unavailable: '当前协议无法导出客户端 YAML，请检查协议参数与凭证。',
+    check_busy: '已有连接测试在进行中，请稍后再试。',
     client_endpoint_unavailable: '导出配置需要有效的连接地址和单个端口，且不能依赖其他代理。请修正客户端访问设置后重试。',
     client_started: '独立的临时 Mihomo 客户端已启动。',
     client_start_failed: '测试客户端启动失败，暂时无法判断节点是否可用。',
