@@ -14,6 +14,7 @@ import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { randomListenerPort } from '../utils/listenerPort';
+import { suggestListenerName } from '../utils/listenerName';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
@@ -85,7 +86,7 @@ const Listeners: React.FC = () => {
     if (port) form.setFieldsValue({ port });
   };
 
-  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
   const openEdit = (record: Listener) => { setSubmitError(''); setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
     if (submitting) return;
