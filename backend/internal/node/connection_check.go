@@ -82,17 +82,21 @@ func (s *Service) connectionClientYAML(l models.Listener) (string, error) {
 		muiCreds = append(muiCreds, mui.Cred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 		creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 	}
-	if shares, err := mui.BuildShares(l, host, muiCreds); err == nil && len(shares) > 0 {
-		if len(shares[0].ClientYAML) > 0 {
-			return string(shares[0].ClientYAML), nil
+	// Prefer m-ui then registry ClientYAML; fall through when a tier returns
+	// shares without YAML so converter can still produce a probe profile.
+	if shares, err := mui.BuildShares(l, host, muiCreds); err == nil {
+		for _, s := range shares {
+			if len(s.ClientYAML) > 0 {
+				return string(s.ClientYAML), nil
+			}
 		}
-		return "", fmt.Errorf("client YAML unavailable")
 	}
-	if shares, err := protocol.ExportShares(l, host, creds); err == nil && len(shares) > 0 {
-		if shares[0].ClientYAML != "" {
-			return shares[0].ClientYAML, nil
+	if shares, err := protocol.ExportShares(l, host, creds); err == nil {
+		for _, s := range shares {
+			if s.ClientYAML != "" {
+				return s.ClientYAML, nil
+			}
 		}
-		return "", fmt.Errorf("client YAML unavailable")
 	}
 	return converter.ExportClientYAML(l, host, credentials)
 }

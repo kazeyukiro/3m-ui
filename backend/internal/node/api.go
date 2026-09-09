@@ -195,6 +195,10 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 	for _, c := range credentials {
 		muiCreds = append(muiCreds, mui.Cred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 	}
+	creds := make([]protocol.UserCred, 0, len(credentials))
+	for _, c := range credentials {
+		creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
+	}
 	if shares, err := mui.BuildShares(*listener, host, muiCreds); err == nil && len(shares) > 0 {
 		uris = make([]string, 0, len(shares))
 		for _, s := range shares {
@@ -208,11 +212,9 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		if len(uris) > 0 {
 			primary = uris[0]
 		}
-	} else {
-		creds := make([]protocol.UserCred, 0, len(credentials))
-		for _, c := range credentials {
-			creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
-		}
+	}
+	// Fall through tiers when m-ui produced neither a URI nor client YAML.
+	if primary == "" && clientYAML == "" {
 		if shares, err := protocol.ExportShares(*listener, host, creds); err == nil && len(shares) > 0 {
 			uris = make([]string, 0, len(shares))
 			for _, s := range shares {
@@ -226,20 +228,28 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 			if len(uris) > 0 {
 				primary = uris[0]
 			}
-		} else {
-			legacy, lerr := ClientURIsWithCredentials(*listener, host, credentials)
-			if lerr != nil {
-				c.JSON(http.StatusUnprocessableEntity, gin.H{"error": lerr.Error()})
-				return
-			}
-			uris = legacy
-			if uris == nil {
-				uris = []string{}
-			}
-			if len(uris) > 0 {
-				primary = uris[0]
-			}
-			clientYAML, _ = converter.ExportClientYAML(*listener, host, credentials)
+		}
+	}
+	if primary == "" && clientYAML == "" {
+		legacy, lerr := ClientURIsWithCredentials(*listener, host, credentials)
+		if lerr != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": lerr.Error()})
+			return
+		}
+		uris = legacy
+		if uris == nil {
+			uris = []string{}
+		}
+		if len(uris) > 0 {
+			primary = uris[0]
+		}
+		if y, err := converter.ExportClientYAML(*listener, host, credentials); err == nil {
+			clientYAML = y
+		}
+	}
+	if clientYAML == "" {
+		if y, err := converter.ExportClientYAML(*listener, host, credentials); err == nil {
+			clientYAML = y
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
