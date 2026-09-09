@@ -224,20 +224,38 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			}
 		}
 		// Prefer existing disk pair; only mint when still incomplete after Load.
-		// Fold listener access profile into SNI hints for SAN when minting.
+		// Older generators persisted the access SNI as an inbound field and
+		// then rejected that same field. Repair only an exact generated value.
+		if sni, ok := configMap["sni"].(string); ok && sni != "" &&
+			(sni == strings.TrimSpace(l.AccessSNI) || sni == strings.TrimSpace(l.PublicHost)) {
+			delete(configMap, "sni")
+		}
+		// Certificate hints belong in a temporary copy, not in the persisted
+		// or validated inbound configuration. REALITY also needs no TLS cert.
+		tlsConfig := make(map[string]interface{}, len(configMap)+1)
+		for key, value := range configMap {
+			tlsConfig[key] = value
+		}
 		if strings.TrimSpace(l.AccessSNI) != "" {
-			if s, _ := configMap["sni"].(string); strings.TrimSpace(s) == "" {
-				configMap["sni"] = strings.TrimSpace(l.AccessSNI)
+			if s, _ := tlsConfig["sni"].(string); strings.TrimSpace(s) == "" {
+				tlsConfig["sni"] = strings.TrimSpace(l.AccessSNI)
 			}
 		}
 		if strings.TrimSpace(l.PublicHost) != "" {
-			if s, _ := configMap["sni"].(string); strings.TrimSpace(s) == "" {
-				configMap["sni"] = strings.TrimSpace(l.PublicHost)
+			if s, _ := tlsConfig["sni"].(string); strings.TrimSpace(s) == "" {
+				tlsConfig["sni"] = strings.TrimSpace(l.PublicHost)
 			}
 		}
-		if err := ensureListenerTLSMaterial(protocolName, configMap); err != nil {
+		if err := ensureListenerTLSMaterial(protocolName, tlsConfig); err != nil {
 			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
 			continue
+		}
+		for _, key := range []string{"certificate", "private-key", "private_key", "allow-insecure"} {
+			if value, ok := tlsConfig[key]; ok {
+				configMap[key] = value
+			} else {
+				delete(configMap, key)
+			}
 		}
 		if patched, mErr := json.Marshal(configMap); mErr == nil {
 			prev := strings.TrimSpace(l.Config)

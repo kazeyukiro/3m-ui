@@ -10,6 +10,16 @@ import (
 )
 
 func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
+	return s.activeCredentialsByListener(true)
+}
+
+// ExistingCredentialsByListener observes credentials without generating or
+// persisting defaults. An empty entry means bindings exist but none is active.
+func (s *Service) ExistingCredentialsByListener() (map[uint][]Credential, error) {
+	return s.activeCredentialsByListener(false)
+}
+
+func (s *Service) activeCredentialsByListener(ensureDefaults bool) (map[uint][]Credential, error) {
 	result := make(map[uint][]Credential)
 	var listeners []models.Listener
 	if err := s.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
@@ -51,6 +61,9 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 	}
 	for _, listener := range listeners {
 		if ids, hasBindings := boundUsers[listener.ID]; hasBindings {
+			if !ensureDefaults {
+				result[listener.ID] = []Credential{}
+			}
 			for _, userID := range ids {
 				u, ok := usersByID[userID]
 				if !ok {
@@ -80,8 +93,10 @@ func (s *Service) ActiveCredentialsByListener() (map[uint][]Credential, error) {
 			continue
 		}
 		before := listener.Config
-		if err := credentials.EnsureListenerCredentials(&listener); err != nil {
-			return nil, fmt.Errorf("prepare listener %q credentials: %w", listener.Name, err)
+		if ensureDefaults {
+			if err := credentials.EnsureListenerCredentials(&listener); err != nil {
+				return nil, fmt.Errorf("prepare listener %q credentials: %w", listener.Name, err)
+			}
 		}
 		if listener.Config != before {
 			if err := s.db.Model(&models.Listener{}).Where("id = ?", listener.ID).Update("config", listener.Config).Error; err != nil {

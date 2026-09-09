@@ -19,6 +19,8 @@ type Handler struct {
 
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc, realityScanner: realityscan.New()} }
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	rg.GET("/runtime-status", h.RuntimeStatus)
+	rg.POST("/:id/check", h.CheckRuntime)
 	rg.GET("", h.ListListeners)
 	rg.POST("", h.CreateListener)
 	rg.POST("/generate", h.GenerateMaterial)

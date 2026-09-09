@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { startVisiblePolling } from './visiblePolling.ts';
+
+test('visible polling pauses, cancels and resumes without overlapping requests', async t => {
+  const original = globalThis.document;
+  const visibility = new EventTarget();
+  visibility.hidden = true;
+  globalThis.document = visibility;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let finish;
+  const signals = [];
+  const stop = startVisiblePolling(signal => {
+    signals.push(signal);
+    return new Promise(resolve => { finish = resolve; });
+  });
+  t.after(() => { stop(); globalThis.document = original; });
+  assert.equal(signals.length, 0, 'hidden mount must not fetch');
+  const show = hidden => {
+    visibility.hidden = hidden;
+    visibility.dispatchEvent(new Event('visibilitychange'));
+  };
+  show(false);
+  assert.equal(signals.length, 1, 'becoming visible checks immediately');
+  t.mock.timers.tick(30000);
+  assert.equal(signals.length, 1, 'slow requests never overlap');
+  show(true);
+  assert.equal(signals[0].aborted, true);
+  show(false);
+  assert.equal(signals.length, 1, 'wait for aborted request to settle');
+  finish();
+  await Promise.resolve();
+  t.mock.timers.tick(0);
+  assert.equal(signals.length, 2, 'resume immediately after it settles');
+  finish();
+  await Promise.resolve();
+  t.mock.timers.tick(9999);
+  assert.equal(signals.length, 2);
+  t.mock.timers.tick(1);
+  assert.equal(signals.length, 3, 'wait ten seconds after completion');
+  show(true);
+  finish();
+  await Promise.resolve();
+  t.mock.timers.tick(60000);
+  assert.equal(signals.length, 3, 'no work in background');
+  show(false);
+  assert.equal(signals.length, 4);
+  stop();
+  assert.equal(signals[3].aborted, true);
+  finish();
+  await Promise.resolve();
+  show(true);
+  show(false);
+  t.mock.timers.tick(60000);
+  assert.equal(signals.length, 4, 'unmount removes listener and timer');
+});

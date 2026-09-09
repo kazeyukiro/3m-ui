@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin } from 'antd';
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
 import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined, MoreOutlined } from '@ant-design/icons';
 import {
   fetchListeners, createListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
@@ -18,6 +18,10 @@ import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolS
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
 import QRCode from '../components/QRCode';
+import { useListenerRuntime } from '../hooks/useListenerRuntime';
+import { useListenerRuntimeMessages } from '../i18n/listenerRuntime';
+import { listenerAvailability } from '../utils/listenerAvailability';
+import { ListenerRuntimeTag, ListenerRuntimeDrawer } from '../components/ListenerRuntime';
 
 const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic-v4', 'tuic-v5', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
@@ -28,6 +32,12 @@ const Listeners: React.FC = () => {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [data, setData] = useState<Listener[]>([]);
+  const runtimeText = useListenerRuntimeMessages();
+  const [runtimeListener, setRuntimeListener] = useState<Listener | null>(null);
+  const { statuses, details, testing, test } = useListenerRuntime(data, runtimeListener?.id);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const showRuntime = (record: Listener, reuse = true) => { setRuntimeListener(record); if (record.enabled) void test(record.id, reuse).catch(() => {}); };
   const [templates, setTemplates] = useState<ListenerTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -75,9 +85,11 @@ const Listeners: React.FC = () => {
     if (port) form.setFieldsValue({ port });
   };
 
-  const openCreate = () => { setEditing(null); form.resetFields(); form.setFieldsValue({ port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
-  const openEdit = (record: Listener) => { setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
+  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openEdit = (record: Listener) => { setSubmitError(''); setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
+    if (submitting) return;
+    setSubmitting(true); setSubmitError('');
     try {
       const values = { ...(form.getFieldsValue(true) || {}), ...(rawValues || {}) };
       const proto = String(values.protocol || '').trim();
@@ -94,9 +106,16 @@ const Listeners: React.FC = () => {
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
       const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
       const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '' };
-      if (editing) { await updateListener(normalizeId(editing), payload); message.success(t('listeners.updated')); } else { await createListener(payload); message.success(t('listeners.created')); }
+      const saved = editing ? await updateListener(normalizeId(editing), payload) : await createListener(payload);
+      if (!saved.enabled) message.success(runtimeText.savedDisabled);
+      else {
+        const status = await test(saved.id).catch(() => null);
+        if (status?.connection_check?.state === 'available') message.success(runtimeText.savedListening);
+        else message.warning(status?.connection_check?.state === 'unavailable' ? runtimeText.savedFailed : runtimeText.savedUnknown);
+      }
       setModalOpen(false); setEditing(null); form.resetFields(); if (!(await load(false))) message.warning(t('common.error'));
-    } catch (e: any) { message.error(e.message); }
+    } catch (e: any) { setSubmitError(e.message); await load(false); }
+    finally { setSubmitting(false); }
   };
   const onDelete = async (id: number) => { try { await deleteListener(id); message.success(t('listeners.deleted')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
@@ -123,10 +142,13 @@ const Listeners: React.FC = () => {
 
 const columns = [
     { title: t('listeners.name'), dataIndex: 'name', key: 'name', ellipsis: true, width: 150 },
-    { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', width: 110, render: (p: string) => <Tag>{p}</Tag> },
-    { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 100 },
-    { title: t('listeners.status'), dataIndex: 'enabled', key: 'enabled', width: 100, render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
-    { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 300, render: (_: any, record: Listener) => <Space size={4} wrap><Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(normalizeId(record))} /></Tooltip><Tooltip title={t('listeners.clone')}><Button size="small" icon={<BranchesOutlined />} onClick={() => openClone(record)} /></Tooltip><Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<SaveOutlined />} onClick={() => openSaveTemplate(record)} /></Tooltip><Tooltip title={t('listeners.versions')}><Button size="small" icon={<HistoryOutlined />} onClick={() => openVersions(record)} /></Tooltip><Tooltip title={t('common.refresh')}><Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(normalizeId(record))} /></Tooltip><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} /><Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<DeleteOutlined />} danger /></Popconfirm></Space> },
+    { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', width: 100, render: (p: string) => <Tag>{p}</Tag> },
+    { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 90 },
+    { title: runtimeText.enabledSetting, dataIndex: 'enabled', key: 'enabled', width: 90, render: (v: boolean) => <Tag color={v ? 'blue' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
+    { title: runtimeText.title, key: 'runtime', width: 170, render: (_: unknown, record: Listener) => <div>
+      <ListenerRuntimeTag enabled={record.enabled} status={statuses[record.id]} checking={testing.includes(record.id)} onClick={() => showRuntime(record)} />
+    </div> },
+    { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 220, render: (_: any, record: Listener) => <Space size={4} wrap><Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(normalizeId(record))} /></Tooltip><Tooltip title={t('listeners.clone')}><Button size="small" icon={<BranchesOutlined />} onClick={() => openClone(record)} /></Tooltip><Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<SaveOutlined />} onClick={() => openSaveTemplate(record)} /></Tooltip><Tooltip title={t('listeners.versions')}><Button size="small" icon={<HistoryOutlined />} onClick={() => openVersions(record)} /></Tooltip><Tooltip title={t('common.refresh')}><Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(normalizeId(record))} /></Tooltip><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} /><Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<DeleteOutlined />} danger /></Popconfirm></Space> },
   ];
   const templateColumns = [
     { title: t('listeners.templateName'), dataIndex: 'name', key: 'name' },
@@ -136,6 +158,8 @@ const columns = [
   ];
   return <div>
     <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
+    {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
+      description={<Space wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
     <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
             <Spin spinning={loading}>
               <div className="mobile-entity-list">
@@ -160,14 +184,16 @@ const columns = [
                           <div className="mobile-entity-meta">
                             <Tag>{record.protocol}</Tag>
                             <span>:{record.port}</span>
-                            <Tag color={record.enabled ? 'success' : 'default'}>
+                            <Tag color={record.enabled ? 'blue' : 'default'}>
                               {record.enabled ? t('common.enabled') : t('common.disabled')}
                             </Tag>
                           </div>
                         </div>
+                        <ListenerRuntimeTag enabled={record.enabled} status={statuses[id]} checking={testing.includes(id)} onClick={() => showRuntime(record)} />
                         <Dropdown
                           menu={{
                             items: [
+                              { key: 'runtime', icon: <ReloadOutlined />, label: runtimeText.check, onClick: () => showRuntime(record, false) },
                               { key: 'uri', icon: <QrcodeOutlined />, label: t('listeners.copyURI'), onClick: () => showURIs(id) },
                               { key: 'clone', icon: <BranchesOutlined />, label: t('listeners.clone'), onClick: () => openClone(record) },
                               { key: 'tpl', icon: <SaveOutlined />, label: t('listeners.saveTemplate'), onClick: () => openSaveTemplate(record) },
@@ -194,15 +220,17 @@ const columns = [
               </div>
             </Spin>
           ) : (
-            <Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 1050 }} size="middle" />
+            <Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 880 }} size="middle" />
           )}</Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
-    <Modal open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
-      <Form form={form} layout="vertical" onFinish={onSubmit} preserve>
+    <ListenerRuntimeDrawer listener={runtimeListener ? data.find(l => l.id === runtimeListener.id) || runtimeListener : null} status={runtimeListener ? details[runtimeListener.id] || statuses[runtimeListener.id] : undefined} checking={!!runtimeListener && testing.includes(runtimeListener.id)} onClose={() => setRuntimeListener(null)} onCheck={() => { if (runtimeListener) void test(runtimeListener.id).catch(() => {}); }} />
+    <Modal confirmLoading={submitting} closable={!submitting} maskClosable={!submitting} keyboard={!submitting} cancelButtonProps={{ disabled: submitting }} okText={submitting ? runtimeText.saving : t('common.save')} open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
+      {submitError && <Alert type="error" showIcon title={runtimeText.failed} description={<><div>{submitError}</div><div>{runtimeText.failedHint}</div></>} style={{ marginBottom: 16 }} />}
+      <Form disabled={submitting} form={form} layout="vertical" onFinish={onSubmit} preserve>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
         <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
         <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" addonAfter={!editing ? <Button type="link" size="small" onClick={regeneratePort}>{t('listeners.randomPort')}</Button> : undefined} /></Form.Item>
         <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip="IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1"><Input placeholder="0.0.0.0 or ::" /></Form.Item>
-        <Form.Item name="enabled" label={t('listeners.status')} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        <Form.Item name="enabled" label={runtimeText.enabledSetting} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
         <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
         <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>

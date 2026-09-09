@@ -16,7 +16,10 @@ type Service struct {
 	cm *ConfigManager
 	// applyMu serializes configuration replacement, backup rotation, validation,
 	// and process restart. Multiple API routes can call ApplyConfig concurrently.
-	applyMu sync.Mutex
+	applyMu             sync.Mutex
+	connectionCheckMu   sync.Mutex
+	connectionResultsMu sync.Mutex
+	connectionResults   map[uint]cachedConnectionCheck
 }
 
 func NewService(cfg *config.Config) *Service {
@@ -135,7 +138,8 @@ func (s *Service) ApplyConfig(content string) error {
 		return fmt.Errorf("validate Mihomo configuration: %w", err)
 	}
 	if !wasRunning {
-		if err := s.pm.Start(); err != nil {
+		if err := s.startAndCheckListeners(content, false); err != nil {
+			_ = s.pm.Stop()
 			if readErr == nil {
 				if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
 					return fmt.Errorf("start Mihomo: %v; restore previous config: %w", err, restoreErr)
@@ -147,7 +151,7 @@ func (s *Service) ApplyConfig(content string) error {
 		}
 		return nil
 	}
-	if err := s.pm.Restart(); err != nil {
+	if err := s.startAndCheckListeners(content, true); err != nil {
 		if readErr == nil {
 			if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
 				return fmt.Errorf("apply Mihomo configuration: %v; restore previous config: %w", err, restoreErr)
@@ -159,6 +163,19 @@ func (s *Service) ApplyConfig(content string) error {
 		return fmt.Errorf("apply Mihomo configuration: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) startAndCheckListeners(content string, restart bool) error {
+	var err error
+	if restart {
+		err = s.pm.Restart()
+	} else {
+		err = s.pm.Start()
+	}
+	if err != nil {
+		return err
+	}
+	return s.waitForListeners(content)
 }
 
 func (s *Service) RollbackConfig() error {

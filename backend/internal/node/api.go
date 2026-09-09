@@ -35,6 +35,7 @@ func NewHandler(svc *Service, userSvc *user.Service, db *gorm.DB) *Handler {
 
 // RegisterRoutes registers node routes on the provided group.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	rg.POST("/:id/connection-check", h.CheckConnection)
 	rg.GET("", h.ListNodes)
 	rg.POST("", h.CreateNode)
 	rg.GET("/:id", h.GetNode)
@@ -48,6 +49,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 // RegisterClientRoutes registers only routes that are unique to the node
 // handler. The listener handler already owns the shared CRUD/reload routes.
 func (h *Handler) RegisterClientRoutes(rg *gin.RouterGroup) {
+	rg.POST("/:id/connection-check", h.CheckConnection)
 	rg.GET("/:id/uri", h.ExportNodeURI)
 	rg.POST("/:id/client-access", h.CreateClientAccess)
 }
