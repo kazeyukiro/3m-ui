@@ -919,4 +919,32 @@ const Settings: React.FC = () => {
   );
 };
 
+
+function AboutPanelVersion({ subtitle }: { subtitle: string }) {
+  const [info, setInfo] = useState<{ version?: string; git_commit?: string; build_time?: string }>({});
+  useEffect(() => {
+    fetch('/api/v1/health')
+      .then((r) => r.json())
+      .then((d) => setInfo(d || {}))
+      .catch(() => setInfo({}));
+  }, []);
+  const ver = info.version || 'dev';
+  const label = ver === 'dev' ? 'dev' : ver.startsWith('v') ? ver : `v${ver}`;
+  return (
+    <Space direction="vertical">
+      <Title level={4} style={{ margin: 0 }}>
+        3M-UI
+      </Title>
+      <Text type="secondary">{subtitle}</Text>
+      <Tag color="blue">{label}</Tag>
+      {info.git_commit && info.git_commit !== 'unknown' ? (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {info.git_commit.slice(0, 12)}
+          {info.build_time && info.build_time !== 'unknown' ? ` · ${info.build_time}` : ''}
+        </Text>
+      ) : null}
+    </Space>
+  );
+}
+
 export default Settings;
