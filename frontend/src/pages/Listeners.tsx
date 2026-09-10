@@ -108,12 +108,7 @@ const Listeners: React.FC = () => {
       const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
       const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '' };
       const saved = editing ? await updateListener(normalizeId(editing), payload) : await createListener(payload);
-      if (!saved.enabled) message.success(runtimeText.savedDisabled);
-      else {
-        const status = await test(saved.id).catch(() => null);
-        if (status?.connection_check?.state === 'available') message.success(runtimeText.savedListening);
-        else message.warning(status?.connection_check?.state === 'unavailable' ? runtimeText.savedFailed : runtimeText.savedUnknown);
-      }
+      message.success(saved.enabled ? runtimeText.saved : runtimeText.savedDisabled);
       setModalOpen(false); setEditing(null); form.resetFields(); if (!(await load(false))) message.warning(t('common.error'));
     } catch (e: any) { setSubmitError(e.message); await load(false); }
     finally { setSubmitting(false); }
