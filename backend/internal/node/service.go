@@ -104,16 +104,22 @@ func (s *Service) Delete(id uint) error {
 	if err := s.db.First(&previous, id).Error; err != nil {
 		return fmt.Errorf("failed to load node %d: %w", id, err)
 	}
-
+	// Free UNIQUE(name) before soft-delete (same contract as listener.Service).
+	freed := fmt.Sprintf("%s__deleted_%d", previous.Name, id)
+	if err := s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", freed).Error; err != nil {
+		return fmt.Errorf("free node name before delete: %w", err)
+	}
 	if err := s.db.Where("listener_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
+		_ = s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", previous.Name).Error
 		return fmt.Errorf("failed to delete node bindings: %w", err)
 	}
 	if err := s.db.Delete(&models.Listener{}, id).Error; err != nil {
+		_ = s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", previous.Name).Error
 		return fmt.Errorf("failed to delete node: %w", err)
 	}
 
 	if err := s.RegenerateConfig(); err != nil {
-		_ = s.db.Unscoped().Model(&models.Listener{}).Where("id = ?", id).Update("deleted_at", nil).Error
+		_ = s.db.Unscoped().Save(&previous).Error
 		_ = s.db.Unscoped().Model(&models.ListenerUser{}).Where("listener_id = ?", id).Update("deleted_at", nil).Error
 		return fmt.Errorf("failed to regenerate config after delete: %w", err)
 	}

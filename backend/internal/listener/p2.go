@@ -98,13 +98,13 @@ func (s *Service) Clone(id uint, name, port string) (*models.Listener, error) {
 		return nil, err
 	}
 	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Delete(&src).Error; rollbackErr != nil {
+		if rollbackErr := s.db.Unscoped().Delete(&src).Error; rollbackErr != nil {
 			return nil, fmt.Errorf("%v; rollback cloned listener failed: %w", err, rollbackErr)
 		}
 		return nil, err
 	}
 	if err := s.SaveVersion(src.ID, "clone"); err != nil {
-		if rollbackErr := s.db.Delete(&src).Error; rollbackErr != nil {
+		if rollbackErr := s.db.Unscoped().Delete(&src).Error; rollbackErr != nil {
 			return nil, fmt.Errorf("save cloned listener history: %v; rollback failed: %w", err, rollbackErr)
 		}
 		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
@@ -273,7 +273,13 @@ func (s *Service) CreateTemplate(t *models.ListenerTemplate) error {
 	if err := ValidateModel(probe); err != nil {
 		return err
 	}
-	return s.db.Create(t).Error
+	if err := s.db.Create(t).Error; err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return fmt.Errorf("template name %q already exists", strings.TrimSpace(t.Name))
+		}
+		return err
+	}
+	return nil
 }
 func (s *Service) ListTemplates() ([]models.ListenerTemplate, error) {
 	var out []models.ListenerTemplate
@@ -288,7 +294,7 @@ func (s *Service) GetTemplate(id uint) (*models.ListenerTemplate, error) {
 	return &t, nil
 }
 func (s *Service) DeleteTemplate(id uint) error {
-	return s.db.Delete(&models.ListenerTemplate{}, id).Error
+	return s.db.Unscoped().Delete(&models.ListenerTemplate{}, id).Error
 }
 func (s *Service) InstantiateTemplate(templateID uint, name, port string) (*models.Listener, error) {
 	s.mu.Lock()

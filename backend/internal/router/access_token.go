@@ -180,7 +180,7 @@ func (h *AccessTokenHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	result := h.db.Delete(&models.AccessToken{}, uint(id))
+	result := h.db.Unscoped().Delete(&models.AccessToken{}, uint(id))
 	if result.Error != nil {
 		log.Printf("access-token delete failed: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})

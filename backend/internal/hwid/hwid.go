@@ -79,7 +79,8 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 	}
 
 	var existing models.HWIDDevice
-	err := db.Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&existing).Error
+	// UNIQUE(proxy_user_id, hwid) includes soft-deleted rows.
+	err := db.Unscoped().Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&existing).Error
 	now := time.Now().UTC()
 	if err == nil {
 		existing.DeviceOS = firstNonEmpty(info.DeviceOS, existing.DeviceOS)
@@ -87,7 +88,8 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 		existing.DeviceModel = firstNonEmpty(info.DeviceModel, existing.DeviceModel)
 		existing.UserAgent = firstNonEmpty(info.UserAgent, existing.UserAgent)
 		existing.LastSeenAt = now
-		_ = db.Save(&existing).Error
+		existing.DeletedAt = gorm.DeletedAt{}
+		_ = db.Unscoped().Save(&existing).Error
 		return nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -124,11 +126,11 @@ func List(db *gorm.DB, userID uint) ([]models.HWIDDevice, error) {
 }
 
 func Delete(db *gorm.DB, userID, deviceID uint) error {
-	return db.Where("proxy_user_id = ? AND id = ?", userID, deviceID).Delete(&models.HWIDDevice{}).Error
+	return db.Unscoped().Where("proxy_user_id = ? AND id = ?", userID, deviceID).Delete(&models.HWIDDevice{}).Error
 }
 
 func DeleteAll(db *gorm.DB, userID uint) error {
-	return db.Where("proxy_user_id = ?", userID).Delete(&models.HWIDDevice{}).Error
+	return db.Unscoped().Where("proxy_user_id = ?", userID).Delete(&models.HWIDDevice{}).Error
 }
 
 func firstNonEmpty(a, b string) string {

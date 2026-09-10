@@ -144,10 +144,12 @@ func SaveVisualConfig(db *gorm.DB, cfg VisualConfig) error {
 	}
 	fragment := models.Config{Name: visualConfigName, Type: "visual", Content: string(data), Enabled: true}
 	var existing models.Config
-	result := db.Where("name = ?", visualConfigName).First(&existing)
+	// Include soft-deleted rows: UNIQUE(name) still applies to them.
+	result := db.Unscoped().Where("name = ?", visualConfigName).First(&existing)
 	if result.Error == nil {
 		existing.Type, existing.Content, existing.Enabled = fragment.Type, fragment.Content, true
-		return db.Save(&existing).Error
+		existing.DeletedAt = gorm.DeletedAt{}
+		return db.Unscoped().Save(&existing).Error
 	}
 	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return result.Error
