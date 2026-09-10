@@ -9,44 +9,41 @@ type inlineKeyboardButton struct {
 }
 
 // inlineKeyboardMarkup wraps a 2D grid of buttons for Telegram's reply_markup.
-// Each inner slice is a visual row.
 type inlineKeyboardMarkup struct {
 	InlineKeyboard [][]inlineKeyboardButton `json:"inline_keyboard"`
 }
 
-// buildAdminMenu returns the inline keyboard shown to admin chats (after /start
-// or /help). Buttons trigger the corresponding callback_query handlers.
-func buildAdminMenu() inlineKeyboardMarkup {
+func buildAdminMenu(lang string) inlineKeyboardMarkup {
+	lang = NormalizeLang(lang)
 	return inlineKeyboardMarkup{
 		InlineKeyboard: [][]inlineKeyboardButton{
 			{
-				{Text: "📊 状态", CallbackData: "status"},
-				{Text: "👥 用户", CallbackData: "users"},
+				{Text: Tr(lang, "btn_status"), CallbackData: "status"},
+				{Text: Tr(lang, "btn_users"), CallbackData: "users"},
 			},
 			{
-				{Text: "📈 流量", CallbackData: "traffic"},
-				{Text: "🟢 在线", CallbackData: "online"},
+				{Text: Tr(lang, "btn_traffic"), CallbackData: "traffic"},
+				{Text: Tr(lang, "btn_online"), CallbackData: "online"},
 			},
 			{
-				{Text: "📡 节点", CallbackData: "listeners"},
-				{Text: "🧹 清理", CallbackData: "deldepleted"},
+				{Text: Tr(lang, "btn_listeners"), CallbackData: "listeners"},
+				{Text: Tr(lang, "btn_cleanup"), CallbackData: "deldepleted"},
 			},
 			{
-				{Text: "📦 备份", CallbackData: "backup"},
-				{Text: "🔄 重启", CallbackData: "restart"},
+				{Text: Tr(lang, "btn_backup"), CallbackData: "backup"},
+				{Text: Tr(lang, "btn_restart"), CallbackData: "restart"},
 			},
 		},
 	}
 }
 
-// buildUserMenu returns the inline keyboard shown to chats bound to a proxy
-// user via TelegramID (admin-independent, access-controlled by GetByTelegramID).
-func buildUserMenu() inlineKeyboardMarkup {
+func buildUserMenu(lang string) inlineKeyboardMarkup {
+	lang = NormalizeLang(lang)
 	return inlineKeyboardMarkup{
 		InlineKeyboard: [][]inlineKeyboardButton{
 			{
-				{Text: "📊 我的用量", CallbackData: "my_usage"},
-				{Text: "🔗 订阅链接", CallbackData: "my_sub"},
+				{Text: Tr(lang, "btn_my_usage"), CallbackData: "my_usage"},
+				{Text: Tr(lang, "btn_my_sub"), CallbackData: "my_sub"},
 			},
 		},
 	}

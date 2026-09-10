@@ -13,11 +13,17 @@ import (
 // handleCommand dispatches a /command from a Telegram message. The returned
 // string is sent as the reply. An empty string means the handler already sent
 // its reply (e.g. via sendWithKeyboard) and the loop should not send again.
+
+func (b *Bot) lang() string {
+	s, _ := LoadSettings(b.db)
+	return NormalizeLang(s.Language)
+}
+
 func (b *Bot) handleCommand(ctx commandContext) string {
 	text := strings.TrimSpace(ctx.Text)
 	parts := strings.Fields(text)
 	if len(parts) == 0 {
-		return helpText()
+		return helpText(b.lang())
 	}
 	cmd := strings.ToLower(parts[0])
 	if i := strings.IndexByte(cmd, '@'); i >= 0 {
@@ -33,42 +39,42 @@ func (b *Bot) handleCommand(ctx commandContext) string {
 		return b.cmdUsage(ctx)
 	case "status", "状态":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdStatus()
 	case "users", "用户":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdUsers()
 	case "online", "在线":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdOnline()
 	case "listeners", "nodes", "节点":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdListeners()
 	case "traffic", "流量":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdTraffic()
 	case "restart", "重启":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdRestart()
 	case "deldepleted", "清理":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdDelDepleted()
 	case "search", "查找":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		q := ""
 		if len(parts) > 1 {
@@ -77,23 +83,21 @@ func (b *Bot) handleCommand(ctx commandContext) string {
 		return b.cmdSearch(q)
 	case "backup", "备份":
 		if !ctx.IsAdmin {
-			return permDeniedUserOnly
+			return Tr(b.lang(), "perm_denied")
 		}
 		return b.cmdBackup()
 	default:
-		return "未知指令。发送 /help 查看可用命令。"
+		return Tr(b.lang(), "unknown_cmd")
 	}
 }
 
 // permDeniedUserOnly is the reply sent to non-admin chats that try to invoke
 // an admin-only command. It tells them which commands they CAN use.
-const permDeniedUserOnly = "⛔ 此命令仅管理员可用 / Admin-only command.\n可用命令 / Available: /id  /usage  /help"
-
 // cmdStartHelp renders /start and /help. Admin chats receive the admin inline
 // keyboard; bound users receive the user menu; unbound chats (which cannot
 // reach this handler anyway) get the plain help text.
 func (b *Bot) cmdStartHelp(ctx commandContext) string {
-	help := helpText()
+	help := helpText(b.lang())
 	if !ctx.IsAdmin && !ctx.IsBound {
 		return help
 	}
@@ -102,15 +106,15 @@ func (b *Bot) cmdStartHelp(ctx commandContext) string {
 	}
 	chatID := fmtInt64(ctx.ChatID)
 	if ctx.IsAdmin {
-		kb := buildAdminMenu()
+		kb := buildAdminMenu(b.lang())
 		if err := b.tgClient.sendWithKeyboard(chatID, help, kb); err != nil {
 			// Fall back to plain text on API failure (e.g. keyboard rejected).
 			return help
 		}
 		return ""
 	}
-	welcome := "👋 欢迎！点击下方按钮查看你的用量与订阅链接。\nWelcome! Tap a button below to view your usage & subscription."
-	if err := b.tgClient.sendWithKeyboard(chatID, welcome, buildUserMenu()); err != nil {
+	welcome := Tr(b.lang(), "user_welcome")
+	if err := b.tgClient.sendWithKeyboard(chatID, welcome, buildUserMenu(b.lang())); err != nil {
 		return welcome
 	}
 	return ""
@@ -120,7 +124,7 @@ func (b *Bot) cmdStartHelp(ctx commandContext) string {
 // their own ID for the chat_ids allowlist, and by users to share their ID with
 // the admin for binding.
 func (b *Bot) cmdID(ctx commandContext) string {
-	return fmt.Sprintf("🆔 Your Telegram ID: <code>%d</code>", ctx.FromID)
+	return Trf(b.lang(), "your_id", ctx.FromID)
 }
 
 // cmdUsage branches on caller role:
@@ -134,7 +138,7 @@ func (b *Bot) cmdUsage(ctx commandContext) string {
 			q = strings.Join(parts[1:], " ")
 		}
 		if strings.TrimSpace(q) == "" {
-			return "用法 / Usage: /usage &lt;关键字&gt; — 搜索代理用户 / search proxy users"
+			return Tr(b.lang(), "usage_admin_hint")
 		}
 		return b.cmdSearch(q)
 	}
@@ -146,13 +150,13 @@ func (b *Bot) cmdUsage(ctx commandContext) string {
 // is not linked to any ProxyUser.
 func (b *Bot) userUsageMessage(fromID int64) string {
 	if fromID == 0 || b.userSvc == nil {
-		return notBoundMessage(fromID)
+		return notBoundMessage(b.lang(), fromID)
 	}
 	u, err := b.userSvc.GetByTelegramID(fromID)
 	if err != nil || u == nil {
-		return notBoundMessage(fromID)
+		return notBoundMessage(b.lang(), fromID)
 	}
-	return formatUserUsage(u)
+	return formatUserUsage(b.lang(), u)
 }
 
 // cmdMyUsage is the callback_query variant — always renders the bound user's
@@ -165,11 +169,11 @@ func (b *Bot) cmdMyUsage(ctx commandContext) string {
 // cmdMySub returns (and lazily ensures) the bound user's subscription URL.
 func (b *Bot) cmdMySub(ctx commandContext) string {
 	if ctx.FromID == 0 || b.userSvc == nil {
-		return notBoundMessage(ctx.FromID)
+		return notBoundMessage(b.lang(), ctx.FromID)
 	}
 	u, err := b.userSvc.GetByTelegramID(ctx.FromID)
 	if err != nil || u == nil {
-		return notBoundMessage(ctx.FromID)
+		return notBoundMessage(b.lang(), ctx.FromID)
 	}
 	token := u.SubToken
 	if strings.TrimSpace(token) == "" {
@@ -178,46 +182,42 @@ func (b *Bot) cmdMySub(ctx commandContext) string {
 		}
 	}
 	if strings.TrimSpace(token) == "" {
-		return "⚠️ 订阅链接生成失败, 请稍后重试 / Subscription token not available."
+		return Tr(b.lang(), "sub_fail")
 	}
-	return fmt.Sprintf("🔗 <b>订阅链接 / Subscription URL</b>\n<code>%s</code>", buildSubURL(token))
+	return Trf(b.lang(), "sub_link", buildSubURL(token))
 }
 
-func notBoundMessage(fromID int64) string {
-	return fmt.Sprintf(
-		"未绑定账户。请联系管理员将你的 Telegram ID (<code>%d</code>) 绑定到你的账户。\n/ Not bound. Ask admin to bind your Telegram ID.",
-		fromID,
-	)
+func notBoundMessage(lang string, fromID int64) string {
+	return Trf(lang, "not_bound", fromID)
 }
 
 // formatUserUsage builds the per-user usage report shown by /usage and the
 // my_usage callback.
-func formatUserUsage(u *models.ProxyUser) string {
+func formatUserUsage(lang string, u *models.ProxyUser) string {
 	var bld strings.Builder
-	bld.WriteString("📊 <b>账户用量 / My Usage</b>\n")
-	bld.WriteString(fmt.Sprintf("用户 / User: <code>%s</code>\n", escapeHTML(u.Username)))
+	bld.WriteString(Tr(lang, "my_usage_title") + "\n")
+	bld.WriteString(Trf(lang, "user_label", escapeHTML(u.Username)) + "\n")
 	used := formatBytes(u.TrafficUsed)
 	limit := "∞"
 	if u.TrafficLimit > 0 {
 		limit = formatBytes(u.TrafficLimit)
 	}
-	bld.WriteString(fmt.Sprintf("流量 / Traffic: %s / %s\n", used, limit))
-	bld.WriteString(fmt.Sprintf("上传 ↑ %s   下载 ↓ %s\n",
-		formatBytes(u.UploadBytes), formatBytes(u.DownloadBytes)))
+	bld.WriteString(Trf(lang, "traffic_label", used, limit) + "\n")
+	bld.WriteString(Trf(lang, "up_down", formatBytes(u.UploadBytes), formatBytes(u.DownloadBytes)) + "\n")
 	if !u.ExpireTime.IsZero() {
-		bld.WriteString(fmt.Sprintf("到期 / Expires: <code>%s</code>\n", u.ExpireTime.Format("2006-01-02 15:04")))
+		bld.WriteString(Trf(lang, "expires", u.ExpireTime.Format("2006-01-02 15:04")) + "\n")
 	} else {
-		bld.WriteString("到期 / Expires: 永不过期 / Never\n")
+		bld.WriteString(Tr(lang, "expires_never") + "\n")
 	}
-	online := "离线 / Offline"
+	online := Tr(lang, "status_offline")
 	if u.Online {
-		online = "在线 / Online 🟢"
+		online = Tr(lang, "status_online")
 	}
-	bld.WriteString(fmt.Sprintf("状态 / Status: %s\n", online))
+	bld.WriteString(online + "\n")
 	if strings.TrimSpace(u.SubToken) != "" {
-		bld.WriteString(fmt.Sprintf("订阅 / Subscription:\n<code>%s</code>\n", buildSubURL(u.SubToken)))
+		bld.WriteString(Trf(lang, "sub_line", buildSubURL(u.SubToken)) + "\n")
 	} else {
-		bld.WriteString("订阅 / Subscription: 未生成 / Not generated (点击 /click my_sub 生成)\n")
+		bld.WriteString(Tr(lang, "sub_missing") + "\n")
 	}
 	return bld.String()
 }
@@ -273,25 +273,11 @@ func (b *Bot) handleCallback(ctx commandContext, data string) string {
 	case "my_sub":
 		return b.cmdMySub(ctx)
 	}
-	return "未知操作 / Unknown action."
+	return Tr(b.lang(), "unknown_action")
 }
 
-func helpText() string {
-	return strings.TrimSpace(`
-🤖 <b>3m-ui Bot</b>
-/status — 核心与面板概览 / Panel & core overview
-/users — 代理用户列表 / Proxy user list
-/online — 当前在线用户 / Online users
-/listeners — 入站节点列表 / Inbound listeners
-/traffic — 流量快照 / Traffic snapshot
-/restart — 重启 Mihomo 核心 / Restart core
-/deldepleted — 清理到期/超额用户 / Delete depleted users
-/search &lt;关键字&gt; — 按用户名/备注搜索 / Search by username/remark
-/backup — 备份提示 / Backup hint
-/id — 显示你的 Telegram ID / Show your Telegram ID
-/usage — 查询用量 (用户) 或搜索 (管理员) / Usage (user) or search (admin)
-/help — 本帮助 / This help
-`)
+func helpText(lang string) string {
+	return strings.TrimSpace(Tr(lang, "help"))
 }
 
 func (b *Bot) cmdStatus() string {
@@ -328,12 +314,12 @@ func (b *Bot) cmdStatus() string {
 			dbWarn = fmt.Sprintf("\n⚠️ DB error: %s", escapeHTML(err.Error()))
 		}
 	}
-	core := "stopped"
+	core := Tr(b.lang(), "core_stopped")
 	if running {
-		core = "running"
+		core = Tr(b.lang(), "core_running")
 	}
 	return fmt.Sprintf(
-		"📊 <b>Status</b>\ncore: <code>%s</code>\nversion: <code>%s</code>\npid: <code>%d</code>\nusers: %d (online %d, blocked %d)\nlisteners: %d%s",
+		Tr(b.lang(), "status_title"),
 		core, escapeHTML(version), pid, userCount, online, blocked, listeners, dbWarn,
 	)
 }
@@ -341,13 +327,13 @@ func (b *Bot) cmdStatus() string {
 func (b *Bot) cmdUsers() string {
 	var users []models.ProxyUser
 	if err := b.db.Order("id asc").Limit(40).Find(&users).Error; err != nil {
-		return "读取用户失败: " + escapeHTML(err.Error())
+		return Trf(b.lang(), "users_fail", escapeHTML(err.Error()))
 	}
 	if len(users) == 0 {
-		return "暂无代理用户。"
+		return Tr(b.lang(), "users_empty")
 	}
 	var bld strings.Builder
-	bld.WriteString("👥 <b>Users</b>\n")
+	bld.WriteString(Tr(b.lang(), "users_title") + "\n")
 	for _, u := range users {
 		flag := "✅"
 		if !user.IsCredentialActive(u) {
@@ -368,13 +354,13 @@ func (b *Bot) cmdUsers() string {
 func (b *Bot) cmdOnline() string {
 	var users []models.ProxyUser
 	if err := b.db.Where("online = ?", true).Order("id asc").Find(&users).Error; err != nil {
-		return "读取在线用户失败: " + escapeHTML(err.Error())
+		return Trf(b.lang(), "users_fail", escapeHTML(err.Error()))
 	}
 	if len(users) == 0 {
-		return "当前无在线用户。"
+		return Tr(b.lang(), "online_empty")
 	}
 	var bld strings.Builder
-	bld.WriteString("🟢 <b>Online</b>\n")
+	bld.WriteString(Tr(b.lang(), "online_title") + "\n")
 	for _, u := range users {
 		bld.WriteString(fmt.Sprintf("• <code>%s</code>\n", escapeHTML(u.Username)))
 	}
@@ -384,13 +370,13 @@ func (b *Bot) cmdOnline() string {
 func (b *Bot) cmdListeners() string {
 	var list []models.Listener
 	if err := b.db.Order("id asc").Limit(40).Find(&list).Error; err != nil {
-		return "读取节点失败: " + escapeHTML(err.Error())
+		return Trf(b.lang(), "users_fail", escapeHTML(err.Error()))
 	}
 	if len(list) == 0 {
-		return "暂无节点。"
+		return Tr(b.lang(), "listeners_empty")
 	}
 	var bld strings.Builder
-	bld.WriteString("📡 <b>Listeners</b>\n")
+	bld.WriteString(Tr(b.lang(), "listeners_title") + "\n")
 	for _, n := range list {
 		en := "off"
 		if n.Enabled {
@@ -412,13 +398,13 @@ func (b *Bot) cmdTraffic() string {
 		total += u.TrafficUsed
 	}
 	var bld strings.Builder
-	bld.WriteString(fmt.Sprintf("📈 <b>Traffic</b> (top users)\napprox listed used sum: %s\n", formatBytes(total)))
+	bld.WriteString(Trf(b.lang(), "traffic_title", formatBytes(total)))
 	for _, u := range users {
 		bld.WriteString(fmt.Sprintf("• <code>%s</code> ↑%s ↓%s\n",
 			escapeHTML(u.Username), formatBytes(u.UploadBytes), formatBytes(u.DownloadBytes)))
 	}
 	if len(users) == 0 {
-		bld.WriteString("暂无数据。")
+		bld.WriteString(Tr(b.lang(), "traffic_empty"))
 	}
 	if dbWarn != "" {
 		bld.WriteString(dbWarn)
@@ -442,38 +428,38 @@ func formatBytes(n int64) string {
 
 func (b *Bot) cmdRestart() string {
 	if b.mihomo == nil {
-		return "Mihomo 服务未初始化。"
+		return Tr(b.lang(), "mihomo_nil")
 	}
 	if err := b.mihomo.RestartMihomo(); err != nil {
-		return "重启失败: " + escapeHTML(err.Error())
+		return Trf(b.lang(), "restart_fail", escapeHTML(err.Error()))
 	}
-	return "✅ Mihomo 核心已重启。"
+	return Tr(b.lang(), "restart_ok")
 }
 
 func (b *Bot) cmdDelDepleted() string {
 	svc := user.NewService(b.db)
 	n, err := svc.DeleteDepleted()
 	if err != nil {
-		return "清理失败: " + escapeHTML(err.Error())
+		return Trf(b.lang(), "cleanup_fail", escapeHTML(err.Error()))
 	}
-	return fmt.Sprintf("🧹 已删除 %d 个到期/超额用户。", n)
+	return Trf(b.lang(), "cleanup_ok", n)
 }
 
 func (b *Bot) cmdSearch(q string) string {
 	q = strings.TrimSpace(q)
 	if q == "" {
-		return "用法: /search &lt;用户名或备注关键字&gt;"
+		return Tr(b.lang(), "search_usage")
 	}
 	svc := user.NewService(b.db)
 	users, err := svc.ListFiltered(user.ListFilter{Query: q})
 	if err != nil {
-		return "搜索失败: " + escapeHTML(err.Error())
+		return Trf(b.lang(), "search_fail", escapeHTML(err.Error()))
 	}
 	if len(users) == 0 {
-		return "未找到匹配用户。"
+		return Tr(b.lang(), "search_empty")
 	}
 	var bld strings.Builder
-	bld.WriteString(fmt.Sprintf("🔍 <b>Search</b> <code>%s</code> (%d)\n", escapeHTML(q), len(users)))
+	bld.WriteString(Trf(b.lang(), "search_title", escapeHTML(q), len(users)))
 	for i, u := range users {
 		if i >= 20 {
 			bld.WriteString("…\n")
@@ -491,8 +477,5 @@ func (b *Bot) cmdSearch(q string) string {
 }
 
 func (b *Bot) cmdBackup() string {
-	return strings.TrimSpace(`📦 <b>Backup</b>
-请在面板「系统设置 → 备份」下载完整备份（SQLite + Mihomo 配置）。
-Use panel Settings → Backup to download a full zip (database + Mihomo config).
-API: <code>GET /api/v1/system/backup</code>`)
+	return strings.TrimSpace(Tr(b.lang(), "backup"))
 }

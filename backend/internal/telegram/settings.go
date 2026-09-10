@@ -29,7 +29,7 @@ type Settings struct {
 	Schedule string `json:"schedule"`
 	// AttachBackup attaches the panel backup file to the scheduled report message.
 	AttachBackup bool `json:"attach_backup"`
-	// Language selects the bot/notification language ("zh" or "en").
+	// Language selects the bot language (18 codes aligned with the panel, e.g. en, zh-CN, ja).
 	Language string `json:"language"`
 	// EnabledEvents is a comma-separated allowlist of event names that may fire notifications
 	// (e.g. "login,cpu,crash"). Use EventEnabled(name) to test membership.
@@ -79,7 +79,7 @@ func DefaultSettings() Settings {
 		NotifyOnCPU:     false,
 		CPUWarnPct:      0,
 		Schedule:        "@daily",
-		Language:        "zh",
+		Language:        "zh-CN",
 		EnabledEvents:   "login,cpu,crash",
 	}
 }
@@ -114,8 +114,9 @@ func LoadSettings(db *gorm.DB) (Settings, error) {
 		s.Schedule = "@daily"
 	}
 	if strings.TrimSpace(s.Language) == "" {
-		s.Language = "zh"
+		s.Language = "zh-CN"
 	}
+	s.Language = NormalizeLang(s.Language)
 	if strings.TrimSpace(s.EnabledEvents) == "" {
 		s.EnabledEvents = "login,cpu,crash"
 	}

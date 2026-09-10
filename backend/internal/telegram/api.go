@@ -193,7 +193,8 @@ func (h *Handler) Test(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	if err := client.SendText("🔔 <b>3m-ui</b> Telegram 测试消息 / test message — 连接正常 / connection OK."); err != nil {
+	sset, _ := LoadSettings(h.db)
+	if err := client.SendText(Tr(NormalizeLang(sset.Language), "test_msg")); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
@@ -209,20 +210,22 @@ func maskToken(token string) string {
 
 // defaultBotCommands returns the command menu registered with Telegram via setMyCommands.
 // Descriptions are bilingual (zh/en) to match the bot's existing reply style.
-func defaultBotCommands() []BotCommand {
+func defaultBotCommands(lang string) []BotCommand {
+	lang = NormalizeLang(lang)
 	return []BotCommand{
-		{Command: "start", Description: "开始 / Start & help"},
-		{Command: "help", Description: "查看可用命令 / Show commands"},
-		{Command: "status", Description: "面板与核心概览 / Panel & core overview"},
-		{Command: "id", Description: "显示当前 Telegram Chat ID / Show chat ID"},
-		{Command: "usage", Description: "查询当前账号用量 / Show my usage"},
-		{Command: "users", Description: "代理用户列表 / List proxy users"},
-		{Command: "online", Description: "当前在线用户 / Online users"},
-		{Command: "listeners", Description: "入站节点列表 / Inbound listeners"},
-		{Command: "traffic", Description: "流量快照 / Traffic snapshot"},
-		{Command: "restart", Description: "重启 Mihomo 核心 / Restart core"},
-		{Command: "backup", Description: "下载/发送备份 / Backup"},
-		{Command: "search", Description: "按用户名/备注搜索 / Search users"},
+		{Command: "start", Description: Tr(lang, "cmd_start")},
+		{Command: "help", Description: Tr(lang, "cmd_start")},
+		{Command: "id", Description: Tr(lang, "cmd_id")},
+		{Command: "usage", Description: Tr(lang, "cmd_usage")},
+		{Command: "status", Description: Tr(lang, "cmd_status")},
+		{Command: "users", Description: Tr(lang, "cmd_users")},
+		{Command: "online", Description: Tr(lang, "cmd_online")},
+		{Command: "listeners", Description: Tr(lang, "cmd_listeners")},
+		{Command: "traffic", Description: Tr(lang, "cmd_traffic")},
+		{Command: "restart", Description: Tr(lang, "cmd_restart")},
+		{Command: "deldepleted", Description: Tr(lang, "cmd_deldepleted")},
+		{Command: "search", Description: Tr(lang, "cmd_search")},
+		{Command: "backup", Description: Tr(lang, "cmd_backup")},
 	}
 }
 
@@ -238,7 +241,7 @@ func (h *Handler) SetMyCommands(c *gin.Context) {
 		return
 	}
 	client := NewClient(s.BotToken, s.ChatIDs, s.ProxyURL, s.APIServer)
-	resp, err := client.SetMyCommands(defaultBotCommands())
+	resp, err := client.SetMyCommands(defaultBotCommands(s.Language))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return

@@ -129,7 +129,7 @@ const Settings: React.FC = () => {
           expiry_warn_hours: s.expiry_warn_hours ?? 72,
           notify_on_traffic: s.notify_on_traffic ?? true,
           schedule: s.schedule || '@daily',
-          language: s.language || 'zh',
+          language: s.language || 'zh-CN',
           enabled_events: s.enabled_events
             ? s.enabled_events.split(',').map((x: string) => x.trim()).filter(Boolean)
             : ['login', 'cpu', 'crash'],
@@ -505,9 +505,27 @@ const Settings: React.FC = () => {
                 </Form.Item>
                 <Form.Item name="language" label={t('settings.tgLanguage') || 'Bot language'}>
                   <Select
+                    showSearch
+                    optionFilterProp="label"
                     options={[
-                      { value: 'zh', label: '中文' },
                       { value: 'en', label: 'English' },
+                      { value: 'zh-CN', label: '简体中文' },
+                      { value: 'zh-TW', label: '繁體中文' },
+                      { value: 'ja', label: '日本語' },
+                      { value: 'ko', label: '한국어' },
+                      { value: 'es', label: 'Español' },
+                      { value: 'fr', label: 'Français' },
+                      { value: 'de', label: 'Deutsch' },
+                      { value: 'ru', label: 'Русский' },
+                      { value: 'pt-BR', label: 'Português (Brasil)' },
+                      { value: 'vi', label: 'Tiếng Việt' },
+                      { value: 'id', label: 'Bahasa Indonesia' },
+                      { value: 'th', label: 'ไทย' },
+                      { value: 'tr', label: 'Türkçe' },
+                      { value: 'ar', label: 'العربية' },
+                      { value: 'hi', label: 'हिन्दी' },
+                      { value: 'pl', label: 'Polski' },
+                      { value: 'uk', label: 'Українська' },
                     ]}
                     allowClear
                   />
