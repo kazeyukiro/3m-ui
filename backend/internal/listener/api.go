@@ -161,7 +161,12 @@ func (h *Handler) DeleteListener(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Delete(id); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		status := 400
+		msg := err.Error()
+		if strings.Contains(msg, "not found") {
+			status = 404
+		}
+		c.JSON(status, gin.H{"error": msg})
 		return
 	}
 	c.JSON(200, gin.H{"status": "ok"})

@@ -1,6 +1,7 @@
 package listener
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -114,6 +115,9 @@ func (s *Service) Delete(id uint) error {
 	defer s.mu.Unlock()
 	var previous models.Listener
 	if err := s.db.First(&previous, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("listener %d not found (already deleted? refresh the list)", id)
+		}
 		return fmt.Errorf("failed to fetch listener before delete: %w", err)
 	}
 	if err := s.SaveVersion(id, "before-delete"); err != nil {
@@ -124,15 +128,19 @@ func (s *Service) Delete(id uint) error {
 	if err := s.db.Where("listener_id = ?", id).Find(&bindings).Error; err != nil {
 		return fmt.Errorf("failed to fetch listener bindings: %w", err)
 	}
+	// Free UNIQUE(name) before soft-delete so create-after-delete cannot race.
+	freed := fmt.Sprintf("%s__deleted_%d", previous.Name, id)
+	if err := s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", freed).Error; err != nil {
+		return fmt.Errorf("free listener name before delete: %w", err)
+	}
 	if err := s.db.Where("listener_id = ?", id).Delete(&models.ListenerUser{}).Error; err != nil {
+		_ = s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", previous.Name).Error
 		return fmt.Errorf("failed to delete listener bindings: %w", err)
 	}
 	if err := s.db.Delete(&models.Listener{}, id).Error; err != nil {
+		_ = s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", previous.Name).Error
 		return fmt.Errorf("failed to delete listener: %w", err)
 	}
-	// Soft-delete keeps the row; rename so UNIQUE(name) can be reused immediately.
-	freed := fmt.Sprintf("%s__deleted_%d", previous.Name, id)
-	_ = s.db.Unscoped().Model(&models.Listener{}).Where("id = ?", id).Update("name", freed).Error
 	if err := s.regenerateConfigLocked(); err != nil {
 		if rollbackErr := s.db.Unscoped().Save(&previous).Error; rollbackErr != nil {
 			return fmt.Errorf("%v; rollback deleted listener failed: %w", err, rollbackErr)
