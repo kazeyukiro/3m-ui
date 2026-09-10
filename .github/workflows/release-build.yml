@@ -77,7 +77,7 @@ jobs:
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           mkdir -p ../release-files
           go build -tags sqlite_modernc -trimpath \
-            -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT -X main.buildTime=$BUILD_TIME" \
+            -ldflags="-s -w -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.Version=$VERSION -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.GitCommit=$GIT_COMMIT -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.BuildTime=$BUILD_TIME" \
             -o "../release-files/3m-ui-$ARTIFACT" ./cmd/server
           # A dynamic interpreter makes the advertised static package invalid.
           if readelf -l "../release-files/3m-ui-$ARTIFACT" | grep -q INTERP; then

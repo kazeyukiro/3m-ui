@@ -18,7 +18,7 @@ import {
   Menu,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { useI18n } from '../i18n';
+import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
@@ -337,12 +337,11 @@ const Settings: React.FC = () => {
               <Card title={<><GlobalOutlined /> {t('settings.language')}</>}>
                 <Select
                   value={locale}
-                  style={{ width: 220 }}
-                  onChange={(v) => setLocale(v)}
-                  options={[
-                    { value: 'zh-CN', label: '简体中文' },
-                    { value: 'en', label: 'English' },
-                  ]}
+                  style={{ width: 280 }}
+                  showSearch
+                  optionFilterProp="label"
+                  onChange={(v) => setLocale(v as Locale)}
+                  options={LOCALE_OPTIONS.map((o) => ({ value: o.key, label: o.label }))}
                 />
               </Card>
 
@@ -911,13 +910,7 @@ const Settings: React.FC = () => {
 
           {section === 'about' && (
             <Card title={<><InfoCircleOutlined /> {t('settings.about')}</>}>
-              <Space direction="vertical">
-                <Title level={4} style={{ margin: 0 }}>
-                  3M-UI
-                </Title>
-                <Text type="secondary">{t('app.title')}</Text>
-                <Tag color="blue">v1.0.0</Tag>
-              </Space>
+              <AboutPanelVersion subtitle={t('app.title')} />
             </Card>
           )}
         </Content>

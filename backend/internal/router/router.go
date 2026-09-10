@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
 	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
+	"github.com/kazeyukiro/3m-ui/backend/internal/buildinfo"
 	"github.com/kazeyukiro/3m-ui/backend/internal/cluster"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
@@ -50,7 +51,12 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		auth.NewHandler(db, cfg).RegisterRoutes(apiV1.Group("/auth"))
 
 		apiV1.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+			c.JSON(http.StatusOK, gin.H{
+				"status":     "ok",
+				"version":    buildinfo.Summary(),
+				"git_commit": buildinfo.GitCommit,
+				"build_time": buildinfo.BuildTime,
+			})
 		})
 
 		RegisterPublicSubscriptionRoutes(apiV1, db, cfg)

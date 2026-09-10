@@ -1,13 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
 
-var (
-	version   = "dev"
-	gitCommit = "unknown"
-	buildTime = "unknown"
+	"github.com/kazeyukiro/3m-ui/backend/internal/buildinfo"
 )
 
 func versionString() string {
-	return fmt.Sprintf("3m-ui %s\ngit commit: %s\nbuild time: %s", version, gitCommit, buildTime)
+	return fmt.Sprintf("3m-ui %s\ngit commit: %s\nbuild time: %s",
+		buildinfo.Version, buildinfo.GitCommit, buildinfo.BuildTime)
 }

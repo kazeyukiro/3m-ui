@@ -21,7 +21,7 @@ COPY backend/ ./
 COPY --from=frontend /src/frontend/dist ./cmd/server/web/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOAMD64=v1 \
     go build -tags sqlite_modernc -trimpath \
-    -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$GIT_COMMIT -X main.buildTime=$BUILD_TIME" \
+    -ldflags="-s -w -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.Version=$VERSION -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.GitCommit=$GIT_COMMIT -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.BuildTime=$BUILD_TIME" \
     -o /out/3m-ui ./cmd/server
 
 FROM --platform=$BUILDPLATFORM alpine:3.21 AS mihomo

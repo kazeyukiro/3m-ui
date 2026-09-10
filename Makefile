@@ -5,7 +5,7 @@ DIST_DIR := dist
 VERSION ?= v1.0.0
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS := -s -w -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildTime=$(BUILD_TIME)
+LDFLAGS := -s -w -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.Version=$(VERSION) -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.GitCommit=$(GIT_COMMIT) -X github.com/kazeyukiro/3m-ui/backend/internal/buildinfo.BuildTime=$(BUILD_TIME)
 
 # Pure-Go static build flags (portable across glibc/musl Linux).
 STATIC_TAGS := sqlite_modernc

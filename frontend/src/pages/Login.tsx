@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { Card, Form, Input, Button, Typography, message, Space, Dropdown } from 'antd';
+import { UserOutlined, LockOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Button, Typography, message } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { login } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';
-import { useI18n } from '../i18n';
+import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
+import { useThemeStore, type ThemeMode } from '../stores/themeStore';
 
 const { Title } = Typography;
 
@@ -12,7 +13,8 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
+  const { mode, setMode, isDark } = useThemeStore();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
 
   const onFinish = async (values: { username: string; password: string }) => {
@@ -20,7 +22,6 @@ const Login: React.FC = () => {
     try {
       const result = await login(values);
       message.success(t('login.welcomeBack'));
-      // First-login / forced rotation must complete before the panel shell loads APIs.
       if (result.must_change_password || useAuthStore.getState().mustChangePassword) {
         navigate('/change-password', { replace: true });
       } else {
@@ -33,18 +34,53 @@ const Login: React.FC = () => {
     }
   };
 
+  const langItems = LOCALE_OPTIONS.map((o) => ({ key: o.key, label: o.label }));
+  const themeItems = [
+    { key: 'light', label: t('settings.light') || 'Light' },
+    { key: 'dark', label: t('settings.dark') || 'Dark' },
+    { key: 'system', label: t('settings.system') || 'System' },
+  ];
+
   return (
     <div
       className="login-page"
       style={{
         minHeight: '100vh',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#f0f2f5',
+        background: isDark ? '#141414' : '#f0f2f5',
         padding: '16px 0',
+        position: 'relative',
       }}
     >
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <Space>
+          <Dropdown
+            menu={{
+              items: themeItems,
+              selectedKeys: [mode],
+              onClick: (e) => setMode(e.key as ThemeMode),
+            }}
+          >
+            <Button type="text" icon={<BgColorsOutlined />}>
+              {t('settings.theme') || 'Theme'}
+            </Button>
+          </Dropdown>
+          <Dropdown
+            menu={{
+              items: langItems,
+              selectedKeys: [locale],
+              onClick: (e) => setLocale(e.key as Locale),
+            }}
+          >
+            <Button type="text" icon={<GlobalOutlined />}>
+              {LOCALE_OPTIONS.find((o) => o.key === locale)?.label || locale}
+            </Button>
+          </Dropdown>
+        </Space>
+      </div>
       <Card style={{ width: '100%', maxWidth: 420, margin: '0 16px' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <img
