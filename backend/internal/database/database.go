@@ -10,6 +10,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var GlobalDB *gorm.DB
@@ -23,7 +24,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// tokens. Do not leave it readable by other local users.
 	_ = os.Chmod(dir, 0700)
 
-	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: dbPath}), &gorm.Config{})
+	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: dbPath}), &gorm.Config{
+		// Info logs every ErrRecordNotFound (e.g. optional panel_settings keys).
+		// Warn keeps real SQL failures without flooding journald every tick.
+		Logger: logger.Default.LogMode(logger.Warn),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sqlite database: %w", err)
 	}
