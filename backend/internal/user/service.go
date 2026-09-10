@@ -44,31 +44,39 @@ func (s *Service) notifyCredentialsChanged() error {
 }
 
 type CreateInput struct {
-	Username     string     `json:"username" binding:"required"`
-	Password     string     `json:"password"`
-	UUID         string     `json:"uuid"`
-	TrafficLimit int64      `json:"traffic_limit"`
-	IPLimit      int        `json:"ip_limit"`
-	HWIDLimit    int        `json:"hwid_limit"`
-	Remark       string     `json:"remark"`
-	ExpireTime   *time.Time `json:"expire_time"`
-	Enabled      *bool      `json:"enabled"`
-	TelegramID   int64      `json:"telegram_id"`
-	TelegramName string     `json:"telegram_name"`
+	Username         string     `json:"username" binding:"required"`
+	Password         string     `json:"password"`
+	UUID             string     `json:"uuid"`
+	TrafficLimit     int64      `json:"traffic_limit"`
+	IPLimit          int        `json:"ip_limit"`
+	HWIDLimit        int        `json:"hwid_limit"`
+	Remark           string     `json:"remark"`
+	Group            string     `json:"group"`
+	Tags             string     `json:"tags"`
+	TrafficResetDays int        `json:"traffic_reset_days"`
+	ExpireRenewDays  int        `json:"expire_renew_days"`
+	ExpireTime       *time.Time `json:"expire_time"`
+	Enabled          *bool      `json:"enabled"`
+	TelegramID       int64      `json:"telegram_id"`
+	TelegramName     string     `json:"telegram_name"`
 }
 
 type UpdateInput struct {
-	Username     string     `json:"username"`
-	Password     string     `json:"password"`
-	UUID         string     `json:"uuid"`
-	TrafficLimit *int64     `json:"traffic_limit"`
-	IPLimit      *int       `json:"ip_limit"`
-	HWIDLimit    *int       `json:"hwid_limit"`
-	Remark       *string    `json:"remark"`
-	ExpireTime   *time.Time `json:"expire_time"`
-	Enabled      *bool      `json:"enabled"`
-	TelegramID   *int64     `json:"telegram_id"`
-	TelegramName *string    `json:"telegram_name"`
+	Username         string     `json:"username"`
+	Password         string     `json:"password"`
+	UUID             string     `json:"uuid"`
+	TrafficLimit     *int64     `json:"traffic_limit"`
+	IPLimit          *int       `json:"ip_limit"`
+	HWIDLimit        *int       `json:"hwid_limit"`
+	Remark           *string    `json:"remark"`
+	Group            *string    `json:"group"`
+	Tags             *string    `json:"tags"`
+	TrafficResetDays *int       `json:"traffic_reset_days"`
+	ExpireRenewDays  *int       `json:"expire_renew_days"`
+	ExpireTime       *time.Time `json:"expire_time"`
+	Enabled          *bool      `json:"enabled"`
+	TelegramID       *int64     `json:"telegram_id"`
+	TelegramName     *string    `json:"telegram_name"`
 }
 
 type Credential struct{ Username, Password, UUID string }

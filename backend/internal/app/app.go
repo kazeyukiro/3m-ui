@@ -21,6 +21,7 @@ import (
 	dbconfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/router"
 	"github.com/kazeyukiro/3m-ui/backend/internal/security"
+	"gorm.io/gorm"
 )
 
 // Run boots the application and serves the embedded frontend.
@@ -115,6 +116,10 @@ func Run(frontendFS fs.FS) error {
 		} else {
 			return nil
 		}
+	}
+
+	if cfg.Server.SubPort > 0 && cfg.Server.SubPort != cfg.Server.Port {
+		go startSubscriptionServer(db, cfg)
 	}
 
 	addr := panelListenAddr(cfg.Server.Listen, cfg.Server.Port)
@@ -234,4 +239,25 @@ func panelListenAddr(listen string, port int) string {
 		return fmt.Sprintf(":%d", port)
 	}
 	return net.JoinHostPort(listen, strconv.Itoa(port))
+}
+
+func startSubscriptionServer(db *gorm.DB, cfg *config.Config) {
+	if db == nil || cfg == nil {
+		return
+	}
+	engine := gin.New()
+	engine.Use(gin.Recovery())
+	router.RegisterPublicSubscriptionRoutes(engine.Group("/api/v1"), db, cfg)
+	router.RegisterCustomSubPathRoutes(engine, db, cfg)
+	router.RegisterLegacySubscriptionRoutes(engine, db, cfg)
+	listen := cfg.Server.SubListen
+	if listen == "" {
+		listen = cfg.Server.Listen
+	}
+	addr := panelListenAddr(listen, cfg.Server.SubPort)
+	log.Printf("3m-ui subscription listener on %s (path %s)", addr, config.SubscriptionBasePath(cfg))
+	srv := &http.Server{Addr: addr, Handler: engine, ReadHeaderTimeout: 10 * time.Second}
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("subscription server stopped: %v", err)
+	}
 }

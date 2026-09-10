@@ -58,7 +58,9 @@ const Users: React.FC = () => {
     if (!q) return data;
     return data.filter((u) =>
       (u.username || '').toLowerCase().includes(q) ||
-      (u.remark || '').toLowerCase().includes(q)
+      (u.remark || '').toLowerCase().includes(q) ||
+      (u.group || '').toLowerCase().includes(q) ||
+      (u.tags || '').toLowerCase().includes(q)
     );
   }, [data, keyword]);
 
@@ -72,6 +74,10 @@ const Users: React.FC = () => {
         ip_limit: values.ip_limit != null ? Number(values.ip_limit) : 0,
         hwid_limit: values.hwid_limit != null ? Number(values.hwid_limit) : 0,
         remark: values.remark || '',
+        group: values.group || '',
+        tags: values.tags || '',
+        traffic_reset_days: values.traffic_reset_days != null ? Number(values.traffic_reset_days) : 0,
+        expire_renew_days: values.expire_renew_days != null ? Number(values.expire_renew_days) : 0,
       };
       if (values.password) payload.password = values.password;
       if (values.expire_time) {
@@ -648,6 +654,18 @@ const Users: React.FC = () => {
             tooltip={t('users.hwidLimitHint') || '0 = unlimited. Compatible with Happ x-hwid import headers (Remnawave-style).'}
           >
             <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="group" label={t('users.group') || 'Group'}>
+            <Input placeholder="vip" allowClear />
+          </Form.Item>
+          <Form.Item name="tags" label={t('users.tags') || 'Tags'}>
+            <Input placeholder="tag1,tag2" allowClear />
+          </Form.Item>
+          <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays') || 'Traffic reset cycle (days)'}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
+          </Form.Item>
+          <Form.Item name="expire_renew_days" label={t('users.expireRenewDays') || 'Expire renew cycle (days)'}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
           </Form.Item>
           <Form.Item name="remark" label={t('users.remark') || 'Remark'}>
             <Input maxLength={255} />

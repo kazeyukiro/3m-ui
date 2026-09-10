@@ -18,46 +18,56 @@ func safeMask(s string) string {
 }
 
 type SafeUser struct {
-	ID            uint       `json:"id"`
-	Username      string     `json:"username"`
-	UUIDMasked    string     `json:"uuid_masked"`
-	TrafficLimit  int64      `json:"traffic_limit"`
-	TrafficUsed   int64      `json:"traffic_used"`
-	UploadBytes   int64      `json:"upload_bytes"`
-	DownloadBytes int64      `json:"download_bytes"`
-	LastSeen      *time.Time `json:"last_seen"`
-	Online        bool       `json:"online"`
-	ExpireTime    time.Time  `json:"expire_time"`
-	Enabled       bool       `json:"enabled"`
-	Blocked       bool       `json:"blocked"`
-	IPLimit       int        `json:"ip_limit"`
-	HWIDLimit     int        `json:"hwid_limit"`
-	Remark        string     `json:"remark"`
-	SubToken      string     `json:"sub_token"`
-	TelegramID    int64      `json:"telegram_id"`
-	TelegramName  string     `json:"telegram_name"`
+	ID                    uint       `json:"id"`
+	Username              string     `json:"username"`
+	UUIDMasked            string     `json:"uuid_masked"`
+	TrafficLimit          int64      `json:"traffic_limit"`
+	TrafficUsed           int64      `json:"traffic_used"`
+	UploadBytes           int64      `json:"upload_bytes"`
+	DownloadBytes         int64      `json:"download_bytes"`
+	LastSeen              *time.Time `json:"last_seen"`
+	Online                bool       `json:"online"`
+	ExpireTime            time.Time  `json:"expire_time"`
+	Enabled               bool       `json:"enabled"`
+	Blocked               bool       `json:"blocked"`
+	IPLimit               int        `json:"ip_limit"`
+	HWIDLimit             int        `json:"hwid_limit"`
+	Remark                string     `json:"remark"`
+	Group                 string     `json:"group"`
+	Tags                  string     `json:"tags"`
+	TrafficResetDays      int        `json:"traffic_reset_days"`
+	ExpireRenewDays       int        `json:"expire_renew_days"`
+	LastTrafficCycleReset *time.Time `json:"last_traffic_cycle_reset,omitempty"`
+	SubToken              string     `json:"sub_token"`
+	TelegramID            int64      `json:"telegram_id"`
+	TelegramName          string     `json:"telegram_name"`
 }
 
 func ToSafeUser(u *models.ProxyUser) SafeUser {
 	return SafeUser{
-		ID:            u.ID,
-		Username:      u.Username,
-		UUIDMasked:    safeMask(u.UUID),
-		TrafficLimit:  u.TrafficLimit,
-		TrafficUsed:   u.TrafficUsed,
-		UploadBytes:   u.UploadBytes,
-		DownloadBytes: u.DownloadBytes,
-		LastSeen:      u.LastSeen,
-		Online:        u.Online,
-		ExpireTime:    u.ExpireTime,
-		Enabled:       u.Enabled,
-		Blocked:       !IsCredentialActive(*u),
-		IPLimit:       u.IPLimit,
-		HWIDLimit:     u.HWIDLimit,
-		Remark:        u.Remark,
-		SubToken:      u.SubToken,
-		TelegramID:    u.TelegramID,
-		TelegramName:  u.TelegramName,
+		ID:                    u.ID,
+		Username:              u.Username,
+		UUIDMasked:            safeMask(u.UUID),
+		TrafficLimit:          u.TrafficLimit,
+		TrafficUsed:           u.TrafficUsed,
+		UploadBytes:           u.UploadBytes,
+		DownloadBytes:         u.DownloadBytes,
+		LastSeen:              u.LastSeen,
+		Online:                u.Online,
+		ExpireTime:            u.ExpireTime,
+		Enabled:               u.Enabled,
+		Blocked:               !IsCredentialActive(*u),
+		IPLimit:               u.IPLimit,
+		HWIDLimit:             u.HWIDLimit,
+		Remark:                u.Remark,
+		Group:                 u.Group,
+		Tags:                  u.Tags,
+		TrafficResetDays:      u.TrafficResetDays,
+		ExpireRenewDays:       u.ExpireRenewDays,
+		LastTrafficCycleReset: u.LastTrafficCycleReset,
+		SubToken:              u.SubToken,
+		TelegramID:            u.TelegramID,
+		TelegramName:          u.TelegramName,
 	}
 }
 

@@ -31,6 +31,13 @@ type ServerConfig struct {
 	Listen    string `yaml:"listen"`
 	Mode      string `yaml:"mode"`
 	PublicURL string `yaml:"public_url"`
+	// SubPath is an optional public subscription prefix (e.g. "/sub"). Empty keeps
+	// only the legacy "/api/v1/client/sub/:token" routes.
+	SubPath string `yaml:"sub_path"`
+	// SubPort serves subscription routes on a separate port when >0. 0 = same as panel.
+	SubPort int `yaml:"sub_port"`
+	// SubListen is the bind address for SubPort (empty = same as Listen / dual-stack).
+	SubListen string `yaml:"sub_listen"`
 }
 
 type DatabaseConfig struct {
@@ -95,6 +102,8 @@ func LoadConfig(path string) (*Config, error) {
 //	THREE_M_UI_PORT / PANEL_PORT     → server.port
 //	THREE_M_UI_LISTEN / PANEL_LISTEN → server.listen
 //	THREE_M_UI_PUBLIC_URL / PUBLIC_URL → server.public_url
+//	THREE_M_UI_SUB_PATH / SUB_PATH → server.sub_path
+//	THREE_M_UI_SUB_PORT / SUB_PORT → server.sub_port
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
@@ -119,6 +128,50 @@ func ApplyEnvOverrides(cfg *Config) {
 			break
 		}
 	}
+	for _, key := range []string{"THREE_M_UI_SUB_PATH", "SUB_PATH"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			cfg.Server.SubPath = v
+			break
+		}
+	}
+	for _, key := range []string{"THREE_M_UI_SUB_PORT", "SUB_PORT"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 65535 {
+				cfg.Server.SubPort = n
+			}
+			break
+		}
+	}
+	for _, key := range []string{"THREE_M_UI_SUB_LISTEN", "SUB_LISTEN"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			cfg.Server.SubListen = v
+			break
+		}
+	}
+	cfg.Server.SubPath = NormalizeSubPath(cfg.Server.SubPath)
+}
+
+// NormalizeSubPath returns a leading-slash path without trailing slash, or "".
+func NormalizeSubPath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || p == "/" {
+		return ""
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return strings.TrimRight(p, "/")
+}
+
+// SubscriptionBasePath is the path prefix used in public subscription URLs.
+// Prefer SubPath when set; otherwise the legacy API path.
+func SubscriptionBasePath(cfg *Config) string {
+	if cfg != nil {
+		if p := NormalizeSubPath(cfg.Server.SubPath); p != "" {
+			return p
+		}
+	}
+	return "/api/v1/client/sub"
 }
 
 // ConfigPath returns the active config file path (env or common defaults).

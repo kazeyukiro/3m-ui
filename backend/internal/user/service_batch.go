@@ -13,7 +13,8 @@ import (
 
 // ListFilter supports search across proxy users.
 type ListFilter struct {
-	Query   string // username / remark substring
+	Query   string // username / remark / tags substring
+	Group   string // exact group match when non-empty
 	Enabled *bool
 	Online  *bool
 	Blocked *bool // computed from IsCredentialActive
@@ -23,7 +24,10 @@ func (s *Service) ListFiltered(f ListFilter) ([]models.ProxyUser, error) {
 	q := s.db.Model(&models.ProxyUser{}).Order("id desc")
 	if term := strings.TrimSpace(f.Query); term != "" {
 		like := "%" + term + "%"
-		q = q.Where("username LIKE ? OR remark LIKE ?", like, like)
+		q = q.Where("username LIKE ? OR remark LIKE ? OR tags LIKE ? OR `group` LIKE ?", like, like, like, like)
+	}
+	if g := strings.TrimSpace(f.Group); g != "" {
+		q = q.Where("`group` = ?", g)
 	}
 	if f.Enabled != nil {
 		q = q.Where("enabled = ?", *f.Enabled)

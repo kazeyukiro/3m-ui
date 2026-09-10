@@ -17,6 +17,11 @@ export interface ProxyUser {
   ip_limit?: number;
   hwid_limit?: number;
   remark?: string;
+  group?: string;
+  tags?: string;
+  traffic_reset_days?: number;
+  expire_renew_days?: number;
+  last_traffic_cycle_reset?: string | null;
   sub_token?: string;
   telegram_id?: number;
   telegram_name?: string;
@@ -71,3 +76,8 @@ export const fetchUserRemoteNodes = (userId: number) =>
   client.get<{ mirror_ids: number[] }>(`/users/${userId}/remote-nodes`).then((r) => r.data);
 export const bindUserRemoteNodes = (userId: number, mirrorIds: number[]) =>
   client.post(`/users/${userId}/remote-nodes`, { mirror_ids: mirrorIds }).then((r) => r.data);
+
+export const exportUserLinks = (params?: { q?: string; group?: string }) =>
+  client
+    .get<{ items: Array<Record<string, unknown>>; count: number }>('/users/export-links', { params })
+    .then((r) => r.data);

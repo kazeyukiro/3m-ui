@@ -42,6 +42,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	r.Use(CORSMiddleware(cfg.Security.CORSOrigins))
 
 	RegisterLegacySubscriptionRoutes(r, db, cfg)
+	RegisterCustomSubPathRoutes(r, db, cfg)
 
 	apiV1 := r.Group("/api/v1")
 	{

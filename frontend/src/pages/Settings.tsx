@@ -883,6 +883,31 @@ const Settings: React.FC = () => {
                   {t('settings.updateGeofiles') || 'Update geo files'}
                 </Button>
               </Card>
+              <Card title={t('settings.warp') || 'Cloudflare WARP'} style={{ marginTop: 16 }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text type="secondary">{t('settings.warpHint') || 'One-click register a WARP WireGuard config (YAML for Mihomo outbound).'}</Text>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const res = await client.post('/system/templates/warp/register');
+                        const yaml = res.data?.yaml || '';
+                        await copyText(yaml);
+                        message.success(t('settings.warpDone') || 'WARP registered — YAML copied');
+                        Modal.info({
+                          title: 'WARP YAML',
+                          width: 720,
+                          content: <pre style={{ maxHeight: 360, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{yaml}</pre>,
+                        });
+                      } catch (e: any) {
+                        message.error(e?.response?.data?.error || e.message || t('common.error'));
+                      }
+                    }}
+                  >
+                    {t('settings.warpRegister') || 'Register WARP'}
+                  </Button>
+                </Space>
+              </Card>
+
             </Space>
           )}
 

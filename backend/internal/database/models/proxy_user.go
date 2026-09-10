@@ -33,4 +33,14 @@ type ProxyUser struct {
 	TelegramID int64 `gorm:"index;default:0" json:"telegram_id,omitempty"`
 	// TelegramName is the display name of the linked Telegram account (best-effort cache).
 	TelegramName string `gorm:"size:64;default:''" json:"telegram_name,omitempty"`
+	// Group is an admin-facing group name for filtering and bulk ops (not auth).
+	Group string `gorm:"size:64;index;default:''" json:"group"`
+	// Tags is a comma-separated list of labels (admin-facing).
+	Tags string `gorm:"size:255;default:''" json:"tags"`
+	// TrafficResetDays: when >0, traffic counters reset every N days from LastTrafficCycleReset.
+	TrafficResetDays int `gorm:"not null;default:0" json:"traffic_reset_days"`
+	// ExpireRenewDays: when >0 and credential would expire, extend ExpireTime by N days (calendar cycle).
+	ExpireRenewDays int `gorm:"not null;default:0" json:"expire_renew_days"`
+	// LastTrafficCycleReset tracks the last per-user traffic cycle reset (UTC).
+	LastTrafficCycleReset *time.Time `json:"last_traffic_cycle_reset,omitempty"`
 }

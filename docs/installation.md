@@ -171,3 +171,8 @@ docker compose exec 3m-ui /usr/local/bin/3m-ui reset-admin
 正式 / 候选版本工作流按标签构建，并拒绝覆盖已发布版本。滚动 `pre` 是独立通道。镜像发布到 `ghcr.io/<当前仓库所有者>/<当前仓库名>`；仓库管理员首次发布时需要确保 package 可见性适合公众拉取。
 
 发布验证应涵盖两种架构、首次初始化、真实核心运行、登录改密、创建节点、实际代理连接、更新保留数据和快照恢复。仅编译成功不能证明一台全新服务器可以安装。
+
+
+## Subscription path and port
+
+Optional `server.sub_path` (e.g. `/sub`) and `server.sub_port` in `/etc/3m-ui/config.yaml`, or env `THREE_M_UI_SUB_PATH` / `THREE_M_UI_SUB_PORT`. Legacy `/api/v1/client/sub/:token` remains. Set `public_url` to the client-facing base URL.

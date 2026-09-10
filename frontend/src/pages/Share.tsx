@@ -10,6 +10,7 @@ import PageHeader from '../components/PageHeader';
 import { copyText } from '../utils/clipboard';
 import {
   fetchUsers, fetchUserSubscription, rotateUserSubscription, fetchUserNodes,
+  exportUserLinks,
   ProxyUser, BoundNode,
 } from '../api/users';
 import { exportNodeURI } from '../api/nodes';
@@ -219,6 +220,24 @@ const SharePage: React.FC = () => {
 
   return (
     <div>
+      <div style={{ marginBottom: 12 }}>
+        <Button
+          onClick={async () => {
+            try {
+              const res = await exportUserLinks();
+              const lines = (res.items || []).map((it: any) =>
+                [it.username, it.group || '', it.subscription || ''].join('\t'),
+              );
+              await copyText(lines.join('\n'));
+              message.success(`Exported ${res.count} link(s)`);
+            } catch (e: any) {
+              message.error(e?.message || 'export failed');
+            }
+          }}
+        >
+          Export all subscription links
+        </Button>
+      </div>
       <PageHeader title={t('share.title')} subtitle={t('share.subtitle') || undefined} />
 
       <Card size="small" style={{ marginBottom: 16 }}>

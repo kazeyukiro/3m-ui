@@ -230,7 +230,11 @@ func buildSubURL(token string) string {
 	if config.GlobalConfig != nil && strings.TrimSpace(config.GlobalConfig.Server.PublicURL) != "" {
 		base = strings.TrimRight(strings.TrimSpace(config.GlobalConfig.Server.PublicURL), "/")
 	}
-	return fmt.Sprintf("%s/api/v1/client/sub/%s", base, url.PathEscape(token))
+	subBase := "/api/v1/client/sub"
+	if config.GlobalConfig != nil {
+		subBase = config.SubscriptionBasePath(config.GlobalConfig)
+	}
+	return fmt.Sprintf("%s%s/%s", base, subBase, url.PathEscape(token))
 }
 
 func fmtInt64(n int64) string {

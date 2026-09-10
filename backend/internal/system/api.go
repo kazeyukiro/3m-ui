@@ -36,6 +36,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/templates/acme", h.ACME)
 	rg.POST("/geofiles/update", h.UpdateGeoFiles)
 	rg.POST("/templates/warp", h.WARP)
+	rg.POST("/templates/warp/register", h.WARPRegister)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
@@ -163,4 +164,13 @@ func (h *Handler) WARP(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"yaml": yaml})
+}
+
+func (h *Handler) WARPRegister(c *gin.Context) {
+	res, err := RegisterWARP()
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }

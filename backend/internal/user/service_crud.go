@@ -105,6 +105,10 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		IPLimit:           max0(in.IPLimit),
 		HWIDLimit:         max0(in.HWIDLimit),
 		Remark:            strings.TrimSpace(in.Remark),
+		Group:             strings.TrimSpace(in.Group),
+		Tags:              strings.TrimSpace(in.Tags),
+		TrafficResetDays:  max0(in.TrafficResetDays),
+		ExpireRenewDays:   max0(in.ExpireRenewDays),
 		ExpireTime:        expire,
 		Enabled:           enabled,
 		SubToken:          subTok,
@@ -167,6 +171,18 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	}
 	if in.Remark != nil {
 		u.Remark = strings.TrimSpace(*in.Remark)
+	}
+	if in.Group != nil {
+		u.Group = strings.TrimSpace(*in.Group)
+	}
+	if in.Tags != nil {
+		u.Tags = strings.TrimSpace(*in.Tags)
+	}
+	if in.TrafficResetDays != nil {
+		u.TrafficResetDays = max0(*in.TrafficResetDays)
+	}
+	if in.ExpireRenewDays != nil {
+		u.ExpireRenewDays = max0(*in.ExpireRenewDays)
 	}
 	if in.ExpireTime != nil {
 		u.ExpireTime = in.ExpireTime.UTC()

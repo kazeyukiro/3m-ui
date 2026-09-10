@@ -261,6 +261,21 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 	api.GET("/client/v2ray/:token/", forcedTargetHandler(db, cfg, "v2ray"))
 }
 
+// RegisterCustomSubPathRoutes mounts subscription handlers under an optional
+// short path (e.g. /sub/:token) on the root engine, matching s-ui style paths.
+func RegisterCustomSubPathRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
+	if r == nil || cfg == nil {
+		return
+	}
+	prefix := config.NormalizeSubPath(cfg.Server.SubPath)
+	if prefix == "" {
+		return
+	}
+	handler := subscriptionHandler(db, cfg)
+	r.GET(prefix+"/:token", handler)
+	r.GET(prefix+"/:token/", handler)
+}
+
 // forcedTargetHandler serves a subscription with a fixed target format.
 func forcedTargetHandler(db *gorm.DB, cfg *config.Config, target string) gin.HandlerFunc {
 	inner := subscriptionHandler(db, cfg)

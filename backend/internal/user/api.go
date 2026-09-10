@@ -28,6 +28,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	// Static path must be registered before /:id to avoid being captured as id.
 	rg.POST("/del-depleted", h.DeleteDepleted)
 	rg.POST("/batch", h.Batch)
+	rg.GET("/export-links", h.ExportLinks)
 	// Telegram binding routes registered before /:id so the static segment is not captured.
 	rg.GET("/by-telegram/:tgid", h.GetByTelegram)
 	rg.PUT("/:id/telegram", h.BindTelegram)
