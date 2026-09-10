@@ -15,6 +15,16 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+/** True when the browser/axios aborted the request (navigation, polling, explicit cancel). */
+export function isCanceledError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; name?: string; message?: string };
+  if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError' || e.name === 'AbortError') return true;
+  if (typeof e.message === 'string' && /cancel|aborted/i.test(e.message)) return true;
+  if (axios.isCancel?.(err)) return true;
+  return false;
+}
+
 function apiErrorMessage(err: AxiosError<{ error?: string; code?: string; message?: string }>): string {
   const data = err.response?.data;
   if (data && typeof data === 'object') {
@@ -28,6 +38,14 @@ function apiErrorMessage(err: AxiosError<{ error?: string; code?: string; messag
 client.interceptors.response.use(
   (res) => res,
   (err: AxiosError<{ error?: string; code?: string; message?: string }>) => {
+    // Aborted polls / navigation must not surface as "backend unreachable".
+    if (isCanceledError(err) || err.code === 'ERR_CANCELED') {
+      const cancelErr = new Error('Request canceled');
+      cancelErr.name = 'CanceledError';
+      (cancelErr as Error & { code?: string }).code = 'ERR_CANCELED';
+      return Promise.reject(cancelErr);
+    }
+
     if (!err.response) {
       if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
         return Promise.reject(
@@ -37,7 +55,16 @@ client.interceptors.response.use(
         );
       }
       if (err.request) {
-        return Promise.reject(new Error('Backend service unreachable or connection was interrupted'));
+        // Network Error, connection reset, offline, or proxy dropped the response.
+        const detail =
+          typeof err.message === 'string' && err.message && err.message !== 'Network Error'
+            ? ` (${err.message})`
+            : '';
+        return Promise.reject(
+          new Error(
+            `Cannot reach the panel API at /api/v1${detail}. Confirm 3m-ui is running (systemctl status 3m-ui), the panel port is open, and you are not blocking the request with a proxy or mixed-content policy.`,
+          ),
+        );
       }
       return Promise.reject(new Error(err.message || 'Backend request failed'));
     }
@@ -45,7 +72,6 @@ client.interceptors.response.use(
 
     if (status === 401) {
       const path = window.location.pathname;
-      // Do not hard-redirect while already on login — avoid loops when password is wrong.
       if (path !== '/login') {
         useAuthStore.getState().logout();
         window.location.href = '/login';

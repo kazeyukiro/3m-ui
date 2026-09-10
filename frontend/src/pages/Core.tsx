@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Alert, Button, Card, Descriptions, Space, Spin, message } from 'antd';
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
-import client from '../api/client';
+import client, { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
 import PageHeader from '../components/PageHeader';
@@ -21,7 +21,7 @@ export default function Core() {
       setStatus(data);
       return true;
     } catch (e: any) {
-      if (showError) message.error(e.message || t('core.unavailable'));
+      if (showError && !isCanceledError(e)) message.error(e.message || t('core.unavailable'));
       return false;
     } finally { setLoading(false); }
   };

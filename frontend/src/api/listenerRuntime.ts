@@ -21,4 +21,4 @@ export const checkListenerRuntime = (id: number, signal?: AbortSignal) =>
   client.post<ListenerRuntime>(`/nodes/${id}/check`, undefined, { signal }).then(r => r.data);
 
 export const testListenerConnection = (id: number, signal?: AbortSignal, reuse = false) =>
-  client.post<ListenerRuntime>(`/nodes/${id}/connection-check`, undefined, { signal, params: { reuse } }).then(r => r.data);
+  client.post<ListenerRuntime>(`/nodes/${id}/connection-check`, undefined, { signal, params: { reuse }, timeout: 45000 }).then(r => r.data);
