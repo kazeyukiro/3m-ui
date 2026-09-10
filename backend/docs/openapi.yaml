@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: 3m-ui API
-  version: "1.1"
+  version: "1.2"
   description: |
     REST API for the 3m-ui Mihomo management panel.
 
@@ -9,8 +9,18 @@ info:
     - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login`
     - Public subscription routes use path tokens (no JWT)
 
+    Subscription URLs:
+    - Always available: `/api/v1/client/sub/{token}` (and `/client/clash|v2ray|json/{token}`)
+    - Optional short path from config `server.sub_path` (e.g. `/sub/{token}`) on the same
+      process; optional `server.sub_port` serves subscription routes on a second listener.
+    - Generated links use `server.public_url` + `SubscriptionBasePath` (sub_path or legacy).
+
     Cross-machine subscription: sync remote nodes via `/cluster/{id}/sync-nodes`,
     bind with `/users/{id}/remote-nodes`, then the user's sub URL merges local + remote.
+
+    Proxy users support group/tags, per-user traffic reset cycle (`traffic_reset_days`)
+    and post-expiry renew (`expire_renew_days`). Export all share links via
+    `GET /users/export-links`.
 servers:
   - url: /api/v1
 tags:
@@ -29,11 +39,20 @@ paths:
   /health:
     get:
       tags: [health]
-      summary: Liveness probe
+      summary: Liveness probe (includes panel build info)
       security: []
       responses:
         "200":
-          description: '{ "status": "ok" }'
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, example: v1.0.6 }
+                  git_commit: { type: string }
+                  build_time: { type: string }
 
   /auth/login:
     post:
@@ -82,15 +101,46 @@ paths:
     get:
       tags: [users]
       summary: List proxy users
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search username, remark, tags, or group
+        - in: query
+          name: group
+          schema: { type: string }
+          description: Exact group match
+        - in: query
+          name: enabled
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
+        - in: query
+          name: online
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
+        - in: query
+          name: blocked
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
       responses:
         "200":
           description: SafeUser array
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProxyUser" }
     post:
       tags: [users]
       summary: Create proxy user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyUserWrite" }
       responses:
         "201":
           description: Created user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyUser" }
 
   /users/{id}:
     parameters:
@@ -101,18 +151,100 @@ paths:
       responses:
         "200":
           description: SafeUser
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyUser" }
     put:
       tags: [users]
       summary: Update proxy user
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyUserWrite" }
       responses:
         "200":
           description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyUser" }
     delete:
       tags: [users]
-      summary: Delete proxy user
+      summary: Delete proxy user (soft-delete; unique name/username freed)
       responses:
         "200":
           description: Deleted
+
+
+  /users/export-links:
+    get:
+      tags: [users, subscription]
+      summary: Export subscription URLs for all (or filtered) users
+      description: |
+        One-click ops export. Returns username, group, tags and subscription URLs
+        (default + clash/v2ray/singbox targets) for each user with a sub_token.
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: group
+          schema: { type: string }
+      responses:
+        "200":
+          description: Export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        username: { type: string }
+                        remark: { type: string }
+                        group: { type: string }
+                        tags: { type: string }
+                        enabled: { type: boolean }
+                        sub_token: { type: string }
+                        subscription: { type: string, format: uri }
+                        subscription_clash: { type: string, format: uri }
+                        subscription_v2ray: { type: string, format: uri }
+                        subscription_singbox: { type: string, format: uri }
+
+  /users/batch:
+    post:
+      tags: [users]
+      summary: Batch enable/disable/reset-traffic/delete/extend users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, ids]
+              properties:
+                action:
+                  type: string
+                  enum: [enable, disable, reset-traffic, delete, extend-days, add-traffic]
+                ids:
+                  type: array
+                  items: { type: integer }
+                days: { type: integer, description: For extend-days }
+                traffic_gb: { type: number, description: For add-traffic }
+      responses:
+        "200":
+          description: '{ "affected": n, "action": "..." }'
+
+  /users/del-depleted:
+    post:
+      tags: [users]
+      summary: Delete expired or over-quota users
+      responses:
+        "200":
+          description: '{ "deleted": n }'
 
   /users/{id}/nodes:
     parameters:
@@ -488,6 +620,10 @@ paths:
     get:
       tags: [subscription]
       summary: User subscription (UA or ?target= selects format)
+      description: |
+        Public (no JWT). Formats via User-Agent or `?target=clash|v2ray|singbox|html`.
+        When `server.sub_path` is set (e.g. `/sub`), the same handler is also mounted at
+        `{sub_path}/{token}` on the panel port and, if configured, on `server.sub_port`.
       security: []
       parameters:
         - in: path
@@ -717,6 +853,47 @@ paths:
         "200":
           description: Updated
 
+  /system/templates/warp:
+    post:
+      tags: [system]
+      summary: Build Mihomo WARP WireGuard YAML from provided keys
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                private_key: { type: string }
+                address: { type: string, description: "v4,v6 addresses" }
+                reserved: { type: string }
+      responses:
+        "200":
+          description: '{ "yaml": "..." }'
+
+  /system/templates/warp/register:
+    post:
+      tags: [system]
+      summary: One-click Cloudflare WARP registration
+      description: |
+        Generates a WireGuard keypair, registers with Cloudflare's client API, and
+        returns private_key, address, reserved, and ready-to-paste Mihomo YAML.
+        Requires outbound HTTPS to api.cloudflareclient.com.
+      responses:
+        "200":
+          description: WARPRegisterResult
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  private_key: { type: string }
+                  public_key: { type: string }
+                  address: { type: string }
+                  reserved: { type: string }
+                  yaml: { type: string }
+        "502":
+          description: Upstream registration failed
+
   /telegram/settings:
     get:
       tags: [telegram]
@@ -733,10 +910,116 @@ paths:
   /telegram/test:
     post:
       tags: [telegram]
-      summary: Send test message
+      summary: Send test message (localized via settings.language)
       responses:
         "200":
           description: OK
+  /telegram/set-my-commands:
+    post:
+      tags: [telegram]
+      summary: Register bot command menu with Telegram (setMyCommands)
+      responses:
+        "200":
+          description: Telegram API response
+  /telegram/bot-info:
+    get:
+      tags: [telegram]
+      summary: Telegram getMe profile
+      responses:
+        "200":
+          description: username, id, first_name
+
+
+  /access-tokens:
+    get:
+      tags: [subscription]
+      summary: List access tokens (per-listener client access)
+      responses:
+        "200":
+          description: Token list (token secret may be omitted)
+    post:
+      tags: [subscription]
+      summary: Create access token for a listener
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listener_id]
+              properties:
+                name: { type: string }
+                listener_id: { type: integer }
+                expire_at: { type: string, format: date-time, nullable: true }
+      responses:
+        "201":
+          description: Created token + subscription links
+  /access-tokens/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    put:
+      tags: [subscription]
+      summary: Update access token
+      responses:
+        "200":
+          description: Updated
+    delete:
+      tags: [subscription]
+      summary: Delete access token (hard delete)
+      responses:
+        "200":
+          description: Deleted
+
+  /panel-settings:
+    get:
+      tags: [system]
+      summary: Panel key/value settings (traffic_reset_day, etc.)
+      responses:
+        "200":
+          description: Settings map
+    put:
+      tags: [system]
+      summary: Update panel settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: { type: string }
+      responses:
+        "200":
+          description: Saved
+
+  /system/ssl/status:
+    get:
+      tags: [system]
+      summary: Panel SSL runtime status
+      responses:
+        "200":
+          description: Enabled, domain, mode hints
+
+  /system/subscription-page/default-template:
+    get:
+      tags: [system, subscription]
+      summary: Download default subscription HTML template
+      responses:
+        "200":
+          description: HTML template body
+
+  /system/templates/reverse-proxy:
+    post:
+      tags: [system]
+      summary: Generate reverse-proxy snippet template
+      responses:
+        "200":
+          description: Template text
+
+  /system/templates/acme:
+    post:
+      tags: [system]
+      summary: Generate ACME helper template
+      responses:
+        "200":
+          description: Template text
 
   /openapi.yaml:
     get:
@@ -749,6 +1032,50 @@ paths:
 
 components:
   schemas:
+    ProxyUser:
+      type: object
+      description: Safe proxy-user view (no password/uuid secrets)
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        enabled: { type: boolean }
+        traffic_limit: { type: integer, format: int64, description: "0 = unlimited (bytes)" }
+        traffic_used: { type: integer, format: int64 }
+        upload_bytes: { type: integer, format: int64 }
+        download_bytes: { type: integer, format: int64 }
+        expire_time: { type: string, format: date-time }
+        online: { type: boolean }
+        blocked: { type: boolean }
+        ip_limit: { type: integer, description: "0 = unlimited concurrent IPs" }
+        hwid_limit: { type: integer, description: "0 = unlimited / track only" }
+        remark: { type: string }
+        group: { type: string, description: Admin group label }
+        tags: { type: string, description: "Comma-separated labels" }
+        traffic_reset_days: { type: integer, description: "Per-user traffic cycle; 0 = off" }
+        expire_renew_days: { type: integer, description: "Extend N days after expiry; 0 = off" }
+        last_traffic_cycle_reset: { type: string, format: date-time, nullable: true }
+        sub_token: { type: string }
+        telegram_id: { type: integer, format: int64 }
+        telegram_name: { type: string }
+        last_seen: { type: string, format: date-time, nullable: true }
+    ProxyUserWrite:
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string, description: Empty = auto-generate on create }
+        uuid: { type: string, description: Empty = auto-generate }
+        traffic_limit: { type: integer, format: int64 }
+        ip_limit: { type: integer }
+        hwid_limit: { type: integer }
+        remark: { type: string }
+        group: { type: string }
+        tags: { type: string }
+        traffic_reset_days: { type: integer }
+        expire_renew_days: { type: integer }
+        expire_time: { type: string, format: date-time }
+        enabled: { type: boolean }
+        telegram_id: { type: integer, format: int64 }
+        telegram_name: { type: string }
     RealityTarget:
       type: object
       required: [target, server_name, latency_ms, eligible]
