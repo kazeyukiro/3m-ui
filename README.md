@@ -66,7 +66,7 @@ curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/insta
 ```bash
 # 推荐（已安装后）
 sudo 3m-ui update
-# 指定版本: sudo 3m-ui update v1.0.0
+# 指定版本: sudo 3m-ui update v1.0.6
 # 从旧安装脚本迁移时，先重新执行上面的最新安装命令，配置和账号会保留。
 ```
 

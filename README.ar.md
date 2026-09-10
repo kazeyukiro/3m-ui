@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/insta
 بعد التثبيت، حدّث باستخدام:
 
 ```bash
-sudo 3m-ui update --stable
+sudo 3m-ui update
 # sudo 3m-ui update v1.0.2
 ```
 
