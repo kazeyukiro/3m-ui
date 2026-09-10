@@ -160,30 +160,31 @@ func (s *Scheduler) fireReport(settings Settings) {
 //   - total traffic sum
 //   - depleted / expiring user counts (uses settings.ExpiryWarnDays)
 func (s *Scheduler) buildReportMessage(settings Settings) string {
+	lang := NormalizeLang(settings.Language)
 	var b strings.Builder
 	host, _ := os.Hostname()
 	now := time.Now()
-	b.WriteString("📋 <b>3m-ui 定期报告 / Scheduled Report</b>\n")
-	b.WriteString(fmt.Sprintf("主机 / Host: <code>%s</code>\n", escapeHTML(host)))
-	b.WriteString(fmt.Sprintf("时间 / Time: <code>%s</code>\n", now.Format("2006-01-02 15:04:05")))
+	b.WriteString(Tr(lang, "n_report_title") + "\n")
+	b.WriteString(Trf(lang, "n_report_host", escapeHTML(host)) + "\n")
+	b.WriteString(Trf(lang, "n_report_time", now.Format("2006-01-02 15:04:05")) + "\n")
 
 	if s.mihomo != nil {
 		if st, err := s.mihomo.GetStatus(); err == nil && st != nil {
-			core := "stopped"
+			core := Tr(lang, "core_stopped")
 			if st.Running {
-				core = "running"
+				core = Tr(lang, "core_running")
 			}
-			b.WriteString(fmt.Sprintf("核心 / Core: <code>%s</code> v%s (uptime %s)\n",
-				core, escapeHTML(st.Version), escapeHTML(st.Uptime)))
+			b.WriteString(Trf(lang, "n_report_core",
+				core, escapeHTML(st.Version), escapeHTML(st.Uptime)) + "\n")
 		}
 	}
 
 	if s.systemSvc != nil {
 		if stats := s.systemSvc.GetStatus(); stats != nil {
-			b.WriteString(fmt.Sprintf("CPU: <code>%.1f%%</code>  Mem: <code>%s / %s</code>  Disk: <code>%.1f%%</code>\n",
+			b.WriteString(Trf(lang, "n_report_sys",
 				stats.CPU.Percent,
 				formatBytes(int64(stats.Memory.Used)), formatBytes(int64(stats.Memory.Total)),
-				stats.Disk.Percent))
+				stats.Disk.Percent) + "\n")
 		}
 	}
 
@@ -208,10 +209,10 @@ func (s *Scheduler) buildReportMessage(settings Settings) string {
 			expiring++
 		}
 	}
-	b.WriteString(fmt.Sprintf("用户 / Users: %d (online %d, blocked %d)\n", len(users), online, blocked))
-	b.WriteString(fmt.Sprintf("累计流量 / Total Traffic: %s\n", formatBytes(totalTraffic)))
+	b.WriteString(Trf(lang, "n_report_users", len(users), online, blocked) + "\n")
+	b.WriteString(Trf(lang, "n_report_traffic", formatBytes(totalTraffic)) + "\n")
 	if depleted > 0 || expiring > 0 {
-		b.WriteString(fmt.Sprintf("到期预警 / Expiring: %d   超额 / Depleted: %d\n", expiring, depleted))
+		b.WriteString(Trf(lang, "n_report_expiry", expiring, depleted) + "\n")
 	}
 	return b.String()
 }
@@ -264,7 +265,7 @@ func (s *Scheduler) NotifyEvent(event string, details map[string]string) {
 	}
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("🔔 <b>%s</b>\n", escapeHTML(event)))
-	b.WriteString(fmt.Sprintf("时间 / Time: <code>%s</code>\n", time.Now().Format("2006-01-02 15:04:05")))
+	b.WriteString(Trf(NormalizeLang(settings.Language), "n_event_time", time.Now().Format("2006-01-02 15:04:05")) + "\n")
 	for k, v := range details {
 		b.WriteString(fmt.Sprintf("%s: <code>%s</code>\n", escapeHTML(k), escapeHTML(v)))
 	}

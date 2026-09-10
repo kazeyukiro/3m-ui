@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -27,8 +26,7 @@ func NotifyCrash(db *gorm.DB, exitErr error) {
 	if exitErr != nil {
 		errText = exitErr.Error()
 	}
-	msg := fmt.Sprintf(
-		"💥 <b>核心崩溃 / Core crashed</b>\n错误 / Error：<code>%s</code>\n时间 / Time：%s\nℹ️ 将尝试自动重启 / Auto-restart will be attempted",
+	msg := Trf(NormalizeLang(settings.Language), "n_core_crash",
 		escapeHTML(errText), time.Now().Format("2006-01-02 15:04:05"),
 	)
 	if err := client.SendText(msg); err != nil {

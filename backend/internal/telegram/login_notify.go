@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -21,8 +20,7 @@ func NotifyLogin(db *gorm.DB, username, clientIP string) {
 	if err != nil || client == nil || !settings.NotifyOnLogin || !settings.EventEnabled("login") {
 		return
 	}
-	msg := fmt.Sprintf(
-		"🔐 <b>面板登录 / Panel login</b>\n用户 / User：<code>%s</code>\nIP：<code>%s</code>\n时间 / Time：%s",
+	msg := Trf(NormalizeLang(settings.Language), "n_login_ok",
 		escapeHTML(username), escapeHTML(clientIP), time.Now().Format("2006-01-02 15:04:05"),
 	)
 	if err := client.SendText(msg); err != nil {
@@ -44,8 +42,7 @@ func NotifyLoginFailed(db *gorm.DB, username, clientIP string) {
 	if err != nil || client == nil || !settings.EventEnabled("login") {
 		return
 	}
-	msg := fmt.Sprintf(
-		"❌ <b>登录失败 / Login failed</b>\n用户 / User：<code>%s</code>\nIP：<code>%s</code>\n时间 / Time：%s",
+	msg := Trf(NormalizeLang(settings.Language), "n_login_fail",
 		escapeHTML(username), escapeHTML(clientIP), time.Now().Format("2006-01-02 15:04:05"),
 	)
 	if err := client.SendText(msg); err != nil {

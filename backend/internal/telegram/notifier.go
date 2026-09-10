@@ -63,7 +63,8 @@ func (n *Notifier) CheckAndNotify() {
 			if reason != "expired" && !settings.NotifyOnBlock {
 				continue
 			}
-			msg := fmt.Sprintf("⛔ <b>用户已被阻止 / User blocked</b>\n用户 / User：<code>%s</code>\n原因 / Reason：%s\n时间 / Time：%s", escapeHTML(u.Username), reasonText(reason), now.Format("2006-01-02 15:04:05"))
+			lang := NormalizeLang(settings.Language)
+			msg := Trf(lang, "n_user_blocked", escapeHTML(u.Username), reasonText(lang, reason), now.Format("2006-01-02 15:04:05"))
 			if err := client.SendText(msg); err != nil {
 				log.Printf("telegram: block notification failed: %v", err)
 			}
@@ -77,7 +78,8 @@ func (n *Notifier) CheckAndNotify() {
 				if err := n.db.First(&u, id).Error; err != nil {
 					continue
 				}
-				msg := fmt.Sprintf("✅ <b>用户已恢复 / User restored</b>\n用户 / User：<code>%s</code>\n时间 / Time：%s", escapeHTML(u.Username), now.Format("2006-01-02 15:04:05"))
+				lang := NormalizeLang(settings.Language)
+				msg := Trf(lang, "n_user_restored", escapeHTML(u.Username), now.Format("2006-01-02 15:04:05"))
 				if err := client.SendText(msg); err != nil {
 					log.Printf("telegram: unblock notification failed: %v", err)
 				}
@@ -90,7 +92,7 @@ func (n *Notifier) CheckAndNotify() {
 	if settings.NotifyDailyDigest {
 		today := now.Format("2006-01-02")
 		if !dailyDigestSent(n.db, today) {
-			if err := client.SendText(dailyDigest(users, now)); err != nil {
+			if err := client.SendText(dailyDigest(NormalizeLang(settings.Language), users, now)); err != nil {
 				log.Printf("telegram: daily digest failed: %v", err)
 			} else if err := markDailyDigestSent(n.db, today); err != nil {
 				log.Printf("telegram: persist daily digest state failed: %v", err)
@@ -99,7 +101,7 @@ func (n *Notifier) CheckAndNotify() {
 	}
 }
 
-func dailyDigest(users []models.ProxyUser, now time.Time) string {
+func dailyDigest(lang string, users []models.ProxyUser, now time.Time) string {
 	var total, used, blocked int64
 	for _, u := range users {
 		total++
@@ -108,19 +110,19 @@ func dailyDigest(users []models.ProxyUser, now time.Time) string {
 			blocked++
 		}
 	}
-	return fmt.Sprintf("📊 <b>3m-ui 每日摘要 / Daily Summary</b>\n用户数 / Users：%d\n已阻止 / Blocked：%d\n累计流量 / Traffic：%s\n时间 / Time：%s", total, blocked, formatBytes(used), now.Format("2006-01-02 15:04:05"))
+	return Trf(lang, "n_daily_digest", total, blocked, formatBytes(used), now.Format("2006-01-02 15:04:05"))
 }
 
-func reasonText(reason string) string {
+func reasonText(lang, reason string) string {
 	switch reason {
 	case "disabled":
-		return "用户已禁用 / Disabled"
+		return Tr(lang, "n_reason_disabled")
 	case "expired":
-		return "已过期 / Expired"
+		return Tr(lang, "n_reason_expired")
 	case "traffic_limit":
-		return "流量已用尽 / Traffic limit reached"
+		return Tr(lang, "n_reason_traffic")
 	default:
-		return "凭据不可用 / Credentials unavailable"
+		return Tr(lang, "n_reason_other")
 	}
 }
 
@@ -167,7 +169,7 @@ func (n *Notifier) emitThresholdWarnings(client *Client, settings Settings, user
 			if pct >= float64(warnPct) && pct < 100 {
 				key := fmt.Sprintf("tg_warn_traffic_%d_%s", u.ID, now.Format("2006-01-02"))
 				if !settingExists(n.db, key) {
-					msg := fmt.Sprintf("⚠️ <b>流量预警 / Traffic warning</b>\n用户 / User：<code>%s</code>\n已用 / Used：%s / %s (%.0f%%)\n阈值 / Threshold：%d%%\n时间 / Time：%s",
+					msg := Trf(NormalizeLang(settings.Language), "n_traffic_warn",
 						escapeHTML(u.Username), formatBytes(u.TrafficUsed), formatBytes(u.TrafficLimit), pct, warnPct, now.Format("2006-01-02 15:04:05"))
 					if err := client.SendText(msg); err != nil {
 						log.Printf("telegram: traffic warn failed: %v", err)
@@ -187,7 +189,7 @@ func (n *Notifier) emitThresholdWarnings(client *Client, settings Settings, user
 			if remaining < int64(settings.TrafficWarnGB)*gigabyte {
 				key := fmt.Sprintf("tg_warn_traffic_gb_%d_%s", u.ID, now.Format("2006-01-02"))
 				if !settingExists(n.db, key) {
-					msg := fmt.Sprintf("📦 <b>流量低 / Low traffic</b>\n用户 / User：<code>%s</code>\n剩余 / Remaining：%s / %s\n阈值 / Threshold：%dGB\n时间 / Time：%s",
+					msg := Trf(NormalizeLang(settings.Language), "n_traffic_low",
 						escapeHTML(u.Username), formatBytes(remaining), formatBytes(u.TrafficLimit), settings.TrafficWarnGB, now.Format("2006-01-02 15:04:05"))
 					if err := client.SendText(msg); err != nil {
 						log.Printf("telegram: traffic GB warn failed: %v", err)
@@ -203,7 +205,7 @@ func (n *Notifier) emitThresholdWarnings(client *Client, settings Settings, user
 			if until <= time.Duration(warnHours)*time.Hour {
 				key := fmt.Sprintf("tg_warn_expire_%d_%s", u.ID, u.ExpireTime.Format("2006-01-02"))
 				if !settingExists(n.db, key) {
-					msg := fmt.Sprintf("⏰ <b>到期预警 / Expiry warning</b>\n用户 / User：<code>%s</code>\n到期 / Expires：%s\n剩余 / Left：%s\n时间 / Time：%s",
+					msg := Trf(NormalizeLang(settings.Language), "n_expiry_warn",
 						escapeHTML(u.Username), u.ExpireTime.Format("2006-01-02 15:04"), until.Round(time.Hour).String(), now.Format("2006-01-02 15:04:05"))
 					if err := client.SendText(msg); err != nil {
 						log.Printf("telegram: expiry warn failed: %v", err)
@@ -223,7 +225,7 @@ func (n *Notifier) emitThresholdWarnings(client *Client, settings Settings, user
 			if daysLeft <= settings.ExpiryWarnDays {
 				key := fmt.Sprintf("tg_warn_expire_days_%d_%s", u.ID, u.ExpireTime.Format("2006-01-02"))
 				if !settingExists(n.db, key) {
-					msg := fmt.Sprintf("📅 <b>到期提醒 / Expiry reminder</b>\n用户 / User：<code>%s</code>\n到期 / Expires：%s\n剩余天数 / Days left：%d\n时间 / Time：%s",
+					msg := Trf(NormalizeLang(settings.Language), "n_expiry_days",
 						escapeHTML(u.Username), u.ExpireTime.Format("2006-01-02 15:04"), daysLeft, now.Format("2006-01-02 15:04:05"))
 					if err := client.SendText(msg); err != nil {
 						log.Printf("telegram: expiry days warn failed: %v", err)
@@ -278,7 +280,7 @@ func (n *Notifier) emitCPUWarning(client *Client, settings Settings) {
 			return
 		}
 	}
-	msg := fmt.Sprintf("🔥 <b>CPU high</b>\nusage: <code>%.1f%%</code> (threshold %d%%)", stats, settings.CPUWarnPct)
+	msg := Trf(NormalizeLang(settings.Language), "n_cpu_high", stats, settings.CPUWarnPct)
 	if err := client.SendText(msg); err != nil {
 		log.Printf("telegram: cpu warning failed: %v", err)
 		return
@@ -318,7 +320,7 @@ func (n *Notifier) emitMemoryWarning(client *Client, settings Settings) {
 			return
 		}
 	}
-	msg := fmt.Sprintf("🧠 <b>Memory high</b>\nusage: <code>%.1f%%</code> (threshold %d%%)", stats, settings.CPUWarnPct)
+	msg := Trf(NormalizeLang(settings.Language), "n_mem_high", stats, settings.CPUWarnPct)
 	if err := client.SendText(msg); err != nil {
 		log.Printf("telegram: memory warning failed: %v", err)
 		return
