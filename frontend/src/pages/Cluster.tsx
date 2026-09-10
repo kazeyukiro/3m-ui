@@ -198,10 +198,10 @@ const ClusterPage: React.FC = () => {
           dataSource={remoteNodes || []}
           pagination={{ pageSize: 8 }}
           columns={[
-            { title: 'ID', dataIndex: 'id', width: 60, render: (_: any, r: any) => r.id ?? r.ID },
-            { title: 'Name', dataIndex: 'name' },
-            { title: 'Protocol', dataIndex: 'protocol', width: 100 },
-            { title: 'Port', dataIndex: 'port', width: 80 },
+            { title: t('cluster.colId'), dataIndex: 'id', width: 60, render: (_: any, r: any) => r.id ?? r.ID },
+            { title: t('cluster.colName'), dataIndex: 'name' },
+            { title: t('cluster.colProtocol'), dataIndex: 'protocol', width: 100 },
+            { title: t('cluster.colPort'), dataIndex: 'port', width: 80 },
             {
               title: t('common.actions'),
               width: 100,
@@ -216,9 +216,9 @@ const ClusterPage: React.FC = () => {
       </Modal>
       <Modal open={dashOpen} onCancel={() => { setDashOpen(false); setDashData(null); }} footer={ctrlId ? (
         <Space>
-          <Button onClick={async () => { try { await remoteStartCore(ctrlId!); message.success('OK'); } catch (e: any) { message.error(e.message); } }}>{t('cluster.startCore') || 'Start core'}</Button>
-          <Button danger onClick={async () => { try { await remoteStopCore(ctrlId!); message.success('OK'); } catch (e: any) { message.error(e.message); } }}>{t('cluster.stopCore') || 'Stop core'}</Button>
-          <Button type="primary" onClick={async () => { try { await remoteRestartCore(ctrlId!); message.success('OK'); } catch (e: any) { message.error(e.message); } }}>{t('cluster.restartCore') || 'Restart'}</Button>
+          <Button onClick={async () => { try { await remoteStartCore(ctrlId!); message.success(t('cluster.operationOk') || t('common.ok')); } catch (e: any) { message.error(e.message); } }}>{t('cluster.startCore') || 'Start core'}</Button>
+          <Button danger onClick={async () => { try { await remoteStopCore(ctrlId!); message.success(t('cluster.operationOk') || t('common.ok')); } catch (e: any) { message.error(e.message); } }}>{t('cluster.stopCore') || 'Stop core'}</Button>
+          <Button type="primary" onClick={async () => { try { await remoteRestartCore(ctrlId!); message.success(t('cluster.operationOk') || t('common.ok')); } catch (e: any) { message.error(e.message); } }}>{t('cluster.restartCore') || 'Restart'}</Button>
         </Space>
       ) : null} title={t('cluster.dashboard') || 'Remote dashboard'} width={720}>
         <pre style={{ maxHeight: 420, overflow: 'auto', fontSize: 12 }}>{dashData ? JSON.stringify(dashData, null, 2) : ''}</pre>
@@ -226,7 +226,7 @@ const ClusterPage: React.FC = () => {
       <Modal open={usersOpen} onCancel={() => { setUsersOpen(false); setRemoteUsers([]); }} footer={null} title={t('cluster.users') || 'Remote users'} width={isMobile ? '100%' : 800}>
         <Table size="small" rowKey={(r: any) => r.id || r.username} dataSource={remoteUsers} pagination={{ pageSize: 10 }}
           columns={[
-            { title: 'ID', dataIndex: 'id', width: 60 },
+            { title: t('cluster.colId'), dataIndex: 'id', width: 60 },
             { title: t('users.username') || 'User', dataIndex: 'username' },
             { title: t('users.enabled') || 'Enabled', dataIndex: 'enabled', width: 80, render: (v: boolean) => String(!!v) },
             { title: t('users.traffic') || 'Traffic', key: 'tr', render: (_: any, r: any) => `${r.traffic_used ?? 0} / ${r.traffic_limit ?? 0}` },

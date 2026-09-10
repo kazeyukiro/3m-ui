@@ -4,6 +4,7 @@ import type { ListenerRuntime } from '../api/listenerRuntime';
 import type { Listener } from '../api/nodes';
 import { listenerAvailability, listenerDiagnosticReason } from '../utils/listenerAvailability';
 import { useListenerRuntimeMessages } from '../i18n/listenerRuntime';
+import { useI18n } from '../i18n';
 
 export function ListenerRuntimeTag({ status, enabled, checking = false, onClick }: {
   status?: ListenerRuntime; enabled: boolean; checking?: boolean; onClick?: () => void;
@@ -19,6 +20,7 @@ export function ListenerRuntimeDrawer({ listener, status, checking, onClose, onC
   listener: Listener | null; status?: ListenerRuntime; checking: boolean; onClose: () => void; onCheck: () => void;
 }) {
   const text = useListenerRuntimeMessages();
+  const { t } = useI18n();
   // The API returns all stages together. While it runs, do not present a
   // previous result as progress for the current request.
   const connection = checking ? undefined : status?.connection_check;
@@ -49,8 +51,8 @@ export function ListenerRuntimeDrawer({ listener, status, checking, onClose, onC
       ]} />
       <Typography.Text strong>{text.endpoints}</Typography.Text>
       <Table size="small" locale={checking ? { emptyText: text.waitingResult } : undefined} dataSource={status?.endpoints || []} rowKey={e => `${e.network}:${e.address}:${e.port}`} pagination={{ pageSize: 10, hideOnSinglePage: true }} columns={[
-        { title: 'TCP / UDP', dataIndex: 'network', render: (value: string) => value.toUpperCase() },
-        { title: 'IP:Port', render: (_, e) => `${e.address.includes(':') ? `[${e.address}]` : e.address}:${e.port}` },
+        { title: t('listeners.tcpUdp'), dataIndex: 'network', render: (value: string) => value.toUpperCase() },
+        { title: t('listeners.ipPort'), render: (_, e) => `${e.address.includes(':') ? `[${e.address}]` : e.address}:${e.port}` },
         { title: text.socketStatus, render: (_, e) => checking ? <Tag color="processing">{text.checking}</Tag> : status?.state === 'unknown' ? text.unverified : <Tag color={e.bound ? 'success' : 'error'}>{e.bound ? text.bound : text.missing}</Tag> },
       ]} />
     </Space>}
