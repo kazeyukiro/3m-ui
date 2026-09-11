@@ -735,4 +735,4 @@ const defaultHTML = `<!DOCTYPE html>
 </script>
 </body>
 </html>
-
+`
