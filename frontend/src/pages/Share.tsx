@@ -229,13 +229,13 @@ const SharePage: React.FC = () => {
                 [it.username, it.group || '', it.subscription || ''].join('\t'),
               );
               await copyText(lines.join('\n'));
-              message.success(`Exported ${res.count} link(s)`);
+              message.success(`${t('share.exported', 'Exported subscription links')} (${res.count})`);
             } catch (e: any) {
               message.error(e?.message || 'export failed');
             }
           }}
         >
-          Export all subscription links
+          {t('share.exportAll', 'Export all subscription links')}
         </Button>
       </div>
       <PageHeader title={t('share.title')} subtitle={t('share.subtitle') || undefined} />

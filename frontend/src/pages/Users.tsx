@@ -655,16 +655,16 @@ const Users: React.FC = () => {
           >
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="group" label={t('users.group') || 'Group'}>
+          <Form.Item name="group" label={t('users.group', 'Group')}>
             <Input placeholder="vip" allowClear />
           </Form.Item>
-          <Form.Item name="tags" label={t('users.tags') || 'Tags'}>
+          <Form.Item name="tags" label={t('users.tags', 'Tags')}>
             <Input placeholder="tag1,tag2" allowClear />
           </Form.Item>
-          <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays') || 'Traffic reset cycle (days)'}>
+          <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays', 'Traffic reset cycle (days)')} extra={t('users.trafficResetDaysHint', '0 = off')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
           </Form.Item>
-          <Form.Item name="expire_renew_days" label={t('users.expireRenewDays') || 'Expire renew cycle (days)'}>
+          <Form.Item name="expire_renew_days" label={t('users.expireRenewDays', 'Expire renew cycle (days)')} extra={t('users.expireRenewDaysHint', '0 = off')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
           </Form.Item>
           <Form.Item name="remark" label={t('users.remark') || 'Remark'}>
