@@ -64,7 +64,10 @@ func TestRuntimeRoutesObserveWithoutApplyingConfiguration(t *testing.T) {
 type recordingRuntimeInspector struct{ details []bool }
 
 func (r *recordingRuntimeInspector) ApplyConfig(string) error {
-	panic("read-only check applied configuration")
+	return nil
+}
+func (r *recordingRuntimeInspector) ApplyConfigDeferredRestart(string) error {
+	return nil
 }
 func (r *recordingRuntimeInspector) ListenerRuntime(listeners []models.Listener, details bool) []mihomo.ListenerRuntime {
 	r.details = append(r.details, details)

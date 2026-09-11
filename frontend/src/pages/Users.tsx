@@ -25,6 +25,7 @@ const Users: React.FC = () => {
   const [data, setData] = useState<ProxyUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
@@ -65,6 +66,8 @@ const Users: React.FC = () => {
   }, [data, keyword]);
 
   const onSubmit = async (values: any) => {
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const trafficGB = values.traffic_limit_gb;
       const payload: Record<string, unknown> = {
@@ -95,9 +98,12 @@ const Users: React.FC = () => {
       setModalOpen(false);
       setEditing(null);
       form.resetFields();
-      load();
+      await load();
     } catch (e: any) {
-      message.error(e.message || t('common.error'));
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
+      message.error(e?.message || t('common.error'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -629,17 +635,23 @@ const Users: React.FC = () => {
         open={modalOpen}
         title={editing ? t('users.edit') : t('users.create')}
         onCancel={() => {
+          if (submitting) return;
           setModalOpen(false);
           setEditing(null);
           form.resetFields();
         }}
         onOk={() => form.submit()}
+        confirmLoading={submitting}
+        okButtonProps={{ disabled: submitting }}
+        cancelButtonProps={{ disabled: submitting }}
+        maskClosable={!submitting}
+        keyboard={!submitting}
         destroyOnClose
         width={isMobile ? '100%' : 520}
         style={isMobile ? { top: 8, maxWidth: '100vw' } : undefined}
         className={isMobile ? 'mobile-full-modal' : undefined}
       >
-        <Form form={form} layout="vertical" onFinish={onSubmit}>
+        <Form form={form} layout="vertical" onFinish={onSubmit} disabled={submitting}>
           <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
