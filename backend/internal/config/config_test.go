@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"net/http/httptest"
+	"testing"
+)
 
 func TestIsMihomoListenerProtocol(t *testing.T) {
 	supported := []string{
@@ -70,5 +73,23 @@ func TestControllerOverrideRemainsLocal(t *testing.T) {
 		if err := Validate(cfg); err != nil {
 			t.Errorf("rejected loopback controller: %v", err)
 		}
+	}
+}
+
+func TestGetSubscriptionURLUsesSharedConfiguration(t *testing.T) {
+	t.Setenv("PUBLIC_URL", "")
+	cfg := &Config{Server: ServerConfig{PublicURL: "https://panel.example", SubPath: "/custom/sub"}}
+	req := httptest.NewRequest("GET", "http://internal.example/", nil)
+	if got := GetSubscriptionURL(cfg, req, "token/a", " Clash "); got != "https://panel.example/custom/sub/token%2Fa?target=clash" {
+		t.Fatal(got)
+	}
+	t.Setenv("PUBLIC_URL", "https://public.example/")
+	if got := GetSubscriptionURL(cfg, req, "abc", ""); got != "https://public.example/custom/sub/abc" {
+		t.Fatal(got)
+	}
+	t.Setenv("PUBLIC_URL", "")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	if got := GetSubscriptionURL(nil, req, "abc", ""); got != "https://internal.example/api/v1/client/sub/abc" {
+		t.Fatal(got)
 	}
 }

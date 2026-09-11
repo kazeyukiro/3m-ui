@@ -12,8 +12,9 @@ import (
 )
 
 type Service struct {
-	pm *ProcessManager
-	cm *ConfigManager
+	updater *coreUpdater
+	pm      *ProcessManager
+	cm      *ConfigManager
 	// applyMu serializes configuration replacement, backup rotation, validation,
 	// and process restart. Multiple API routes can call ApplyConfig concurrently.
 	applyMu             sync.Mutex
@@ -26,7 +27,9 @@ func NewService(cfg *config.Config) *Service {
 	if cfg == nil {
 		return &Service{}
 	}
-	return &Service{pm: NewProcessManager(cfg.Mihomo.Binary, cfg.Mihomo.Config), cm: NewConfigManager(cfg.Mihomo.Config)}
+	svc := &Service{pm: NewProcessManager(cfg.Mihomo.Binary, cfg.Mihomo.Config), cm: NewConfigManager(cfg.Mihomo.Config)}
+	svc.initCoreUpdater(cfg.Mihomo.Config)
+	return svc
 }
 
 // SetCrashHandler forwards a crash-notification callback to the underlying
@@ -43,8 +46,14 @@ func (s *Service) StartMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")
 	}
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 
 	if err := s.pm.ValidateConfig(); err != nil {
 		return err
@@ -56,8 +65,14 @@ func (s *Service) StopMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")
 	}
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 
 	return s.pm.Stop()
 }
@@ -66,8 +81,14 @@ func (s *Service) RestartMihomo() error {
 	if s == nil || s.pm == nil {
 		return fmt.Errorf("mihomo service not initialized")
 	}
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 
 	return s.pm.Restart()
 }
@@ -82,6 +103,15 @@ func (s *Service) SaveConfig(content string) error {
 	if s == nil || s.cm == nil {
 		return fmt.Errorf("mihomo service not initialized")
 	}
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
+	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
+
 	old, readErr := s.cm.ReadConfig()
 	hadOld := readErr == nil
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !os.IsNotExist(readErr) {
@@ -111,8 +141,14 @@ func (s *Service) ApplyConfig(content string) error {
 	if s == nil || s.cm == nil {
 		return fmt.Errorf("mihomo service not initialized")
 	}
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
+	if err := s.coreMutationAllowed(); err != nil {
+		return err
+	}
 	old, readErr := s.cm.ReadConfig()
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !os.IsNotExist(readErr) {
 		return fmt.Errorf("read current Mihomo config: %w", readErr)
@@ -249,3 +285,6 @@ func inferLogLevel(payload string) string {
 	}
 	return "info"
 }
+
+// BinaryPath reports the selected persistent core or the bundled fallback.
+func (s *Service) BinaryPath() string { return s.pm.BinaryPath() }

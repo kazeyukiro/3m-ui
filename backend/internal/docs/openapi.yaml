@@ -706,6 +706,55 @@ paths:
         "200":
           description: Connection list
 
+  /mihomo/releases:
+    get:
+      tags: [mihomo]
+      summary: List verifiable official stable and Pre Mihomo releases for this platform
+      responses:
+        "200":
+          description: Release list with version, published_at, url, asset, sha256, size, and prerelease
+        "502":
+          description: Official release metadata is unavailable
+  /mihomo/update:
+    get:
+      tags: [mihomo]
+      summary: Get core update capability, saved previous version, and latest job
+      responses:
+        "200":
+          description: supported, disabled_reason, busy, managed, previous_version, and job
+    post:
+      tags: [mihomo]
+      summary: Start an asynchronous official core update (administrator only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: string
+                  pattern: '^(v[0-9]+\.[0-9]+\.[0-9]+|alpha-[a-f0-9]{7,40})$'
+      responses:
+        "202":
+          description: Job with id, operation, version, status, stage, and started_at; poll GET /mihomo/update
+        "400":
+          description: Invalid version or unavailable persistent storage/platform
+        "409":
+          description: Another core update or deployment is in progress
+  /mihomo/update/rollback:
+    post:
+      tags: [mihomo]
+      summary: Restore the saved previous core asynchronously (administrator only)
+      responses:
+        "202":
+          description: Accepted rollback job; failures include error and rolled_back
+        "400":
+          description: No previous core is available or this platform is unsupported
+        "409":
+          description: Another update or deployment is in progress
+
   /mihomo/status:
     get:
       tags: [mihomo]

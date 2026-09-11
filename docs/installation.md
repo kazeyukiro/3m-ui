@@ -176,3 +176,10 @@ docker compose exec 3m-ui /usr/local/bin/3m-ui reset-admin
 ## Subscription path and port
 
 Optional `server.sub_path` (e.g. `/sub`) and `server.sub_port` in `/etc/3m-ui/config.yaml`, or env `THREE_M_UI_SUB_PATH` / `THREE_M_UI_SUB_PORT`. Legacy `/api/v1/client/sub/:token` remains. Set `public_url` to the client-facing base URL.
+
+## Independent core updates
+
+The Core page supports manual updates and rollback of official stable and Pre Mihomo
+versions on Linux amd64/arm64. Selected versions persist in the existing data
+volume across panel upgrades. See [core updates](core-updates.md) for validation,
+recovery, and deployment integration details.

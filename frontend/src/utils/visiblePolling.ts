@@ -1,6 +1,6 @@
 // Poll only while visible, with at most one request in flight. A hidden or
 // unmounted page aborts its request; consumers must ignore aborted results.
-export function startVisiblePolling(poll: (signal: AbortSignal) => Promise<void>, interval = 10000) {
+export function startVisiblePolling(poll: (signal: AbortSignal) => Promise<void>, interval: number | (() => number) = 10000) {
   let stopped = false;
   let running = false;
   let resumePending = false;
@@ -19,7 +19,7 @@ export function startVisiblePolling(poll: (signal: AbortSignal) => Promise<void>
     } finally {
       running = false;
       if (!stopped && !document.hidden) {
-        timer = setTimeout(() => { void run(); }, resumePending ? 0 : interval);
+        timer = setTimeout(() => { void run(); }, resumePending ? 0 : typeof interval === 'function' ? interval() : interval);
       }
     }
   };

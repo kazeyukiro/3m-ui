@@ -2,6 +2,7 @@ package mihomo
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +21,7 @@ type ProcessManager struct {
 	pid         int
 	startTime   time.Time
 	binaryPath  string
+	managedDir  string
 	configPath  string
 	done        chan struct{}
 	logs        []string
@@ -113,24 +115,44 @@ func isAllowedBinaryPath(path string) bool {
 	return false
 }
 
+func (pm *ProcessManager) BinaryPath() string {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	return pm.binaryPath
+}
+func (pm *ProcessManager) setBinaryPath(path string) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	pm.binaryPath = path
+}
+func (pm *ProcessManager) allowedBinary(path string) bool {
+	if isAllowedBinaryPath(path) {
+		return true
+	}
+	name := filepath.Base(path)
+	return pm.managedDir != "" && filepath.Dir(path) == pm.managedDir && strings.HasPrefix(name, "mihomo-") && sha256Pattern.MatchString(strings.TrimPrefix(name, "mihomo-"))
+}
 func (pm *ProcessManager) GetVersion() (*VersionInfo, error) {
-	info, err := os.Stat(pm.binaryPath)
+	binaryPath := pm.BinaryPath()
+	info, err := os.Stat(binaryPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("mihomo binary not found: %s", pm.binaryPath)
+			return nil, fmt.Errorf("mihomo binary not found: %s", binaryPath)
 		}
 
 		return nil, fmt.Errorf("failed to stat mihomo binary: %w", err)
 	}
 
 	if info.IsDir() {
-		return nil, fmt.Errorf("mihomo binary path is a directory: %s", pm.binaryPath)
+		return nil, fmt.Errorf("mihomo binary path is a directory: %s", binaryPath)
 	}
-	if !isAllowedBinaryPath(pm.binaryPath) {
-		return nil, fmt.Errorf("mihomo binary path is not in allowed list: %s", pm.binaryPath)
+	if !pm.allowedBinary(binaryPath) {
+		return nil, fmt.Errorf("mihomo binary path is not in allowed list: %s", binaryPath)
 	}
 
-	cmd := exec.Command(pm.binaryPath, "-v")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binaryPath, "-v")
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -146,9 +168,9 @@ func (pm *ProcessManager) GetVersion() (*VersionInfo, error) {
 	version := "unknown"
 	// Mihomo output has changed over time (for example, it may contain
 	// both the product name and the version). Prefer the first token that
-	// looks like a semantic version instead of assuming it is fields[1].
+	// looks like a release version (including alpha builds), not fields[1].
 	for _, part := range parts {
-		if strings.HasPrefix(part, "v") && len(part) > 1 && strings.ContainsAny(part[1:], "0123456789") {
+		if alphaVersion.MatchString(part) || (strings.HasPrefix(part, "v") && len(part) > 1 && strings.ContainsAny(part[1:], "0123456789")) {
 			version = part
 			break
 		}
@@ -180,7 +202,7 @@ func (pm *ProcessManager) ValidateConfig() error {
 		return fmt.Errorf("mihomo binary is not executable: %s", binaryPath)
 	}
 
-	if !isAllowedBinaryPath(binaryPath) {
+	if !pm.allowedBinary(binaryPath) {
 		return fmt.Errorf("mihomo binary path is not in allowed list: %s", binaryPath)
 	}
 
@@ -193,7 +215,9 @@ func (pm *ProcessManager) ValidateConfig() error {
 		return fmt.Errorf("mihomo config is empty: %s", configPath)
 	}
 
-	cmd := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx,
 		binaryPath,
 		"-t",
 		"-d",
@@ -232,7 +256,7 @@ func (pm *ProcessManager) findExistingProcesses() []int {
 		return nil
 	}
 
-	binary, err := filepath.EvalSymlinks(pm.binaryPath)
+	binary, err := filepath.EvalSymlinks(pm.BinaryPath())
 	if err != nil {
 		return nil
 	}
@@ -412,7 +436,7 @@ func (pm *ProcessManager) start() error {
 		)
 	}
 
-	if !isAllowedBinaryPath(binaryPath) {
+	if !pm.allowedBinary(binaryPath) {
 		return fmt.Errorf(
 			"mihomo binary path is not in allowed list: %s",
 			binaryPath,
@@ -582,6 +606,15 @@ func (pm *ProcessManager) waitProcess(
 
 	time.Sleep(2 * time.Second)
 
+	// A stopped/replaced process must not revive after an updater rolls back.
+	pm.lifecycleMu.Lock()
+	defer pm.lifecycleMu.Unlock()
+	pm.mu.Lock()
+	wanted := pm.desired && pm.cmd == cmd
+	pm.mu.Unlock()
+	if !wanted {
+		return
+	}
 	if pm.IsRunning() {
 		return
 	}
@@ -601,7 +634,7 @@ func (pm *ProcessManager) waitProcess(
 		return
 	}
 
-	if err := pm.Start(); err != nil {
+	if err := pm.start(); err != nil {
 		pm.mu.Lock()
 
 		pm.appendLogLocked(
@@ -869,4 +902,17 @@ func formatDuration(d time.Duration) string {
 	}
 
 	return fmt.Sprintf("%ds", s)
+}
+
+// quiesce is an idempotent stop for a version switch, including crashed cores.
+func (pm *ProcessManager) quiesce() error {
+	pm.lifecycleMu.Lock()
+	defer pm.lifecycleMu.Unlock()
+	if pm.IsRunning() {
+		return pm.stop()
+	}
+	pm.mu.Lock()
+	pm.desired = false
+	pm.mu.Unlock()
+	return nil
 }

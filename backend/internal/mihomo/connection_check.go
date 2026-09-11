@@ -204,7 +204,7 @@ func (s *Service) CheckConnection(ctx context.Context, l models.Listener, export
 	}
 	check.Address = address
 	check.Steps = append(check.Steps, ConnectionStep{"client_config", "passed", "client_config_ready"})
-	runClientCheck(ctx, binary, proxy, &check, []string{"https://www.gstatic.com/generate_204", "https://cp.cloudflare.com/generate_204"})
+	runClientCheck(ctx, binary, proxy, &check, []string{"https://www.gstatic.com/generate_204", "https://cp.cloudflare.com/generate_204"}, s.pm.allowedBinary)
 	return finish(check.Reason)
 }
 
@@ -256,7 +256,7 @@ func exportedClientProxy(clientYAML string) (map[string]any, string, error) {
 	return proxy, net.JoinHostPort(address, strconv.Itoa(p)), nil
 }
 
-func runClientCheck(ctx context.Context, binary string, proxy map[string]any, check *ConnectionCheck, targets []string) {
+func runClientCheck(ctx context.Context, binary string, proxy map[string]any, check *ConnectionCheck, targets []string, allowed func(string) bool) {
 	check.State, check.Reason = "unknown", "client_start_failed"
 	ready := false
 	defer func() {
@@ -264,7 +264,7 @@ func runClientCheck(ctx context.Context, binary string, proxy map[string]any, ch
 			check.Steps = append(check.Steps, ConnectionStep{"client_start", "unknown", "client_start_failed"})
 		}
 	}()
-	if runtime.GOOS == "windows" || !isAllowedBinaryPath(binary) {
+	if runtime.GOOS == "windows" || !allowed(binary) {
 		return
 	}
 	dir, err := os.MkdirTemp("", "3m-node-check-")

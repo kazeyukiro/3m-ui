@@ -82,7 +82,7 @@ func Run(frontendFS fs.FS) error {
 		return fmt.Errorf("initialize Mihomo service: service is nil")
 	}
 	if generatedConfig != "" {
-		if _, statErr := os.Stat(cfg.Mihomo.Binary); statErr == nil {
+		if _, statErr := os.Stat(container.Mihomo.BinaryPath()); statErr == nil {
 			// Soft-fail: Mihomo problems must not prevent the management panel
 			// from starting. Operators can inspect logs and fix listeners/config
 			// from the UI, then start/restart the core explicitly.

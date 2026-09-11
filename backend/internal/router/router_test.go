@@ -141,3 +141,21 @@ func TestCORSConfiguredOrigin(t *testing.T) {
 		t.Fatalf("expected no allow-origin for disallowed origin, got %q", got)
 	}
 }
+
+// Core update routes use the same administrator-only middleware as lifecycle
+// controls. Rejected callers must not reach an updater or external releases API.
+func TestCoreUpdateRoutesRequireAuthentication(t *testing.T) {
+	cfg := &config.Config{}
+	r := router.SetupRouter(cfg)
+	for _, item := range []struct{ method, path string }{
+		{"GET", "/api/v1/mihomo/releases"}, {"GET", "/api/v1/mihomo/update"},
+		{"POST", "/api/v1/mihomo/update"}, {"POST", "/api/v1/mihomo/update/rollback"},
+	} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(item.method, item.path, nil)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s: %d", item.method, item.path, w.Code)
+		}
+	}
+}

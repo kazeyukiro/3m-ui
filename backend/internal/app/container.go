@@ -43,7 +43,7 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	userSvc := user.NewService(db)
 	systemSvc := system.NewService()
 	userSvc.SetCredentialsChangedHandler(func() error {
-		return nodeSvc.RegenerateConfig()
+		return mihomoSvc.SyncCredentials(nodeSvc.RegenerateConfig)
 	})
 
 	trafficSvc := traffic.NewService()

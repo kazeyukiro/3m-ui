@@ -16,6 +16,7 @@ services:
       TZ: ${TZ:-UTC}
     volumes:
       - 3m-ui-config:/etc/3m-ui
+      # Includes selected/previous Mihomo cores; preserve across image updates.
       - 3m-ui-data:/var/lib/3m-ui
       - 3m-ui-logs:/var/log/3m-ui
     cap_drop:

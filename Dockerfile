@@ -50,8 +50,9 @@ COPY distribution/MIHOMO_LICENSE /usr/local/share/licenses/mihomo/LICENSE
 COPY LICENSE /usr/local/share/licenses/3m-ui/LICENSE
 RUN printf 'Mihomo source and build scripts: https://github.com/MetaCubeX/mihomo/tree/%s\n' \
     "$(cat /usr/local/lib/3m-ui/MIHOMO_VERSION)" > /usr/local/share/licenses/mihomo/SOURCE
-# Immutable image files remain root-owned. Upgrade the reviewed panel/core pair
-# by replacing the image; only configuration, state and logs are writable.
+# Image files remain root-owned. The bundled core is the initial fallback;
+# administrator-selected versions persist under /var/lib/3m-ui/mihomo/cores.
+# Panel image updates preserve that selection through the existing data volume.
 ENV THREE_M_UI_CONFIG=/etc/3m-ui/config.yaml \
     THREE_M_UI_CONTAINER=1
 VOLUME ["/etc/3m-ui", "/var/lib/3m-ui", "/var/log/3m-ui"]

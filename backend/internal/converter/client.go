@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -60,33 +59,7 @@ func cleanURLHost(raw string) string {
 }
 
 func GetSubscriptionURL(cfg *config.Config, req *http.Request, token string, target string) string {
-	var base string
-	if envURL := os.Getenv("PUBLIC_URL"); envURL != "" {
-		base = strings.TrimSpace(envURL)
-	} else if cfg != nil && cfg.Server.PublicURL != "" {
-		base = strings.TrimSpace(cfg.Server.PublicURL)
-	} else if req != nil && req.Host != "" {
-		scheme := "http"
-		if req.TLS != nil {
-			scheme = "https"
-		} else if proto := req.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
-			scheme = "https"
-		}
-		// req.Host already includes [ipv6]:port when applicable.
-		base = fmt.Sprintf("%s://%s", scheme, req.Host)
-	} else {
-		base = "http://127.0.0.1:8080"
-	}
-	base = strings.TrimSuffix(base, "/")
-	pathToken := url.PathEscape(token)
-	subBase := config.SubscriptionBasePath(cfg)
-	// When SubPort is set and PublicURL does not already include a non-panel port,
-	// leave host as PublicURL; operators should set PublicURL to the subscription
-	// entrypoint they want clients to use (recommended).
-	if target == "" {
-		return fmt.Sprintf("%s%s/%s", base, subBase, pathToken)
-	}
-	return fmt.Sprintf("%s%s/%s?target=%s", base, subBase, pathToken, url.QueryEscape(strings.ToLower(strings.TrimSpace(target))))
+	return config.GetSubscriptionURL(cfg, req, token, target)
 }
 
 func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request) ([]byte, error) {

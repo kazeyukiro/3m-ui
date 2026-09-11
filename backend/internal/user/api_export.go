@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 )
 
 // ExportLinks returns subscription URLs for all (or filtered) proxy users.
@@ -33,10 +32,10 @@ func (h *Handler) ExportLinks(c *gin.Context) {
 			"enabled":  u.Enabled,
 		}
 		if tok := strings.TrimSpace(u.SubToken); tok != "" {
-			item["subscription"] = converter.GetSubscriptionURL(cfg, c.Request, tok, "")
-			item["subscription_clash"] = converter.GetSubscriptionURL(cfg, c.Request, tok, "clash")
-			item["subscription_v2ray"] = converter.GetSubscriptionURL(cfg, c.Request, tok, "v2ray")
-			item["subscription_singbox"] = converter.GetSubscriptionURL(cfg, c.Request, tok, "singbox")
+			item["subscription"] = config.GetSubscriptionURL(cfg, c.Request, tok, "")
+			item["subscription_clash"] = config.GetSubscriptionURL(cfg, c.Request, tok, "clash")
+			item["subscription_v2ray"] = config.GetSubscriptionURL(cfg, c.Request, tok, "v2ray")
+			item["subscription_singbox"] = config.GetSubscriptionURL(cfg, c.Request, tok, "singbox")
 			item["sub_token"] = tok
 		}
 		out = append(out, item)

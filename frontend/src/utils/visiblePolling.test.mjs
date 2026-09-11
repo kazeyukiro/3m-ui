@@ -54,3 +54,38 @@ test('visible polling pauses, cancels and resumes without overlapping requests',
   t.mock.timers.tick(60000);
   assert.equal(signals.length, 4, 'unmount removes listener and timer');
 });
+
+test('effect replacement cannot revive the aborted polling loop and uses the latest delay', async t => {
+  const original = globalThis.document;
+  const visibility = new EventTarget();
+  visibility.hidden = false;
+  globalThis.document = visibility;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const calls = [];
+  let delay = 1000;
+  const poll = signal => new Promise(resolve => { calls.push({ signal, resolve }); });
+  const oldStop = startVisiblePolling(poll, () => delay);
+  oldStop();
+  const stop = startVisiblePolling(poll, () => delay);
+  t.after(() => { stop(); globalThis.document = original; });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].signal.aborted, true);
+  calls[0].resolve();
+  calls[1].resolve();
+  await Promise.resolve();
+  t.mock.timers.tick(1000);
+  assert.equal(calls.length, 3, 'only the replacement effect polls again');
+  assert.equal(calls[2].signal.aborted, false);
+  delay = 5000;
+  calls[2].resolve();
+  await Promise.resolve();
+  t.mock.timers.tick(4999);
+  assert.equal(calls.length, 3, 'idle status switches to the slower interval');
+  t.mock.timers.tick(1);
+  assert.equal(calls.length, 4);
+  stop();
+  calls[3].resolve();
+  await Promise.resolve();
+  t.mock.timers.tick(60000);
+  assert.equal(calls.length, 4, 'settling after cleanup never schedules more work');
+});
