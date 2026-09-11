@@ -14,7 +14,7 @@ import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { randomListenerPort } from '../utils/listenerPort';
-import { suggestListenerName } from '../utils/listenerName';
+import { suggestListenerName, nextListenerNameAfterConflict } from '../utils/listenerName';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
@@ -117,6 +117,12 @@ const Listeners: React.FC = () => {
       const msg = e?.message || t('common.error');
       setSubmitError(msg);
       message.error(msg);
+      if (/already exists/i.test(String(msg)) && !editing) {
+        const current = String(form.getFieldValue('name') || '');
+        const next = nextListenerNameAfterConflict(current, data.map((listener) => listener.name));
+        form.setFieldsValue({ name: next });
+        message.info(t('listeners.nameTakenHint', `Name was taken; try "${next}"`));
+      }
       void load(false);
     } finally { setSubmitting(false); }
   };

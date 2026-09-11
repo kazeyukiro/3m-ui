@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"sync"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -169,32 +170,27 @@ func (s *Service) ensureUniqueName(candidate *models.Listener) error {
 	if name == "" {
 		return fmt.Errorf("listener name is required")
 	}
-	// Only live rows should block create/update. Soft-deleted rows still occupy
-	// the SQLite UNIQUE index, so reclaim those names first.
-	var active int64
-	q := s.db.Model(&models.Listener{}).Where("name = ?", name)
+	// SQLite UNIQUE(name) covers soft-deleted rows. Reclaim every non-live row
+	// that still holds this name (hard-delete the soft-deleted tombstone).
+	var rows []models.Listener
+	q := s.db.Unscoped().Where("name = ?", name)
 	if candidate.ID != 0 {
 		q = q.Where("id <> ?", candidate.ID)
 	}
-	if err := q.Count(&active).Error; err != nil {
+	if err := q.Find(&rows).Error; err != nil {
 		return fmt.Errorf("check listener name uniqueness: %w", err)
 	}
-	if active > 0 {
-		return fmt.Errorf("listener name %q already exists", name)
-	}
-	var soft []models.Listener
-	sq := s.db.Unscoped().Where("name = ? AND deleted_at IS NOT NULL", name)
-	if candidate.ID != 0 {
-		sq = sq.Where("id <> ?", candidate.ID)
-	}
-	if err := sq.Find(&soft).Error; err != nil {
-		return fmt.Errorf("check soft-deleted listener names: %w", err)
-	}
-	for _, row := range soft {
-		newName := fmt.Sprintf("%s__deleted_%d", name, row.ID)
-		if err := s.db.Unscoped().Model(&models.Listener{}).Where("id = ?", row.ID).Update("name", newName).Error; err != nil {
-			return fmt.Errorf("reclaim soft-deleted name %q: %w", name, err)
+	for _, row := range rows {
+		if row.DeletedAt.Valid {
+			if err := s.db.Unscoped().Delete(&models.Listener{}, row.ID).Error; err != nil {
+				newName := fmt.Sprintf("%s__deleted_%d_%d", name, row.ID, time.Now().UnixNano())
+				if renErr := s.db.Unscoped().Model(&models.Listener{}).Where("id = ?", row.ID).Update("name", newName).Error; renErr != nil {
+					return fmt.Errorf("reclaim soft-deleted name %q: %v; rename: %w", name, err, renErr)
+				}
+			}
+			continue
 		}
+		return fmt.Errorf("listener name %q already exists", name)
 	}
 	return nil
 }

@@ -119,13 +119,44 @@ logs() {
 }
 
 version() {
+    printed=0
     if [ -x "$APP_BIN" ]; then
-        "$APP_BIN" --version
-        if [ -s "$BASE/MIHOMO_VERSION" ]; then printf 'Bundled Mihomo: %s\n' "$(cat "$BASE/MIHOMO_VERSION")"; fi
-        if [ -s "$BASE/CHANNEL" ]; then printf 'Update channel: %s\n' "$(cat "$BASE/CHANNEL")"; fi
-        if [ -s "$BASE/REPOSITORY" ]; then printf 'Release source: %s\n' "$(cat "$BASE/REPOSITORY")"; fi
-    else
-        printf '%s\n' '3m-ui 未安装。' >&2
+        if out="$("$APP_BIN" --version 2>/dev/null)"; then
+            if [ -n "$out" ]; then
+                printf '%s
+' "$out"
+                printed=1
+            fi
+        fi
+    fi
+    if [ -s "$BASE/VERSION" ]; then
+        printf 'Installed release: %s
+' "$(cat "$BASE/VERSION")"
+        printed=1
+    fi
+    if [ -s "$BASE/CHANNEL" ]; then
+        printf 'Update channel: %s
+' "$(cat "$BASE/CHANNEL")"
+        printed=1
+    fi
+    if [ -s "$BASE/MIHOMO_VERSION" ]; then
+        printf 'Bundled Mihomo: %s
+' "$(cat "$BASE/MIHOMO_VERSION")"
+        printed=1
+    fi
+    if [ -s "$BASE/REPOSITORY" ]; then
+        printf 'Release source: %s
+' "$(cat "$BASE/REPOSITORY")"
+        printed=1
+    fi
+    if [ -x "$APP_BIN" ]; then
+        printf 'Binary: %s
+' "$APP_BIN"
+        printed=1
+    fi
+    if [ "$printed" -eq 0 ]; then
+        printf '%s
+' '3m-ui 未安装或无法读取版本信息。' >&2
         exit 1
     fi
 }
