@@ -109,7 +109,13 @@ def main():
                 "bind_address": "127.0.0.1", "enabled": True,
                 "config": json.dumps({"cipher": "aes-128-gcm", "password": ss_password}),
             })
-            assert api("mihomo/status")["running"], "Bundled core did not start"
+            # Core may finish start slightly after the listener response; poll briefly.
+            for _ in range(40):
+                if api("mihomo/status").get("running"):
+                    break
+                time.sleep(0.25)
+            else:
+                raise AssertionError("Bundled core did not start")
             # Persist real listener certificates as well as the Shadowsocks node.
             api("listeners", {"name": "certificate-smoke", "protocol": "trojan", "port": str(free_port()),
                               "bind_address": "127.0.0.1", "enabled": True, "config": "{}"})

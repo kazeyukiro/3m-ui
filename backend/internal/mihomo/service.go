@@ -249,20 +249,31 @@ func (s *Service) ApplyConfigDeferredRestart(content string) error {
 		return fmt.Errorf("validate Mihomo configuration: %w", err)
 	}
 	wasRunning := s.pm.IsRunning()
-	// Release applyMu before the long restart so other API requests are not blocked;
-	// startAndCheckListeners will take lifecycle locks itself.
-	s.applyMu.Unlock()
+	// First start must be synchronous: callers (smoke tests, UI after create) expect
+	// mihomo/status.running == true as soon as the listener API returns.
+	if !wasRunning {
+		err := s.startAndCheckListeners(content, false)
+		if err != nil {
+			_ = s.pm.Stop()
+			if readErr == nil {
+				_ = s.cm.SaveConfig(old)
+			} else {
+				_ = os.Remove(s.cm.configPath)
+			}
+			s.applyMu.Unlock()
+			return fmt.Errorf("start Mihomo: %w", err)
+		}
+		s.applyMu.Unlock()
+		return nil
+	}
 
+	// Core already running: restart in the background so HTTP create/update is not
+	// blocked for the full validate+restart window. Config on disk is already valid.
+	s.applyMu.Unlock()
 	go func() {
 		s.applyMu.Lock()
 		defer s.applyMu.Unlock()
-		var err error
-		if wasRunning {
-			err = s.startAndCheckListeners(content, true)
-		} else {
-			err = s.startAndCheckListeners(content, false)
-		}
-		if err != nil {
+		if err := s.startAndCheckListeners(content, true); err != nil {
 			log.Printf("warning: Mihomo restart after config apply failed: %v", err)
 			if readErr == nil {
 				if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
