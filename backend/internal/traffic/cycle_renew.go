@@ -23,32 +23,23 @@ func MaybeApplyUserCycles(db *gorm.DB) {
 	for _, u := range users {
 		updates := map[string]interface{}{}
 		if u.TrafficResetDays > 0 {
-			need := false
 			if u.LastTrafficCycleReset == nil {
-				need = true
+				// Enabling the cycle must not wipe current counters on the first tick.
+				updates["last_traffic_cycle_reset"] = now
 			} else {
 				next := u.LastTrafficCycleReset.Add(time.Duration(u.TrafficResetDays) * 24 * time.Hour)
 				if !now.Before(next) {
-					need = true
+					updates["traffic_used"] = 0
+					updates["upload_bytes"] = 0
+					updates["download_bytes"] = 0
+					updates["last_traffic_cycle_reset"] = now
 				}
-			}
-			if need {
-				updates["traffic_used"] = 0
-				updates["upload_bytes"] = 0
-				updates["download_bytes"] = 0
-				updates["last_traffic_cycle_reset"] = now
 			}
 		}
-		if u.ExpireRenewDays > 0 && !u.ExpireTime.IsZero() {
-			// Renew when expired or within 24h of expiry.
-			window := u.ExpireTime.Add(-24 * time.Hour)
-			if !now.Before(window) {
-				base := u.ExpireTime
-				if base.Before(now) {
-					base = now
-				}
-				updates["expire_time"] = base.Add(time.Duration(u.ExpireRenewDays) * 24 * time.Hour)
-			}
+		if u.ExpireRenewDays > 0 && !u.ExpireTime.IsZero() && u.ExpireTime.Before(now) {
+			// Only extend after the period has ended (avoids renewing every scheduler tick
+			// while still inside a pre-expiry window).
+			updates["expire_time"] = now.Add(time.Duration(u.ExpireRenewDays) * 24 * time.Hour)
 		}
 		if len(updates) == 0 {
 			continue

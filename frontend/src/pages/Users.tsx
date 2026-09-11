@@ -140,6 +140,10 @@ const Users: React.FC = () => {
       ip_limit: record.ip_limit || 0,
       hwid_limit: record.hwid_limit || 0,
       remark: record.remark || '',
+      group: record.group || '',
+      tags: record.tags || '',
+      traffic_reset_days: record.traffic_reset_days || 0,
+      expire_renew_days: record.expire_renew_days || 0,
     });
     setModalOpen(true);
   };
@@ -513,6 +517,10 @@ const Users: React.FC = () => {
                             ip_limit: record.ip_limit || 0,
                             hwid_limit: record.hwid_limit || 0,
                             remark: record.remark,
+                            group: record.group || '',
+                            tags: record.tags || '',
+                            traffic_reset_days: record.traffic_reset_days || 0,
+                            expire_renew_days: record.expire_renew_days || 0,
                           });
                           setModalOpen(true);
                         }}
@@ -559,6 +567,10 @@ const Users: React.FC = () => {
                                   ip_limit: record.ip_limit || 0,
                                   hwid_limit: record.hwid_limit || 0,
                                   remark: record.remark,
+                            group: record.group || '',
+                            tags: record.tags || '',
+                            traffic_reset_days: record.traffic_reset_days || 0,
+                            expire_renew_days: record.expire_renew_days || 0,
                                 });
                                 setModalOpen(true);
                               },
