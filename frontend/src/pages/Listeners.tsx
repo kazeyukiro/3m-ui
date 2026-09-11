@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
 import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined, MoreOutlined } from '@ant-design/icons';
 import {
@@ -37,6 +37,7 @@ const Listeners: React.FC = () => {
   const [runtimeListener, setRuntimeListener] = useState<Listener | null>(null);
   const { statuses, details, testing, test } = useListenerRuntime(data, runtimeListener?.id);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState('');
   const showRuntime = (record: Listener, reuse = true) => { setRuntimeListener(record); if (record.enabled) void test(record.id, reuse).catch(() => {}); };
   const [templates, setTemplates] = useState<ListenerTemplate[]>([]);
@@ -89,14 +90,18 @@ const Listeners: React.FC = () => {
   const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
   const openEdit = (record: Listener) => { setSubmitError(''); setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
-    if (submitting) return;
-    setSubmitting(true); setSubmitError('');
+    // useRef lock: React state updates are async, so double-click / double onOk
+    // used to fire two creates — first succeeds, second returns "already exists"
+    // and the modal never closes.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setSubmitError('');
     try {
       const values = { ...(form.getFieldsValue(true) || {}), ...(rawValues || {}) };
       const proto = String(values.protocol || '').trim();
       if (!proto) { message.error(t('listeners.selectProtocolFirst')); return; }
       if (!values.name || !String(values.port || '').trim()) { message.error(t('listeners.portHint')); return; }
-      // REALITY credentials can be generated on save; the destination must be explicit.
       if (REALITY_PROTOCOLS.has(proto) && firstNonEmpty(values.security_layer) === 'reality') {
         values.reality_enabled = true;
         const dest = firstNonEmpty(values.reality_dest, values['reality-config']?.dest, values['reality-config.dest']);
@@ -109,22 +114,40 @@ const Listeners: React.FC = () => {
       const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '' };
       const saved = editing ? await updateListener(normalizeId(editing), payload) : await createListener(payload);
       message.success(saved.enabled ? runtimeText.saved : runtimeText.savedDisabled);
-      setModalOpen(false); setEditing(null); form.resetFields();
-      // Refresh list without blocking the success toast if the list call is slow.
+      setModalOpen(false);
+      setEditing(null);
+      form.resetFields();
       void load(false);
     } catch (e: any) {
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
       const msg = e?.message || t('common.error');
-      setSubmitError(msg);
-      message.error(msg);
-      if (/already exists/i.test(String(msg)) && !editing) {
-        const current = String(form.getFieldValue('name') || '');
-        const next = nextListenerNameAfterConflict(current, data.map((listener) => listener.name));
+      // Double-submit: first request created the node, second hit UNIQUE — treat as success.
+      if (!editing && /already exists/i.test(String(msg))) {
+        const name = String(form.getFieldValue('name') || '').trim();
+        try {
+          const list = await fetchListeners();
+          setData(list || []);
+          if (name && (list || []).some((item) => item.name === name)) {
+            message.success(runtimeText.saved);
+            setModalOpen(false);
+            setEditing(null);
+            form.resetFields();
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+        const next = nextListenerNameAfterConflict(name, data.map((listener) => listener.name));
         form.setFieldsValue({ name: next });
         message.info(t('listeners.nameTakenHint', `Name was taken; try "${next}"`));
       }
+      setSubmitError(msg);
+      message.error(msg);
       void load(false);
-    } finally { setSubmitting(false); }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
   const onDelete = async (id: number) => { try { await deleteListener(id); message.success(t('listeners.deleted')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
@@ -232,7 +255,7 @@ const columns = [
             <Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: 880 }} size="middle" />
           )}</Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} /></Card> }]} />
     <ListenerRuntimeDrawer listener={runtimeListener ? data.find(l => l.id === runtimeListener.id) || runtimeListener : null} status={runtimeListener ? details[runtimeListener.id] || statuses[runtimeListener.id] : undefined} checking={!!runtimeListener && testing.includes(runtimeListener.id)} onClose={() => setRuntimeListener(null)} onCheck={() => { if (runtimeListener) void test(runtimeListener.id).catch(() => {}); }} />
-    <Modal confirmLoading={submitting} closable={!submitting} maskClosable={!submitting} keyboard={!submitting} cancelButtonProps={{ disabled: submitting }} okText={submitting ? runtimeText.saving : t('common.save')} open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.submit()} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
+    <Modal confirmLoading={submitting} closable={!submitting} maskClosable={!submitting} keyboard={!submitting} cancelButtonProps={{ disabled: submitting }} okText={submitting ? runtimeText.saving : t('common.save')} open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.validateFields().then((vals) => onSubmit(vals))} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
       {submitError && <Alert type="error" showIcon title={runtimeText.failed} description={<><div>{submitError}</div><div>{runtimeText.failedHint}</div></>} style={{ marginBottom: 16 }} />}
       <Form disabled={submitting} form={form} layout="vertical" onFinish={onSubmit} scrollToFirstError={{ block: 'center', focus: true }} preserve>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>

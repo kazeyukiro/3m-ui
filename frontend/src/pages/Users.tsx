@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
@@ -26,6 +26,7 @@ const Users: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
@@ -66,7 +67,8 @@ const Users: React.FC = () => {
   }, [data, keyword]);
 
   const onSubmit = async (values: any) => {
-    if (submitting) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const trafficGB = values.traffic_limit_gb;
@@ -103,6 +105,7 @@ const Users: React.FC = () => {
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
       message.error(e?.message || t('common.error'));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
