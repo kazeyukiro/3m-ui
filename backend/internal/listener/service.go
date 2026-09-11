@@ -213,20 +213,42 @@ func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
 }
 
 func (s *Service) RegenerateConfig() error {
+	// Generate under the service lock, then ApplyConfig outside so concurrent
+	// read APIs are not blocked for the whole Mihomo validate+restart window.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.regenerateConfigLocked()
+	yamlContent, err := s.generateConfigYAMLLocked()
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return s.applyGeneratedYAML(yamlContent)
 }
 
 func (s *Service) regenerateConfigLocked() error {
+	// Caller must hold s.mu. Keep the lock for the whole generate+apply so
+	// concurrent Create/Update/Delete cannot interleave DB mutations with a
+	// half-applied config. Long ApplyConfig is mitigated by a higher frontend
+	// mutation timeout and async user-credential reloads.
+	yamlContent, err := s.generateConfigYAMLLocked()
+	if err != nil {
+		return err
+	}
+	return s.applyGeneratedYAML(yamlContent)
+}
+
+func (s *Service) generateConfigYAMLLocked() (string, error) {
 	if s == nil || s.db == nil {
-		return fmt.Errorf("listener service not initialized")
+		return "", fmt.Errorf("listener service not initialized")
 	}
 	engine := dbconfig.NewConfigEngine(s.db)
 	yamlContent, err := engine.GenerateFinalConfig()
 	if err != nil {
-		return fmt.Errorf("generate Mihomo configuration: %w", err)
+		return "", fmt.Errorf("generate Mihomo configuration: %w", err)
 	}
+	return yamlContent, nil
+}
+
+func (s *Service) applyGeneratedYAML(yamlContent string) error {
 	if s.mihomoApply != nil {
 		return s.mihomoApply.ApplyConfig(yamlContent)
 	}

@@ -3,7 +3,9 @@ package user
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -12,20 +14,16 @@ import (
 
 type Service struct {
 	db *gorm.DB
-	// credentialsChanged is invoked by notifyCredentialsChanged() after a
-	// proxy-user mutation (Create/Update/Delete) so the node config can be
-	// hot-reloaded. It is set exactly once, at startup, by
-	// SetCredentialsChangedHandler (called from app.NewContainer before any
-	// HTTP handler can fire), so the missing lock around the read in
-	// notifyCredentialsChanged is safe in practice.
-	//
-	// THREAD-SAFETY (R2-1.4): the field is read without a lock from
-	// notifyCredentialsChanged. This is currently safe because the handler is
-	// only ever set at startup — no admin API mutates it after the server begins
-	// serving. If a future code path starts rebinding the handler at runtime,
-	// this must move behind sync.RWMutex or sync/atomic.Value. Documented here
-	// so the assumption is explicit.
+	// credentialsChanged is invoked after proxy-user mutations so Mihomo config
+	// can be regenerated. Set once at startup via SetCredentialsChangedHandler.
 	credentialsChanged func() error
+
+	// Async reload: ApplyConfig validates + restarts Mihomo and can take longer
+	// than the browser's HTTP timeout. Blocking the create/delete handler caused
+	// false "Cannot reach the panel API" errors even when the DB write succeeded.
+	credMu       sync.Mutex
+	credTimer    *time.Timer
+	credPending  bool
 }
 
 func NewService(db *gorm.DB) *Service {
@@ -37,10 +35,35 @@ func (s *Service) SetCredentialsChangedHandler(fn func() error) {
 }
 
 func (s *Service) notifyCredentialsChanged() error {
-	if s.credentialsChanged == nil {
-		return nil
+	// Always schedule asynchronously and return success to the HTTP layer.
+	// The reload is debounced so rapid batch edits collapse into one ApplyConfig.
+	s.scheduleCredentialsSync()
+	return nil
+}
+
+func (s *Service) scheduleCredentialsSync() {
+	if s == nil || s.credentialsChanged == nil {
+		return
 	}
-	return s.credentialsChanged()
+	s.credMu.Lock()
+	defer s.credMu.Unlock()
+	s.credPending = true
+	if s.credTimer != nil {
+		s.credTimer.Stop()
+	}
+	s.credTimer = time.AfterFunc(400*time.Millisecond, func() {
+		s.credMu.Lock()
+		run := s.credPending
+		s.credPending = false
+		fn := s.credentialsChanged
+		s.credMu.Unlock()
+		if !run || fn == nil {
+			return
+		}
+		if err := fn(); err != nil {
+			log.Printf("warning: Mihomo config reload after user change failed: %v", err)
+		}
+	})
 }
 
 type CreateInput struct {

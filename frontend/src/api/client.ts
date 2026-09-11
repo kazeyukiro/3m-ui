@@ -3,7 +3,8 @@ import { useAuthStore } from '../stores/authStore';
 
 const client = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000,
+  // GET polls stay moderate; mutating endpoints raise timeout in the request interceptor.
+  timeout: 45000,
   headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
 });
 
@@ -11,6 +12,11 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token;
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const method = (config.method || 'get').toLowerCase();
+  if (method !== 'get' && method !== 'head' && config.timeout == null) {
+    // Listener create/delete runs Mihomo validate+restart on the request path.
+    config.timeout = 120000;
   }
   return config;
 });
@@ -62,7 +68,7 @@ client.interceptors.response.use(
             : '';
         return Promise.reject(
           new Error(
-            `Cannot reach the panel API at /api/v1${detail}. Confirm 3m-ui is running (systemctl status 3m-ui), the panel port is open, and you are not blocking the request with a proxy or mixed-content policy.`,
+            `Cannot reach the panel API at /api/v1${detail}. If this appeared while creating or deleting users/nodes, wait a few seconds and refresh — the change may already be saved while Mihomo was reloading. Also confirm 3m-ui is running (systemctl status 3m-ui) and the panel port is open.`,
           ),
         );
       }
