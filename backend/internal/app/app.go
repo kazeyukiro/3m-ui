@@ -105,7 +105,7 @@ func Run(frontendFS fs.FS) error {
 	}
 
 	r := router.SetupRouterWithDeps(container.RouterDeps())
-	mountFrontend(r, frontendFS)
+	router.MountFrontend(r, frontendFS)
 
 	sslSettings, _ := acme.LoadSettings(db)
 	if sslSettings.Enabled {
@@ -190,44 +190,6 @@ func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error
 
 func defaultConfigPath() string {
 	return config.ConfigPath()
-}
-
-func mountFrontend(r *gin.Engine, frontendFS fs.FS) {
-	staticFS, err := fs.Sub(frontendFS, "web/dist")
-	if err != nil {
-		log.Printf("frontend assets unavailable: %v", err)
-		return
-	}
-	fileServer := http.FileServer(http.FS(staticFS))
-	r.RedirectTrailingSlash = false
-	r.RedirectFixedPath = false
-	r.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/api") {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		if path == "/" {
-			c.Data(http.StatusOK, "text/html; charset=utf-8", mustReadFile(staticFS, "index.html"))
-			return
-		}
-		f, err := staticFS.Open(path[1:])
-		if err == nil {
-			defer f.Close()
-			fileServer.ServeHTTP(c.Writer, c.Request)
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", mustReadFile(staticFS, "index.html"))
-	})
-}
-
-func mustReadFile(fsys fs.FS, name string) []byte {
-	data, err := fs.ReadFile(fsys, name)
-	if err != nil {
-		log.Printf("read frontend %s failed: %v", name, err)
-		return []byte("3m-ui frontend unavailable")
-	}
-	return data
 }
 
 // panelListenAddr builds a net listen address supporting dual-stack and IPv6.

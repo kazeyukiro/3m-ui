@@ -183,3 +183,13 @@ The Core page supports manual updates and rollback of official stable and Pre Mi
 versions on Linux amd64/arm64. Selected versions persist in the existing data
 volume across panel upgrades. See [core updates](core-updates.md) for validation,
 recovery, and deployment integration details.
+
+## Frontend compression and caching
+
+The panel precompresses embedded text assets with gzip once at startup and serves
+compressed responses when the client accepts them. Hashed JavaScript and CSS
+assets use `Cache-Control: public, max-age=31536000, immutable`; HTML and assets
+without content hashes use `no-cache` with ETags so new deployments are detected.
+Identity and gzip responses have separate validators and use `Vary: Accept-Encoding`.
+No reverse-proxy compression setting or writable asset directory is required.
+Missing `/assets/` files return an uncached 404 rather than the SPA HTML fallback.

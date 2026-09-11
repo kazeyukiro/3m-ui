@@ -1,7 +1,19 @@
 package router
 
 import (
+	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
+	"fmt"
+	"io/fs"
+	"log"
+	"mime"
 	"net/http"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
@@ -109,4 +121,130 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	}
 
 	return r
+}
+
+var hashedFrontendAsset = regexp.MustCompile(`^assets/.+-[A-Za-z0-9_-]{8,}\.(js|css)$`)
+
+type frontendAsset struct {
+	data, compressed                                []byte
+	contentType, etag, compressedETag, cacheControl string
+}
+
+// MountFrontend serves embedded assets independently of API/subscription routes.
+// Compression happens once at startup, not on the request path or on disk.
+func MountFrontend(r *gin.Engine, frontendFS fs.FS) {
+	staticFS, err := fs.Sub(frontendFS, "web/dist")
+	if err != nil {
+		log.Printf("frontend assets unavailable: %v", err)
+		return
+	}
+	assets := make(map[string]frontendAsset)
+	err = fs.WalkDir(staticFS, ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		data, err := fs.ReadFile(staticFS, name)
+		if err != nil {
+			return err
+		}
+		contentType := mime.TypeByExtension(path.Ext(name))
+		if contentType == "" {
+			contentType = http.DetectContentType(data)
+		}
+		asset := frontendAsset{data: data, contentType: contentType, etag: fmt.Sprintf(`"%x"`, sha256.Sum256(data)), cacheControl: "no-cache"}
+		if hashedFrontendAsset.MatchString(name) {
+			asset.cacheControl = "public, max-age=31536000, immutable"
+		}
+		if len(data) >= 1024 && (strings.HasPrefix(contentType, "text/") || strings.Contains(contentType, "javascript") || strings.Contains(contentType, "json") || strings.Contains(contentType, "svg+xml")) {
+			var buffer bytes.Buffer
+			writer := gzip.NewWriter(&buffer)
+			if _, err := writer.Write(data); err != nil {
+				return err
+			}
+			if err := writer.Close(); err != nil {
+				return err
+			}
+			if buffer.Len() < len(data) {
+				asset.compressed = buffer.Bytes()
+				asset.compressedETag = fmt.Sprintf(`"%x"`, sha256.Sum256(asset.compressed))
+			}
+		}
+		assets[name] = asset
+		return nil
+	})
+	if err != nil {
+		log.Printf("frontend assets unavailable: %v", err)
+		return
+	}
+	if _, ok := assets["index.html"]; !ok {
+		log.Printf("frontend index.html unavailable")
+		return
+	}
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
+	r.NoRoute(func(c *gin.Context) {
+		requestPath := c.Request.URL.Path
+		if strings.HasPrefix(requestPath, "/api") || (c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		name := strings.TrimPrefix(requestPath, "/")
+		asset, ok := assets[name]
+		if !ok {
+			// Missing chunks must never return cacheable HTML after a deployment.
+			if strings.HasPrefix(requestPath, "/assets/") || requestPath == "/assets" {
+				c.Header("Cache-Control", "no-store")
+				c.Status(http.StatusNotFound)
+				return
+			}
+			name, asset = "index.html", assets["index.html"]
+		}
+		data, etag := asset.data, asset.etag
+		if asset.compressed != nil {
+			c.Writer.Header().Add("Vary", "Accept-Encoding")
+			// Keep byte ranges in the identity representation; ServeContent handles
+			// Range, If-Range, conditional requests and HEAD consistently.
+			if c.Request.Header.Get("Range") == "" && acceptsFrontendGzip(c.Request.Header.Values("Accept-Encoding")) {
+				data = asset.compressed
+				etag = asset.compressedETag
+				c.Header("Content-Encoding", "gzip")
+			}
+		}
+		c.Header("Content-Type", asset.contentType)
+		c.Header("Cache-Control", asset.cacheControl)
+		c.Header("ETag", etag)
+		http.ServeContent(c.Writer, c.Request, name, time.Time{}, bytes.NewReader(data))
+	})
+}
+
+func acceptsFrontendGzip(values []string) bool {
+	wildcard := false
+	for _, item := range strings.Split(strings.Join(values, ","), ",") {
+		parts := strings.Split(item, ";")
+		coding := strings.ToLower(strings.TrimSpace(parts[0]))
+		if coding != "gzip" && coding != "*" {
+			continue
+		}
+		quality := 1.0
+		for _, parameter := range parts[1:] {
+			key, value, ok := strings.Cut(strings.TrimSpace(parameter), "=")
+			if ok && strings.EqualFold(strings.TrimSpace(key), "q") {
+				parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+				if err != nil || parsed < 0 || parsed > 1 {
+					quality = 0
+				} else {
+					quality = parsed
+				}
+			}
+		}
+		// An explicit refusal overrides the wildcard regardless of ordering.
+		if coding == "gzip" {
+			return quality > 0
+		}
+		wildcard = quality > 0
+	}
+	return wildcard
 }
