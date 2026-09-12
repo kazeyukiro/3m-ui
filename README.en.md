@@ -54,24 +54,23 @@ Default panel: `http://SERVER_IP:8080/` — user `admin`, one-time random passwo
 
 ### Install with an AI assistant prompt
 
-Copy the block below into ChatGPT / Claude / Cursor (and state your OS, e.g. Ubuntu 22.04, and whether you have root SSH). The assistant should only use the official installer—not rewrite URLs or invent third-party commands.
+Copy the prompt into ChatGPT / Claude / Cursor (and state your OS, e.g. Ubuntu 22.04, and whether you have root SSH). The assistant should only use the official installer — not rewrite URLs or invent third-party commands. The full prompt and usage notes live in [the AI install prompt doc](docs/ai-install-prompt.md).
 
-```text
-Help install 3m-ui (Mihomo server Web panel) on a Linux VPS as root.
+Skip manual copy-paste — load the plain-text prompt straight to your clipboard with `curl`:
 
-Requirements:
-1. Use only the official one-liner (do not change the URL or add unknown flags):
-   curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
-2. Before install: confirm arch (full bundle needs amd64/arm64), systemd or OpenRC, GitHub reachability, and that firewall can open the panel port (default 8080) plus later node ports.
-3. After install:
-   - Save the one-time admin password printed in the terminal
-   - Confirm the service with systemctl status 3m-ui (or equivalent)
-   - Explain http://SERVER_IP:8080/ and that the password must be changed on first login
-4. Ops: sudo 3m-ui status | update | logs | restart | backup
-5. Docs: https://3m-ui.top/docs/ and https://github.com/kazeyukiro/3m-ui
-6. Do not wipe existing /etc/3m-ui or /var/lib/3m-ui; prefer sudo 3m-ui update for upgrades.
-If a step fails, troubleshoot from the error; do not invent unofficial install sources.
+```bash
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/docs/ai-install-prompt.en.txt | pbcopy        # macOS
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/docs/ai-install-prompt.en.txt | xclip -sel clip # Linux X11
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/docs/ai-install-prompt.en.txt | wl-copy       # Linux Wayland
 ```
+
+The prompt only ever runs the official one-liner below; all downloads verify `SHA256SUMS`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
+```
+
+For the optional pre-release / test channel, see [installation docs](docs/installation.md#ai-提示词安装).
 
 ## Build from source
 
