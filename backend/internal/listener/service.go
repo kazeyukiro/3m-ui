@@ -215,15 +215,11 @@ func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
 }
 
 func (s *Service) RegenerateConfig() error {
-	// Generate under the service lock, then ApplyConfig outside so concurrent
-	// read APIs are not blocked for the whole Mihomo validate+restart window.
+	// Keep generation and application ordered with listener mutations so an old
+	// snapshot cannot overwrite the configuration from a newer Create/Update/Delete.
 	s.mu.Lock()
-	yamlContent, err := s.generateConfigYAMLLocked()
-	s.mu.Unlock()
-	if err != nil {
-		return err
-	}
-	return s.applyGeneratedYAML(yamlContent)
+	defer s.mu.Unlock()
+	return s.regenerateConfigLocked()
 }
 
 func (s *Service) regenerateConfigLocked() error {
