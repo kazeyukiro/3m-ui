@@ -13,20 +13,37 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
+  const [totpNeeded, setTotpNeeded] = useState(false);
+  const [pendingCreds, setPendingCreds] = useState<{ username: string; password: string } | null>(null);
   const { t, locale, setLocale } = useI18n();
   const { mode, setMode, isDark } = useThemeStore();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
 
-  const onFinish = async (values: { username: string; password: string }) => {
+  const finishLogin = (result: { must_change_password?: boolean }) => {
+    message.success(t('login.welcomeBack'));
+    if (result.must_change_password || useAuthStore.getState().mustChangePassword) {
+      navigate('/change-password', { replace: true });
+    } else {
+      navigate(from === '/login' || from === '/change-password' ? '/' : from, { replace: true });
+    }
+  };
+
+  const onFinish = async (values: { username: string; password: string; totp_code?: string }) => {
     setLoading(true);
     try {
-      const result = await login(values);
-      message.success(t('login.welcomeBack'));
-      if (result.must_change_password || useAuthStore.getState().mustChangePassword) {
-        navigate('/change-password', { replace: true });
-      } else {
-        navigate(from === '/login' || from === '/change-password' ? '/' : from, { replace: true });
+      const payload = pendingCreds && totpNeeded
+        ? { ...pendingCreds, totp_code: values.totp_code }
+        : { username: values.username, password: values.password, totp_code: values.totp_code };
+      const result = await login(payload);
+      if (result.totp_required && !result.token) {
+        setPendingCreds({ username: payload.username, password: payload.password });
+        setTotpNeeded(true);
+        message.info(t('login.totpRequired', 'Enter authenticator code'));
+        return;
       }
+      setTotpNeeded(false);
+      setPendingCreds(null);
+      finishLogin(result);
     } catch (e: any) {
       message.error(e?.message || t('login.failed'));
     } finally {
@@ -96,18 +113,23 @@ const Login: React.FC = () => {
           <Typography.Text type="secondary">{t('login.subtitle')}</Typography.Text>
         </div>
         <Form onFinish={onFinish} initialValues={{ username: 'admin' }}>
-          <Form.Item name="username" rules={[{ required: true, message: t('login.username') }]}>
+          <Form.Item name="username" rules={[{ required: !totpNeeded, message: t('login.username') }]} hidden={totpNeeded}>
             <Input prefix={<UserOutlined />} placeholder={t('login.username')} autoComplete="username" />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: t('login.password') }]}>
+          <Form.Item name="password" rules={[{ required: !totpNeeded, message: t('login.password') }]} hidden={totpNeeded}>
             <Input.Password
               prefix={<LockOutlined />}
               placeholder={t('login.password')}
               autoComplete="current-password"
             />
           </Form.Item>
+          {totpNeeded && (
+            <Form.Item name="totp_code" rules={[{ required: true, message: t('login.totpRequired', 'Authenticator code') }]}>
+              <Input prefix={<LockOutlined />} placeholder="TOTP" inputMode="numeric" autoComplete="one-time-code" maxLength={8} />
+            </Form.Item>
+          )}
           <Button type="primary" htmlType="submit" block loading={loading}>
-            {t('login.button')}
+            {totpNeeded ? t('login.totpVerify', 'Verify') : t('login.button')}
           </Button>
         </Form>
       </Card>

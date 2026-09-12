@@ -108,6 +108,9 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		Group:             strings.TrimSpace(in.Group),
 		Tags:              strings.TrimSpace(in.Tags),
 		TrafficResetDays:  max0(in.TrafficResetDays),
+		StartOnFirstUse:      in.StartOnFirstUse,
+		ExpireDaysAfterFirst:  max0(in.ExpireDaysAfterFirst),
+		ExternalLinks:         strings.TrimSpace(in.ExternalLinks),
 		ExpireRenewDays:   max0(in.ExpireRenewDays),
 		ExpireTime:        expire,
 		Enabled:           enabled,
@@ -183,6 +186,15 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	}
 	if in.ExpireRenewDays != nil {
 		u.ExpireRenewDays = max0(*in.ExpireRenewDays)
+	}
+	if in.StartOnFirstUse != nil {
+		u.StartOnFirstUse = *in.StartOnFirstUse
+	}
+	if in.ExpireDaysAfterFirst != nil {
+		u.ExpireDaysAfterFirst = max0(*in.ExpireDaysAfterFirst)
+	}
+	if in.ExternalLinks != nil {
+		u.ExternalLinks = strings.TrimSpace(*in.ExternalLinks)
 	}
 	if in.ExpireTime != nil {
 		u.ExpireTime = in.ExpireTime.UTC()

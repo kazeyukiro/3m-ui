@@ -43,4 +43,13 @@ type ProxyUser struct {
 	ExpireRenewDays int `gorm:"not null;default:0" json:"expire_renew_days"`
 	// LastTrafficCycleReset tracks the last per-user traffic cycle reset (UTC).
 	LastTrafficCycleReset *time.Time `json:"last_traffic_cycle_reset,omitempty"`
+	// StartOnFirstUse: ignore ExpireTime until the user first connects or pulls a subscription.
+	StartOnFirstUse bool `gorm:"not null;default:false" json:"start_on_first_use"`
+	// FirstConnectedAt is set once when traffic/subscription first sees the user.
+	FirstConnectedAt *time.Time `json:"first_connected_at,omitempty"`
+	// ExpireDaysAfterFirst: when StartOnFirstUse and >0, set ExpireTime = first use + N days.
+	ExpireDaysAfterFirst int `gorm:"not null;default:0" json:"expire_days_after_first"`
+	// ExternalLinks: newline-separated Clash/Mihomo subscription URLs merged into this user's sub.
+	ExternalLinks string `gorm:"type:text" json:"external_links,omitempty"`
 }
+

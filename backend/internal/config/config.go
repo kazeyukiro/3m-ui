@@ -36,6 +36,8 @@ type ServerConfig struct {
 	// SubPath is an optional public subscription prefix (e.g. "/sub"). Empty keeps
 	// only the legacy "/api/v1/client/sub/:token" routes.
 	SubPath string `yaml:"sub_path"`
+	// WebPath is an optional panel UI/API path prefix (e.g. "/secret"). Empty = root.
+	WebPath string `yaml:"web_path"`
 	// SubPort serves subscription routes on a separate port when >0. 0 = same as panel.
 	SubPort int `yaml:"sub_port"`
 	// SubListen is the bind address for SubPort (empty = same as Listen / dual-stack).
@@ -151,9 +153,21 @@ func ApplyEnvOverrides(cfg *Config) {
 		}
 	}
 	cfg.Server.SubPath = NormalizeSubPath(cfg.Server.SubPath)
+	cfg.Server.WebPath = NormalizeWebPath(cfg.Server.WebPath)
 }
 
 // NormalizeSubPath returns a leading-slash path without trailing slash, or "".
+func NormalizeWebPath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || p == "/" {
+		return ""
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return strings.TrimRight(p, "/")
+}
+
 func NormalizeSubPath(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" || p == "/" {

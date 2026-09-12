@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/totp"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
 	"gorm.io/gorm"
@@ -165,6 +166,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/login", h.Login)
 	rg.POST("/password", RequireAuth(h.db, h.secret), h.ChangePassword)
 	rg.GET("/me", RequireAuth(h.db, h.secret), h.Me)
+	rg.POST("/totp/setup", RequireAuth(h.db, h.secret), h.TOTPSetup)
+	rg.POST("/totp/enable", RequireAuth(h.db, h.secret), h.TOTPEnable)
+	rg.POST("/totp/disable", RequireAuth(h.db, h.secret), h.TOTPDisable)
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -186,21 +190,110 @@ func (h *Handler) Login(c *gin.Context) {
 	result, err := Login(h.db, h.secret, input)
 	if err != nil {
 		status := http.StatusUnauthorized
-		if err.Error() != "invalid username or password" {
+		msg := "invalid username or password"
+		if err.Error() == "invalid totp code" {
+			msg = "invalid totp code"
+		} else if err.Error() != "invalid username or password" {
 			status = http.StatusInternalServerError
 		}
-		// Fire-and-forget: a failed login is worth a Telegram alert even when
-		// the success path is muted. NotifyLoginFailed self-gates via
-		// settings.EventEnabled("login") and silently no-ops if Telegram is
-		// disabled, misconfigured, or the DB is unreachable.
 		go telegram.NotifyLoginFailed(h.db, input.Username, clientID)
-		c.JSON(status, gin.H{"error": "invalid username or password"})
+		c.JSON(status, gin.H{"error": msg})
+		return
+	}
+	if result != nil && result.TOTPRequired {
+		c.JSON(http.StatusOK, result)
 		return
 	}
 	resetLoginLimit(clientID)
-	// optional Telegram notice on successful panel login.
 	go telegram.NotifyLogin(h.db, input.Username, clientID)
 	c.JSON(http.StatusOK, result)
+}
+
+func (h *Handler) TOTPSetup(c *gin.Context) {
+	claims, ok := ClaimsFromContext(c)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	secret, err := totp.GenerateSecret()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.db.Model(&models.User{}).Where("id = ?", claims.UserID).Updates(map[string]interface{}{
+		"totp_secret":  secret,
+		"totp_enabled": false,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"secret": secret,
+		"otpauth_url": totp.OTPAuthURL("3m-ui", claims.Username, secret),
+	})
+}
+
+func (h *Handler) TOTPEnable(c *gin.Context) {
+	claims, ok := ClaimsFromContext(c)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	var req struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code required"})
+		return
+	}
+	var user models.User
+	if err := h.db.First(&user, claims.UserID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
+		return
+	}
+	if strings.TrimSpace(user.TOTPSecret) == "" || !totp.Verify(user.TOTPSecret, req.Code, 1) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid totp code"})
+		return
+	}
+	if err := h.db.Model(&user).Update("totp_enabled", true).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "totp_enabled": true})
+}
+
+func (h *Handler) TOTPDisable(c *gin.Context) {
+	claims, ok := ClaimsFromContext(c)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	var req struct {
+		Password string `json:"password" binding:"required"`
+		Code     string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password required"})
+		return
+	}
+	var user models.User
+	if err := h.db.First(&user, claims.UserID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
+		return
+	}
+	if !CheckPasswordHash(req.Password, user.PasswordHash) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
+		return
+	}
+	if user.TOTPEnabled && !totp.Verify(user.TOTPSecret, req.Code, 1) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid totp code"})
+		return
+	}
+	if err := h.db.Model(&user).Updates(map[string]interface{}{"totp_enabled": false, "totp_secret": ""}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "totp_enabled": false})
 }
 
 func (h *Handler) ChangePassword(c *gin.Context) {
@@ -300,6 +393,7 @@ func (h *Handler) Me(c *gin.Context) {
 		"role":                 claims.Role,
 		"expires_at":           claims.ExpiresAt,
 		"must_change_password": user.MustChangePassword,
+		"totp_enabled":         user.TOTPEnabled,
 	})
 }
 

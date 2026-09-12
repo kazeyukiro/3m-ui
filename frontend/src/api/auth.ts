@@ -4,22 +4,45 @@ import { useAuthStore } from '../stores/authStore';
 export interface LoginInput {
   username: string;
   password: string;
+  totp_code?: string;
 }
 
 export interface LoginResult {
-  token: string;
+  token?: string;
   username: string;
-  must_change_password: boolean;
+  must_change_password?: boolean;
   expires_at?: string;
   role?: string;
+  totp_required?: boolean;
+  totp_enabled?: boolean;
 }
 
 export async function login(input: LoginInput): Promise<LoginResult> {
   const { data } = await client.post<LoginResult>('/auth/login', input);
+  if (data?.totp_required && !data?.token) {
+    return data;
+  }
   if (!data?.token) {
     throw new Error('Login response missing token');
   }
   useAuthStore.getState().login(data.token, data.username || input.username, !!data.must_change_password);
+  return data;
+}
+
+export async function setupTOTP() {
+  const { data } = await client.post<{ secret: string; otpauth_url: string }>('/auth/totp/setup');
+  return data;
+}
+export async function enableTOTP(code: string) {
+  const { data } = await client.post('/auth/totp/enable', { code });
+  return data;
+}
+export async function disableTOTP(password: string, code?: string) {
+  const { data } = await client.post('/auth/totp/disable', { password, code });
+  return data;
+}
+export async function fetchMe() {
+  const { data } = await client.get<{ totp_enabled?: boolean; username?: string }>('/auth/me');
   return data;
 }
 

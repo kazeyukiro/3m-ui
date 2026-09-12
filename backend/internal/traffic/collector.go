@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo/api"
 	mihomoConfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"gorm.io/gorm"
@@ -208,6 +209,9 @@ func (c *Collector) CollectOnce() error {
 			log.Printf("traffic: record sample for user %d failed: %v", uid, err)
 			continue
 		}
+	}
+	for _, uid := range activeUserIDs {
+		user.TouchFirstUse(c.db, uid)
 	}
 	if err := c.userSvc.MarkOffline(activeUserIDs); err != nil {
 		return fmt.Errorf("update online status: %w", err)

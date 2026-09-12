@@ -78,6 +78,9 @@ type CreateInput struct {
 	Tags             string     `json:"tags"`
 	TrafficResetDays int        `json:"traffic_reset_days"`
 	ExpireRenewDays  int        `json:"expire_renew_days"`
+	StartOnFirstUse      bool   `json:"start_on_first_use"`
+	ExpireDaysAfterFirst int    `json:"expire_days_after_first"`
+	ExternalLinks        string `json:"external_links"`
 	ExpireTime       *time.Time `json:"expire_time"`
 	Enabled          *bool      `json:"enabled"`
 	TelegramID       int64      `json:"telegram_id"`
@@ -96,6 +99,9 @@ type UpdateInput struct {
 	Tags             *string    `json:"tags"`
 	TrafficResetDays *int       `json:"traffic_reset_days"`
 	ExpireRenewDays  *int       `json:"expire_renew_days"`
+	StartOnFirstUse      *bool   `json:"start_on_first_use"`
+	ExpireDaysAfterFirst *int    `json:"expire_days_after_first"`
+	ExternalLinks        *string `json:"external_links"`
 	ExpireTime       *time.Time `json:"expire_time"`
 	Enabled          *bool      `json:"enabled"`
 	TelegramID       *int64     `json:"telegram_id"`
@@ -138,13 +144,36 @@ func IsCredentialActive(u models.ProxyUser) bool {
 	if !u.Enabled {
 		return false
 	}
-	if !u.ExpireTime.IsZero() && !u.ExpireTime.After(now) {
+	// Deferred expiry: not started yet → treat as not expired.
+	if u.StartOnFirstUse && u.FirstConnectedAt == nil {
+		// still enforce traffic if somehow used without first-connect stamp
+	} else if !u.ExpireTime.IsZero() && !u.ExpireTime.After(now) {
 		return false
 	}
 	if u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit {
 		return false
 	}
 	return true
+}
+
+// TouchFirstUse stamps FirstConnectedAt once and optionally starts the expiry clock.
+func TouchFirstUse(db *gorm.DB, userID uint) {
+	if db == nil || userID == 0 {
+		return
+	}
+	var u models.ProxyUser
+	if err := db.Select("id", "start_on_first_use", "first_connected_at", "expire_days_after_first", "expire_time").First(&u, userID).Error; err != nil {
+		return
+	}
+	if u.FirstConnectedAt != nil {
+		return
+	}
+	now := time.Now().UTC()
+	updates := map[string]interface{}{"first_connected_at": now}
+	if u.StartOnFirstUse && u.ExpireDaysAfterFirst > 0 {
+		updates["expire_time"] = now.Add(time.Duration(u.ExpireDaysAfterFirst) * 24 * time.Hour)
+	}
+	_ = db.Model(&models.ProxyUser{}).Where("id = ? AND first_connected_at IS NULL", userID).Updates(updates).Error
 }
 
 // BindTelegram links a Telegram account (numeric chat/user ID + display name) to a proxy user.

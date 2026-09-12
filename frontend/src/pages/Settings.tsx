@@ -48,6 +48,7 @@ import {
 import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
+import { setupTOTP, enableTOTP, disableTOTP, fetchMe } from '../api/auth';
 
 const { Text, Title } = Typography;
 const { Sider, Content } = Layout;
@@ -75,6 +76,11 @@ const Settings: React.FC = () => {
   const [panelForm] = Form.useForm();
   const { t, locale, setLocale } = useI18n();
   const isMobile = useIsMobile();
+  const [totpEnabled, setTotpEnabled] = useState(false);
+  const [totpSecret, setTotpSecret] = useState('');
+  const [totpUrl, setTotpUrl] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [totpPassword, setTotpPassword] = useState('');
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
   const [tgForm] = Form.useForm();
@@ -577,9 +583,66 @@ const Settings: React.FC = () => {
           {section === 'security' && (
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Card title={<><LockOutlined /> {t('settings.security')}</>}>
-                <Button type="primary" onClick={() => navigate('/change-password')}>
-                  {t('settings.changePassword')}
-                </Button>
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  <Button type="primary" onClick={() => navigate('/change-password')}>
+                    {t('settings.changePassword')}
+                  </Button>
+                  <div>
+                    <Typography.Text strong>{t('settings.totp', 'Two-factor (TOTP)')}</Typography.Text>
+                    <div style={{ marginTop: 8 }}>
+                      {totpEnabled ? (
+                        <Space wrap>
+                          <Tag color="success">{t('settings.totpOn', 'Enabled')}</Tag>
+                          <Input.Password placeholder={t('login.password')} value={totpPassword} onChange={(e) => setTotpPassword(e.target.value)} style={{ width: 160 }} />
+                          <Input placeholder="TOTP" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} style={{ width: 100 }} />
+                          <Button danger onClick={async () => {
+                            try {
+                              await disableTOTP(totpPassword, totpCode);
+                              setTotpEnabled(false);
+                              message.success(t('common.success'));
+                            } catch (e: any) {
+                              message.error(e.message || t('common.error'));
+                            }
+                          }}>{t('settings.totpDisable', 'Disable 2FA')}</Button>
+                        </Space>
+                      ) : (
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Button onClick={async () => {
+                            try {
+                              const r = await setupTOTP();
+                              setTotpSecret(r.secret);
+                              setTotpUrl(r.otpauth_url);
+                              message.success(t('settings.totpSetup', 'Scan with authenticator'));
+                            } catch (e: any) {
+                              message.error(e.message || t('common.error'));
+                            }
+                          }}>{t('settings.totpSetupBtn', 'Setup 2FA')}</Button>
+                          {totpSecret && (
+                            <>
+                              <Typography.Paragraph copyable style={{ marginBottom: 0 }}>{totpSecret}</Typography.Paragraph>
+                              <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>{totpUrl}</Typography.Text>
+                              <Space wrap>
+                                <Input placeholder="TOTP" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} style={{ width: 120 }} />
+                                <Button type="primary" onClick={async () => {
+                                  try {
+                                    await enableTOTP(totpCode);
+                                    setTotpEnabled(true);
+                                    message.success(t('common.success'));
+                                  } catch (e: any) {
+                                    message.error(e.message || t('common.error'));
+                                  }
+                                }}>{t('settings.totpEnable', 'Enable')}</Button>
+                              </Space>
+                            </>
+                          )}
+                        </Space>
+                      )}
+                    </div>
+                  </div>
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                    {t('settings.webPathHint', 'Panel path prefix (web_path) is set in /etc/3m-ui/config.yaml then restart. Example: web_path: "/secret" → open http://IP:8080/secret/')}
+                  </Typography.Paragraph>
+                </Space>
               </Card>
               <Card title={t('settings.backup') || 'Backup'}>
                 <Space wrap>
