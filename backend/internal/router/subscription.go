@@ -73,6 +73,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				return
 			}
 			isProxyUser = true
+			user.TouchFirstUse(db, pu.ID)
 			// HWID device registration (Happ / Remnawave-compatible headers).
 			info := hwid.ParseRequest(c.Request)
 			if err := hwid.Enforce(db, pu.ID, pu.HWIDLimit, info, c.Writer.Header()); err != nil {
