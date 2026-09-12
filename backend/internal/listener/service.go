@@ -19,15 +19,13 @@ type Service struct {
 	configPath  string
 	mihomoApply interface {
 		ApplyConfig(string) error
-		ApplyConfigDeferredRestart(string) error
 	}
 	mu sync.Mutex
 }
 
 func NewService(db *gorm.DB, configPath string, mihomoApply interface {
-	ApplyConfig(string) error
-	ApplyConfigDeferredRestart(string) error
-}) *Service {
+		ApplyConfig(string) error
+	}) *Service {
 	return &Service{db: db, configPath: configPath, mihomoApply: mihomoApply}
 }
 
@@ -248,13 +246,7 @@ func (s *Service) generateConfigYAMLLocked() (string, error) {
 
 func (s *Service) applyGeneratedYAML(yamlContent string) error {
 	if s.mihomoApply != nil {
-		// Prefer deferred restart so create/delete HTTP handlers return after
-		// validation instead of blocking on a full core restart (often >30s).
-		if d, ok := s.mihomoApply.(interface {
-			ApplyConfigDeferredRestart(string) error
-		}); ok {
-			return d.ApplyConfigDeferredRestart(yamlContent)
-		}
+		// Report activation failures while CRUD can still restore the database.
 		return s.mihomoApply.ApplyConfig(yamlContent)
 	}
 	dir := filepath.Dir(s.configPath)

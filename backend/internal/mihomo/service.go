@@ -3,7 +3,6 @@ package mihomo
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -199,92 +198,6 @@ func (s *Service) ApplyConfig(content string) error {
 		}
 		return fmt.Errorf("apply Mihomo configuration: %w", err)
 	}
-	return nil
-}
-
-// ApplyConfigDeferredRestart writes and validates the config like ApplyConfig, but
-// restarts Mihomo in the background after a successful validation. Used by panel
-// create/update/delete so the HTTP handler can return before a multi-second restart.
-// If validation fails, the previous config is restored and the error is returned
-// synchronously (same safety as ApplyConfig).
-func (s *Service) ApplyConfigDeferredRestart(content string) error {
-	if s == nil || s.cm == nil {
-		return fmt.Errorf("mihomo service not initialized")
-	}
-	if err := s.coreMutationAllowed(); err != nil {
-		return err
-	}
-	s.applyMu.Lock()
-	if err := s.coreMutationAllowed(); err != nil {
-		s.applyMu.Unlock()
-		return err
-	}
-	old, readErr := s.cm.ReadConfig()
-	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) && !os.IsNotExist(readErr) {
-		s.applyMu.Unlock()
-		return fmt.Errorf("read current Mihomo config: %w", readErr)
-	}
-	if readErr == nil {
-		if err := os.WriteFile(s.cm.configPath+".bak", []byte(old), 0600); err != nil {
-			s.applyMu.Unlock()
-			return fmt.Errorf("backup Mihomo config: %w", err)
-		}
-	}
-	if err := s.cm.SaveConfig(content); err != nil {
-		s.applyMu.Unlock()
-		return err
-	}
-	if s.pm == nil {
-		s.applyMu.Unlock()
-		return nil
-	}
-	if err := s.pm.ValidateConfig(); err != nil {
-		if readErr == nil {
-			_ = s.cm.SaveConfig(old)
-		} else {
-			_ = os.Remove(s.cm.configPath)
-		}
-		s.applyMu.Unlock()
-		return fmt.Errorf("validate Mihomo configuration: %w", err)
-	}
-	wasRunning := s.pm.IsRunning()
-	// First start must be synchronous: callers (smoke tests, UI after create) expect
-	// mihomo/status.running == true as soon as the listener API returns.
-	if !wasRunning {
-		err := s.startAndCheckListeners(content, false)
-		if err != nil {
-			_ = s.pm.Stop()
-			if readErr == nil {
-				_ = s.cm.SaveConfig(old)
-			} else {
-				_ = os.Remove(s.cm.configPath)
-			}
-			s.applyMu.Unlock()
-			return fmt.Errorf("start Mihomo: %w", err)
-		}
-		s.applyMu.Unlock()
-		return nil
-	}
-
-	// Core already running: restart in the background so HTTP create/update is not
-	// blocked for the full validate+restart window. Config on disk is already valid.
-	s.applyMu.Unlock()
-	go func() {
-		s.applyMu.Lock()
-		defer s.applyMu.Unlock()
-		if err := s.startAndCheckListeners(content, true); err != nil {
-			log.Printf("warning: Mihomo restart after config apply failed: %v", err)
-			if readErr == nil {
-				if restoreErr := s.cm.SaveConfig(old); restoreErr != nil {
-					log.Printf("warning: restore previous Mihomo config failed: %v", restoreErr)
-					return
-				}
-				if restartErr := s.startAndCheckListeners(string(old), true); restartErr != nil {
-					log.Printf("warning: restart previous Mihomo config failed: %v", restartErr)
-				}
-			}
-		}
-	}()
 	return nil
 }
 
