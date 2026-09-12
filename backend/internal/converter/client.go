@@ -99,14 +99,7 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 			names = append(names, name)
 		}
 	}
-	cfg := map[string]interface{}{
-		"proxies": proxies,
-		"proxy-groups": []interface{}{
-			map[string]interface{}{"name": "PROXY", "type": "select", "proxies": names},
-		},
-		"rules": []string{"MATCH,PROXY"},
-	}
-	return yaml.Marshal(cfg)
+	return yaml.Marshal(clientSubscriptionDocument(proxies, names))
 }
 
 func listenerToProxies(l models.Listener, server string, credentials []user.Credential) ([]map[string]interface{}, error) {
