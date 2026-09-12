@@ -202,7 +202,6 @@ func (s *Service) ApplyConfig(content string) error {
 	return nil
 }
 
-
 // ApplyConfigDeferredRestart writes and validates the config like ApplyConfig, but
 // restarts Mihomo in the background after a successful validation. Used by panel
 // create/update/delete so the HTTP handler can return before a multi-second restart.
