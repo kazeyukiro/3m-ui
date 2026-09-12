@@ -14,7 +14,7 @@ import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { randomListenerPort } from '../utils/listenerPort';
-import { suggestListenerName, nextListenerNameAfterConflict } from '../utils/listenerName';
+import { suggestListenerName } from '../utils/listenerName';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
@@ -121,26 +121,6 @@ const Listeners: React.FC = () => {
     } catch (e: any) {
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
       const msg = e?.message || t('common.error');
-      // Double-submit: first request created the node, second hit UNIQUE — treat as success.
-      if (!editing && /already exists/i.test(String(msg))) {
-        const name = String(form.getFieldValue('name') || '').trim();
-        try {
-          const list = await fetchListeners();
-          setData(list || []);
-          if (name && (list || []).some((item) => item.name === name)) {
-            message.success(runtimeText.saved);
-            setModalOpen(false);
-            setEditing(null);
-            form.resetFields();
-            return;
-          }
-        } catch {
-          /* fall through */
-        }
-        const next = nextListenerNameAfterConflict(name, data.map((listener) => listener.name));
-        form.setFieldsValue({ name: next });
-        message.info(t('listeners.nameTakenHint', `Name was taken; try "${next}"`));
-      }
       setSubmitError(msg);
       message.error(msg);
       void load(false);
