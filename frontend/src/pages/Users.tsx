@@ -714,7 +714,7 @@ const Users: React.FC = () => {
         <Form.Item name="expire_days_after_first" label={t('users.expireDaysAfterFirst', 'Days after first use')}>
           <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
         </Form.Item>
-        <Form.Item name="external_links" label={t('users.externalLinks', 'External subscription URLs')}>
+        <Form.Item name="external_links" label={t('users.externalLinks', 'External subscription URLs')} extra={t('users.externalLinksHint', 'One URL per line')}>
           <Input.TextArea rows={3} placeholder={"https://example.com/sub1\nhttps://example.com/sub2"} />
         </Form.Item>
           <Form.Item name="group" label={t('users.group', 'Group')}>
