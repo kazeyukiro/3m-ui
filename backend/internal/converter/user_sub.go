@@ -100,18 +100,7 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 	if len(allProxies) == 0 {
 		return nil, fmt.Errorf("no exportable proxies for user")
 	}
-	cfg := map[string]interface{}{
-		"proxies": allProxies,
-		"proxy-groups": []interface{}{
-			map[string]interface{}{
-				"name":    "PROXY",
-				"type":    "select",
-				"proxies": names,
-			},
-		},
-		"rules": []string{"MATCH,PROXY"},
-	}
-	return yaml.Marshal(cfg)
+	return yaml.Marshal(clientSubscriptionDocument(allProxies, names))
 }
 
 // URIGenerator builds share links for a listener + credentials (injected to avoid import cycles).
