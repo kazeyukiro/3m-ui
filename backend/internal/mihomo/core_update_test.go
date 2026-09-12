@@ -412,20 +412,39 @@ func TestCoreUpdateReconcilesCommittedCredentials(t *testing.T) {
 				}
 				return s.SaveConfig(string(content))
 			}
-			users.SetCredentialsChangedHandler(func() error { return s.SyncCredentials(regenerate) })
+			queued := make(chan error, 3)
+			users.SetCredentialsChangedHandler(func() error {
+				err := s.SyncCredentials(regenerate)
+				queued <- err
+				return err
+			})
+			waitForQueuedSync := func() {
+				t.Helper()
+				select {
+				case err := <-queued:
+					if !errors.Is(err, ErrCoreUpdateBusy) {
+						t.Fatalf("credential sync was not queued during the core update: %v", err)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("asynchronous credential sync was not scheduled")
+				}
+			}
 			if err := regenerate(); err != nil {
 				t.Fatal(err)
 			}
 			s.updater.job = &CoreUpdateJob{Status: "running"}
-			if err := users.Delete(ids[0]); !errors.Is(err, ErrCoreUpdateBusy) {
+			if err := users.Delete(ids[0]); err != nil {
 				t.Fatalf("delete: %v", err)
 			}
-			if _, err := users.Update(ids[1], user.UpdateInput{Password: "new-password"}); !errors.Is(err, ErrCoreUpdateBusy) {
+			waitForQueuedSync()
+			if _, err := users.Update(ids[1], user.UpdateInput{Password: "new-password"}); err != nil {
 				t.Fatalf("rotate: %v", err)
 			}
-			if err := users.BindListeners(ids[2], nil); !errors.Is(err, ErrCoreUpdateBusy) {
+			waitForQueuedSync()
+			if err := users.BindListeners(ids[2], nil); err != nil {
 				t.Fatalf("unbind: %v", err)
 			}
+			waitForQueuedSync()
 			var updateErr error
 			if failed {
 				updateErr = fmt.Errorf("download failed")
