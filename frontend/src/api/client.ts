@@ -3,8 +3,9 @@ import { useAuthStore } from '../stores/authStore';
 
 const client = axios.create({
   baseURL: '/api/v1',
-  // GET polls stay moderate; mutating endpoints raise timeout in the request interceptor.
-  timeout: 45000,
+  // Resolve the default after Axios merges request options. A null sentinel
+  // preserves explicit timeouts, including 0 (no timeout).
+  timeout: null,
   headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
 });
 
@@ -14,9 +15,8 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   const method = (config.method || 'get').toLowerCase();
-  if (method !== 'get' && method !== 'head' && config.timeout == null) {
-    // Listener create/delete runs Mihomo validate+restart on the request path.
-    config.timeout = 120000;
+  if (config.timeout == null) {
+    config.timeout = method === 'get' || method === 'head' ? 45000 : 120000;
   }
   return config;
 });
