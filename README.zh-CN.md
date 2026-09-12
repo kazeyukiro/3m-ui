@@ -49,6 +49,28 @@ sudo 3m-ui update
 
 默认面板：`http://服务器IP:8080/` — 用户 `admin`，安装时打印一次性随机密码（**首次登录请立即修改**）。
 
+### AI 提示词安装
+
+把下面整段复制到 ChatGPT / Claude / Cursor 等助手，并说明你的系统（如 Ubuntu 22.04）与是否已有 root SSH。助手应只协助执行官方脚本，不要改写成不明来源命令。
+
+```text
+请协助在 Linux VPS（需 root）上安装 3m-ui（Mihomo 服务端 Web 面板）。
+
+要求：
+1. 只使用官方一键脚本，不要改写下载地址或追加不明参数：
+   curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
+2. 安装前检查：架构（完整包需 amd64/arm64）、systemd 或 OpenRC、能访问 GitHub、防火墙可放行面板端口（默认 8080）及后续节点端口。
+3. 安装结束后：
+   - 记录终端里一次性显示的 admin 初始密码（不会再次完整打印）
+   - 用 systemctl status 3m-ui（或等价命令）确认服务运行
+   - 说明如何访问 http://服务器IP:8080/ ，并提醒首次登录必须改密
+4. 常用管理：sudo 3m-ui status | update | logs | restart | backup
+5. 文档：https://3m-ui.top/docs/ 与 https://github.com/kazeyukiro/3m-ui
+6. 不要重置已有 /etc/3m-ui、/var/lib/3m-ui；更新优先用 sudo 3m-ui update。
+若某一步失败，根据报错给出排查步骤，不要臆造非官方安装源。
+```
+
+
 ---
 
 ## 源码编译
