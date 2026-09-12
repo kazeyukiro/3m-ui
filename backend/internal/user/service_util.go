@@ -37,6 +37,10 @@ type SafeUser struct {
 	Tags                  string     `json:"tags"`
 	TrafficResetDays      int        `json:"traffic_reset_days"`
 	ExpireRenewDays       int        `json:"expire_renew_days"`
+	StartOnFirstUse      bool       `json:"start_on_first_use"`
+	ExpireDaysAfterFirst int        `json:"expire_days_after_first"`
+	FirstConnectedAt     *time.Time `json:"first_connected_at,omitempty"`
+	ExternalLinks        string     `json:"external_links,omitempty"`
 	LastTrafficCycleReset *time.Time `json:"last_traffic_cycle_reset,omitempty"`
 	SubToken              string     `json:"sub_token"`
 	TelegramID            int64      `json:"telegram_id"`
@@ -64,6 +68,10 @@ func ToSafeUser(u *models.ProxyUser) SafeUser {
 		Tags:                  u.Tags,
 		TrafficResetDays:      u.TrafficResetDays,
 		ExpireRenewDays:       u.ExpireRenewDays,
+		StartOnFirstUse:      u.StartOnFirstUse,
+		ExpireDaysAfterFirst: u.ExpireDaysAfterFirst,
+		FirstConnectedAt:     u.FirstConnectedAt,
+		ExternalLinks:        u.ExternalLinks,
 		LastTrafficCycleReset: u.LastTrafficCycleReset,
 		SubToken:              u.SubToken,
 		TelegramID:            u.TelegramID,

@@ -21,6 +21,10 @@ export interface ProxyUser {
   tags?: string;
   traffic_reset_days?: number;
   expire_renew_days?: number;
+  start_on_first_use?: boolean;
+  expire_days_after_first?: number;
+  first_connected_at?: string | null;
+  external_links?: string;
   last_traffic_cycle_reset?: string | null;
   sub_token?: string;
   telegram_id?: number;
@@ -81,3 +85,22 @@ export const exportUserLinks = (params?: { q?: string; group?: string }) =>
   client
     .get<{ items: Array<Record<string, unknown>>; count: number }>('/users/export-links', { params })
     .then((r) => r.data);
+
+
+export interface HWIDDevice {
+  id: number;
+  proxy_user_id: number;
+  hwid: string;
+  device_os?: string;
+  ver_os?: string;
+  device_model?: string;
+  user_agent?: string;
+  last_seen_at?: string;
+}
+
+export const fetchUserHWIDDevices = (userId: number) =>
+  client.get<{ items: HWIDDevice[] }>(`/users/${userId}/hwid-devices`).then((r) => r.data.items || []);
+export const deleteUserHWIDDevice = (userId: number, deviceId: number) =>
+  client.delete(`/users/${userId}/hwid-devices/${deviceId}`);
+export const clearUserHWIDDevices = (userId: number) =>
+  client.delete(`/users/${userId}/hwid-devices`);

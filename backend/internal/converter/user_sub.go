@@ -97,6 +97,9 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 	if mirrors, mErr := loadBoundRemoteMirrors(db, pu.ID); mErr == nil && len(mirrors) > 0 {
 		allProxies, names = appendRemoteProxyMaps(mirrors, allProxies, names)
 	}
+	if strings.TrimSpace(pu.ExternalLinks) != "" {
+		allProxies, names = mergeExternalSubscriptionLinks(pu.ExternalLinks, allProxies, names)
+	}
 	if len(allProxies) == 0 {
 		return nil, fmt.Errorf("no exportable proxies for user")
 	}

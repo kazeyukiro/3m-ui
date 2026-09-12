@@ -53,6 +53,37 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	r.Use(SecurityHeaders())
 	r.Use(CORSMiddleware(cfg.Security.CORSOrigins))
 
+	// Optional panel base path (hide UI/API behind /secret). Public subscription
+	// custom path remains independently configured via sub_path.
+	if webPath := config.NormalizeWebPath(cfg.Server.WebPath); webPath != "" {
+		r.Use(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			if path == webPath || strings.HasPrefix(path, webPath+"/") {
+				c.Request.URL.Path = strings.TrimPrefix(path, webPath)
+				if c.Request.URL.Path == "" {
+					c.Request.URL.Path = "/"
+				}
+				c.Next()
+				return
+			}
+			// Allow health probes and subscription without the secret prefix.
+			if strings.HasPrefix(path, "/api/v1/client/") || strings.HasPrefix(path, "/api/client/") ||
+				path == "/api/v1/health" || path == "/healthz" {
+				c.Next()
+				return
+			}
+			if cfg.Server.SubPath != "" {
+				sp := config.NormalizeSubPath(cfg.Server.SubPath)
+				if path == sp || strings.HasPrefix(path, sp+"/") {
+					c.Next()
+					return
+				}
+			}
+			c.Status(http.StatusNotFound)
+			c.Abort()
+		})
+	}
+
 	RegisterLegacySubscriptionRoutes(r, db, cfg)
 	RegisterCustomSubPathRoutes(r, db, cfg)
 

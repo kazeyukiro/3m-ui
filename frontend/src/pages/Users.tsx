@@ -8,6 +8,7 @@ import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
   fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
+  fetchUserHWIDDevices, deleteUserHWIDDevice, clearUserHWIDDevices, type HWIDDevice,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
@@ -27,6 +28,10 @@ const Users: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  const [hwidOpen, setHwidOpen] = useState(false);
+  const [hwidUser, setHwidUser] = useState<ProxyUser | null>(null);
+  const [hwidRows, setHwidRows] = useState<HWIDDevice[]>([]);
+  const [hwidLoading, setHwidLoading] = useState(false);
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
@@ -83,6 +88,9 @@ const Users: React.FC = () => {
         tags: values.tags || '',
         traffic_reset_days: values.traffic_reset_days != null ? Number(values.traffic_reset_days) : 0,
         expire_renew_days: values.expire_renew_days != null ? Number(values.expire_renew_days) : 0,
+        start_on_first_use: !!values.start_on_first_use,
+        expire_days_after_first: values.expire_days_after_first != null ? Number(values.expire_days_after_first) : 0,
+        external_links: String(values.external_links || '').trim(),
       };
       if (values.password) payload.password = values.password;
       if (values.expire_time) {
@@ -130,6 +138,19 @@ const Users: React.FC = () => {
     }
   };
 
+  const openHwid = async (record: ProxyUser) => {
+    setHwidUser(record);
+    setHwidOpen(true);
+    setHwidLoading(true);
+    try {
+      setHwidRows(await fetchUserHWIDDevices(record.id));
+    } catch (e: any) {
+      message.error(e?.message || t('common.error'));
+    } finally {
+      setHwidLoading(false);
+    }
+  };
+
   const openEdit = (record: ProxyUser) => {
     setEditing(record);
     const limitGB =
@@ -153,6 +174,9 @@ const Users: React.FC = () => {
       tags: record.tags || '',
       traffic_reset_days: record.traffic_reset_days || 0,
       expire_renew_days: record.expire_renew_days || 0,
+      start_on_first_use: !!record.start_on_first_use,
+      expire_days_after_first: record.expire_days_after_first || 0,
+      external_links: record.external_links || '',
     });
     setModalOpen(true);
   };
@@ -318,6 +342,7 @@ const Users: React.FC = () => {
               <Button size="small" icon={<ClearOutlined />} />
             </Popconfirm>
           </Tooltip>
+          <Button size="small" onClick={() => openHwid(record)}>{t('users.devices', 'Devices')}</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
             <Button size="small" icon={<DeleteOutlined />} danger />
@@ -557,7 +582,8 @@ const Users: React.FC = () => {
                         menu={{
                           items: [
                             {
-                              key: 'edit',
+                              key: 'devices', label: t('users.devices', 'Devices'), onClick: () => openHwid(record) },
+                            { key: 'edit',
                               icon: <EditOutlined />,
                               label: t('common.edit'),
                               onClick: () => {
@@ -682,6 +708,15 @@ const Users: React.FC = () => {
           >
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
+        <Form.Item name="start_on_first_use" label={t('users.startOnFirstUse', 'Start on first use')} valuePropName="checked">
+          <Switch />
+        </Form.Item>
+        <Form.Item name="expire_days_after_first" label={t('users.expireDaysAfterFirst', 'Days after first use')}>
+          <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+        </Form.Item>
+        <Form.Item name="external_links" label={t('users.externalLinks', 'External subscription URLs')}>
+          <Input.TextArea rows={3} placeholder={"https://example.com/sub1\nhttps://example.com/sub2"} />
+        </Form.Item>
           <Form.Item name="group" label={t('users.group', 'Group')}>
             <Input placeholder="vip" allowClear />
           </Form.Item>
@@ -750,6 +785,45 @@ const Users: React.FC = () => {
           }))}
         />
       </Modal>
+
+
+    <Modal
+      open={hwidOpen}
+      title={hwidUser ? `${t('users.devices', 'Devices')} — ${hwidUser.username}` : t('users.devices', 'Devices')}
+      onCancel={() => { setHwidOpen(false); setHwidUser(null); }}
+      footer={[
+        <Button key="clear" danger disabled={!hwidUser || !hwidRows.length} onClick={async () => {
+          if (!hwidUser) return;
+          await clearUserHWIDDevices(hwidUser.id);
+          setHwidRows([]);
+          message.success(t('common.success'));
+        }}>{t('users.clearDevices', 'Clear all')}</Button>,
+        <Button key="close" type="primary" onClick={() => setHwidOpen(false)}>{t('common.close', 'Close')}</Button>,
+      ]}
+      width={isMobile ? '100%' : 720}
+    >
+      <Table
+        rowKey="id"
+        loading={hwidLoading}
+        dataSource={hwidRows}
+        size="small"
+        pagination={false}
+        scroll={{ x: true }}
+        columns={[
+          { title: 'HWID', dataIndex: 'hwid', ellipsis: true },
+          { title: t('users.deviceOs', 'OS'), dataIndex: 'device_os', width: 90 },
+          { title: t('users.deviceModel', 'Model'), dataIndex: 'device_model', ellipsis: true },
+          { title: t('users.lastSeen', 'Last seen'), dataIndex: 'last_seen_at', width: 160, render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
+          { title: t('common.actions'), key: 'a', width: 90, render: (_: any, r: HWIDDevice) => (
+            <Button size="small" danger onClick={async () => {
+              if (!hwidUser) return;
+              await deleteUserHWIDDevice(hwidUser.id, r.id);
+              setHwidRows((rows) => rows.filter((x) => x.id !== r.id));
+            }}>{t('common.delete')}</Button>
+          )},
+        ]}
+      />
+    </Modal>
 
     </div>
   );

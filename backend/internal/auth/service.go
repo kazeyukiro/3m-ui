@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/totp"
 	"gorm.io/gorm"
 )
 
@@ -18,14 +19,16 @@ const DefaultTokenTTL = 24 * time.Hour
 type LoginInput struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+	TOTPCode string `json:"totp_code"`
 }
 
 type LoginResult struct {
-	Token              string    `json:"token"`
-	ExpiresAt          time.Time `json:"expires_at"`
+	Token              string    `json:"token,omitempty"`
+	ExpiresAt          time.Time `json:"expires_at,omitempty"`
 	Username           string    `json:"username"`
-	Role               string    `json:"role"`
+	Role               string    `json:"role,omitempty"`
 	MustChangePassword bool      `json:"must_change_password"`
+	TOTPRequired       bool      `json:"totp_required,omitempty"`
 }
 
 func Login(db *gorm.DB, jwtSecret string, input LoginInput) (*LoginResult, error) {
@@ -38,6 +41,14 @@ func Login(db *gorm.DB, jwtSecret string, input LoginInput) (*LoginResult, error
 	}
 	if !CheckPasswordHash(input.Password, user.PasswordHash) {
 		return nil, errors.New("invalid username or password")
+	}
+	if user.TOTPEnabled && strings.TrimSpace(user.TOTPSecret) != "" {
+		if strings.TrimSpace(input.TOTPCode) == "" {
+			return &LoginResult{Username: user.Username, TOTPRequired: true}, nil
+		}
+		if !totp.Verify(user.TOTPSecret, input.TOTPCode, 1) {
+			return nil, errors.New("invalid totp code")
+		}
 	}
 	if user.SessionVersion == 0 {
 		user.SessionVersion = 1
