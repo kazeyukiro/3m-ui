@@ -25,6 +25,38 @@ sudo env PANEL_PORT=8080 sh install.sh --yes
 
 从旧版安装脚本迁移时，先执行上面的最新安装命令一次，以安装新的快照与恢复流程；旧版 `3m-ui update` 不具备本文描述的完整备份保证。
 
+
+### AI 提示词安装
+
+把下面整段复制到 ChatGPT / Claude / Cursor 等助手，并说明你的系统（如 Ubuntu 22.04）与是否已有 root SSH。助手应只协助执行官方脚本，不要改写成不明来源命令。
+
+```text
+请协助在 Linux VPS（需 root）上安装 3m-ui（Mihomo 服务端 Web 面板）。
+
+要求：
+1. 只使用官方一键脚本，不要改写下载地址或追加不明参数：
+   curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
+2. 安装前检查：架构（完整包需 amd64/arm64）、systemd 或 OpenRC、能访问 GitHub、防火墙可放行面板端口（默认 8080）及后续节点端口。
+3. 安装结束后：
+   - 记录终端里一次性显示的 admin 初始密码（不会再次完整打印）
+   - 用 systemctl status 3m-ui（或等价命令）确认服务运行
+   - 说明如何访问 http://服务器IP:8080/ ，并提醒首次登录必须改密
+4. 常用管理：sudo 3m-ui status | update | logs | restart | backup
+5. 文档：https://3m-ui.top/docs/ 与 https://github.com/kazeyukiro/3m-ui
+6. 不要重置已有 /etc/3m-ui、/var/lib/3m-ui；更新优先用 sudo 3m-ui update。
+若某一步失败，根据报错给出排查步骤，不要臆造非官方安装源。
+```
+
+测试通道（可选，非默认）：
+
+```text
+在上一条要求基础上，若用户明确要预发布/测试版，再使用：
+sudo env THREE_M_UI_CHANNEL=pre sh -c 'curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sh'
+或已安装后：sudo 3m-ui update pre
+默认仍应安装稳定版。
+```
+
+
 ### HTTPS 与对外访问
 
 首次登录改密后，在「系统设置」配置面板 HTTPS：可以申请域名证书，也可以使用已有证书。已有 Nginx / Caddy 的用户可设置面板只监听 `127.0.0.1`，由反向代理提供 HTTPS。域名不是安装前置要求；HTTP 端口本身不代表已启用 HTTPS。
