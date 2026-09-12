@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	dbconfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
@@ -21,13 +21,13 @@ type Service struct {
 		ApplyConfig(string) error
 		ApplyConfigDeferredRestart(string) error
 	}
-	mu          sync.Mutex
+	mu sync.Mutex
 }
 
 func NewService(db *gorm.DB, configPath string, mihomoApply interface {
-		ApplyConfig(string) error
-		ApplyConfigDeferredRestart(string) error
-	}) *Service {
+	ApplyConfig(string) error
+	ApplyConfigDeferredRestart(string) error
+}) *Service {
 	return &Service{db: db, configPath: configPath, mihomoApply: mihomoApply}
 }
 

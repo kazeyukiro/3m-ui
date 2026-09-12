@@ -298,7 +298,6 @@ func localSubQRDataURI(subURL string) template.URL {
 	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png))
 }
 
-
 func protocolLabel(uri string) string {
 	uri = strings.TrimSpace(uri)
 	if i := strings.Index(uri, "://"); i > 0 {

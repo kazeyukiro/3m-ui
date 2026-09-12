@@ -21,9 +21,9 @@ type Service struct {
 	// Async reload: ApplyConfig validates + restarts Mihomo and can take longer
 	// than the browser's HTTP timeout. Blocking the create/delete handler caused
 	// false "Cannot reach the panel API" errors even when the DB write succeeded.
-	credMu       sync.Mutex
-	credTimer    *time.Timer
-	credPending  bool
+	credMu      sync.Mutex
+	credTimer   *time.Timer
+	credPending bool
 }
 
 func NewService(db *gorm.DB) *Service {
