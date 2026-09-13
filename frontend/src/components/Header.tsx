@@ -47,8 +47,8 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 8,
-        height: isMobile ? 52 : 64,
-        lineHeight: isMobile ? '52px' : '64px',
+        height: isMobile ? 48 : 64,
+        lineHeight: isMobile ? '48px' : '64px',
       }}
     >
       {isMobile ? (

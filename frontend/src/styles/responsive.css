@@ -6,7 +6,9 @@ html, body, #root {
 }
 
 body {
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Safe-area handled by header/bottom-nav — avoid full-body padding blank strips */
+  padding: 0;
+  margin: 0;
 }
 
 /* Prevent long translated strings from breaking layout */
@@ -707,4 +709,34 @@ html.dark .mobile-entity-card,
   .ant-col {
     /* stats stack tighter */
   }
+}
+
+
+/* Prevent tall empty content card on mobile */
+.app-shell-mobile {
+  min-height: 100dvh;
+  background: var(--ant-color-bg-layout, #f5f5f5);
+}
+.app-shell-mobile > .app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: transparent;
+}
+.app-shell-mobile .app-page-content {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 6px !important;
+  padding: 10px !important;
+}
+.app-shell-mobile .app-header-bar.ant-layout-header {
+  flex: 0 0 auto;
+  height: auto !important;
+  min-height: 48px;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  line-height: 48px !important;
+  display: flex !important;
+  align-items: center !important;
 }
