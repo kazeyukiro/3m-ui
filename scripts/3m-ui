@@ -55,21 +55,22 @@ menu() {
         printf '\n请选择 / Select: '
         IFS= read -r choice || exit 0
         case "$choice" in
-            1) run_script "$INSTALLER" ;;
-            2) run_script "$UPDATER" ;;
-            3) run_script "$MANAGER" status ;;
-            4) run_script "$MANAGER" start ;;
-            5) run_script "$MANAGER" restart ;;
-            6) run_script "$MANAGER" stop ;;
-            7) run_script "$MANAGER" logs ;;
-            8) run_script "$MANAGER" version ;;
-            9) change_port ;;
-            10) show_access ;;
-            11) reset_admin ;;
-            12) enable_bbr ;;
-            13) update_geo ;;
-            14) set_public_url ;;
-            a|A) run_script "$UNINSTALLER" ;;
+            # || true: set -e must not tear down the whole menu on a failed action
+            1) run_script "$INSTALLER" || true ;;
+            2) run_script "$UPDATER" || true ;;
+            3) status || true ;;
+            4) service_action start || true ;;
+            5) service_action restart || true ;;
+            6) service_action stop || true ;;
+            7) logs || true ;;
+            8) version || true ;;
+            9) change_port || true ;;
+            10) show_access || true ;;
+            11) reset_admin || true ;;
+            12) enable_bbr || true ;;
+            13) update_geo || true ;;
+            14) set_public_url || true ;;
+            a|A) run_script "$UNINSTALLER" || true ;;
             0) exit 0 ;;
             *) printf '%s\n' '无效选择，请重新输入。' ;;
         esac
@@ -91,7 +92,15 @@ service_action() {
     case "$(init_system)" in
         systemd) systemctl "$action" 3m-ui ;;
         openrc) rc-service 3m-ui "$action" ;;
-        *) printf '%s\n' '未检测到 systemd 或 OpenRC。' >&2; exit 1 ;;
+        *) printf '%s\n' '未检测到 systemd 或 OpenRC。' >&2; return 1 ;;
+    esac
+}
+
+service_is_active() {
+    case "$(init_system)" in
+        systemd) systemctl is-active --quiet 3m-ui ;;
+        openrc) rc-service 3m-ui status >/dev/null 2>&1 ;;
+        *) return 1 ;;
     esac
 }
 
@@ -121,12 +130,13 @@ logs() {
 version() {
     printed=0
     if [ -x "$APP_BIN" ]; then
-        if out="$("$APP_BIN" --version 2>/dev/null)"; then
-            if [ -n "$out" ]; then
-                printf '%s
-' "$out"
-                printed=1
-            fi
+        out="$("$APP_BIN" --version 2>/dev/null || true)"
+        if [ -z "$out" ]; then
+            out="$("$APP_BIN" version 2>/dev/null || true)"
+        fi
+        if [ -n "$out" ]; then
+            printf '%s\n' "$out"
+            printed=1
         fi
     fi
     if [ -s "$BASE/VERSION" ]; then
@@ -241,14 +251,29 @@ set_public_url() {
     printf '输入新的 public_url (例如 https://example.com:8443 ，回车取消): '
     IFS= read -r url || return 0
     [ -z "$url" ] && return 0
+    # Escape for sed replacement (|, &, \)
+    esc=$(printf '%s' "$url" | sed -e 's/[\\|&]/\\\\&/g')
     if grep -q '^  public_url:' "$CONFIG_FILE" 2>/dev/null; then
-        sed -i "s|^  public_url:.*|  public_url: \"$url\"|" "$CONFIG_FILE"
+        sed -i "s|^  public_url:.*|  public_url: \"$esc\"|" "$CONFIG_FILE"
+    elif grep -q '^server:' "$CONFIG_FILE" 2>/dev/null; then
+        # Portable insert: rewrite via temp file (works on GNU and BusyBox sed)
+        tmp="${CONFIG_FILE}.tmp.$$"
+        awk -v u="$url" '
+            BEGIN { done=0 }
+            { print }
+            /^server:/ && !done { print "  public_url: \"" u "\""; done=1 }
+        ' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
     else
-        # insert under server:
-        sed -i "/^server:/a\\  public_url: \"$url\"" "$CONFIG_FILE"
+        printf '%s\n' "配置中未找到 server: 段，请手动编辑 $CONFIG_FILE" >&2
+        return 1
     fi
     printf '%s\n' "已写入 public_url。重启面板后订阅外链将使用该地址。"
     service_action restart
+    if service_is_active; then
+        printf '%s\n' '✓ 服务已重启。'
+    else
+        printf '%s\n' '✗ 服务重启后未处于运行状态，请检查: 3m-ui logs' >&2
+    fi
 }
 
 
@@ -273,21 +298,29 @@ change_port() {
         printf '%s\n' '端口未变更。'
         return 0
     }
-    sed -i "s/^  port: .*/  port: $new_port/" "$CONFIG_FILE"
+    if grep -q '^  port:' "$CONFIG_FILE" 2>/dev/null; then
+        sed -i "s/^  port: .*/  port: $new_port/" "$CONFIG_FILE"
+    else
+        printf '%s\n' "配置中未找到 '  port:' 字段，请手动编辑 $CONFIG_FILE" >&2
+        return 1
+    fi
     printf '%s\n' "端口已更改: $current → $new_port"
     printf '%s\n' '正在重启 3m-ui...'
     service_action restart
     sleep 1
-    if service_action status >/dev/null 2>&1; then
+    if service_is_active; then
         printf '%s\n' "✓ 3m-ui 已重启。配置端口: $new_port（独立 HTTPS 端口以面板设置为准）"
     else
-        printf '%s\n' '✗ 3m-ui 启动失败，请检查日志。' >&2
+        printf '%s\n' '✗ 3m-ui 启动失败，请检查日志: 3m-ui logs' >&2
     fi
 }
 
 main() {
-    need_root
     cmd=${1:-}
+    case "$cmd" in
+        help|-h|--help) ;;
+        *) need_root ;;
+    esac
     case "$cmd" in
         status) status ;;
         start) service_action start ;;
