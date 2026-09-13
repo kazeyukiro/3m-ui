@@ -266,8 +266,8 @@ const Settings: React.FC = () => {
         className="settings-layout"
         style={{
           background: 'transparent',
-          minHeight: 480,
-          gap: 16,
+          minHeight: isMobile ? 0 : 480,
+          gap: isMobile ? 10 : 16,
         }}
       >
         {!isMobile && (
