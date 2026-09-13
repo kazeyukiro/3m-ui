@@ -42,7 +42,11 @@ export async function disableTOTP(password: string, code?: string) {
   return data;
 }
 export async function fetchMe() {
-  const { data } = await client.get<{ totp_enabled?: boolean; username?: string }>('/auth/me');
+  const { data } = await client.get<{
+    totp_enabled?: boolean;
+    username?: string;
+    must_change_password?: boolean;
+  }>('/auth/me');
   return data;
 }
 
@@ -68,7 +72,3 @@ export async function changePassword(current: string, next: string) {
   return data;
 }
 
-export async function fetchMe() {
-  const { data } = await client.get('/auth/me');
-  return data;
-}
