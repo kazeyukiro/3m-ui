@@ -99,6 +99,27 @@ const Settings: React.FC = () => {
 
 
   useEffect(() => {
+    fetchMe()
+      .then((me) => {
+        if (me && typeof me.totp_enabled === 'boolean') {
+          setTotpEnabled(!!me.totp_enabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (section !== 'security') return;
+    fetchMe()
+      .then((me) => {
+        if (me && typeof me.totp_enabled === 'boolean') {
+          setTotpEnabled(!!me.totp_enabled);
+        }
+      })
+      .catch(() => {});
+  }, [section]);
+
+  useEffect(() => {
     client
       .get('/system/panel-server')
       .then((r) => {
