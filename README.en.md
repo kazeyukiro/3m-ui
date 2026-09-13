@@ -25,10 +25,10 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | Area | Capabilities |
 |------|------|
 | **Nodes** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **Users** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **Users** | Bind nodes, traffic/expiry, IP/HWID limits, start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
 | **Subscriptions** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **Ops** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
+| **Ops** | Core start/stop/update, logs, dashboard, online connections, Geo, panel SSL/ACME, WARP one-click, backup/restore |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions |
 
