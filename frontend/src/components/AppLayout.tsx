@@ -1,33 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Drawer, theme } from 'antd';
-import Sidebar, { SidebarMenu } from './Sidebar';
+import { Layout, theme } from 'antd';
+import Sidebar from './Sidebar';
 import HeaderBar from './Header';
+import MobileBottomNav from './MobileBottomNav';
 import useIsMobile from '../hooks/useIsMobile';
 
 const { Content } = Layout;
 
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
+  // Desktop only: restore collapsed preference is local; no drawer on mobile anymore
   useEffect(() => {
-    if (!isMobile) setDrawerOpen(false);
+    if (isMobile) setCollapsed(false);
   }, [isMobile]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {!isMobile && <Sidebar collapsed={collapsed} />}
 
-      <Layout style={{ minWidth: 0 }}>
-        <HeaderBar
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          onOpenMobileNav={() => setDrawerOpen(true)}
-        />
+      <Layout style={{ minWidth: 0, paddingBottom: isMobile ? 'calc(56px + env(safe-area-inset-bottom))' : 0 }}>
+        <HeaderBar collapsed={collapsed} setCollapsed={setCollapsed} />
         <Content
           className="app-page-content"
           style={{
@@ -46,18 +43,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </Content>
       </Layout>
 
-      <Drawer
-        className="app-mobile-drawer"
-        placement="left"
-        open={isMobile && drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        width={Math.min(300, typeof window !== 'undefined' ? window.innerWidth - 24 : 280)}
-        styles={{ body: { padding: 0 } }}
-        title={null}
-        closable={false}
-      >
-        <SidebarMenu onNavigate={() => setDrawerOpen(false)} />
-      </Drawer>
+      {isMobile && <MobileBottomNav />}
     </Layout>
   );
 };

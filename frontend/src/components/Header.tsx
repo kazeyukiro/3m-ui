@@ -1,9 +1,8 @@
 import React from 'react';
-import { Layout, Button, Space, Tag, Dropdown } from 'antd';
+import { Layout, Button, Space, Tag, Dropdown, Typography } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  MenuOutlined,
   UserOutlined,
   GlobalOutlined,
   BgColorsOutlined,
@@ -14,14 +13,14 @@ import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
 
 const { Header } = Layout;
+const { Text } = Typography;
 
 type Props = {
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
-  onOpenMobileNav?: () => void;
 };
 
-const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }) => {
+const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
   const { t, locale, setLocale } = useI18n();
   const { mode, setMode } = useThemeStore();
   const username = useAuthStore((s) => s.username);
@@ -42,7 +41,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
     <Header
       className="app-header-bar"
       style={{
-        padding: isMobile ? '0 8px' : '0 24px',
+        padding: isMobile ? '0 12px' : '0 24px',
         background: 'transparent',
         display: 'flex',
         alignItems: 'center',
@@ -53,7 +52,12 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
       }}
     >
       {isMobile ? (
-        <Button type="text" size="large" icon={<MenuOutlined />} onClick={onOpenMobileNav} aria-label="Open menu" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <img src="/logo.png" alt="" width={28} height={28} style={{ objectFit: 'contain', flexShrink: 0 }} />
+          <Text strong style={{ fontSize: 16 }}>
+            3M-UI
+          </Text>
+        </div>
       ) : (
         <Button
           type="text"
@@ -62,7 +66,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
         />
       )}
 
-      <Space size={isMobile ? 4 : 'middle'} wrap>
+      <Space size={isMobile ? 4 : 'middle'} wrap={false}>
         <Dropdown
           menu={{
             items: themeItems,

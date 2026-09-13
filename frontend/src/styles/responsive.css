@@ -382,3 +382,128 @@ html.dark .mobile-entity-card,
 [data-theme='dark'] .mobile-entity-card {
   border-color: rgba(255, 255, 255, 0.12);
 }
+
+
+/* —— Mobile bottom navigation —— */
+.app-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 110;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 2px;
+  min-height: 56px;
+  padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--ant-color-bg-container, #fff) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.app-bottom-nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 96px;
+  margin: 0;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.55));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 10px;
+}
+
+.app-bottom-nav-item:active {
+  background: var(--ant-color-fill-tertiary, rgba(0, 0, 0, 0.04));
+}
+
+.app-bottom-nav-item.is-active {
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.app-bottom-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-bottom-nav-label {
+  font-size: 10px;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-weight: 500;
+}
+
+.app-bottom-more-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-bottom-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 10px 6px;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container, #fff);
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-bottom-more-item.is-active {
+  border-color: var(--ant-color-primary, #1677ff);
+  color: var(--ant-color-primary, #1677ff);
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 8%, transparent);
+}
+
+.app-bottom-more-item.is-danger {
+  color: var(--ant-color-error, #ff4d4f);
+}
+
+.app-bottom-more-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.app-bottom-more-label {
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (min-width: 768px) {
+  .app-bottom-nav {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* content already padded via layout; ensure modals above bar */
+  .ant-modal-wrap {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}
