@@ -2,56 +2,52 @@ import React from 'react';
 import { Typography, Space } from 'antd';
 import useIsMobile from '../hooks/useIsMobile';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
-/** Consistent page title + optional subtitle/actions for mobile & desktop. */
-const PageHeader: React.FC<{
+export interface PageHeaderProps {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   extra?: React.ReactNode;
-}> = ({ title, subtitle, extra }) => {
+  style?: React.CSSProperties;
+}
+
+/**
+ * Shared page title block. Stacks actions under the title on narrow screens
+ * so long translations (DE/RU/AR/…) remain readable and tappable.
+ */
+const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, extra, style }) => {
   const isMobile = useIsMobile();
-  const sub =
-    subtitle === undefined || subtitle === null || subtitle === false || subtitle === ''
-      ? null
-      : subtitle;
 
   return (
-    <div
-      className="page-header"
-      style={{
-        display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        alignItems: isMobile ? 'stretch' : 'flex-start',
-        justifyContent: 'space-between',
-        gap: isMobile ? 8 : 16,
-        marginBottom: isMobile ? 12 : 16,
-      }}
-    >
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>
-          {title}
-        </Title>
-        {sub != null ? (
-          <p
-            className="page-header-subtitle"
-            style={{
-              margin: '6px 0 0',
-              fontSize: isMobile ? 13 : 14,
-              lineHeight: 1.45,
-              opacity: 0.7,
-              color: 'var(--ant-color-text-secondary, inherit)',
-            }}
-          >
-            {sub}
-          </p>
+    <div className="page-header" style={{ marginBottom: isMobile ? 12 : 20, ...style }}>
+      <div
+        className="page-header-title-row"
+        style={{
+          display: 'flex',
+          alignItems: isMobile ? 'stretch' : 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+          <Title level={isMobile ? 4 : 3} style={{ margin: 0, lineHeight: 1.3 }}>
+            {title}
+          </Title>
+          {subtitle ? (
+            <Text type="secondary" className="page-header-subtitle" style={{ display: 'block', marginTop: 4 }}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </div>
+        {extra ? (
+          <div className="page-header-actions" style={{ flex: isMobile ? '1 1 100%' : '0 0 auto' }}>
+            <Space wrap size="small" style={{ width: isMobile ? '100%' : undefined }}>
+              {extra}
+            </Space>
+          </div>
         ) : null}
       </div>
-      {extra ? (
-        <Space wrap style={{ width: isMobile ? '100%' : undefined }}>
-          {extra}
-        </Space>
-      ) : null}
     </div>
   );
 };

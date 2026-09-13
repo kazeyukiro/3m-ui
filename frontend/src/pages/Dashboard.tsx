@@ -46,7 +46,7 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
-      <Row gutter={[16, 16]}>
+      <Row gutter={isMobile ? [12, 12] : [16, 16]}>
         <Col xs={24} md={12} lg={8}>
           <Card title={t('dashboard.users') || 'Users'}>
             <Statistic title={t('dashboard.onlineUsers') || 'Online'} value={users.online ?? data?.onlineUsers ?? 0} />
@@ -73,7 +73,7 @@ const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} md={12} lg={8}>
           <Card title={t('dashboard.listeners')}>
-            <Row gutter={16}>
+            <Row gutter={isMobile ? [12, 12] : 16}>
               <Col span={8}><Statistic title={t('dashboard.total')} value={data?.listeners?.total || 0} /></Col>
               <Col span={8}><Statistic title={t('dashboard.enabled')} value={data?.listeners?.enabled || 0} valueStyle={{ color: '#3f8600' }} /></Col>
               <Col span={8}><Statistic title={t('dashboard.disabled')} value={data?.listeners?.disabled || 0} valueStyle={{ color: '#cf1322' }} /></Col>

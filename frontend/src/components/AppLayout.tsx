@@ -14,7 +14,6 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
-  // Close drawer when switching to desktop
   useEffect(() => {
     if (!isMobile) setDrawerOpen(false);
   }, [isMobile]);
@@ -39,6 +38,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             overflow: 'auto',
             minWidth: 0,
             maxWidth: isMobile ? undefined : 1400,
+            width: isMobile ? undefined : 'calc(100% - 48px)',
+            alignSelf: isMobile ? undefined : 'center',
           }}
         >
           {children}
@@ -50,7 +51,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         placement="left"
         open={isMobile && drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={280}
+        width={Math.min(300, typeof window !== 'undefined' ? window.innerWidth - 24 : 280)}
         styles={{ body: { padding: 0 } }}
         title={null}
         closable={false}

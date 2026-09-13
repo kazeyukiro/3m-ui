@@ -85,7 +85,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed, onOpenMobileNav }
             {!isMobile && (LOCALE_OPTIONS.find((o) => o.key === locale)?.label || locale)}
           </Button>
         </Dropdown>
-        <Tag icon={<UserOutlined />} style={{ marginInlineEnd: 0 }}>
+        <Tag icon={<UserOutlined />} title={displayName} style={{ marginInlineEnd: 0 }}>
           {isMobile ? shortName : displayName}
         </Tag>
       </Space>

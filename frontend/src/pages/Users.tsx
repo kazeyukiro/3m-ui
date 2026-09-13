@@ -572,10 +572,30 @@ const Users: React.FC = () => {
                           <Tag color={record.enabled ? 'processing' : 'default'}>
                             {record.enabled ? t('common.enabled') : t('common.disabled')}
                           </Tag>
-                          <span className="mobile-entity-sub">
-                            {formatBytes(used)}
-                            {limit > 0 ? ` / ${formatBytes(limit)}` : ` / ${t('users.unlimited')}`}
-                          </span>
+                          {record.group ? <Tag>{record.group}</Tag> : null}
+                        </div>
+                        <div className="mobile-entity-rows">
+                          <div className="mobile-entity-row">
+                            <span className="label">{t('users.traffic')}</span>
+                            <span className="value">
+                              {formatBytes(used)}
+                              {limit > 0 ? ` / ${formatBytes(limit)}` : ` / ${t('users.unlimited')}`}
+                            </span>
+                          </div>
+                          <div className="mobile-entity-row">
+                            <span className="label">{t('users.expire')}</span>
+                            <span className="value">
+                              {!record.expire_time || String(record.expire_time).startsWith('0001')
+                                ? t('users.neverExpire')
+                                : dayjs(record.expire_time).format('YYYY-MM-DD')}
+                            </span>
+                          </div>
+                          {(record.tags || record.remark) && (
+                            <div className="mobile-entity-row">
+                              <span className="label">{t('users.remark') || 'Remark'}</span>
+                              <span className="value">{[record.remark, record.tags].filter(Boolean).join(' · ')}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Dropdown

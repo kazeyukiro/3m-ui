@@ -1,4 +1,4 @@
-/* 3m-ui global layout polish — mobile + desktop */
+/* 3m-ui global layout polish — mobile + desktop + long i18n labels */
 
 html, body, #root {
   max-width: 100vw;
@@ -9,30 +9,80 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+/* Prevent long translated strings from breaking layout */
+.ant-btn > span,
+.ant-menu-title-content,
+.ant-select-selection-item,
+.ant-form-item-label > label,
+.ant-table-cell,
+.ant-tag {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ant-form-item-label > label {
+  white-space: normal !important;
+  height: auto !important;
+  line-height: 1.4 !important;
+}
+
+.ant-menu-item,
+.ant-menu-submenu-title {
+  white-space: normal !important;
+  height: auto !important;
+  line-height: 1.35 !important;
+  padding-block: 10px !important;
+}
+
+.ant-menu-item .ant-menu-title-content,
+.ant-menu-submenu-title .ant-menu-title-content {
+  white-space: normal;
+}
+
 /* Desktop readability */
 @media (min-width: 768px) {
   .app-page-content {
     max-width: 1400px;
+    width: 100%;
+    margin-inline: auto !important;
+  }
+
+  .page-header {
+    margin-bottom: 20px;
   }
   .page-header h3.ant-typography {
     letter-spacing: -0.01em;
   }
+  .page-header .page-header-subtitle {
+    max-width: 720px;
+    line-height: 1.5;
+  }
+
   .ant-card {
     border-radius: 10px;
   }
   .ant-table-wrapper {
     border-radius: 8px;
   }
-  /* Comfortable row density */
   .ant-table-thead > tr > th {
     font-weight: 600;
   }
   .ant-card + .ant-card {
     margin-top: 16px;
   }
+
+  /* Desktop action rows stay usable with long labels */
+  .page-toolbar,
+  .ant-card-extra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
 }
 
 @media (max-width: 767px) {
+  /* iOS zoom prevention on focus */
   input.ant-input,
   .ant-input,
   .ant-input-number-input,
@@ -47,8 +97,9 @@ body {
     top: 0;
     z-index: 100;
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     background: color-mix(in srgb, var(--ant-color-bg-container, #fff) 88%, transparent) !important;
-    border-bottom: 1px solid var(--ant-color-border-secondary, rgba(0,0,0,.06));
+    border-bottom: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06));
     height: 52px !important;
     line-height: 52px !important;
     padding-inline: 8px !important;
@@ -57,11 +108,44 @@ body {
     min-width: 40px;
     min-height: 40px;
   }
+  .app-header-bar .ant-space {
+    flex-wrap: nowrap;
+    gap: 4px !important;
+  }
+  .app-header-bar .ant-tag {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .app-page-content {
     margin: 8px !important;
     padding: 12px !important;
     border-radius: 12px !important;
+  }
+
+  .page-header {
+    margin-bottom: 12px !important;
+  }
+  .page-header .page-header-title-row {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px;
+  }
+  .page-header .page-header-actions {
+    width: 100%;
+  }
+  .page-header .page-header-actions .ant-space {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .page-header .page-header-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+  .page-header .page-header-subtitle {
+    font-size: 13px;
+    line-height: 1.45;
   }
 
   .ant-table-wrapper {
@@ -98,6 +182,7 @@ body {
   }
   .ant-modal-footer .ant-btn {
     margin: 0 !important;
+    min-height: 40px;
   }
 
   .ant-card {
@@ -107,6 +192,11 @@ body {
     flex-wrap: wrap;
     min-height: auto;
     padding: 10px 12px !important;
+  }
+  .ant-card-head-title {
+    white-space: normal !important;
+    padding: 4px 0 !important;
+    line-height: 1.35;
   }
   .ant-card-head-wrapper {
     flex-wrap: wrap;
@@ -118,35 +208,41 @@ body {
   }
   .ant-card-extra .ant-space {
     width: 100%;
-    justify-content: flex-start;
+    display: flex;
+    flex-wrap: wrap;
   }
   .ant-card-body {
     padding: 12px !important;
   }
 
-  .ant-space {
-    flex-wrap: wrap !important;
-  }
-
-  .ant-card-extra .ant-input-search,
-  .ant-card-extra .ant-input-affix-wrapper {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
   .ant-tabs-nav {
-    margin-bottom: 8px !important;
+    margin-bottom: 12px !important;
   }
   .ant-tabs-tab {
     padding: 8px 10px !important;
+  }
+  .ant-tabs-tab-btn {
+    white-space: normal;
+    text-align: center;
   }
 
   .ant-form-item {
     margin-bottom: 12px !important;
   }
+  .ant-form-item-control-input-content > .ant-input,
+  .ant-form-item-control-input-content > .ant-input-password,
+  .ant-form-item-control-input-content > .ant-input-number,
+  .ant-form-item-control-input-content > .ant-select,
+  .ant-form-item-control-input-content > .ant-picker {
+    width: 100% !important;
+  }
 
   .ant-statistic-content {
     font-size: 20px !important;
+  }
+  .ant-statistic-title {
+    white-space: normal;
+    line-height: 1.3;
   }
 
   .settings-section-select .ant-select-selector {
@@ -168,6 +264,7 @@ body {
 
   .ant-dropdown-menu-item {
     padding: 10px 14px !important;
+    white-space: normal;
   }
 
   .login-page {
@@ -180,11 +277,14 @@ body {
     max-width: 100% !important;
   }
 
-  .ant-btn-primary {
+  .ant-btn {
     min-height: 36px;
   }
+  .ant-btn-primary {
+    min-height: 40px;
+  }
 
-  /* Entity lists */
+  /* Entity lists (users / listeners mobile cards) */
   .mobile-entity-list {
     display: flex;
     flex-direction: column;
@@ -194,7 +294,7 @@ body {
     border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
     border-radius: 12px;
     background: var(--ant-color-bg-container, #fff);
-    padding: 10px 12px;
+    padding: 12px;
   }
   .mobile-entity-card-main {
     display: flex;
@@ -215,7 +315,7 @@ body {
   }
   .mobile-entity-sub {
     font-weight: 400;
-    opacity: 0.65;
+    opacity: 0.7;
     font-size: 13px;
   }
   .mobile-entity-meta {
@@ -223,13 +323,47 @@ body {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    margin-top: 6px;
+    margin-top: 8px;
     font-size: 13px;
+  }
+  .mobile-entity-rows {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    opacity: 0.85;
+  }
+  .mobile-entity-row {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    min-width: 0;
+  }
+  .mobile-entity-row .label {
+    opacity: 0.65;
+    flex-shrink: 0;
+  }
+  .mobile-entity-row .value {
+    text-align: end;
+    word-break: break-word;
+    min-width: 0;
   }
   .mobile-empty {
     text-align: center;
     padding: 32px 12px;
     opacity: 0.55;
+  }
+
+  /* Drawer nav: comfortable touch targets + wrapping labels */
+  .app-mobile-drawer .ant-menu-item {
+    margin-block: 2px !important;
+    width: calc(100% - 8px) !important;
+  }
+
+  /* Stats grids */
+  .ant-row {
+    row-gap: 12px;
   }
 }
 
@@ -238,4 +372,13 @@ body {
     margin: 6px !important;
     padding: 10px !important;
   }
+  .ant-card-body {
+    padding: 10px !important;
+  }
+}
+
+/* Dark mode soft adjustments */
+html.dark .mobile-entity-card,
+[data-theme='dark'] .mobile-entity-card {
+  border-color: rgba(255, 255, 255, 0.12);
 }
