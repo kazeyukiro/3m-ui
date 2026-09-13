@@ -57,6 +57,7 @@ const CopyField: React.FC<{ label: string; value: string; qr?: boolean }> = ({ l
 };
 
 const SharePage: React.FC = () => {
+  const isMobile = useIsMobile();
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<ProxyUser[]>([]);
