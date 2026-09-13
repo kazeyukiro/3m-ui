@@ -1,13 +1,20 @@
-import React, { useState } from 'react';
-import { Card, Form, Input, Button, Typography, message, Space, Dropdown } from 'antd';
-import { UserOutlined, LockOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
+import React, { useEffect, useRef, useState } from 'react';
+import { Card, Form, Input, Button, Typography, message, Space, Dropdown, Steps, Alert } from 'antd';
+import {
+  UserOutlined,
+  LockOutlined,
+  GlobalOutlined,
+  BgColorsOutlined,
+  SafetyOutlined,
+  ArrowLeftOutlined,
+} from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { login } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import { useThemeStore, type ThemeMode } from '../stores/themeStore';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -15,9 +22,19 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [totpNeeded, setTotpNeeded] = useState(false);
   const [pendingCreds, setPendingCreds] = useState<{ username: string; password: string } | null>(null);
+  const [form] = Form.useForm();
+  const totpInputRef = useRef<any>(null);
   const { t, locale, setLocale } = useI18n();
   const { mode, setMode, isDark } = useThemeStore();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
+
+  useEffect(() => {
+    if (totpNeeded) {
+      // Focus OTP field after the second step renders
+      const id = window.setTimeout(() => totpInputRef.current?.focus?.(), 80);
+      return () => window.clearTimeout(id);
+    }
+  }, [totpNeeded]);
 
   const finishLogin = (result: { must_change_password?: boolean }) => {
     message.success(t('login.welcomeBack'));
@@ -31,13 +48,19 @@ const Login: React.FC = () => {
   const onFinish = async (values: { username: string; password: string; totp_code?: string }) => {
     setLoading(true);
     try {
-      const payload = pendingCreds && totpNeeded
-        ? { ...pendingCreds, totp_code: values.totp_code }
-        : { username: values.username, password: values.password, totp_code: values.totp_code };
+      const payload =
+        pendingCreds && totpNeeded
+          ? { ...pendingCreds, totp_code: (values.totp_code || '').trim() }
+          : {
+              username: values.username,
+              password: values.password,
+              totp_code: values.totp_code ? values.totp_code.trim() : undefined,
+            };
       const result = await login(payload);
       if (result.totp_required && !result.token) {
         setPendingCreds({ username: payload.username, password: payload.password });
         setTotpNeeded(true);
+        form.setFieldsValue({ totp_code: undefined });
         message.info(t('login.totpRequired', 'Enter authenticator code'));
         return;
       }
@@ -51,25 +74,28 @@ const Login: React.FC = () => {
     }
   };
 
+  const backToPassword = () => {
+    setTotpNeeded(false);
+    setPendingCreds(null);
+    form.setFieldsValue({ totp_code: undefined });
+  };
+
   const langItems = LOCALE_OPTIONS.map((o) => ({ key: o.key, label: o.label }));
   const themeItems = [
-    { key: 'light', label: t('settings.light') || 'Light' },
-    { key: 'dark', label: t('settings.dark') || 'Dark' },
-    { key: 'system', label: t('settings.system') || 'System' },
+    { key: 'light' as ThemeMode, label: t('settings.light') || 'Light' },
+    { key: 'dark' as ThemeMode, label: t('settings.dark') || 'Dark' },
   ];
 
   return (
     <div
-      className="login-page"
       style={{
         minHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        background: isDark ? '#141414' : '#f0f2f5',
-        padding: '16px 0',
-        position: 'relative',
+        background: isDark ? '#141414' : '#f5f5f5',
+        padding: '24px 0',
       }}
     >
       <div style={{ position: 'absolute', top: 16, right: 16 }}>
@@ -99,7 +125,7 @@ const Login: React.FC = () => {
         </Space>
       </div>
       <Card style={{ width: '100%', maxWidth: 420, margin: '0 16px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <img
             src="/logo.png"
             alt="3m-ui"
@@ -110,27 +136,91 @@ const Login: React.FC = () => {
           <Title level={3} style={{ marginBottom: 4 }}>
             {t('login.title')}
           </Title>
-          <Typography.Text type="secondary">{t('login.subtitle')}</Typography.Text>
+          <Text type="secondary">{t('login.subtitle')}</Text>
         </div>
-        <Form onFinish={onFinish} initialValues={{ username: 'admin' }}>
-          <Form.Item name="username" rules={[{ required: !totpNeeded, message: t('login.username') }]} hidden={totpNeeded}>
-            <Input prefix={<UserOutlined />} placeholder={t('login.username')} autoComplete="username" />
+
+        {totpNeeded && (
+          <div style={{ marginBottom: 16 }}>
+            <Steps
+              size="small"
+              current={1}
+              items={[
+                { title: t('login.password') },
+                { title: t('login.totpStep', 'Authenticator') },
+              ]}
+              style={{ marginBottom: 12 }}
+            />
+            <Alert
+              type="info"
+              showIcon
+              icon={<SafetyOutlined />}
+              message={t('login.totpRequired', 'Enter authenticator code')}
+              description={t(
+                'login.totpHint',
+                'Open your authenticator app and enter the 6-digit code for this panel.',
+              )}
+              style={{ marginBottom: 8 }}
+            />
+          </div>
+        )}
+
+        <Form form={form} onFinish={onFinish} initialValues={{ username: 'admin' }} layout="vertical" requiredMark={false}>
+          <Form.Item
+            name="username"
+            label={totpNeeded ? undefined : t('login.username')}
+            rules={[{ required: !totpNeeded, message: t('login.username') }]}
+            hidden={totpNeeded}
+          >
+            <Input prefix={<UserOutlined />} placeholder={t('login.username')} autoComplete="username" size="large" />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: !totpNeeded, message: t('login.password') }]} hidden={totpNeeded}>
+          <Form.Item
+            name="password"
+            label={totpNeeded ? undefined : t('login.password')}
+            rules={[{ required: !totpNeeded, message: t('login.password') }]}
+            hidden={totpNeeded}
+          >
             <Input.Password
               prefix={<LockOutlined />}
               placeholder={t('login.password')}
               autoComplete="current-password"
+              size="large"
             />
           </Form.Item>
           {totpNeeded && (
-            <Form.Item name="totp_code" rules={[{ required: true, message: t('login.totpRequired', 'Authenticator code') }]}>
-              <Input prefix={<LockOutlined />} placeholder="TOTP" inputMode="numeric" autoComplete="one-time-code" maxLength={8} />
+            <Form.Item
+              name="totp_code"
+              label={t('login.totpLabel', 'Verification code')}
+              rules={[
+                { required: true, message: t('login.totpRequired', 'Authenticator code') },
+                { pattern: /^\d{6,8}$/, message: t('login.totpFormat', 'Enter 6–8 digits') },
+              ]}
+            >
+              <Input
+                ref={totpInputRef}
+                prefix={<SafetyOutlined />}
+                placeholder="123456"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={8}
+                size="large"
+                style={{ letterSpacing: 6, fontSize: 20, textAlign: 'center' }}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 8);
+                  form.setFieldsValue({ totp_code: v });
+                }}
+              />
             </Form.Item>
           )}
-          <Button type="primary" htmlType="submit" block loading={loading}>
-            {totpNeeded ? t('login.totpVerify', 'Verify') : t('login.button')}
-          </Button>
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Button type="primary" htmlType="submit" block loading={loading} size="large">
+              {totpNeeded ? t('login.totpVerify', 'Verify') : t('login.button')}
+            </Button>
+            {totpNeeded && (
+              <Button type="link" block icon={<ArrowLeftOutlined />} onClick={backToPassword} disabled={loading}>
+                {t('login.totpBack', 'Back to password')}
+              </Button>
+            )}
+          </Space>
         </Form>
       </Card>
     </div>

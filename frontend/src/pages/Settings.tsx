@@ -49,6 +49,7 @@ import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
 import { setupTOTP, enableTOTP, disableTOTP, fetchMe } from '../api/auth';
+import QRCode from '../components/QRCode';
 
 const { Text, Title } = Typography;
 const { Sider, Content } = Layout;
@@ -81,6 +82,8 @@ const Settings: React.FC = () => {
   const [totpUrl, setTotpUrl] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [totpPassword, setTotpPassword] = useState('');
+  const [totpLoading, setTotpLoading] = useState(false);
+  const [totpSetupOpen, setTotpSetupOpen] = useState(false);
   const { mode, setMode } = useThemeStore();
   const navigate = useNavigate();
   const [tgForm] = Form.useForm();
@@ -588,56 +591,173 @@ const Settings: React.FC = () => {
                     {t('settings.changePassword')}
                   </Button>
                   <div>
-                    <Typography.Text strong>{t('settings.totp', 'Two-factor (TOTP)')}</Typography.Text>
-                    <div style={{ marginTop: 8 }}>
-                      {totpEnabled ? (
-                        <Space wrap>
+                    <div>
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      <Space wrap align="center">
+                        <SafetyOutlined />
+                        <Typography.Text strong>{t('settings.totp', 'Two-factor (TOTP)')}</Typography.Text>
+                        {totpEnabled ? (
                           <Tag color="success">{t('settings.totpOn', 'Enabled')}</Tag>
-                          <Input.Password placeholder={t('login.password')} value={totpPassword} onChange={(e) => setTotpPassword(e.target.value)} style={{ width: 160 }} />
-                          <Input placeholder="TOTP" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} style={{ width: 100 }} />
-                          <Button danger onClick={async () => {
-                            try {
-                              await disableTOTP(totpPassword, totpCode);
-                              setTotpEnabled(false);
-                              message.success(t('common.success'));
-                            } catch (e: any) {
-                              message.error(e.message || t('common.error'));
-                            }
-                          }}>{t('settings.totpDisable', 'Disable 2FA')}</Button>
+                        ) : (
+                          <Tag>{t('common.disabled', 'Disabled')}</Tag>
+                        )}
+                      </Space>
+                      <Typography.Text type="secondary" style={{ display: 'block' }}>
+                        {t(
+                          'settings.totpDesc',
+                          'Protect admin login with an authenticator app (Google Authenticator, Microsoft Authenticator, etc.).',
+                        )}
+                      </Typography.Text>
+                      {totpEnabled ? (
+                        <Space direction="vertical" size="middle" style={{ width: '100%', maxWidth: 420 }}>
+                          <Alert
+                            type="warning"
+                            showIcon
+                            message={t('settings.totpDisableHint', 'Enter password and a current code to disable 2FA.')}
+                          />
+                          <Input.Password
+                            placeholder={t('login.password')}
+                            value={totpPassword}
+                            onChange={(e) => setTotpPassword(e.target.value)}
+                            size="large"
+                            autoComplete="current-password"
+                          />
+                          <Input
+                            placeholder={t('login.totpLabel', 'Verification code')}
+                            value={totpCode}
+                            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                            inputMode="numeric"
+                            maxLength={8}
+                            size="large"
+                            style={{ letterSpacing: 4 }}
+                            autoComplete="one-time-code"
+                          />
+                          <Button
+                            danger
+                            block
+                            loading={totpLoading}
+                            onClick={async () => {
+                              if (!totpPassword || !totpCode) {
+                                message.warning(t('settings.totpNeedBoth', 'Password and code are required'));
+                                return;
+                              }
+                              setTotpLoading(true);
+                              try {
+                                await disableTOTP(totpPassword, totpCode);
+                                setTotpEnabled(false);
+                                setTotpPassword('');
+                                setTotpCode('');
+                                message.success(t('common.success'));
+                              } catch (e: any) {
+                                message.error(e.message || t('common.error'));
+                              } finally {
+                                setTotpLoading(false);
+                              }
+                            }}
+                          >
+                            {t('settings.totpDisable', 'Disable 2FA')}
+                          </Button>
                         </Space>
                       ) : (
-                        <Space direction="vertical" style={{ width: '100%' }}>
-                          <Button onClick={async () => {
+                        <Button
+                          type="primary"
+                          icon={<SafetyOutlined />}
+                          onClick={async () => {
+                            setTotpLoading(true);
                             try {
                               const r = await setupTOTP();
                               setTotpSecret(r.secret);
                               setTotpUrl(r.otpauth_url);
-                              message.success(t('settings.totpSetup', 'Scan with authenticator'));
+                              setTotpCode('');
+                              setTotpSetupOpen(true);
                             } catch (e: any) {
                               message.error(e.message || t('common.error'));
+                            } finally {
+                              setTotpLoading(false);
                             }
-                          }}>{t('settings.totpSetupBtn', 'Setup 2FA')}</Button>
-                          {totpSecret && (
-                            <>
-                              <Typography.Paragraph copyable style={{ marginBottom: 0 }}>{totpSecret}</Typography.Paragraph>
-                              <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>{totpUrl}</Typography.Text>
-                              <Space wrap>
-                                <Input placeholder="TOTP" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} style={{ width: 120 }} />
-                                <Button type="primary" onClick={async () => {
-                                  try {
-                                    await enableTOTP(totpCode);
-                                    setTotpEnabled(true);
-                                    message.success(t('common.success'));
-                                  } catch (e: any) {
-                                    message.error(e.message || t('common.error'));
-                                  }
-                                }}>{t('settings.totpEnable', 'Enable')}</Button>
-                              </Space>
-                            </>
-                          )}
-                        </Space>
+                          }}
+                          loading={totpLoading}
+                        >
+                          {t('settings.totpSetupBtn', 'Setup 2FA')}
+                        </Button>
                       )}
-                    </div>
+                    </Space>
+                    <Modal
+                      title={t('settings.totpSetupBtn', 'Setup 2FA')}
+                      open={totpSetupOpen}
+                      onCancel={() => {
+                        setTotpSetupOpen(false);
+                        setTotpSecret('');
+                        setTotpUrl('');
+                        setTotpCode('');
+                      }}
+                      footer={null}
+                      destroyOnClose
+                      width={440}
+                    >
+                      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                        <Alert
+                          type="info"
+                          showIcon
+                          message={t('settings.totpSetup', 'Scan with authenticator')}
+                          description={t(
+                            'settings.totpSetupSteps',
+                            '1) Scan the QR code  2) Or enter the secret manually  3) Confirm with a 6-digit code',
+                          )}
+                        />
+                        {totpUrl ? (
+                          <div style={{ display: 'flex', justifyContent: 'center', padding: 8 }}>
+                            <QRCode value={totpUrl} size={200} />
+                          </div>
+                        ) : null}
+                        {totpSecret ? (
+                          <div>
+                            <Typography.Text type="secondary">{t('settings.totpSecret', 'Secret key')}</Typography.Text>
+                            <Typography.Paragraph copyable code style={{ marginBottom: 0, wordBreak: 'break-all' }}>
+                              {totpSecret}
+                            </Typography.Paragraph>
+                          </div>
+                        ) : null}
+                        <Input
+                          placeholder={t('login.totpLabel', 'Verification code')}
+                          value={totpCode}
+                          onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                          inputMode="numeric"
+                          maxLength={8}
+                          size="large"
+                          style={{ letterSpacing: 6, textAlign: 'center', fontSize: 18 }}
+                          autoComplete="one-time-code"
+                        />
+                        <Button
+                          type="primary"
+                          block
+                          size="large"
+                          loading={totpLoading}
+                          onClick={async () => {
+                            if (!/^\d{6,8}$/.test(totpCode)) {
+                              message.warning(t('login.totpFormat', 'Enter 6–8 digits'));
+                              return;
+                            }
+                            setTotpLoading(true);
+                            try {
+                              await enableTOTP(totpCode);
+                              setTotpEnabled(true);
+                              setTotpSecret('');
+                              setTotpUrl('');
+                              setTotpCode('');
+                              setTotpSetupOpen(false);
+                              message.success(t('settings.totpEnabledOk', 'Two-factor authentication enabled'));
+                            } catch (e: any) {
+                              message.error(e.message || t('common.error'));
+                            } finally {
+                              setTotpLoading(false);
+                            }
+                          }}
+                        >
+                          {t('settings.totpEnable', 'Enable')}
+                        </Button>
+                      </Space>
+                    </Modal>
                   </div>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                     {t('settings.webPathHint', 'Panel path prefix (web_path) is set in /etc/3m-ui/config.yaml then restart. Example: web_path: "/secret" → open http://IP:8080/secret/')}
