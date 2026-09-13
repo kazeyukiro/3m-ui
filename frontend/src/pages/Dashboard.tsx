@@ -44,7 +44,7 @@ const Dashboard: React.FC = () => {
   const users = data?.users || {};
 
   return (
-    <div>
+    <div className="page-root" style={{ display: 'block' }}>
       <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
       <Row gutter={isMobile ? [8, 8] : [16, 16]}>
         <Col xs={24} md={12} lg={8}>

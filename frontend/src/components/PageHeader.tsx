@@ -12,30 +12,43 @@ export interface PageHeaderProps {
 }
 
 /**
- * Shared page title block. Stacks actions under the title on narrow screens
- * so long translations (DE/RU/AR/…) remain readable and tappable.
+ * Shared page title. On mobile keeps a tight block under the app bar
+ * (no flex-grow) so the first cards sit directly below.
  */
 const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, extra, style }) => {
   const isMobile = useIsMobile();
 
   return (
-    <div className="page-header" style={{ marginBottom: isMobile ? 12 : 20, ...style }}>
+    <div
+      className="page-header"
+      style={{
+        marginBottom: isMobile ? 10 : 20,
+        flex: 'none',
+        flexGrow: 0,
+        flexShrink: 0,
+        ...style,
+      }}
+    >
       <div
         className="page-header-title-row"
         style={{
           display: 'flex',
           alignItems: isMobile ? 'stretch' : 'flex-start',
           justifyContent: 'space-between',
-          gap: 12,
+          gap: isMobile ? 8 : 12,
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+        <div style={{ minWidth: 0, flex: isMobile ? '1 1 auto' : '1 1 200px', maxWidth: '100%' }}>
           <Title level={isMobile ? 4 : 3} style={{ margin: 0, lineHeight: 1.3 }}>
             {title}
           </Title>
           {subtitle ? (
-            <Text type="secondary" className="page-header-subtitle" style={{ display: 'block', marginTop: 4 }}>
+            <Text
+              type="secondary"
+              className="page-header-subtitle"
+              style={{ display: 'block', marginTop: 2, fontSize: isMobile ? 12 : undefined }}
+            >
               {subtitle}
             </Text>
           ) : null}

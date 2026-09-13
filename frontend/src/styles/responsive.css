@@ -712,31 +712,54 @@ html.dark .mobile-entity-card,
 }
 
 
-/* Prevent tall empty content card on mobile */
-.app-shell-mobile {
-  min-height: 100dvh;
-  background: var(--ant-color-bg-layout, #f5f5f5);
+/* Mobile: never stretch content into a tall empty white panel */
+.app-shell-mobile.ant-layout,
+.app-shell-mobile > .app-main.ant-layout {
+  background: var(--ant-color-bg-layout, #f5f5f5) !important;
 }
-.app-shell-mobile > .app-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  background: transparent;
+.app-shell-mobile > .app-main.ant-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
 }
-.app-shell-mobile .app-page-content {
+.app-shell-mobile .app-page-content.ant-layout-content,
+.app-shell-mobile .app-page-content-mobile.ant-layout-content {
   flex: 0 0 auto !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
   height: auto !important;
   min-height: 0 !important;
-  margin: 6px !important;
-  padding: 10px !important;
+  max-height: none !important;
+  display: block !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 8px 10px 12px !important;
+}
+.app-shell-mobile .app-page-content > *,
+.app-shell-mobile .app-page-content-mobile > * {
+  /* page root wrappers must not grow */
+  min-height: 0 !important;
+}
+.app-shell-mobile .page-header {
+  flex: none !important;
+  margin-bottom: 10px !important;
 }
 .app-shell-mobile .app-header-bar.ant-layout-header {
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
   height: auto !important;
   min-height: 48px;
   padding-top: env(safe-area-inset-top, 0px) !important;
   line-height: 48px !important;
   display: flex !important;
   align-items: center !important;
+  background: var(--ant-color-bg-container, #fff) !important;
+}
+/* Cards sit on layout gray; tighten gaps */
+.app-shell-mobile .ant-card {
+  margin-bottom: 0;
+}
+.app-shell-mobile .ant-row {
+  align-content: flex-start !important;
 }
