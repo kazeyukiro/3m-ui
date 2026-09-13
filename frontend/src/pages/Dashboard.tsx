@@ -46,9 +46,9 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
-      <Row gutter={isMobile ? [12, 12] : [16, 16]}>
+      <Row gutter={isMobile ? [8, 8] : [16, 16]}>
         <Col xs={24} md={12} lg={8}>
-          <Card title={t('dashboard.users') || 'Users'}>
+          <Card size={isMobile ? "small" : "default"} title={t('dashboard.users') || 'Users'}>
             <Statistic title={t('dashboard.onlineUsers') || 'Online'} value={users.online ?? data?.onlineUsers ?? 0} />
             <div style={{ marginTop: 8, color: 'rgba(0,0,0,0.45)', fontSize: 13 }}>
               {(t('dashboard.totalUsers') || 'Total') + ': '}{users.total ?? 0}
@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} lg={8}>
-          <Card title={t('dashboard.status')}>
+          <Card size={isMobile ? "small" : "default"} title={t('dashboard.status')}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Tag color={data?.mihomo?.running ? 'success' : 'error'}>{data?.mihomo?.running ? t('dashboard.running') : t('dashboard.stopped')}</Tag>
               <div>{t('dashboard.version')}: {data?.mihomo?.version || '-'}</div>
@@ -72,8 +72,8 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} lg={8}>
-          <Card title={t('dashboard.listeners')}>
-            <Row gutter={isMobile ? [12, 12] : 16}>
+          <Card size={isMobile ? "small" : "default"} title={t('dashboard.listeners')}>
+            <Row gutter={isMobile ? [8, 8] : 16}>
               <Col span={8}><Statistic title={t('dashboard.total')} value={data?.listeners?.total || 0} /></Col>
               <Col span={8}><Statistic title={t('dashboard.enabled')} value={data?.listeners?.enabled || 0} valueStyle={{ color: '#3f8600' }} /></Col>
               <Col span={8}><Statistic title={t('dashboard.disabled')} value={data?.listeners?.disabled || 0} valueStyle={{ color: '#cf1322' }} /></Col>
@@ -81,7 +81,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} lg={8}>
-          <Card title={t('dashboard.traffic')}>
+          <Card size={isMobile ? "small" : "default"} title={t('dashboard.traffic')}>
             <Row gutter={[8, 8]}>
               <Col span={12}><Statistic title={t('dashboard.uploadRate')} value={formatRate(data?.traffic?.uploadRate || 0)} /></Col>
               <Col span={12}><Statistic title={t('dashboard.downloadRate')} value={formatRate(data?.traffic?.downloadRate || 0)} /></Col>
@@ -91,10 +91,10 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title={`${t('dashboard.cpu')} ${clampPct(sys.cpu?.percent)}%`}><Progress percent={clampPct(sys.cpu?.percent)} size="small" status={clampPct(sys.cpu?.percent) > 90 ? 'exception' : 'normal'} /></Card>
+          <Card size={isMobile ? "small" : "default"} title={`${t('dashboard.cpu')} ${clampPct(sys.cpu?.percent)}%`}><Progress percent={clampPct(sys.cpu?.percent)} size="small" status={clampPct(sys.cpu?.percent) > 90 ? 'exception' : 'normal'} /></Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title={`${t('dashboard.memory')} ${clampPct(sys.memory?.percent)}%`}>
+          <Card size={isMobile ? "small" : "default"} title={`${t('dashboard.memory')} ${clampPct(sys.memory?.percent)}%`}>
             <Progress percent={clampPct(sys.memory?.percent)} size="small" status={clampPct(sys.memory?.percent) > 90 ? 'exception' : 'normal'} />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{formatBytes(sys.memory?.used || 0)} / {formatBytes(sys.memory?.total || 0)}</div>
           </Card>

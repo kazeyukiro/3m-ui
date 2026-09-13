@@ -106,30 +106,30 @@ const TrafficPage: React.FC = () => {
       </Space>
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} md={6}>
-          <Card>
+          <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t('traffic.uploadRate')} value={formatBytes(status?.upload_rate || 0) + '/s'} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card>
+          <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t('traffic.downloadRate')} value={formatBytes(status?.download_rate || 0) + '/s'} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card>
+          <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t('traffic.connections')} value={status?.connections || connections.length} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card>
+          <Card size={isMobile ? "small" : "default"}>
             <Statistic title={t('traffic.onlineUsers')} value={users.filter((u) => u.online).length} />
           </Card>
         </Col>
       </Row>
-      <Card title={t('traffic.byUser')} style={{ marginBottom: 16 }}>
+      <Card size={isMobile ? "small" : "default"} title={t('traffic.byUser')} style={{ marginBottom: 16 }}>
         <Table rowKey="user_id" loading={loading} dataSource={users} columns={userColumns} scroll={{ x: 720 }} size={isMobile ? "small" : "middle"} />
       </Card>
-      <Card title={t('traffic.connections')}>
+      <Card size={isMobile ? "small" : "default"} title={t('traffic.connections')}>
         <Table
           rowKey={(r, i) => r.id || String(i)}
           loading={loading}

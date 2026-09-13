@@ -194,7 +194,7 @@ const ConfigPage: React.FC = () => {
               </Button>
             }
           >
-            <Table rowKey={(_, i) => String(i)} loading={loading} dataSource={proxies} columns={columns} pagination={false} />
+            <Table size={isMobile ? "small" : "middle"} rowKey={(_, i) => String(i)} loading={loading} dataSource={proxies} columns={columns} pagination={false} />
           </Card>
           <Card style={{ marginTop: 16 }} title={t('config.yamlPreview') || 'YAML preview'} loading={yamlLoading}>
             {yamlEditor}

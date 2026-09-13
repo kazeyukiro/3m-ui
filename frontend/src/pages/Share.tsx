@@ -29,7 +29,7 @@ const CopyField: React.FC<{ label: string; value: string; qr?: boolean }> = ({ l
   const isMobile = useIsMobile();
   if (!value) return null;
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: isMobile ? 10 : 16 }}>
       <div style={{ marginBottom: 4, fontWeight: 500 }}>{label}</div>
       <Input
         value={value}
@@ -157,7 +157,7 @@ const SharePage: React.FC = () => {
           <Alert
             type="info"
             showIcon
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: isMobile ? 10 : 16 }}
             message={t('share.subHint') || 'Copy into the client. Without ?target=, format follows User-Agent (Clash/Mihomo → YAML, v2rayNG → Base64, sing-box → JSON). Headers include traffic/expiry (Subscription-Userinfo).'}
           />
           <CopyField label={t('users.subMihomo') || 'Mihomo / Clash YAML'} value={shareUrl} qr />
@@ -240,7 +240,7 @@ const SharePage: React.FC = () => {
       </div>
       <PageHeader title={t('share.title')} subtitle={t('share.subtitle') || undefined} />
 
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <Card size="small" style={{ marginBottom: isMobile ? 10 : 16 }}>
         <Space wrap style={{ width: '100%' }} align="center">
           <span>{t('share.selectUser') || 'User'}</span>
           <Select

@@ -612,7 +612,6 @@ const Settings: React.FC = () => {
                     {t('settings.changePassword')}
                   </Button>
                   <div>
-                    <div>
                     <Space direction="vertical" size="small" style={{ width: '100%' }}>
                       <Space wrap align="center">
                         <SafetyOutlined />

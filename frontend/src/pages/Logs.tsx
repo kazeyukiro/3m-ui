@@ -35,7 +35,7 @@ const Logs: React.FC = () => {
         <Button icon={<ClearOutlined />} onClick={() => setLogs([])}>{t('logs.clear')}</Button>
         <Button type={autoRefresh ? 'primary' : 'default'} onClick={() => setAutoRefresh(!autoRefresh)}>{t('logs.autoRefresh')}: {autoRefresh ? t('common.enabled') : t('common.disabled')}</Button>
       </Space>
-      <Card>
+      <Card size={isMobile ? "small" : "default"}>
         {loading && logs.length === 0 ? <Spin /> : logs.length === 0 ? <Empty description={t('logs.empty')} /> : (
           <List size="small" dataSource={logs} renderItem={(log, i) => (
             <List.Item key={i} style={{ fontFamily: 'monospace', fontSize: 13 }}>
