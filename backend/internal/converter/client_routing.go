@@ -4,6 +4,7 @@ package converter
 // minimal domestic/international split:
 //   - private / CN → DIRECT
 //   - everything else → PROXY (manual select, with AUTO url-test + DIRECT)
+//
 // Clients need the usual GeoIP/GeoSite databases (shipped with Mihomo/Clash Meta).
 func clientSubscriptionDocument(proxies []map[string]interface{}, names []string) map[string]interface{} {
 	if names == nil {
@@ -34,12 +35,12 @@ func clientSubscriptionDocument(proxies []map[string]interface{}, names []string
 	}
 
 	return map[string]interface{}{
-		"mixed-port":  7890,
-		"allow-lan":   false,
-		"mode":        "rule",
-		"log-level":   "info",
-		"ipv6":        true,
-		"proxies":     proxies,
+		"mixed-port":   7890,
+		"allow-lan":    false,
+		"mode":         "rule",
+		"log-level":    "info",
+		"ipv6":         true,
+		"proxies":      proxies,
 		"proxy-groups": groups,
 		"rules": []string{
 			"GEOSITE,private,DIRECT",

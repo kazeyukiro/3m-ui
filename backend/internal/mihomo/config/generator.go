@@ -209,6 +209,19 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		}
 		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
 		sanitizeIncompleteTLSWrappers(configMap)
+
+		// Protocols without top-level certificate/private-key (shadowsocks,
+		// snell, shadowquic, mieru, sudoku) must never carry those fields —
+		// their schema validator hard-rejects them. Stale PEMs can reach the
+		// config via certstore hydration or a protocol switch on a reused
+		// listener ID; strip them before any TLS-material logic runs.
+		supportsCert := listenerProtocolSupportsCertField(protocolName)
+		if !supportsCert {
+			delete(configMap, "certificate")
+			delete(configMap, "private-key")
+			delete(configMap, "private_key")
+			delete(configMap, "allow-insecure")
+		}
 		// Prefer durable on-disk certs when DB config has no pair (survives panel updates
 		// that used to mint a new self-signed identity every apply).
 		cert0, _ := configMap["certificate"].(string)
@@ -216,7 +229,7 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		if key0 == "" {
 			key0, _ = configMap["private_key"].(string)
 		}
-		if strings.TrimSpace(cert0) == "" || strings.TrimSpace(key0) == "" {
+		if supportsCert && (strings.TrimSpace(cert0) == "" || strings.TrimSpace(key0) == "") {
 			if c, k, ok := certstore.Load(l.ID); ok {
 				configMap["certificate"] = c
 				configMap["private-key"] = k
@@ -246,15 +259,17 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 				tlsConfig["sni"] = strings.TrimSpace(l.PublicHost)
 			}
 		}
-		if err := ensureListenerTLSMaterial(protocolName, tlsConfig); err != nil {
-			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
-			continue
-		}
-		for _, key := range []string{"certificate", "private-key", "private_key", "allow-insecure"} {
-			if value, ok := tlsConfig[key]; ok {
-				configMap[key] = value
-			} else {
-				delete(configMap, key)
+		if supportsCert {
+			if err := ensureListenerTLSMaterial(protocolName, tlsConfig); err != nil {
+				skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+				continue
+			}
+			for _, key := range []string{"certificate", "private-key", "private_key", "allow-insecure"} {
+				if value, ok := tlsConfig[key]; ok {
+					configMap[key] = value
+				} else {
+					delete(configMap, key)
+				}
 			}
 		}
 		if patched, mErr := json.Marshal(configMap); mErr == nil {
@@ -267,7 +282,7 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		}
 		// Always mirror a complete pair to disk so the next binary update can
 		// restore the same identity even if the DB row lacked PEMs historically.
-		if l.ID != 0 {
+		if supportsCert && l.ID != 0 {
 			c, _ := configMap["certificate"].(string)
 			k, _ := configMap["private-key"].(string)
 			if k == "" {
@@ -431,6 +446,26 @@ func listenerSupportsTLS(protocol string) bool {
 	default:
 		return false
 	}
+}
+
+// listenerProtocolSupportsCertField reports whether the protocol's listener
+// schema allows top-level certificate/private-key fields. Protocols that
+// front TLS via wrappers (shadow-tls / res-tls / jls-config) or are
+// plaintext (shadowsocks, snell, shadowquic, mieru, sudoku) do NOT carry
+// top-level certificate/private-key — verified against the official
+// MetaCubeX inbound listener schemas (dongchengjie/meta-json-schema).
+//
+// This guard prevents stale PEMs (left on disk by a former cert-capable
+// protocol on the same listener ID, or injected by certstore hydration)
+// from leaking into a protocol whose schema validator would reject them,
+// which previously skipped the listener during config generation.
+func listenerProtocolSupportsCertField(protocol string) bool {
+	schema, ok := MihomoListenerSchemas[protocol]
+	if !ok {
+		return false
+	}
+	_, supports := schema.Fields["certificate"]
+	return supports
 }
 func ListenerSupportsTLS(protocol string) bool {
 	return listenerSupportsTLS(strings.ToLower(strings.TrimSpace(protocol)))

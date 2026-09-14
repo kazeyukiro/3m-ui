@@ -10,9 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/totp"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/telegram"
+	"github.com/kazeyukiro/3m-ui/backend/internal/totp"
 	"gorm.io/gorm"
 )
 
@@ -228,7 +228,7 @@ func (h *Handler) TOTPSetup(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"secret": secret,
+		"secret":      secret,
 		"otpauth_url": totp.OTPAuthURL("3m-ui", claims.Username, secret),
 	})
 }

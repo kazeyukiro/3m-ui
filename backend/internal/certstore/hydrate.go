@@ -29,6 +29,16 @@ func HydrateListenersFromDisk(db *gorm.DB) {
 		if l.ID == 0 {
 			continue
 		}
+		// Only protocols whose Mihomo listener schema exposes top-level
+		// certificate/private-key can carry PEMs. Injecting them into a
+		// wrapper-based or plaintext protocol (shadowsocks, snell, shadowquic,
+		// mieru, sudoku) pollutes the stored Config and is later rejected by
+		// the schema validator. This list mirrors
+		// config.listenerProtocolSupportsCertField (certstore cannot import
+		// the mihomo/config package without a circular dependency).
+		if !protocolSupportsCertField(strings.ToLower(strings.TrimSpace(l.Protocol))) {
+			continue
+		}
 		cfg := map[string]interface{}{}
 		raw := strings.TrimSpace(l.Config)
 		if raw != "" {
@@ -69,6 +79,21 @@ func HydrateListenersFromDisk(db *gorm.DB) {
 	}
 }
 
+// protocolSupportsCertField reports whether a Mihomo listener protocol carries
+// top-level certificate/private-key fields. It must stay in sync with
+// internal/mihomo/config.MihomoListenerSchemas (the Fields["certificate"]
+// membership). Kept local to avoid a circular import (mihomo/config already
+// imports certstore).
+func protocolSupportsCertField(protocol string) bool {
+	switch protocol {
+	case "vmess", "vless", "trojan", "hysteria2",
+		"tuic", "tuic-v4", "tuic-v5", "anytls", "trusttunnel":
+		return true
+	default:
+		return false
+	}
+}
+
 // HydrateFromMihomoYAML recovers PEMs from an existing mihomo config.yaml by
 // matching listener name → id when both DB and certstore lack a pair.
 // This covers installs that never wrote /var/lib/3m-ui/listener-certs.
@@ -103,6 +128,11 @@ func HydrateFromMihomoYAML(db *gorm.DB, configPath string) {
 	for i := range list {
 		l := &list[i]
 		if l.ID == 0 {
+			continue
+		}
+		// Skip protocols that have no top-level certificate/private-key fields
+		// (see protocolSupportsCertField comment above).
+		if !protocolSupportsCertField(strings.ToLower(strings.TrimSpace(l.Protocol))) {
 			continue
 		}
 		cfg := map[string]interface{}{}

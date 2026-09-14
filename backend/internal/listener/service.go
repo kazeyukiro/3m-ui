@@ -24,8 +24,8 @@ type Service struct {
 }
 
 func NewService(db *gorm.DB, configPath string, mihomoApply interface {
-		ApplyConfig(string) error
-	}) *Service {
+	ApplyConfig(string) error
+}) *Service {
 	return &Service{db: db, configPath: configPath, mihomoApply: mihomoApply}
 }
 
