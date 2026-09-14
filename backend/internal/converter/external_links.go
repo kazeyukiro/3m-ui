@@ -8,14 +8,19 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
 
 const maxExternalSubBytes = 2 << 20 // 2 MiB
 
 // mergeExternalSubscriptionLinks fetches optional Clash/Mihomo YAML URLs and
-// appends their proxies into the user subscription document.
+// appends their proxies into the user subscription document. The HTTP client
+// uses the shared SSRF-safe dialer (netutil.NewSafeHTTPClient) so private /
+// link-local / cloud-metadata destinations are rejected at dial time and on
+// redirect, matching the cluster sync path.
 func mergeExternalSubscriptionLinks(rawLinks string, proxies []map[string]interface{}, names []string) ([]map[string]interface{}, []string) {
-	client := &http.Client{Timeout: 8 * time.Second}
+	client := netutil.NewSafeHTTPClient(8 * time.Second)
 	for _, line := range strings.Split(rawLinks, "\n") {
 		u := strings.TrimSpace(line)
 		if u == "" || strings.HasPrefix(u, "#") {
