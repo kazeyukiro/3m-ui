@@ -48,6 +48,7 @@ const Listeners: React.FC = () => {
   const [quickModal, setQuickModal] = useState(false);
   const [quickForm] = Form.useForm();
   const [quickSubmitting, setQuickSubmitting] = useState(false);
+  const quickSubmittingRef = useRef(false);
   const [editing, setEditing] = useState<Listener | null>(null);
   const [form] = Form.useForm();
   const [templateForm] = Form.useForm();
@@ -90,17 +91,19 @@ const Listeners: React.FC = () => {
     if (port) form.setFieldsValue({ port });
   };
 
-  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision', reality_dest: 'www.microsoft.com:443', 'reality-config.dest': 'www.microsoft.com:443' }); setModalOpen(true); };
   const openQuick = () => {
     quickForm.resetFields();
     quickForm.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), protocol: 'vless' });
     setQuickModal(true);
   };
   const doQuickCreate = async () => {
-    if (quickSubmitting) return;
+    // Ref lock: state updates are async; double-tap can fire two creates.
+    if (quickSubmittingRef.current) return;
+    quickSubmittingRef.current = true;
+    setQuickSubmitting(true);
     try {
       const values = await quickForm.validateFields();
-      setQuickSubmitting(true);
       const created = await quickCreateListener({ name: String(values.name).trim(), protocol: String(values.protocol).trim() });
       message.success(`${t('listeners.quickCreated', 'Created')}: ${created.name} :${created.port}`);
       setQuickModal(false);
@@ -109,6 +112,7 @@ const Listeners: React.FC = () => {
       if (e?.errorFields) return;
       message.error(e?.message || t('common.error'));
     } finally {
+      quickSubmittingRef.current = false;
       setQuickSubmitting(false);
     }
   };

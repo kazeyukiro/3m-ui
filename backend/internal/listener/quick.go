@@ -27,9 +27,18 @@ func SeedQuickConfig(protocol string) map[string]interface{} {
 		cfg["security_layer"] = "reality"
 		cfg["transport_layer"] = "raw"
 		cfg["flow"] = "xtls-rprx-vision"
+		// dest is required by autofillReality; provide a widely used default target.
+		cfg["reality-config"] = map[string]interface{}{
+			"dest":         "www.microsoft.com:443",
+			"server-names": []string{"www.microsoft.com"},
+		}
 	case "vmess", "trojan":
 		cfg["security_layer"] = "reality"
 		cfg["transport_layer"] = "raw"
+		cfg["reality-config"] = map[string]interface{}{
+			"dest":         "www.microsoft.com:443",
+			"server-names": []string{"www.microsoft.com"},
+		}
 	case "shadowsocks":
 		cfg["cipher"] = "aes-128-gcm"
 		cfg["udp"] = true

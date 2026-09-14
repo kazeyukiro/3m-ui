@@ -375,6 +375,8 @@ const Users: React.FC = () => {
                     setEditing(null);
                     form.resetFields();
                     form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0 });
+                    submittingRef.current = false;
+                    setSubmitting(false);
                     setModalOpen(true);
                   }}
                 >
@@ -502,6 +504,8 @@ const Users: React.FC = () => {
                 setEditing(null);
                 form.resetFields();
                 form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0 });
+                submittingRef.current = false;
+                setSubmitting(false);
                 setModalOpen(true);
               }}
             >
@@ -536,7 +540,9 @@ const Users: React.FC = () => {
                       <div
                         className="mobile-entity-card-body"
                         onClick={() => {
-                          setEditing(record);
+                          submittingRef.current = false;
+    setSubmitting(false);
+    setEditing(record);
                           form.setFieldsValue({
                             username: record.username,
                             password: undefined,
