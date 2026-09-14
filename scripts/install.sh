@@ -192,7 +192,10 @@ prepare_release(){
       verify_asset "$member" "$WORK/release/$member"
     done
   fi
-  for member in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do sh -n "$WORK/release/$member"; done
+  for member in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do
+    sh -n "$WORK/release/$member"
+    chmod 0755 "$WORK/release/$member"
+  done
   chmod 0755 "$WORK/release/3m-ui-bin"
   "$WORK/release/3m-ui-bin" --version >/dev/null
   if [ "$INSTALL_MIHOMO" = 1 ]; then chmod 0755 "$WORK/release/mihomo"; "$WORK/release/mihomo" -v >/dev/null; fi
@@ -442,9 +445,12 @@ main(){
   create_snapshot
   TRANSACTION=1
   mkdir -p "$BASE" "$(dirname "$ENTRY")" "$CONFIG_DIR" "$DATA_DIR/mihomo" "$LOG_DIR"
-  # Retain existing cores and custom files. Only replace release-owned files.
+  # Replace every release-owned binary and lifecycle script (always, on install and update).
+  # Scripts must stay in lockstep with the panel so menu/CLI behaviour matches the release notes.
   for member in 3m-ui-bin install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do
+    [ -s "$WORK/release/$member" ] || err "Release payload missing: $member"
     install -m 0755 "$WORK/release/$member" "$BASE/$member"
+    say "Installed $BASE/$member"
   done
   if [ "$INSTALL_MIHOMO" = 1 ]; then
     install -m 0755 "$WORK/release/mihomo" "$MIHOMO_BIN"
@@ -453,7 +459,15 @@ main(){
       if [ -f "$WORK/release/$member" ]; then install -m 0644 "$WORK/release/$member" "$BASE/$member"; fi
     done
   fi
+  # Management entry must match the release script (never leave a stale /usr/local/bin/3m-ui).
   install -m 0755 "$WORK/release/3m-ui" "$ENTRY"
+  # Second copy from BASE so ENTRY cannot drift if install is interrupted mid-write.
+  install -m 0755 "$BASE/3m-ui" "$ENTRY"
+  say "Installed management entry: $ENTRY"
+  for member in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui 3m-ui-bin; do
+    [ -x "$BASE/$member" ] || err "Not executable after install: $BASE/$member"
+  done
+  [ -x "$ENTRY" ] || err "Not executable after install: $ENTRY"
   printf '%s\n' "$TAG" > "$BASE/VERSION"
   printf '%s\n' static > "$BASE/BUILD_MODE"
   printf '%s\n' "$REPO" > "$BASE/REPOSITORY"
