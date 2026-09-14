@@ -25,7 +25,7 @@ jobs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
       # Manual runs must build the requested tag, not the branch selected in UI.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
       - name: Resolve exact tag and channel
@@ -57,7 +57,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.metadata.outputs.sha }}
       - uses: actions/download-artifact@v4

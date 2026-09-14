@@ -40,7 +40,7 @@ jobs:
             artifact: linux-s390x
     runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source_sha }}
       - uses: actions/setup-node@v4
