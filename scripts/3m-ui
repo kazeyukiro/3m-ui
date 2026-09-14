@@ -61,6 +61,7 @@ run_app() {
         err "未找到程序: $APP_BIN"
         return 1
     fi
+    mkdir -p "$DATA_DIR"
     (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd")
 }
 
@@ -93,16 +94,34 @@ service_is_active() {
 
 service_enable() {
     case "$(init_system)" in
-        systemd) systemctl enable 3m-ui && say '已设置开机自启 / Enabled on boot.' ;;
-        openrc) rc-update add 3m-ui default && say '已设置开机自启 / Enabled on boot.' ;;
+        systemd)
+            if systemctl enable 3m-ui; then
+                say '已设置开机自启 / Enabled on boot.'
+            else
+                err 'enable 失败（服务单元是否已安装？）'
+                return 1
+            fi
+            ;;
+        openrc)
+            rc-update add 3m-ui default && say '已设置开机自启 / Enabled on boot.'
+            ;;
         *) err '不支持的 init'; return 1 ;;
     esac
 }
 
 service_disable() {
     case "$(init_system)" in
-        systemd) systemctl disable 3m-ui && say '已取消开机自启 / Disabled on boot.' ;;
-        openrc) rc-update del 3m-ui default && say '已取消开机自启 / Disabled on boot.' ;;
+        systemd)
+            if systemctl disable 3m-ui; then
+                say '已取消开机自启 / Disabled on boot.'
+            else
+                err 'disable 失败'
+                return 1
+            fi
+            ;;
+        openrc)
+            rc-update del 3m-ui default && say '已取消开机自启 / Disabled on boot.'
+            ;;
         *) err '不支持的 init'; return 1 ;;
     esac
 }
@@ -173,17 +192,18 @@ logs() {
     case "$(init_system)" in
         systemd)
             if [ "${1:-}" = "-f" ] || [ "${1:-}" = "follow" ]; then
-                journalctl -u 3m-ui -f --no-pager
+                # Ctrl+C must not abort the interactive menu under set -e
+                journalctl -u 3m-ui -f --no-pager || true
             else
-                journalctl -u 3m-ui -n 100 --no-pager
+                journalctl -u 3m-ui -n 100 --no-pager || true
             fi
             ;;
         openrc)
             if [ -f /var/log/3m-ui/3m-ui.log ]; then
                 if [ "${1:-}" = "-f" ] || [ "${1:-}" = "follow" ]; then
-                    tail -n 50 -f /var/log/3m-ui/3m-ui.log
+                    tail -n 50 -f /var/log/3m-ui/3m-ui.log || true
                 else
-                    tail -n 100 /var/log/3m-ui/3m-ui.log
+                    tail -n 100 /var/log/3m-ui/3m-ui.log || true
                 fi
             else
                 say '未找到日志文件 /var/log/3m-ui/3m-ui.log'
@@ -533,7 +553,7 @@ ssl_cert_menu() {
 
 update_self() {
     say "从仓库更新管理脚本: $REPO_RAW/scripts/3m-ui"
-    if ! confirm '确认下载并覆盖 /usr/local/bin/3m-ui 与 $BASE/3m-ui ?' n; then
+    if ! confirm "确认下载并覆盖 /usr/local/bin/3m-ui 与 ${BASE}/3m-ui ?" n; then
         say '已取消。'
         return 0
     fi
