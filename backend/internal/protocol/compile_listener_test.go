@@ -86,3 +86,24 @@ func TestVLESSCompilerNeverUsesPasswordAsUUID(t *testing.T) {
 		t.Fatalf("VLESS credential without UUID must not be emitted as a UUID: %#v", result["users"])
 	}
 }
+
+func TestShadowsocksCompilerPreservesDisabledUDP(t *testing.T) {
+	result, err := (ShadowsocksCompiler{}).Compile(CompileInput{
+		Name:     "ss-tcp-only",
+		Protocol: "shadowsocks",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		UDP:      false,
+		Config: map[string]interface{}{
+			"cipher":   "aes-256-gcm",
+			"password": "secret",
+		},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	udp, ok := result["udp"].(bool)
+	if !ok || udp {
+		t.Fatalf("TCP-only Shadowsocks listener must emit udp: false, got %#v", result["udp"])
+	}
+}
