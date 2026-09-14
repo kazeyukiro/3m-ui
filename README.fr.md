@@ -71,7 +71,7 @@ Binaires statiques : [Releases](https://github.com/kazeyukiro/3m-ui/releases).
 - Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
 - Go, Node.js, and the open-source community
 
-Contributeurs: [kazeyukiro](https://github.com/kazeyukiro), [freephilx](https://github.com/freephilx)
+Contributeurs: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
 
 ---
 

@@ -71,7 +71,7 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 - Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
 - Go, Node.js, and the open-source community
 
-기여자: [kazeyukiro](https://github.com/kazeyukiro), [freephilx](https://github.com/freephilx)
+기여자: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
 
 ---
 

@@ -92,7 +92,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
 - Go, Node.js, and the open-source community
 
-Contributors: [kazeyukiro](https://github.com/kazeyukiro), [freephilx](https://github.com/freephilx)
+Contributors: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
 
 ---
 

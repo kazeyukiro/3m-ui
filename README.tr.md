@@ -71,7 +71,7 @@ Statik ikililer: [Releases](https://github.com/kazeyukiro/3m-ui/releases).
 - Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
 - Go, Node.js, and the open-source community
 
-Katkıda bulunanlar: [kazeyukiro](https://github.com/kazeyukiro), [freephilx](https://github.com/freephilx)
+Katkıda bulunanlar: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
 
 ---
 

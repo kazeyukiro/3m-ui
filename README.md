@@ -193,7 +193,7 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 - [golang-jwt/jwt](https://github.com/golang-jwt/jwt) — JWT
 - Go、Node.js 以及整个开源社区
 
-贡献者：[kazeyukiro](https://github.com/kazeyukiro)、[freephilx](https://github.com/freephilx)
+贡献者：[Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
 
 ---
 
