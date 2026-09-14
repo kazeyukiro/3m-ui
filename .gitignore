@@ -1,9 +1,20 @@
-
-frontend-variants/
+# Dependencies
 node_modules/
-*.log
-
 frontend-variants/
+
+# Build / generated
+*.log
 
 # Python helper bytecode
 __pycache__/
+
+# Secrets & local state — never commit these.
+.env
+.env.*
+*.db
+*.db-*
+*.key
+*.pem
+*.crt
+*.csr
+backend/data/
