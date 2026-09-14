@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo/api"
 	mihomoConfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
 

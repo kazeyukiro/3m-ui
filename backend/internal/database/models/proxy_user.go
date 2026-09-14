@@ -52,4 +52,3 @@ type ProxyUser struct {
 	// ExternalLinks: newline-separated Clash/Mihomo subscription URLs merged into this user's sub.
 	ExternalLinks string `gorm:"type:text" json:"external_links,omitempty"`
 }
-
