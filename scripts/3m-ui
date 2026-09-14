@@ -642,6 +642,48 @@ menu() {
 
 # --- main --------------------------------------------------------------------
 
+
+channel_cmd() {
+    ch_file="$BASE/CHANNEL"
+    arg="${1:-}"
+    do_update=0
+    if [ "$#" -gt 0 ]; then
+        shift
+    fi
+    for a in "$@"; do
+        case "$a" in --update|update|-u) do_update=1 ;; esac
+    done
+    if [ -z "$arg" ]; then
+        cur=stable
+        if [ -s "$ch_file" ]; then
+            cur=$(tr -d '\n\r' < "$ch_file")
+        fi
+        case "$cur" in pre|prerelease) cur=pre ;; *) cur=stable ;; esac
+        say "Current update channel: $cur"
+        say "Switch: 3m-ui channel stable | 3m-ui channel pre"
+        say "Switch and upgrade now: 3m-ui channel pre --update"
+        return 0
+    fi
+    case "$arg" in
+        stable|pre) ;;
+        prerelease) arg=pre ;;
+        *)
+            err "Unknown channel: $arg (use stable or pre)"
+            return 1
+            ;;
+    esac
+    mkdir -p "$BASE"
+    printf '%s\n' "$arg" > "$ch_file"
+    say "Update channel set to: $arg (saved in $ch_file)"
+    if [ "$do_update" -eq 1 ]; then
+        say "Running update on channel $arg ..."
+        THREE_M_UI_CHANNEL="$arg" run_script "$UPDATER" || return 1
+    else
+        say "Next: 3m-ui update   # install latest $arg release"
+        say "  or: 3m-ui channel $arg --update"
+    fi
+}
+
 main() {
     cmd=${1:-}
     case "$cmd" in
@@ -657,6 +699,7 @@ main() {
         disable) service_disable ;;
         logs) shift; logs "$@" ;;
         version) version ;;
+        channel) shift; channel_cmd "$@" ;;
         config) shift; run_script "$MANAGER" config "$@" ;;
         backup) shift; run_script "$INSTALLER" --backup "$@" ;;
         restore) shift; run_script "$INSTALLER" --restore "$@" ;;
@@ -677,9 +720,9 @@ main() {
         help|-h|--help)
             printf '%s\n' '用法: 3m-ui <命令> [参数]'
             printf '%s\n' ''
-            printf '%s\n' '服务: status | start | restart | stop | enable | disable | logs | version'
+            printf '%s\n' '服务: status | start | restart | stop | enable | disable | logs | version | channel'
             printf '%s\n' '配置: config show | config port <端口>'
-            printf '%s\n' '安装: update [vX.Y.Z] | install | uninstall [--purge]'
+            printf '%s\n' '安装: update [vX.Y.Z|pre] | channel stable|pre [--update] | install | uninstall [--purge]'
             printf '%s\n' '数据: backup | restore <snapshot.tar.gz> | reset-admin | healthcheck'
             printf '%s\n' '其他: menu | help'
             printf '%s\n' ''
