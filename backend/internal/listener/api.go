@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/:id/check", h.CheckRuntime)
 	rg.GET("", h.ListListeners)
 	rg.POST("", h.CreateListener)
+	rg.POST("/quick", h.QuickCreate)
 	rg.POST("/generate", h.GenerateMaterial)
 	rg.POST("/reality/scan", h.ScanRealityTargets)
 	rg.GET("/templates", h.ListTemplates)
@@ -112,6 +113,20 @@ func (h *Handler) CreateListener(c *gin.Context) {
 		return
 	}
 	c.JSON(201, l)
+}
+
+func (h *Handler) QuickCreate(c *gin.Context) {
+	var in QuickCreateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	l, err := h.svc.QuickCreate(in)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, l)
 }
 func (h *Handler) BatchCreate(c *gin.Context) {
 	var list []models.Listener

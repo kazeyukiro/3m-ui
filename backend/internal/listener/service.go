@@ -32,6 +32,16 @@ func NewService(db *gorm.DB, configPath string, mihomoApply interface {
 func (s *Service) Create(l *models.Listener) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if l != nil {
+		port := strings.TrimSpace(l.Port)
+		if port == "" || port == "0" {
+			p, err := s.allocateFreePort()
+			if err != nil {
+				return err
+			}
+			l.Port = p
+		}
+	}
 	if err := AutofillListenerDefaults(l); err != nil {
 		return fmt.Errorf("autofill listener defaults: %w", err)
 	}

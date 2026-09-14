@@ -37,6 +37,9 @@ function mapListener(raw: any): Listener {
 
 export const fetchListeners = () =>
   client.get<any[]>('/nodes').then((r) => (r.data || []).map(mapListener));
+export const quickCreateListener = (payload: { name: string; protocol: string }) =>
+  client.post<any>('/nodes/quick', payload).then((r) => mapListener(r.data));
+
 export const createListener = (payload: Partial<Listener>) =>
   client.post<any>('/nodes', payload).then((r) => mapListener(r.data));
 export const updateListener = (id: number, payload: Partial<Listener>) => {

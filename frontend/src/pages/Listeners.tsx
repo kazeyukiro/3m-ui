@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
 import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined, MoreOutlined } from '@ant-design/icons';
 import {
-  fetchListeners, createListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
+  fetchListeners, createListener, quickCreateListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
 } from '../api/nodes';
 import {
   listListenerTemplates, createListenerTemplate, deleteListenerTemplate, instantiateListenerTemplate,
@@ -45,6 +45,9 @@ const Listeners: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [templateLoading, setTemplateLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [quickModal, setQuickModal] = useState(false);
+  const [quickForm] = Form.useForm();
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
   const [editing, setEditing] = useState<Listener | null>(null);
   const [form] = Form.useForm();
   const [templateForm] = Form.useForm();
@@ -88,6 +91,28 @@ const Listeners: React.FC = () => {
   };
 
   const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision' }); setModalOpen(true); };
+  const openQuick = () => {
+    quickForm.resetFields();
+    quickForm.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), protocol: 'vless' });
+    setQuickModal(true);
+  };
+  const doQuickCreate = async () => {
+    if (quickSubmitting) return;
+    try {
+      const values = await quickForm.validateFields();
+      setQuickSubmitting(true);
+      const created = await quickCreateListener({ name: String(values.name).trim(), protocol: String(values.protocol).trim() });
+      message.success(`${t('listeners.quickCreated', 'Created')}: ${created.name} :${created.port}`);
+      setQuickModal(false);
+      if (!(await load(false))) message.warning(t('common.error'));
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      message.error(e?.message || t('common.error'));
+    } finally {
+      setQuickSubmitting(false);
+    }
+  };
+
   const openEdit = (record: Listener) => { setSubmitError(''); setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', ...configToFormValues(record.config) }); setModalOpen(true); };
   const onSubmit = async (rawValues?: any) => {
     // useRef lock: React state updates are async, so double-click / double onOk
@@ -172,7 +197,7 @@ const columns = [
     <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
     {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
       description={<Space wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
-    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
             <Spin spinning={loading}>
               <div className="mobile-entity-list">
                 {filteredListeners.length === 0 && !loading ? (
@@ -235,6 +260,13 @@ const columns = [
             <Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: isMobile ? 720 : 880 }} size={isMobile ? "small" : "middle"} />
           )}</Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} size={isMobile ? "small" : "middle"} /></Card> }]} />
     <ListenerRuntimeDrawer listener={runtimeListener ? data.find(l => l.id === runtimeListener.id) || runtimeListener : null} status={runtimeListener ? details[runtimeListener.id] || statuses[runtimeListener.id] : undefined} checking={!!runtimeListener && testing.includes(runtimeListener.id)} onClose={() => setRuntimeListener(null)} onCheck={() => { if (runtimeListener) void test(runtimeListener.id).catch(() => {}); }} />
+    <Modal open={quickModal} title={t('listeners.quickCreate', 'Quick create')} onCancel={() => setQuickModal(false)} onOk={doQuickCreate} confirmLoading={quickSubmitting} okText={t('common.create', 'Create')} destroyOnClose width={isMobile ? '100%' : 480} style={isMobile ? { top: 12 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
+      <p style={{ marginBottom: 12, opacity: 0.75, fontSize: 13 }}>{t('listeners.quickCreateHint', 'Select protocol and name only. Port, credentials and REALITY/TLS are generated automatically.')}</p>
+      <Form form={quickForm} layout="vertical" requiredMark={false}>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} size={isMobile ? 'large' : 'middle'} showSearch optionFilterProp="label" /></Form.Item>
+        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input size={isMobile ? 'large' : 'middle'} maxLength={64} placeholder="my-node" /></Form.Item>
+      </Form>
+    </Modal>
     <Modal confirmLoading={submitting} closable={!submitting} maskClosable={!submitting} keyboard={!submitting} cancelButtonProps={{ disabled: submitting }} okText={submitting ? runtimeText.saving : t('common.save')} open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.validateFields().then((vals) => onSubmit(vals))} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
       {submitError && <Alert type="error" showIcon title={runtimeText.failed} description={<><div>{submitError}</div><div>{runtimeText.failedHint}</div></>} style={{ marginBottom: 16 }} />}
       <Form disabled={submitting} form={form} layout="vertical" onFinish={onSubmit} scrollToFirstError={{ block: 'center', focus: true }} preserve>

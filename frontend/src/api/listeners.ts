@@ -1,8 +1,16 @@
 import client from './client';
-import { fetchListeners, createListener, updateListener, deleteListener, reloadListener, exportNodeURI, Listener } from './nodes';
+import type { Listener } from './nodes';
 
-export { fetchListeners, createListener, updateListener, deleteListener, reloadListener, exportNodeURI };
-export type { Listener };
+export {
+  fetchListeners,
+  createListener,
+  updateListener,
+  deleteListener,
+  reloadListener,
+  exportNodeURI,
+  quickCreateListener,
+} from './nodes';
+export type { Listener } from './nodes';
 
 export interface ListenerTemplate {
   id: number;
