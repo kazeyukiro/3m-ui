@@ -52,7 +52,16 @@ func (s *Service) Create(l *models.Listener) error {
 		return err
 	}
 	if err := s.db.Create(l).Error; err != nil {
-		return fmt.Errorf("failed to create listener: %w", err)
+		// Concurrent create or leftover unique row: reclaim soft-deleted and retry once.
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "unique") || strings.Contains(msg, "constraint") || strings.Contains(msg, "duplicate") {
+			_ = s.ensureUniqueName(l)
+			if err2 := s.db.Create(l).Error; err2 != nil {
+				return fmt.Errorf("listener name %q already exists", strings.TrimSpace(l.Name))
+			}
+		} else {
+			return fmt.Errorf("failed to create listener: %w", err)
+		}
 	}
 	if err := s.regenerateConfigLocked(); err != nil {
 		// Hard-delete: soft-delete would keep UNIQUE(name) occupied and block retries.
@@ -131,7 +140,8 @@ func (s *Service) Delete(id uint) error {
 	var previous models.Listener
 	if err := s.db.First(&previous, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("listener %d not found (already deleted? refresh the list)", id)
+			// Idempotent: UI double-click / stale list after a successful delete.
+			return nil
 		}
 		return fmt.Errorf("failed to fetch listener before delete: %w", err)
 	}

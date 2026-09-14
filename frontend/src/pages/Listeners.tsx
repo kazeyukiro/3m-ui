@@ -14,7 +14,7 @@ import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { randomListenerPort } from '../utils/listenerPort';
-import { suggestListenerName } from '../utils/listenerName';
+import { suggestListenerName, nextListenerNameAfterConflict } from '../utils/listenerName';
 import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
 import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
 import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
@@ -141,7 +141,25 @@ const Listeners: React.FC = () => {
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
       const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
       const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '' };
-      const saved = editing ? await updateListener(normalizeId(editing), payload) : await createListener(payload);
+      let saved: Listener;
+      if (editing) {
+        saved = await updateListener(normalizeId(editing), payload);
+      } else {
+        try {
+          saved = await createListener(payload);
+        } catch (createErr: any) {
+          const cmsg = String(createErr?.message || '');
+          if (/already exists/i.test(cmsg)) {
+            const nextName = nextListenerNameAfterConflict(String(payload.name || ''), data.map((l) => l.name));
+            payload.name = nextName;
+            form.setFieldsValue({ name: nextName });
+            saved = await createListener(payload);
+            message.info(t('listeners.nameRenamed', 'Name was taken; created as {{name}}').replace('{{name}}', nextName));
+          } else {
+            throw createErr;
+          }
+        }
+      }
       message.success(saved.enabled ? runtimeText.saved : runtimeText.savedDisabled);
       setModalOpen(false);
       setEditing(null);
@@ -158,7 +176,24 @@ const Listeners: React.FC = () => {
       setSubmitting(false);
     }
   };
-  const onDelete = async (id: number) => { try { await deleteListener(id); message.success(t('listeners.deleted')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const onDelete = async (id: number) => {
+    if (!id) { void load(false); return; }
+    // Optimistic: drop from list so a second click cannot hit a stale id.
+    setData((rows) => rows.filter((r) => normalizeId(r) !== id));
+    try {
+      await deleteListener(id);
+      message.success(t('listeners.deleted'));
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (/not found|already deleted/i.test(msg)) {
+        message.success(t('listeners.deleted'));
+      } else {
+        message.error(msg || t('common.error'));
+      }
+    } finally {
+      if (!(await load(false))) message.warning(t('common.error'));
+    }
+  };
   const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const showURIs = async (id: number) => { try { const res = await exportNodeURI(id); setUris(res.uris); setUriModal(true); } catch (e: any) { message.error(e.message); } };
   const openClone = (record: Listener) => { setCloneSource(record); cloneForm.setFieldsValue({ name: `${record.name}-copy`, port: '' }); setCloneModal(true); };
