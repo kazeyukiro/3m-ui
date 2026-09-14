@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
 
 func TestNormalizeBaseURL(t *testing.T) {
@@ -35,7 +37,7 @@ func TestNormalizeBaseURL(t *testing.T) {
 		t.Fatalf("lab allow should pass: %v", err)
 	}
 	// Metadata endpoints remain blocked even when private targets are enabled.
-	if err := assertClusterIPAllowed(net.ParseIP("169.254.169.254")); err == nil {
+	if err := netutil.AssertIPAllowed(net.ParseIP("169.254.169.254")); err == nil {
 		t.Fatal("metadata endpoint must remain blocked")
 	}
 }
@@ -59,8 +61,9 @@ func TestSanitizeProxyPath(t *testing.T) {
 }
 
 func TestSafeClusterDialContextBlocksPrivateIP(t *testing.T) {
+	t.Setenv("THREE_M_UI_ALLOW_PRIVATE", "0")
 	t.Setenv("THREE_M_UI_CLUSTER_ALLOW_PRIVATE", "0")
-	dial := safeClusterDialContext(&net.Dialer{Timeout: 100 * time.Millisecond})
+	dial := netutil.SafeDialContext(&net.Dialer{Timeout: 100 * time.Millisecond})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if _, err := dial(ctx, "tcp", "127.0.0.1:1"); err == nil {
