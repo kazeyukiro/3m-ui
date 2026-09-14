@@ -14,7 +14,6 @@ UPDATER="$BASE/update.sh"
 UNINSTALLER="$BASE/uninstall.sh"
 APP_BIN="$BASE/3m-ui-bin"
 CONFIG_FILE="$ROOT/etc/3m-ui/config.yaml"
-REPO_RAW="${THREE_M_UI_REPO_RAW:-https://raw.githubusercontent.com/kazeyukiro/3m-ui/main}"
 DATA_DIR="${THREE_M_UI_DATA_DIR:-}"
 if [ -z "$DATA_DIR" ] && [ -s "$BASE/DATA_DIRECTORY" ]; then
     DATA_DIR="$(cat "$BASE/DATA_DIRECTORY")"
@@ -462,23 +461,11 @@ bbr_menu() {
 # --- Geo / firewall / SSL helpers --------------------------------------------
 
 update_geo() {
-    dir="$DATA_DIR/mihomo"
-    mkdir -p "$dir"
-    base="https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest"
-    say "下载 Geo 到 $dir ..."
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$dir/geoip.metadb" "$base/geoip.metadb" || \
-            curl -fsSL -o "$dir/geoip.dat" "$base/geoip.dat" || true
-        curl -fsSL -o "$dir/geosite.dat" "$base/geosite.dat" || true
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$dir/geoip.metadb" "$base/geoip.metadb" || true
-        wget -q -O "$dir/geosite.dat" "$base/geosite.dat" || true
-    else
-        err '需要 curl 或 wget'
-        return 1
-    fi
-    ls -la "$dir"/geoip* "$dir"/geosite* 2>/dev/null || true
-    say '完成。可在面板重启 Mihomo 使规则生效。'
+    # Geo databases influence routing. Do not download a moving "latest" asset
+    # from a root-owned management script without a release checksum.
+    say 'Geo 数据库请在面板「系统设置 → 网络与 Geo」中更新。'
+    say 'Use Settings → Network & Geo in the authenticated panel to update Geo files.'
+    say '该入口会显示每个文件的更新结果；管理脚本不会下载未校验的 latest 资产。'
 }
 
 open_firewall() {
@@ -552,31 +539,15 @@ ssl_cert_menu() {
 # --- update management script itself -----------------------------------------
 
 update_self() {
-    say "从仓库更新管理脚本: $REPO_RAW/scripts/3m-ui"
-    if ! confirm "确认下载并覆盖 /usr/local/bin/3m-ui 与 ${BASE}/3m-ui ?" n; then
+    # Lifecycle scripts and the panel binary are a single release unit. Routing
+    # this action through the installer keeps the checksum, provenance option,
+    # rollback snapshot, and health check that protect normal updates.
+    say '管理脚本会随已验证的面板版本一起更新。'
+    if ! confirm '通过已验证的发布更新 3m-ui（包括管理脚本）？' n; then
         say '已取消。'
         return 0
     fi
-    tmp=$(mktemp)
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$REPO_RAW/scripts/3m-ui" -o "$tmp" || { err '下载失败'; rm -f "$tmp"; return 1; }
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$tmp" "$REPO_RAW/scripts/3m-ui" || { err '下载失败'; rm -f "$tmp"; return 1; }
-    else
-        err '需要 curl 或 wget'
-        return 1
-    fi
-    if ! head -1 "$tmp" | grep -q '^#!'; then
-        err '下载内容不像 shell 脚本'
-        rm -f "$tmp"
-        return 1
-    fi
-    install -m 0755 "$tmp" /usr/local/bin/3m-ui
-    if [ -d "$BASE" ]; then
-        install -m 0755 "$tmp" "$BASE/3m-ui"
-    fi
-    rm -f "$tmp"
-    say '管理脚本已更新。请重新运行: 3m-ui'
+    run_script "$UPDATER" || return 1
 }
 
 update_to_version() {

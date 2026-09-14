@@ -31,6 +31,13 @@ class DistributionTests(unittest.TestCase):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 metadata.metadata(tag)
 
+    def test_root_management_script_uses_only_verified_update_paths(self):
+        script = (ROOT / "scripts/3m-ui").read_text(encoding="utf-8")
+        self.assertNotIn("raw.githubusercontent.com", script)
+        self.assertNotIn("THREE_M_UI_REPO_RAW", script)
+        self.assertNotIn("meta-rules-dat/releases/download/latest", script)
+        self.assertIn('run_script "$UPDATER" || return 1', script)
+
     def test_changed_upstream_asset_is_rejected_before_installing_core(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

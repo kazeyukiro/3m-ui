@@ -91,9 +91,10 @@ func (ShadowsocksCompiler) Capability() ProtocolCapability { return shadowsocksC
 func (ShadowsocksCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	m := baseMap(in)
 	copyConfigPassthrough(m, in.Config, managedKeys())
-	if in.UDP {
-		m["udp"] = true
-	}
+	// Mihomo defaults the common listener udp field to true. Emit both values
+	// so disabling UDP in the panel is preserved instead of silently falling
+	// back to the core default after each config regeneration.
+	m["udp"] = in.UDP
 	if len(in.Users) > 1 {
 		return nil, fmt.Errorf("shadowsocks supports one password; %d credentials bound", len(in.Users))
 	}
