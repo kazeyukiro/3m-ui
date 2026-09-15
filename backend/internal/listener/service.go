@@ -64,10 +64,17 @@ func (s *Service) flushConfigApply() {
 	if !run {
 		return
 	}
+	// Generate under the mutation lock, ApplyConfig outside — ApplyConfig may
+	// restart Mihomo and block for a long time; holding s.mu would deadlock
+	// concurrent Create/Update/Delete (and the concurrency test).
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.regenerateConfigLocked(); err != nil {
-		//nolint:keep — panel stays source of truth; operator can Reload from UI.
+	yamlContent, err := s.generateConfigYAMLLocked()
+	s.mu.Unlock()
+	if err != nil {
+		log.Printf("warning: Mihomo config generate after listener change failed: %v", err)
+		return
+	}
+	if err := s.applyGeneratedYAML(yamlContent); err != nil {
 		log.Printf("warning: Mihomo config reload after listener change failed: %v", err)
 	}
 }
@@ -290,18 +297,21 @@ func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
 }
 
 func (s *Service) RegenerateConfig() error {
-	// Keep generation and application ordered with listener mutations so an old
-	// snapshot cannot overwrite the configuration from a newer Create/Update/Delete.
+	// Snapshot YAML under the mutation lock, then ApplyConfig without holding
+	// s.mu so listener CRUD is not blocked for the duration of Mihomo restart.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.regenerateConfigLocked()
+	yamlContent, err := s.generateConfigYAMLLocked()
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return s.applyGeneratedYAML(yamlContent)
 }
 
+// regenerateConfigLocked generates and applies while the caller holds s.mu.
+// Prefer RegenerateConfig / flushConfigApply for production paths so ApplyConfig
+// does not keep the mutation lock. Kept for any remaining call sites that already hold mu.
 func (s *Service) regenerateConfigLocked() error {
-	// Caller must hold s.mu. Keep the lock for the whole generate+apply so
-	// concurrent Create/Update/Delete cannot interleave DB mutations with a
-	// half-applied config. Long ApplyConfig is mitigated by a higher frontend
-	// mutation timeout and async user-credential reloads.
 	yamlContent, err := s.generateConfigYAMLLocked()
 	if err != nil {
 		return err
