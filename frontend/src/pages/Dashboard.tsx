@@ -100,9 +100,43 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card title={`${t('dashboard.disk')} ${clampPct(sys.disk?.percent)}%`}>
+          <Card size={isMobile ? "small" : "default"} title={`${t('dashboard.disk')} ${clampPct(sys.disk?.percent)}%`}>
             <Progress percent={clampPct(sys.disk?.percent)} size="small" status={clampPct(sys.disk?.percent) > 90 ? 'exception' : 'normal'} />
             <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{formatBytes(sys.disk?.used || 0)} / {formatBytes(sys.disk?.total || 0)}</div>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card size={isMobile ? "small" : "default"} title={t('dashboard.panelUsage', 'Panel process')}>
+            <Row gutter={[8, 8]}>
+              <Col span={12}>
+                <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.processCPU', 'CPU')}</div>
+                <Progress percent={clampPct(data?.panel?.cpu_percent)} size="small" status={clampPct(data?.panel?.cpu_percent) > 90 ? 'exception' : 'normal'} />
+              </Col>
+              <Col span={12}>
+                <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.processMemory', 'Memory')}</div>
+                <Progress percent={clampPct(data?.panel?.memory_percent)} size="small" />
+                <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{formatBytes(data?.panel?.memory_used || 0)}{data?.panel?.pid ? ` · PID ${data.panel.pid}` : ''}</div>
+              </Col>
+            </Row>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card size={isMobile ? "small" : "default"} title={t('dashboard.coreUsage', 'Core process')}>
+            <Row gutter={[8, 8]}>
+              <Col span={12}>
+                <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.processCPU', 'CPU')}</div>
+                <Progress percent={clampPct(data?.core?.cpu_percent)} size="small" status={clampPct(data?.core?.cpu_percent) > 90 ? 'exception' : 'normal'} />
+              </Col>
+              <Col span={12}>
+                <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('dashboard.processMemory', 'Memory')}</div>
+                <Progress percent={clampPct(data?.core?.memory_percent)} size="small" />
+                <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>
+                  {data?.mihomo?.running
+                    ? `${formatBytes(data?.core?.memory_used || 0)}${data?.core?.pid ? ` · PID ${data.core.pid}` : ''}`
+                    : (t('dashboard.stoppedStatus') || 'Stopped')}
+                </div>
+              </Col>
+            </Row>
           </Card>
         </Col>
       </Row>

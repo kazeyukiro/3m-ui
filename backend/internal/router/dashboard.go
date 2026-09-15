@@ -2,10 +2,12 @@ package router
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
+	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 	"github.com/kazeyukiro/3m-ui/backend/internal/traffic"
 )
 
@@ -54,9 +56,18 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 			activeConnections = len(col.CurrentConnections())
 		}
 
+		panelUsage := system.SampleProcessUsage(os.Getpid())
+		corePID := 0
+		if mihomoStatus != nil {
+			corePID = mihomoStatus.PID
+		}
+		coreUsage := system.SampleProcessUsage(corePID)
+
 		c.JSON(http.StatusOK, gin.H{
 			"mihomo": mihomoStatus,
 			"system": sysStatus,
+			"panel":  panelUsage,
+			"core":   coreUsage,
 			"listeners": gin.H{
 				"total":    listenerTotal,
 				"enabled":  listenerEnabled,
