@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, Form, Input, Button, Typography, message, Space, Dropdown, Steps, Alert } from 'antd';
+import { Card, Form, Input, Button, Typography, message, Space, Dropdown, Steps, Alert, theme } from 'antd';
 import {
   UserOutlined,
   LockOutlined,
@@ -25,7 +25,8 @@ const Login: React.FC = () => {
   const [form] = Form.useForm();
   const totpInputRef = useRef<any>(null);
   const { t, locale, setLocale } = useI18n();
-  const { mode, setMode, isDark } = useThemeStore();
+  const { mode, setMode } = useThemeStore();
+  const { token } = theme.useToken();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
 
   useEffect(() => {
@@ -94,7 +95,7 @@ const Login: React.FC = () => {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        background: isDark ? '#141414' : '#f5f5f5',
+        background: token.colorBgLayout,
         padding: '24px 0',
       }}
     >

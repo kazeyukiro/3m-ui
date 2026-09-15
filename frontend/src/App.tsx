@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp, theme } from 'antd';
 import enUS from 'antd/locale/en_US';
@@ -40,6 +40,16 @@ import SharePage from './pages/Share';
 const ThemedApp: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDark);
   const { locale } = useI18n();
+
+  // Propagate isDark to <html data-theme="…"> so plain CSS rules
+  // (e.g. `[data-theme='dark'] …` in responsive.css) and any other
+  // data-theme-aware styles can adapt alongside Ant Design's darkAlgorithm.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
+
   return (
     <ConfigProvider
       locale={(() => {

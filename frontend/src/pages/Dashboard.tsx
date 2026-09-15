@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, Grid, message } from 'antd';
+import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, Grid, message, theme } from 'antd';
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { isCanceledError } from '../api/client';
@@ -29,25 +29,6 @@ type ProcSample = {
   memory_percent?: number;
 };
 
-const muted: React.CSSProperties = { fontSize: 12, color: 'rgba(0,0,0,0.45)', lineHeight: 1.4 };
-
-/** Usage level → color. ≥80% high (red), ≥50% medium (orange), else inherit. */
-const HIGH = '#cf1322';
-const MED = '#d46b08';
-const LOW = '#3f8600';
-function usageColor(pct: number): string | undefined {
-  if (pct >= 80) return HIGH;
-  if (pct >= 50) return MED;
-  return undefined;
-}
-
-/** Bar variant: always resolves, so a healthy bar reads green rather than neutral. */
-function usageBarColor(pct: number): string {
-  if (pct >= 80) return HIGH;
-  if (pct >= 50) return MED;
-  return LOW;
-}
-
 /**
  * Process usage, grouped by **process**: Panel | Core.
  *
@@ -71,8 +52,16 @@ const ProcessUsageWall: React.FC<{
   memLabel: string;
   pidLabel: string;
 }> = ({ panel, core, coreRunning, panelLabel, coreLabel, cpuLabel, memLabel, pidLabel }) => {
+  const { token } = theme.useToken();
   const screens = Grid.useBreakpoint();
   const stacked = !screens.sm; // xs: groups stacked; sm+: side by side
+
+  /** Usage level → color. ≥80% high (red), ≥50% medium (orange), else inherit. */
+  const usageColor = (pct: number): string | undefined => {
+    if (pct >= 80) return token.colorError;
+    if (pct >= 50) return token.colorWarning;
+    return undefined;
+  };
 
   const groups = [
     {
@@ -117,7 +106,7 @@ const ProcessUsageWall: React.FC<{
   });
   const detailStyle: React.CSSProperties = {
     fontSize: 11,
-    color: 'rgba(0,0,0,0.45)',
+    color: token.colorTextSecondary,
     marginTop: 2,
     lineHeight: 1.3,
     whiteSpace: 'nowrap',
@@ -126,7 +115,7 @@ const ProcessUsageWall: React.FC<{
   };
   const labelStyle: React.CSSProperties = {
     fontSize: 12,
-    color: 'rgba(0,0,0,0.45)',
+    color: token.colorTextSecondary,
     marginTop: 4,
     lineHeight: 1.4,
     whiteSpace: 'nowrap',
@@ -135,10 +124,10 @@ const ProcessUsageWall: React.FC<{
   };
   const emptyStyle: React.CSSProperties = {
     ...numStyle(0),
-    color: 'rgba(0,0,0,0.35)',
+    color: token.colorTextDisabled,
   };
   const cellStyle: React.CSSProperties = { textAlign: 'center', padding: '10px 4px', minWidth: 0 };
-  const border = '1px solid rgba(0,0,0,0.06)';
+  const border = `1px solid ${token.colorBorderSecondary}`;
 
   return (
     <div
@@ -173,12 +162,12 @@ const ProcessUsageWall: React.FC<{
               gap: 8,
               padding: '6px 10px',
               borderBottom: border,
-              background: 'rgba(0,0,0,0.02)',
+              background: token.colorFillQuaternary,
             }}
           >
             <span style={{ fontSize: 12, fontWeight: 600 }}>{g.name}</span>
             {g.live && g.pid ? (
-              <span style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>
+              <span style={{ fontSize: 11, color: token.colorTextSecondary }}>
                 {pidLabel} {g.pid}
               </span>
             ) : null}
@@ -214,10 +203,21 @@ const ProcessUsageWall: React.FC<{
 const Dashboard: React.FC = () => {
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  const { token } = theme.useToken();
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const cardSize = isMobile ? 'small' as const : 'default' as const;
   const gutter = isMobile ? ([8, 8] as [number, number]) : ([16, 16] as [number, number]);
+
+  // Theme-adaptive muted text style (was a hardcoded rgba(0,0,0,0.45)).
+  const muted: React.CSSProperties = { fontSize: 12, color: token.colorTextSecondary, lineHeight: 1.4 };
+
+  /** Bar variant: always resolves, so a healthy bar reads green rather than neutral. */
+  const usageBarColor = (pct: number): string => {
+    if (pct >= 80) return token.colorError;
+    if (pct >= 50) return token.colorWarning;
+    return token.colorSuccess;
+  };
 
   const load = async (signal?: AbortSignal) => {
     try {
@@ -316,8 +316,8 @@ const Dashboard: React.FC = () => {
           <Card size={cardSize} title={t('dashboard.listeners')}>
             <Row gutter={isMobile ? [8, 8] : 16}>
               <Col span={8}><Statistic title={t('dashboard.total')} value={data?.listeners?.total || 0} /></Col>
-              <Col span={8}><Statistic title={t('dashboard.enabled')} value={data?.listeners?.enabled || 0} valueStyle={{ color: '#3f8600' }} /></Col>
-              <Col span={8}><Statistic title={t('dashboard.disabled')} value={data?.listeners?.disabled || 0} valueStyle={{ color: '#cf1322' }} /></Col>
+              <Col span={8}><Statistic title={t('dashboard.enabled')} value={data?.listeners?.enabled || 0} valueStyle={{ color: token.colorSuccess }} /></Col>
+              <Col span={8}><Statistic title={t('dashboard.disabled')} value={data?.listeners?.disabled || 0} valueStyle={{ color: token.colorError }} /></Col>
             </Row>
           </Card>
         </Col>
@@ -356,7 +356,7 @@ const Dashboard: React.FC = () => {
                 return (
                   <div key={m.key}>
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>{m.label}</span>
+                      <span style={{ fontSize: 13, color: token.colorText }}>{m.label}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color, fontVariantNumeric: 'tabular-nums' }}>
                         {m.pct}%
                       </span>
@@ -366,7 +366,7 @@ const Dashboard: React.FC = () => {
                       showInfo={false}
                       size="small"
                       strokeColor={color}
-                      trailColor="rgba(0,0,0,0.06)"
+                      trailColor={token.colorBorderSecondary}
                       strokeLinecap="butt"
                     />
                     {m.detail ? <div style={{ ...muted, fontSize: 11, marginTop: 2 }}>{m.detail}</div> : null}

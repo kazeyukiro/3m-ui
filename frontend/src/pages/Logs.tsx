@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, List, Tag, Button, Space, Empty, Spin, message } from 'antd';
+import { Card, List, Tag, Button, Space, Empty, Spin, message, theme } from 'antd';
 import { ReloadOutlined, ClearOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import client from '../api/client';
@@ -14,6 +14,7 @@ const levelColor: Record<string, string> = { debug: 'default', info: 'blue', war
 const Logs: React.FC = () => {
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  const { token } = theme.useToken();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -39,7 +40,7 @@ const Logs: React.FC = () => {
         {loading && logs.length === 0 ? <Spin /> : logs.length === 0 ? <Empty description={t('logs.empty')} /> : (
           <List size="small" dataSource={logs} renderItem={(log, i) => (
             <List.Item key={i} style={{ fontFamily: 'monospace', fontSize: 13 }}>
-              <span style={{ color: '#888', marginRight: 8 }}>[{dayjs(log.timestamp).format('YYYY-MM-DD HH:mm:ss')}]</span>
+              <span style={{ color: token.colorTextTertiary, marginRight: 8 }}>[{dayjs(log.timestamp).format('YYYY-MM-DD HH:mm:ss')}]</span>
               <Tag color={levelColor[log.level?.toLowerCase()] || 'default'} style={{ marginRight: 8 }}>{log.level?.toUpperCase()}</Tag>
               <span>{log.payload}</span>
             </List.Item>

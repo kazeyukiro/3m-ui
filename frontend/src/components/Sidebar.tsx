@@ -51,6 +51,9 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
 }) => {
   const { items, selectedKeys, onMenuClick, onLogout, t } = useSidebarMenuItems(onNavigate);
 
+  // Sidebar is rendered with theme="light" on the Sider below; the logout
+  // divider is therefore a light-mode border regardless of the global theme,
+  // so a static light color is correct here.
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...style }}>
       <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: 18, flexShrink: 0, padding: '0 12px' }}>
@@ -58,7 +61,7 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
         {!collapsed && <span>3M-UI</span>}
       </div>
       <Menu mode="inline" selectedKeys={selectedKeys} items={items} onClick={onMenuClick} style={{ flex: 1, borderInlineEnd: 'none' }} />
-      <Menu mode="inline" selectable={false} items={[{ key: 'logout', icon: <LogoutOutlined />, label: t('nav.logout'), onClick: onLogout }]} style={{ borderInlineEnd: 'none', borderTop: '1px solid rgba(5,5,5,0.06)' }} />
+      <Menu mode="inline" selectable={false} items={[{ key: 'logout', icon: <LogoutOutlined />, label: t('nav.logout'), onClick: onLogout }]} style={{ borderInlineEnd: 'none', borderTop: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))' }} />
     </div>
   );
 };

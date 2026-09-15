@@ -385,6 +385,21 @@ html.dark .mobile-entity-card,
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+/* Dark mode: subtle lift for sticky surfaces whose hardcoded light shadow
+   (rgba(0,0,0,0.04)) is invisible on a dark background. */
+html.dark .app-bottom-nav,
+[data-theme='dark'] .app-bottom-nav {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* Dark mode: lift the sticky header bar's blur scrim slightly so light text
+   stays readable over scrolling content. The var() fallback (rgba(0,0,0,0.06))
+   is too faint on dark surfaces. */
+html.dark .app-header-bar,
+[data-theme='dark'] .app-header-bar {
+  border-bottom-color: var(--ant-color-border-secondary, rgba(255, 255, 255, 0.08)) !important;
+}
+
 
 /* —— Mobile bottom navigation —— */
 .app-bottom-nav {
