@@ -17,6 +17,7 @@ import {
   Alert,
   Layout,
   Menu,
+  theme,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
@@ -88,6 +89,7 @@ const Settings: React.FC = () => {
   const [totpSetupOpen, setTotpSetupOpen] = useState(false);
   const { mode, setMode } = useThemeStore();
   const isDark = useThemeStore((s) => s.isDark);
+  const { token } = theme.useToken();
   const navigate = useNavigate();
   const [tgForm] = Form.useForm();
   const [accessForm] = Form.useForm();
@@ -1110,7 +1112,21 @@ const Settings: React.FC = () => {
                         Modal.info({
                           title: warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
                           width: 720,
-                          content: <pre style={{ maxHeight: 360, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{yaml}</pre>,
+                          // Themed TextArea — bare <pre> keeps browser default (light) bg in dark mode.
+                          content: (
+                            <Input.TextArea
+                              value={yaml}
+                              readOnly
+                              autoSize={{ minRows: 10, maxRows: 20 }}
+                              style={{
+                                fontFamily:
+                                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                fontSize: 12,
+                                background: token.colorFillTertiary,
+                                color: token.colorText,
+                              }}
+                            />
+                          ),
                         });
                       } catch (e: any) {
                         message.error(e?.response?.data?.error || e.message || t('common.error'));
