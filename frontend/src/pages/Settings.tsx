@@ -10,6 +10,7 @@ import {
   Upload,
   Form,
   Input,
+  Segmented,
   Switch,
   Select,
   InputNumber,
@@ -67,6 +68,7 @@ type SectionKey =
 
 const Settings: React.FC = () => {
   const [section, setSection] = useState<SectionKey>('panel');
+  const [warpMode, setWarpMode] = useState<'wireguard' | 'masque'>('wireguard');
   const [panelServer, setPanelServer] = useState<{
     port?: number;
     listen?: string;
@@ -1087,17 +1089,25 @@ const Settings: React.FC = () => {
                 </Button>
               </Card>
               <Card title={t('settings.warp', 'Cloudflare WARP')} style={{ marginTop: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
                   <Text type="secondary">{t('settings.warpHint', 'One-click register a WARP WireGuard config (YAML for Mihomo outbound).')}</Text>
+                  <Segmented
+                    value={warpMode}
+                    onChange={(v) => setWarpMode(v as 'wireguard' | 'masque')}
+                    options={[
+                      { label: t('settings.warpWireguard', 'WireGuard'), value: 'wireguard' },
+                      { label: t('settings.warpMasque', 'MASQUE'), value: 'masque' },
+                    ]}
+                  />
                   <Button
                     onClick={async () => {
                       try {
-                        const res = await client.post('/system/templates/warp/register');
+                        const res = await client.post(`/system/templates/warp/register?mode=${warpMode}`);
                         const yaml = res.data?.yaml || '';
                         await copyText(yaml);
                         message.success(t('settings.warpDone', 'WARP registered — YAML copied'));
                         Modal.info({
-                          title: 'WARP YAML',
+                          title: warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
                           width: 720,
                           content: <pre style={{ maxHeight: 360, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{yaml}</pre>,
                         });
@@ -1106,7 +1116,7 @@ const Settings: React.FC = () => {
                       }
                     }}
                   >
-                    {t('settings.warpRegister', 'Register WARP')}
+                    {t('settings.warpRegister', 'Register WARP')} ({warpMode === 'masque' ? 'MASQUE' : 'WireGuard'})
                   </Button>
                 </Space>
               </Card>

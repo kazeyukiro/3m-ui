@@ -202,3 +202,97 @@ func indexOf(s, substr string) int {
 	}
 	return -1
 }
+
+// TestWARPMasqueTemplate_GeneratesCorrectYAML verifies the masque YAML
+// output aligns with https://wiki.metacubex.one/config/proxies/masque/
+func TestWARPMasqueTemplate_GeneratesCorrectYAML(t *testing.T) {
+	yaml, err := WARPMasqueTemplate(
+		"CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=",
+		"172.16.0.2",
+		"2606:4700:110:8216:dac5:4a83:49de:6997",
+		"", // default network (UDP masque)
+	)
+	if err != nil {
+		t.Fatalf("WARPMasqueTemplate: %v", err)
+	}
+	// type must be masque (not wireguard).
+	if !contains(yaml, "type: masque") {
+		t.Errorf("missing 'type: masque':\n%s", yaml)
+	}
+	// ip must carry CIDR /32 per masque schema.
+	if !contains(yaml, "ip: 172.16.0.2/32") {
+		t.Errorf("ip field must have /32 CIDR:\n%s", yaml)
+	}
+	// ipv6 must carry CIDR /128.
+	if !contains(yaml, "ipv6: 2606:4700:110:8216:dac5:4a83:49de:6997/128") {
+		t.Errorf("ipv6 field must have /128 CIDR:\n%s", yaml)
+	}
+	// masque has NO reserved field (wireguard-only).
+	if contains(yaml, "reserved:") {
+		t.Errorf("masque YAML must NOT have reserved field:\n%s", yaml)
+	}
+	// server + port + key fields present.
+	if !contains(yaml, "server: engage.cloudflareclient.com") {
+		t.Errorf("missing server:\n%s", yaml)
+	}
+	if !contains(yaml, "port: 2408") {
+		t.Errorf("missing port:\n%s", yaml)
+	}
+	if !contains(yaml, "private-key: CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=") {
+		t.Errorf("missing private-key:\n%s", yaml)
+	}
+	// network must be absent when empty (default UDP).
+	if contains(yaml, "network:") {
+		t.Errorf("network should be omitted when empty:\n%s", yaml)
+	}
+}
+
+// TestWARPMasqueTemplate_NetworkH2 verifies the network field is emitted
+// when "h2" is specified.
+func TestWARPMasqueTemplate_NetworkH2(t *testing.T) {
+	yaml, err := WARPMasqueTemplate(
+		"CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=",
+		"172.16.0.2",
+		"",
+		"h2",
+	)
+	if err != nil {
+		t.Fatalf("WARPMasqueTemplate: %v", err)
+	}
+	if !contains(yaml, "network: h2") {
+		t.Errorf("missing network: h2:\n%s", yaml)
+	}
+	// ipv6 should be omitted when empty.
+	if contains(yaml, "ipv6:") {
+		t.Errorf("ipv6 should be omitted when empty:\n%s", yaml)
+	}
+}
+
+// TestWARPMasqueTemplate_InvalidNetwork rejects unknown network values.
+func TestWARPMasqueTemplate_InvalidNetwork(t *testing.T) {
+	_, err := WARPMasqueTemplate(
+		"CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=",
+		"172.16.0.2", "", "unknown",
+	)
+	if err == nil {
+		t.Fatal("expected error for invalid network, got nil")
+	}
+}
+
+// TestWARPMasqueTemplate_KeepsExistingCIDR verifies that caller-supplied
+// CIDRs are preserved (not doubled).
+func TestWARPMasqueTemplate_KeepsExistingCIDR(t *testing.T) {
+	yaml, err := WARPMasqueTemplate(
+		"CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=",
+		"10.0.0.1/24", "fd00::1/64", "",
+	)
+	if err != nil {
+		t.Fatalf("WARPMasqueTemplate: %v", err)
+	}
+	if !contains(yaml, "ip: 10.0.0.1/24") {
+		t.Errorf("CIDR should be preserved, not doubled:\n%s", yaml)
+	}
+	if !contains(yaml, "ipv6: fd00::1/64") {
+		t.Errorf("IPv6 CIDR should be preserved:\n%s", yaml)
+	}
+}

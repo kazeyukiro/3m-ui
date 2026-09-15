@@ -57,6 +57,90 @@ func validateWARPField(s string) bool {
 	return true
 }
 
+// WARPMasqueTemplate returns a Mihomo YAML fragment for Cloudflare WARP using
+// the MASQUE protocol (RFC 9298 / HTTP/3 CONNECT-UDP). Cloudflare WARP now
+// defaults to MASQUE per the registration API's `policy.tunnel_protocol`
+// field — this template emits the schema documented at
+// https://wiki.metacubex.one/config/proxies/masque/
+//
+// Key differences vs WireGuard WARP:
+//   - `ip` / `ipv6` carry a CIDR (/32 and /128) per mihomo's masque schema
+//   - No `reserved` field (that's wireguard-only)
+//   - Same X25519 keypair (Curve25519 private/public key from WARP register)
+//   - Optional `network` field: "" (default UDP) | "h2" | "h3-l4proxy"
+//   - Optional `congestion-controller`: "bbr" recommended for WARP
+func WARPMasqueTemplate(privateKey, ipv4, ipv6, network string) (string, error) {
+	privateKey = strings.TrimSpace(privateKey)
+	if privateKey != "" {
+		if !validateWARPField(privateKey) {
+			return "", fmt.Errorf("invalid private_key: must be base64 / wireguard-safe")
+		}
+	}
+	ipv4 = strings.TrimSpace(ipv4)
+	ipv6 = strings.TrimSpace(ipv6)
+	if ipv4 == "" && ipv6 == "" {
+		ipv4 = "172.16.0.2"
+	}
+	// masque requires CIDR form. Append /32 / /128 if caller passed bare IP.
+	ipv4 = ensureCIDR(ipv4, "/32")
+	ipv6 = ensureCIDR(ipv6, "/128")
+	if !validateWARPField(ipv4) {
+		return "", fmt.Errorf("invalid IPv4 address: %q", ipv4)
+	}
+	if !validateWARPField(ipv6) {
+		return "", fmt.Errorf("invalid IPv6 address: %q", ipv6)
+	}
+	key := privateKey
+	if key == "" {
+		key = "YOUR_WARP_PRIVATE_KEY"
+	}
+	network = strings.TrimSpace(network)
+	if network != "" && network != "h2" && network != "h3-l4proxy" {
+		return "", fmt.Errorf("invalid network %q: must be '', 'h2', or 'h3-l4proxy'", network)
+	}
+	proxy := map[string]interface{}{
+		"name":        "WARP-Masque",
+		"type":        "masque",
+		"server":      "engage.cloudflareclient.com",
+		"port":        2408,
+		"ip":          ipv4,
+		"private-key": key,
+		"public-key":  "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+		"udp":         true,
+		"mtu":         1280,
+	}
+	if ipv6 != "" {
+		proxy["ipv6"] = ipv6
+	}
+	if network != "" {
+		proxy["network"] = network
+	}
+	cfg := warpConfig{
+		Proxies: []map[string]interface{}{proxy},
+		Groups: []warpProxyGroup{
+			{Name: "WARP-Masque-OUT", Type: "select", Proxies: []string{"WARP-Masque", "DIRECT"}},
+		},
+	}
+	out, err := yaml.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	header := "# Cloudflare WARP (MASQUE) outbound for Mihomo\n"
+	footer := "\n# Example rule (optional):\n# rules:\n#   - MATCH,WARP-Masque-OUT\n"
+	return header + string(out) + footer, nil
+}
+
+// ensureCIDR appends suffix if s does not already contain a '/'.
+func ensureCIDR(s, suffix string) string {
+	if s == "" {
+		return s
+	}
+	if strings.IndexByte(s, '/') >= 0 {
+		return s
+	}
+	return s + suffix
+}
+
 // WARPTemplate returns a Mihomo YAML fragment for Cloudflare WARP (WireGuard)
 // outbound — WARP helper. Operators paste private_key / addresses from
 // `warp-cli` or wgcf. Structured marshalling prevents injection through

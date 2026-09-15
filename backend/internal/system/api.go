@@ -183,5 +183,29 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, res)
+	// Optional `mode` query param: "masque" returns only the MASQUE YAML,
+	// "wireguard" (default) returns only the WireGuard YAML, "both" returns
+	// the full result (including both YAMLs). This keeps the response shape
+	// backward-compatible (the default `yaml` field stays WireGuard).
+	mode := strings.TrimSpace(c.Query("mode"))
+	switch mode {
+	case "", "wireguard":
+		c.JSON(http.StatusOK, gin.H{
+			"yaml":        res.YAML,
+			"masque_yaml": res.MasqueYAML, // bonus, for clients that support it
+			"address":     res.Address,
+			"ipv6":        res.IPv6,
+			"reserved":    res.Reserved,
+		})
+	case "masque":
+		c.JSON(http.StatusOK, gin.H{
+			"yaml":    res.MasqueYAML,
+			"address": res.Address,
+			"ipv6":    res.IPv6,
+		})
+	case "both":
+		c.JSON(http.StatusOK, res)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mode %q: must be wireguard, masque, or both", mode)})
+	}
 }

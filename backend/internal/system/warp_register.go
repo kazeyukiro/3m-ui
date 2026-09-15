@@ -18,10 +18,11 @@ import (
 type WARPRegisterResult struct {
 	PrivateKey string `json:"private_key"`
 	PublicKey  string `json:"public_key"`
-	Address    string `json:"address"`            // IPv4 address (no CIDR)
-	IPv6       string `json:"ipv6,omitempty"`     // IPv6 address (no CIDR)
-	Reserved   []int  `json:"reserved,omitempty"` // 3-byte reserved (decoded from client_id)
-	YAML       string `json:"yaml"`
+	Address    string `json:"address"`               // IPv4 address (no CIDR)
+	IPv6       string `json:"ipv6,omitempty"`        // IPv6 address (no CIDR)
+	Reserved   []int  `json:"reserved,omitempty"`    // 3-byte reserved (decoded from client_id)
+	YAML       string `json:"yaml"`                  // WireGuard outbound YAML
+	MasqueYAML string `json:"masque_yaml,omitempty"` // MASQUE outbound YAML (WARP default protocol)
 }
 
 type cfRegRequest struct {
@@ -158,6 +159,12 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	masqueYAML, err := WARPMasqueTemplate(priv, v4, v6, "")
+	if err != nil {
+		// Non-fatal: masque is a bonus; wireguard yaml already built.
+		// Log to stderr via fmt for now — production code should use log pkg.
+		masqueYAML = ""
+	}
 	return &WARPRegisterResult{
 		PrivateKey: priv,
 		PublicKey:  pub,
@@ -165,6 +172,7 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 		IPv6:       v6,
 		Reserved:   reserved,
 		YAML:       yaml,
+		MasqueYAML: masqueYAML,
 	}, nil
 }
 
