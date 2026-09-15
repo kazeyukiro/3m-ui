@@ -44,67 +44,66 @@ function usageBarColor(pct: number): string {
 }
 
 /**
- * Equal-width number wall (no bars).
- * 4 cells: Panel CPU | Panel Mem | Core CPU | Core Mem
- * Mobile: 2 cols (2×2 grid); Desktop: 4 cols (1×4 row).
+ * Process usage, grouped by **process**: Panel | Core.
  *
- * Every cell leads with the **percentage** — the same number the colour is
+ * A PID belongs to a process rather than to a metric, so it lives in the
+ * group header. A flat four-cell wall can only park the two PIDs in the card
+ * corner, where nothing says which one belongs to which process.
+ *
+ * Every metric leads with the **percentage** — the same number the colour is
  * derived from, so a red figure always has a visible reason. Absolute RSS
- * rides along as a neutral sub-line. A cell with no sample renders "—"
+ * rides along as a neutral sub-line. A group with no sample renders "—"
  * instead of a misleading 0%; the card header already carries the
- * running/stopped state, so cells keep their own label.
+ * running/stopped state, so metrics keep their own label.
  */
 const ProcessUsageWall: React.FC<{
   panel: ProcSample | undefined;
   core: ProcSample | undefined;
   coreRunning: boolean;
-  panelCpuLabel: string;
-  panelMemLabel: string;
-  coreCpuLabel: string;
-  coreMemLabel: string;
-}> = ({ panel, core, coreRunning, panelCpuLabel, panelMemLabel, coreCpuLabel, coreMemLabel }) => {
-  // Match the Col breakpoints exactly so separators never land on a row edge.
+  panelLabel: string;
+  coreLabel: string;
+  cpuLabel: string;
+  memLabel: string;
+  pidLabel: string;
+}> = ({ panel, core, coreRunning, panelLabel, coreLabel, cpuLabel, memLabel, pidLabel }) => {
   const screens = Grid.useBreakpoint();
-  const twoCol = !screens.sm;
+  const stacked = !screens.sm; // xs: groups stacked; sm+: side by side
 
-  const cells = [
+  const groups = [
     {
-      key: 'panel-cpu',
-      label: panelCpuLabel,
-      pct: clampPct(panel?.cpu_percent),
-      detail: '',
+      key: 'panel',
+      name: panelLabel,
+      pid: panel?.pid,
       live: Boolean(panel),
+      metrics: [
+        { key: 'cpu', label: cpuLabel, pct: clampPct(panel?.cpu_percent), detail: '' },
+        {
+          key: 'mem',
+          label: memLabel,
+          pct: clampPct(panel?.memory_percent),
+          detail: panel?.memory_used ? formatBytes(panel.memory_used) : '',
+        },
+      ],
     },
     {
-      key: 'panel-mem',
-      label: panelMemLabel,
-      pct: clampPct(panel?.memory_percent),
-      detail: panel?.memory_used ? formatBytes(panel.memory_used) : '',
-      live: Boolean(panel),
-    },
-    {
-      key: 'core-cpu',
-      label: coreCpuLabel,
-      pct: clampPct(core?.cpu_percent),
-      detail: '',
+      key: 'core',
+      name: coreLabel,
+      pid: core?.pid,
       live: coreRunning && Boolean(core),
-    },
-    {
-      key: 'core-mem',
-      label: coreMemLabel,
-      pct: clampPct(core?.memory_percent),
-      detail: coreRunning && core?.memory_used ? formatBytes(core.memory_used) : '',
-      live: coreRunning && Boolean(core),
+      metrics: [
+        { key: 'cpu', label: cpuLabel, pct: clampPct(core?.cpu_percent), detail: '' },
+        {
+          key: 'mem',
+          label: memLabel,
+          pct: clampPct(core?.memory_percent),
+          detail: coreRunning && core?.memory_used ? formatBytes(core.memory_used) : '',
+        },
+      ],
     },
   ];
 
-  const cellStyle: React.CSSProperties = {
-    textAlign: 'center',
-    padding: '12px 4px',
-    minWidth: 0,
-  };
   const numStyle = (pct: number): React.CSSProperties => ({
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: 700,
     lineHeight: 1.1,
     fontVariantNumeric: 'tabular-nums',
@@ -133,28 +132,77 @@ const ProcessUsageWall: React.FC<{
     ...numStyle(0),
     color: 'rgba(0,0,0,0.35)',
   };
+  const cellStyle: React.CSSProperties = { textAlign: 'center', padding: '10px 4px', minWidth: 0 };
   const border = '1px solid rgba(0,0,0,0.06)';
-  // In the 2×2 layout only the left cell of each row gets a separator.
-  const withRightBorder = (i: number) => (twoCol ? i % 2 === 0 : i < cells.length - 1);
 
   return (
-    <Row gutter={[0, 0]} style={{ borderTop: border, borderBottom: border }}>
-      {cells.map((c, i) => (
-        <Col xs={12} sm={6} key={c.key} style={withRightBorder(i) ? { borderRight: border } : undefined}>
-          <div style={cellStyle}>
-            {c.live ? (
-              <>
-                <div style={numStyle(c.pct)}>{c.pct}%</div>
-                {c.detail ? <div style={detailStyle}>{c.detail}</div> : null}
-              </>
-            ) : (
-              <div style={emptyStyle}>—</div>
-            )}
-            <div style={labelStyle}>{c.label}</div>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: stacked ? 'column' : 'row',
+        border,
+        borderRadius: 6,
+        overflow: 'hidden',
+      }}
+    >
+      {groups.map((g, i) => (
+        <div
+          key={g.key}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            ...(stacked
+              ? i > 0
+                ? { borderTop: border }
+                : null
+              : i > 0
+                ? { borderLeft: border }
+                : null),
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 8,
+              padding: '6px 10px',
+              borderBottom: border,
+              background: 'rgba(0,0,0,0.02)',
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{g.name}</span>
+            {g.live && g.pid ? (
+              <span style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>
+                {pidLabel} {g.pid}
+              </span>
+            ) : null}
           </div>
-        </Col>
+          <div style={{ display: 'flex' }}>
+            {g.metrics.map((m, mi) => (
+              <div
+                key={m.key}
+                style={{ ...cellStyle, flex: 1, ...(mi === 0 ? { borderRight: border } : null) }}
+              >
+                {g.live ? (
+                  <>
+                    <div style={numStyle(m.pct)}>{m.pct}%</div>
+                    {/* Always reserve the sub-line so CPU and Mem baselines align. */}
+                    <div style={detailStyle}>{m.detail || '\u00A0'}</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={emptyStyle}>—</div>
+                    <div style={detailStyle}>{'\u00A0'}</div>
+                  </>
+                )}
+                <div style={labelStyle}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       ))}
-    </Row>
+    </div>
   );
 };
 
@@ -324,7 +372,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
 
-        {/* Process usage: 4-cell number wall (Panel CPU/Mem + Core CPU/Mem) */}
+        {/* Process usage: Panel / Core groups, each carrying its own PID */}
         <Col xs={24}>
           <Card
             size={cardSize}
@@ -336,21 +384,16 @@ const Dashboard: React.FC = () => {
                 </Tag>
               </Space>
             }
-            extra={
-              <Space size={12}>
-                {data?.panel?.pid ? <Text type="secondary" style={{ fontSize: 12 }}>PID {data.panel.pid}</Text> : null}
-                {coreRunning && data?.core?.pid ? <Text type="secondary" style={{ fontSize: 12 }}>PID {data.core.pid}</Text> : null}
-              </Space>
-            }
           >
             <ProcessUsageWall
               panel={data?.panel}
               core={data?.core}
               coreRunning={coreRunning}
-              panelCpuLabel={t('dashboard.panelCpu', 'Panel CPU')}
-              panelMemLabel={t('dashboard.panelMem', 'Panel Mem')}
-              coreCpuLabel={t('dashboard.coreCpu', 'Core CPU')}
-              coreMemLabel={t('dashboard.coreMem', 'Core Mem')}
+              panelLabel={t('dashboard.panel', 'Panel')}
+              coreLabel={t('dashboard.core', 'Core')}
+              cpuLabel={t('dashboard.cpu')}
+              memLabel={t('dashboard.memory')}
+              pidLabel={t('dashboard.pid')}
             />
           </Card>
         </Col>
