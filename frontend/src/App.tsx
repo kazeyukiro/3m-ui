@@ -75,7 +75,19 @@ const ThemedApp: React.FC = () => {
         };
         return map[locale] || enUS;
       })()}
-      theme={{ algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm }}
+      theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        // In dark mode, antd v6's default colorTextSecondary (~rgba(255,255,255,0.65))
+        // and colorTextTertiary (~rgba(255,255,255,0.45)) fall below WCAG AA 4.5:1
+        // contrast on dark card backgrounds. Boost them so subtitles, muted
+        // metadata, and Statistic titles stay readable.
+        // See https://github.com/ant-design/ant-design/issues/41317
+        token: isDark ? {
+          colorTextSecondary: 'rgba(255, 255, 255, 0.85)',
+          colorTextTertiary: 'rgba(255, 255, 255, 0.65)',
+          colorTextQuaternary: 'rgba(255, 255, 255, 0.55)',
+        } : {},
+      }}
     >
       <AntApp>
         <BrowserRouter>
