@@ -1148,7 +1148,8 @@ const Settings: React.FC = () => {
                 cancelButtonProps={{ style: { display: 'none' } }}
                 destroyOnHidden
                 styles={{
-                  content: { background: token.colorBgElevated },
+                  // antd v6: use container (not content)
+                  container: { background: token.colorBgElevated },
                   header: { background: token.colorBgElevated, color: token.colorText },
                   body: { background: token.colorBgElevated },
                   footer: { background: token.colorBgElevated },
