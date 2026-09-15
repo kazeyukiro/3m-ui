@@ -87,6 +87,7 @@ const Settings: React.FC = () => {
   const [totpLoading, setTotpLoading] = useState(false);
   const [totpSetupOpen, setTotpSetupOpen] = useState(false);
   const { mode, setMode } = useThemeStore();
+  const isDark = useThemeStore((s) => s.isDark);
   const navigate = useNavigate();
   const [tgForm] = Form.useForm();
   const [accessForm] = Form.useForm();
@@ -276,7 +277,7 @@ const Settings: React.FC = () => {
         <Sider
           className="settings-sider"
           width={220}
-          theme="light"
+          theme={isDark ? 'dark' : 'light'}
           style={{
             background: 'var(--ant-color-bg-container, #fff)',
             borderRadius: 8,

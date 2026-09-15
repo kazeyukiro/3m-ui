@@ -7,6 +7,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n } from '../i18n';
+import { useThemeStore } from '../stores/themeStore';
 
 const { Sider } = Layout;
 
@@ -51,9 +52,8 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
 }) => {
   const { items, selectedKeys, onMenuClick, onLogout, t } = useSidebarMenuItems(onNavigate);
 
-  // Sidebar is rendered with theme="light" on the Sider below; the logout
-  // divider is therefore a light-mode border regardless of the global theme,
-  // so a static light color is correct here.
+  // The Sider follows the global theme (light/dark); the logout divider
+  // uses antd's CSS variable so it adapts automatically.
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...style }}>
       <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: 18, flexShrink: 0, padding: '0 12px' }}>
@@ -66,11 +66,14 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
   );
 };
 
-const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
-  <Sider trigger={null} collapsible collapsed={collapsed} theme="light" breakpoint="md" collapsedWidth={80} width={220}
-    style={{ overflow: 'auto', height: '100vh', position: 'sticky', insetInlineStart: 0, top: 0, bottom: 0 }}>
-    <SidebarMenu collapsed={collapsed} />
-  </Sider>
-);
+const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
+  const isDark = useThemeStore((s) => s.isDark);
+  return (
+    <Sider trigger={null} collapsible collapsed={collapsed} theme={isDark ? 'dark' : 'light'} breakpoint="md" collapsedWidth={80} width={220}
+      style={{ overflow: 'auto', height: '100vh', position: 'sticky', insetInlineStart: 0, top: 0, bottom: 0 }}>
+      <SidebarMenu collapsed={collapsed} />
+    </Sider>
+  );
+};
 
 export default Sidebar;
