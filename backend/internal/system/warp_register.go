@@ -66,13 +66,22 @@ func genWireGuardKeyPair() (privB64, pubB64 string, err error) {
 	if _, err = rand.Read(priv[:]); err != nil {
 		return "", "", err
 	}
-	// clamp
+	// Clamp per RFC 7748 §5: priv[0] &= 248, priv[31] &= 127, priv[31] |= 64.
+	// Note: x/crypto's X25519 also clamps internally, but we still clamp here
+	// so the stored private key matches the wire-format expected by Mihomo
+	// and other WireGuard implementations.
 	priv[0] &= 248
 	priv[31] &= 127
 	priv[31] |= 64
-	var pub [32]byte
-	curve25519.ScalarBaseMult(&pub, &priv)
-	return base64.StdEncoding.EncodeToString(priv[:]), base64.StdEncoding.EncodeToString(pub[:]), nil
+	// Use the modern X25519 API (RFC 7748). The legacy ScalarBaseMult API is
+	// deprecated in x/crypto and produced pubkeys that Cloudflare's WARP API
+	// silently rejected (HTTP 200 with empty config.interface.addresses),
+	// triggering "warp register: empty interface addresses".
+	pub, err := curve25519.X25519(priv[:], curve25519.Basepoint)
+	if err != nil {
+		return "", "", fmt.Errorf("curve25519 X25519: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(priv[:]), base64.StdEncoding.EncodeToString(pub), nil
 }
 
 // RegisterWARP performs a Cloudflare WARP device registration (wgcf-style) and
@@ -122,7 +131,7 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 		}
 	}
 	if addr == "" {
-		return nil, fmt.Errorf("warp register: empty interface addresses")
+		return nil, fmt.Errorf("warp register: empty interface addresses (raw response: %s)", truncate(string(raw), 400))
 	}
 	reserved := ""
 	if cid := parsed.Result.Config.ClientID; cid != "" {
