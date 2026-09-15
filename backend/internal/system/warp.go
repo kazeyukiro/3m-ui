@@ -12,11 +12,15 @@ import (
 // escaping / indentation, which prevents a malicious operator-supplied
 // private_key or address from breaking out of the YAML scalar and injecting
 // sibling keys.
+// Field names align with mihomo's wireguard outbound schema documented at
+// https://wiki.metacubex.one/en/config/proxies/wg/ — in particular, IPv4 and
+// IPv6 are separate fields (ip + ipv6), NOT a comma-joined string.
 type warpWireGuardSpec struct {
 	PrivateKey string `yaml:"private-key,omitempty"`
 	Server     string `yaml:"server"`
 	Port       int    `yaml:"port"`
-	IP         string `yaml:"ip"`
+	IP         string `yaml:"ip"`             // IPv4 address (no CIDR)
+	IPv6       string `yaml:"ipv6,omitempty"` // IPv6 address (no CIDR)
 	PublicKey  string `yaml:"public-key"`
 	UDP        bool   `yaml:"udp"`
 	Reserved   []int  `yaml:"reserved,omitempty"`
@@ -53,96 +57,56 @@ func validateWARPField(s string) bool {
 	return true
 }
 
-// parseWARPReserved converts "1,2,3" or "[1,2,3]" into []int. Empty input
-// returns nil (reserved omitted from the YAML).
-func parseWARPReserved(s string) ([]int, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil, nil
-	}
-	s = strings.TrimPrefix(s, "[")
-	s = strings.TrimSuffix(s, "]")
-	if s == "" {
-		return nil, nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]int, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		var n int
-		if _, err := fmt.Sscanf(p, "%d", &n); err != nil {
-			return nil, fmt.Errorf("invalid reserved entry %q", p)
-		}
-		if n < 0 || n > 255 {
-			return nil, fmt.Errorf("reserved entry %d out of byte range", n)
-		}
-		out = append(out, n)
-	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	return out, nil
-}
-
 // WARPTemplate returns a Mihomo YAML fragment for Cloudflare WARP (WireGuard)
 // outbound — WARP helper. Operators paste private_key / addresses from
 // `warp-cli` or wgcf. Structured marshalling prevents injection through
 // operator-supplied strings.
-func WARPTemplate(privateKey, address, reserved string) (string, error) {
+//
+// Per https://wiki.metacubex.one/en/config/proxies/wg/ the IPv4 and IPv6
+// addresses are emitted as separate fields (`ip` + `ipv6`), not a
+// comma-joined string. The reserved list is a []int of decoded bytes
+// (Cloudflare's client_id is base64-encoded).
+func WARPTemplate(privateKey, ipv4, ipv6 string, reserved []int) (string, error) {
 	privateKey = strings.TrimSpace(privateKey)
 	if privateKey != "" {
 		if !validateWARPField(privateKey) {
 			return "", fmt.Errorf("invalid private_key: must be base64 / wireguard-safe")
 		}
 	}
-	address = strings.TrimSpace(address)
-	if address == "" {
-		address = "172.16.0.2/32"
-	} else if !validateWARPField(address) {
-		return "", fmt.Errorf("invalid address: must be host/CIDR")
+	ipv4 = strings.TrimSpace(ipv4)
+	ipv6 = strings.TrimSpace(ipv6)
+	if ipv4 == "" && ipv6 == "" {
+		ipv4 = "172.16.0.2" // WARP default IPv4 if API returned nothing
 	}
-	reservedList, err := parseWARPReserved(reserved)
-	if err != nil {
-		return "", err
+	if ipv4 != "" && !validateWARPField(ipv4) {
+		return "", fmt.Errorf("invalid IPv4 address: %q", ipv4)
 	}
-	ipAddr := address
-	if i := strings.IndexByte(ipAddr, '/'); i >= 0 {
-		ipAddr = ipAddr[:i]
+	if ipv6 != "" && !validateWARPField(ipv6) {
+		return "", fmt.Errorf("invalid IPv6 address: %q", ipv6)
 	}
 	key := privateKey
 	if key == "" {
 		key = "YOUR_WARP_PRIVATE_KEY"
 	}
-	wg := warpWireGuardSpec{
-		PrivateKey: key,
-		Server:     "engage.cloudflareclient.com",
-		Port:       2408,
-		IP:         ipAddr,
-		PublicKey:  "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-		UDP:        true,
-		Reserved:   reservedList,
-		MTU:        1280,
-	}
-	_ = wg // structured shape reference; marshalled via the generic map below
-	// yaml.Marshal produces a map under the top-level struct fields; we need
-	// it as an entry of a proxies: list. Re-marshal as a generic map so the
-	// ordering and shape matches Mihomo's expected fragment.
+	// Build the proxy map directly (yaml.v3 marshals map keys alphabetically,
+	// which is acceptable for Mihomo's schema — order is not semantically
+	// significant for wireguard outbounds).
 	proxy := map[string]interface{}{
 		"name":        "WARP",
 		"type":        "wireguard",
-		"server":      wg.Server,
-		"port":        wg.Port,
-		"ip":          wg.IP,
-		"private-key": wg.PrivateKey,
-		"public-key":  wg.PublicKey,
-		"udp":         wg.UDP,
-		"mtu":         wg.MTU,
+		"server":      "engage.cloudflareclient.com",
+		"port":        2408,
+		"ip":          ipv4,
+		"private-key": key,
+		"public-key":  "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+		"udp":         true,
+		"mtu":         1280,
 	}
-	if reservedList != nil {
-		proxy["reserved"] = reservedList
+	if ipv6 != "" {
+		proxy["ipv6"] = ipv6
+	}
+	if len(reserved) > 0 {
+		proxy["reserved"] = reserved
 	}
 	cfg := warpConfig{
 		Proxies: []map[string]interface{}{proxy},

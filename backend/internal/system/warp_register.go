@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
@@ -17,8 +18,9 @@ import (
 type WARPRegisterResult struct {
 	PrivateKey string `json:"private_key"`
 	PublicKey  string `json:"public_key"`
-	Address    string `json:"address"`
-	Reserved   string `json:"reserved,omitempty"`
+	Address    string `json:"address"`            // IPv4 address (no CIDR)
+	IPv6       string `json:"ipv6,omitempty"`     // IPv6 address (no CIDR)
+	Reserved   []int  `json:"reserved,omitempty"` // 3-byte reserved (decoded from client_id)
 	YAML       string `json:"yaml"`
 }
 
@@ -147,34 +149,64 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 	}
 	v4 := cfg.Interface.Addresses.V4
 	v6 := cfg.Interface.Addresses.V6
-	addr := v4
-	if v6 != "" {
-		if addr != "" {
-			addr = addr + "," + v6
-		} else {
-			addr = v6
-		}
-	}
-	if addr == "" {
+	if v4 == "" && v6 == "" {
 		return nil, fmt.Errorf("warp register: empty interface addresses (v4=%q v6=%q, raw: %s)",
 			v4, v6, truncate(string(raw), 800))
 	}
-	reserved := ""
-	if cid := cfg.ClientID; cid != "" {
-		// client_id is often base64 3-byte reserved; pass through as-is when short
-		reserved = cid
-	}
-	yaml, err := WARPTemplate(priv, addr, reserved)
+	reserved := decodeWARPClientID(cfg.ClientID)
+	yaml, err := WARPTemplate(priv, v4, v6, reserved)
 	if err != nil {
 		return nil, err
 	}
 	return &WARPRegisterResult{
 		PrivateKey: priv,
 		PublicKey:  pub,
-		Address:    addr,
+		Address:    v4,
+		IPv6:       v6,
 		Reserved:   reserved,
 		YAML:       yaml,
 	}, nil
+}
+
+// decodeWARPClientID converts Cloudflare's client_id field into the 3-byte
+// reserved list Mihomo expects. The client_id can be either:
+//   - a base64 string (e.g. "qVtt" → [171, 91, 109]) — most common
+//   - a numeric string (e.g. "21") — sometimes returned for certain accounts
+//   - a comma-separated list (e.g. "21,22,23") — legacy compat form
+//
+// Returns nil when the input is empty or cannot be decoded (reserved field
+// will be omitted from the YAML, which is acceptable for WARP+ accounts
+// that don't need the reserved hack).
+func decodeWARPClientID(cid string) []int {
+	cid = strings.TrimSpace(cid)
+	if cid == "" {
+		return nil
+	}
+	// Try base64 decode first (the common case).
+	if b, err := base64.StdEncoding.DecodeString(cid); err == nil && len(b) > 0 {
+		out := make([]int, 0, len(b))
+		for _, c := range b {
+			out = append(out, int(c))
+		}
+		return out
+	}
+	// Fallback: treat as comma-separated decimal list ("21" or "21,22,23").
+	var nums []int
+	for _, p := range strings.Split(cid, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		var n int
+		if _, err := fmt.Sscanf(p, "%d", &n); err != nil {
+			return nil // not numeric either — give up, omit reserved
+		}
+		if n < 0 || n > 255 {
+			return nil
+		}
+		nums = append(nums, n)
+	}
+	return nums
 }
 
 func truncate(s string, n int) string {

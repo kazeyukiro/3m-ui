@@ -102,3 +102,103 @@ func TestParseWARPResponse_EmptyConfig(t *testing.T) {
 			cfg.Interface.Addresses.V4, cfg.Interface.Addresses.V6)
 	}
 }
+
+// TestDecodeWARPClientID_Base64 verifies the common case: Cloudflare returns
+// a base64-encoded 3-byte client_id (e.g. "qVtt" → [169, 91, 109]).
+func TestDecodeWARPClientID_Base64(t *testing.T) {
+	got := decodeWARPClientID("qVtt")
+	want := []int{169, 91, 109}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("byte %d: got %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
+// TestDecodeWARPClientID_Numeric covers the rare case where Cloudflare returns
+// a numeric client_id (e.g. "21").
+func TestDecodeWARPClientID_Numeric(t *testing.T) {
+	got := decodeWARPClientID("21")
+	if len(got) != 1 || got[0] != 21 {
+		t.Errorf("got %v, want [21]", got)
+	}
+}
+
+// TestDecodeWARPClientID_Empty returns nil for empty input.
+func TestDecodeWARPClientID_Empty(t *testing.T) {
+	if got := decodeWARPClientID(""); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+	if got := decodeWARPClientID("   "); got != nil {
+		t.Errorf("got %v, want nil for whitespace-only", got)
+	}
+}
+
+// TestWARPTemplate_GeneratesCorrectYAML verifies that the generated YAML
+// uses separate ip + ipv6 fields (NOT a comma-joined string) per
+// https://wiki.metacubex.one/en/config/proxies/wg/
+func TestWARPTemplate_GeneratesCorrectYAML(t *testing.T) {
+	yaml, err := WARPTemplate(
+		"CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=",
+		"172.16.0.2",
+		"2606:4700:110:8216:dac5:4a83:49de:6997",
+		[]int{21, 91, 109},
+	)
+	if err != nil {
+		t.Fatalf("WARPTemplate: %v", err)
+	}
+	// Must have separate ip + ipv6 fields.
+	if !contains(yaml, "ip: 172.16.0.2") {
+		t.Errorf("missing/incorrect ip field:\n%s", yaml)
+	}
+	if !contains(yaml, "ipv6: 2606:4700:110:8216:dac5:4a83:49de:6997") {
+		t.Errorf("missing/incorrect ipv6 field:\n%s", yaml)
+	}
+	// Must NOT have comma-joined form.
+	if contains(yaml, "172.16.0.2,2606") {
+		t.Errorf("found comma-joined ip (wrong), should be separate fields:\n%s", yaml)
+	}
+	// Reserved must be a 3-element list.
+	if !contains(yaml, "reserved:") {
+		t.Errorf("missing reserved field:\n%s", yaml)
+	}
+	if !contains(yaml, "- 21") || !contains(yaml, "- 91") || !contains(yaml, "- 109") {
+		t.Errorf("reserved list missing expected bytes:\n%s", yaml)
+	}
+}
+
+// TestWARPTemplate_OmitsReservedWhenEmpty verifies that reserved is omitted
+// when nil/empty (some WARP+ accounts don't need it).
+func TestWARPTemplate_OmitsReservedWhenEmpty(t *testing.T) {
+	yaml, err := WARPTemplate(
+		"CJiuBUMZWavAdfelvnUUnee+sQqHwU5ObGkFxjb6zWo=",
+		"172.16.0.2",
+		"",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("WARPTemplate: %v", err)
+	}
+	if contains(yaml, "reserved:") {
+		t.Errorf("reserved should be omitted when nil:\n%s", yaml)
+	}
+	if contains(yaml, "ipv6:") {
+		t.Errorf("ipv6 should be omitted when empty:\n%s", yaml)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && indexOf(s, substr) >= 0
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}

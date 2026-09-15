@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -154,11 +155,21 @@ func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 func (h *Handler) WARP(c *gin.Context) {
 	var body struct {
 		PrivateKey string `json:"private_key"`
-		Address    string `json:"address"`
-		Reserved   string `json:"reserved"`
+		Address    string `json:"address"` // accepts "v4" or "v4,v6" or just "v6"
+		IPv6       string `json:"ipv6"`
+		Reserved   string `json:"reserved"` // accepts "21,22,23" or base64 "qVtt"
 	}
 	_ = c.ShouldBindJSON(&body)
-	yaml, err := WARPTemplate(body.PrivateKey, body.Address, body.Reserved)
+	// Split comma-joined Address into v4/v6 for the new WARPTemplate signature.
+	ipv4, ipv6 := body.Address, body.IPv6
+	if i := strings.IndexByte(ipv4, ','); i >= 0 {
+		if ipv6 == "" {
+			ipv6 = strings.TrimSpace(ipv4[i+1:])
+		}
+		ipv4 = strings.TrimSpace(ipv4[:i])
+	}
+	reserved := decodeWARPClientID(body.Reserved)
+	yaml, err := WARPTemplate(body.PrivateKey, ipv4, ipv6, reserved)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
