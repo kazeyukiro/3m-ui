@@ -32,33 +32,50 @@ type cfRegRequest struct {
 	Locale       string `json:"locale"`
 }
 
+// cfConfig captures the part of Cloudflare's response that 3m-ui needs.
+// The WARP API historically returned the device object wrapped in
+// {"result": {...}}; current deployments return the device object at the
+// top level. RegisterWARP tolerates both shapes by decoding the device
+// object twice (once via Result, once via top-level fields).
+type cfConfig struct {
+	Peers []struct {
+		PublicKey string `json:"public_key"`
+		Endpoint  struct {
+			Host string `json:"host"`
+			V4   string `json:"v4"`
+			V6   string `json:"v6"`
+		} `json:"endpoint"`
+	} `json:"peers"`
+	Interface struct {
+		Addresses struct {
+			V4 string `json:"v4"`
+			V6 string `json:"v6"`
+		} `json:"addresses"`
+	} `json:"interface"`
+	ClientID string `json:"client_id"`
+}
+
 type cfRegResponse struct {
+	// Legacy shape: {"result": {"config": {...}, ...}}
 	Result struct {
-		ID     string `json:"id"`
-		Type   string `json:"type"`
-		Model  string `json:"model"`
-		Config struct {
-			Peers []struct {
-				PublicKey string `json:"public_key"`
-				Endpoint  struct {
-					Host string `json:"host"`
-					V4   string `json:"v4"`
-					V6   string `json:"v6"`
-				} `json:"endpoint"`
-			} `json:"peers"`
-			Interface struct {
-				Addresses struct {
-					V4 string `json:"v4"`
-					V6 string `json:"v6"`
-				} `json:"addresses"`
-			} `json:"interface"`
-			ClientID string `json:"client_id"`
-		} `json:"config"`
-		Token   string `json:"token"`
+		ID      string   `json:"id"`
+		Type    string   `json:"type"`
+		Model   string   `json:"model"`
+		Config  cfConfig `json:"config"`
+		Token   string   `json:"token"`
 		Account struct {
 			AccountType string `json:"account_type"`
 		} `json:"account"`
 	} `json:"result"`
+	// Current shape: {"id":..., "config": {...}, ...}
+	ID      string   `json:"id"`
+	Type    string   `json:"type"`
+	Model   string   `json:"model"`
+	Config  cfConfig `json:"config"`
+	Token   string   `json:"token"`
+	Account struct {
+		AccountType string `json:"account_type"`
+	} `json:"account"`
 }
 
 func genWireGuardKeyPair() (privB64, pubB64 string, err error) {
@@ -120,8 +137,16 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, fmt.Errorf("warp register decode: %w", err)
 	}
-	v4 := parsed.Result.Config.Interface.Addresses.V4
-	v6 := parsed.Result.Config.Interface.Addresses.V6
+	// Cloudflare WARP API responses come in two shapes depending on endpoint
+	// version / region: legacy {"result":{"config":{...}}} and current
+	// top-level {"config":{...}}. Prefer the legacy wrapper when present
+	// (non-empty Result.ID), otherwise fall back to top-level fields.
+	cfg := parsed.Result.Config
+	if parsed.Result.ID == "" {
+		cfg = parsed.Config
+	}
+	v4 := cfg.Interface.Addresses.V4
+	v6 := cfg.Interface.Addresses.V6
 	addr := v4
 	if v6 != "" {
 		if addr != "" {
@@ -131,10 +156,11 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 		}
 	}
 	if addr == "" {
-		return nil, fmt.Errorf("warp register: empty interface addresses (raw response: %s)", truncate(string(raw), 400))
+		return nil, fmt.Errorf("warp register: empty interface addresses (v4=%q v6=%q, raw: %s)",
+			v4, v6, truncate(string(raw), 800))
 	}
 	reserved := ""
-	if cid := parsed.Result.Config.ClientID; cid != "" {
+	if cid := cfg.ClientID; cid != "" {
 		// client_id is often base64 3-byte reserved; pass through as-is when short
 		reserved = cid
 	}
