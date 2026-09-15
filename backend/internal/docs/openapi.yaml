@@ -954,7 +954,11 @@ paths:
   /system/templates/warp:
     post:
       tags: [system]
-      summary: Build Mihomo WARP WireGuard YAML from provided keys
+      summary: Build Mihomo WARP outbound YAML from provided keys
+      description: |
+        Emits WireGuard-style YAML by default. Prefer separate `address` (IPv4) and
+        `ipv6` fields. `address` may still be a comma-joined "v4,v6" string for
+        compatibility. `reserved` accepts decimal "a,b,c" or base64 Cloudflare client_id.
       requestBody:
         content:
           application/json:
@@ -962,8 +966,9 @@ paths:
               type: object
               properties:
                 private_key: { type: string }
-                address: { type: string, description: "v4,v6 addresses" }
-                reserved: { type: string }
+                address: { type: string, description: "IPv4 or comma-joined v4,v6" }
+                ipv6: { type: string, description: "IPv6 interface address" }
+                reserved: { type: string, description: "decimal list or base64 client_id" }
       responses:
         "200":
           description: '{ "yaml": "..." }'
@@ -972,6 +977,15 @@ paths:
     post:
       tags: [system]
       summary: One-click Cloudflare WARP registration
+      description: |
+        Registers a device with Cloudflare and returns Mihomo outbound YAML.
+        Query `mode`: `wireguard` (default) — `yaml` is WireGuard; `masque` — `yaml`
+        is MASQUE (`type: masque`); `both` — full payload including both YAMLs.
+        Requires a Mihomo core that supports the chosen outbound type.
+      parameters:
+        - in: query
+          name: mode
+          schema: { type: string, enum: [wireguard, masque, both], default: wireguard }
       description: |
         Generates a WireGuard keypair, registers with Cloudflare's client API, and
         returns private_key, address, reserved, and ready-to-paste Mihomo YAML.
