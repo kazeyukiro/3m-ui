@@ -70,6 +70,9 @@ type SectionKey =
 const Settings: React.FC = () => {
   const [section, setSection] = useState<SectionKey>('panel');
   const [warpMode, setWarpMode] = useState<'wireguard' | 'masque'>('wireguard');
+  const [warpYamlOpen, setWarpYamlOpen] = useState(false);
+  const [warpYaml, setWarpYaml] = useState('');
+  const [warpYamlTitle, setWarpYamlTitle] = useState('');
   const [panelServer, setPanelServer] = useState<{
     port?: number;
     listen?: string;
@@ -1106,28 +1109,25 @@ const Settings: React.FC = () => {
                     onClick={async () => {
                       try {
                         const res = await client.post(`/system/templates/warp/register?mode=${warpMode}`);
-                        const yaml = res.data?.yaml || '';
-                        await copyText(yaml);
-                        message.success(t('settings.warpDone', 'WARP registered — YAML copied'));
-                        Modal.info({
-                          title: warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
-                          width: 720,
-                          // Themed TextArea — bare <pre> keeps browser default (light) bg in dark mode.
-                          content: (
-                            <Input.TextArea
-                              value={yaml}
-                              readOnly
-                              autoSize={{ minRows: 10, maxRows: 20 }}
-                              style={{
-                                fontFamily:
-                                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                                fontSize: 12,
-                                background: token.colorFillTertiary,
-                                color: token.colorText,
-                              }}
-                            />
-                          ),
-                        });
+                        const yaml =
+                          (typeof res.data?.yaml === 'string' && res.data.yaml) ||
+                          (typeof res.data?.masque_yaml === 'string' && res.data.masque_yaml) ||
+                          '';
+                        if (!yaml.trim()) {
+                          message.error(t('settings.warpEmpty', 'WARP registration returned empty YAML'));
+                          return;
+                        }
+                        try {
+                          await copyText(yaml);
+                          message.success(t('settings.warpDone', 'WARP registered — YAML copied'));
+                        } catch {
+                          message.success(t('settings.warpDoneNoCopy', 'WARP registered (copy failed — select text in the dialog)'));
+                        }
+                        setWarpYamlTitle(
+                          warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
+                        );
+                        setWarpYaml(yaml);
+                        setWarpYamlOpen(true);
                       } catch (e: any) {
                         message.error(e?.response?.data?.error || e.message || t('common.error'));
                       }
@@ -1137,6 +1137,44 @@ const Settings: React.FC = () => {
                   </Button>
                 </Space>
               </Card>
+
+              <Modal
+                open={warpYamlOpen}
+                title={warpYamlTitle}
+                width={Math.min(720, typeof window !== 'undefined' ? window.innerWidth - 32 : 720)}
+                onCancel={() => setWarpYamlOpen(false)}
+                onOk={() => setWarpYamlOpen(false)}
+                okText={t('common.close', 'Close')}
+                cancelButtonProps={{ style: { display: 'none' } }}
+                destroyOnHidden
+                styles={{
+                  content: { background: token.colorBgElevated },
+                  header: { background: token.colorBgElevated, color: token.colorText },
+                  body: { background: token.colorBgElevated },
+                  footer: { background: token.colorBgElevated },
+                }}
+              >
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: 12,
+                    maxHeight: 420,
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontFamily:
+                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                    fontSize: 12,
+                    lineHeight: 1.45,
+                    background: token.colorBgContainer,
+                    color: token.colorText,
+                    border: `1px solid ${token.colorBorderSecondary}`,
+                    borderRadius: token.borderRadiusLG ?? token.borderRadius,
+                  }}
+                >
+                  {warpYaml}
+                </pre>
+              </Modal>
 
             </Space>
           )}
