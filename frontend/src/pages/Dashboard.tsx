@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, message } from 'antd';
+import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, Grid, message } from 'antd';
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { useI18n } from '../i18n';
@@ -44,10 +44,15 @@ function usageBarColor(pct: number): string {
 }
 
 /**
- * Double-column equal-width number wall (no bars).
+ * Equal-width number wall (no bars).
  * 4 cells: Panel CPU | Panel Mem | Core CPU | Core Mem
  * Mobile: 2 cols (2×2 grid); Desktop: 4 cols (1×4 row).
- * Big number + small label; color encodes high/medium usage.
+ *
+ * Every cell leads with the **percentage** — the same number the colour is
+ * derived from, so a red figure always has a visible reason. Absolute RSS
+ * rides along as a neutral sub-line. A cell with no sample renders "—"
+ * instead of a misleading 0%; the card header already carries the
+ * running/stopped state, so cells keep their own label.
  */
 const ProcessUsageWall: React.FC<{
   panel: ProcSample | undefined;
@@ -57,18 +62,45 @@ const ProcessUsageWall: React.FC<{
   panelMemLabel: string;
   coreCpuLabel: string;
   coreMemLabel: string;
-  stoppedLabel: string;
-}> = ({ panel, core, coreRunning, panelCpuLabel, panelMemLabel, coreCpuLabel, coreMemLabel, stoppedLabel }) => {
-  const panelCpu = clampPct(panel?.cpu_percent);
-  const panelMemPct = clampPct(panel?.memory_percent);
-  const panelMemUsed = formatBytes(panel?.memory_used || 0);
-  const coreCpu = clampPct(core?.cpu_percent);
-  const coreMemPct = clampPct(core?.memory_percent);
-  const coreMemUsed = formatBytes(core?.memory_used || 0);
+}> = ({ panel, core, coreRunning, panelCpuLabel, panelMemLabel, coreCpuLabel, coreMemLabel }) => {
+  // Match the Col breakpoints exactly so separators never land on a row edge.
+  const screens = Grid.useBreakpoint();
+  const twoCol = !screens.sm;
+
+  const cells = [
+    {
+      key: 'panel-cpu',
+      label: panelCpuLabel,
+      pct: clampPct(panel?.cpu_percent),
+      detail: '',
+      live: Boolean(panel),
+    },
+    {
+      key: 'panel-mem',
+      label: panelMemLabel,
+      pct: clampPct(panel?.memory_percent),
+      detail: panel?.memory_used ? formatBytes(panel.memory_used) : '',
+      live: Boolean(panel),
+    },
+    {
+      key: 'core-cpu',
+      label: coreCpuLabel,
+      pct: clampPct(core?.cpu_percent),
+      detail: '',
+      live: coreRunning && Boolean(core),
+    },
+    {
+      key: 'core-mem',
+      label: coreMemLabel,
+      pct: clampPct(core?.memory_percent),
+      detail: coreRunning && core?.memory_used ? formatBytes(core.memory_used) : '',
+      live: coreRunning && Boolean(core),
+    },
+  ];
 
   const cellStyle: React.CSSProperties = {
     textAlign: 'center',
-    padding: '10px 4px',
+    padding: '12px 4px',
     minWidth: 0,
   };
   const numStyle = (pct: number): React.CSSProperties => ({
@@ -79,6 +111,15 @@ const ProcessUsageWall: React.FC<{
     letterSpacing: '-0.02em',
     color: usageColor(pct),
   });
+  const detailStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: 'rgba(0,0,0,0.45)',
+    marginTop: 2,
+    lineHeight: 1.3,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  };
   const labelStyle: React.CSSProperties = {
     fontSize: 12,
     color: 'rgba(0,0,0,0.45)',
@@ -88,57 +129,31 @@ const ProcessUsageWall: React.FC<{
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   };
-  const stoppedStyle: React.CSSProperties = {
+  const emptyStyle: React.CSSProperties = {
     ...numStyle(0),
-    fontSize: 20,
     color: 'rgba(0,0,0,0.35)',
   };
   const border = '1px solid rgba(0,0,0,0.06)';
+  // In the 2×2 layout only the left cell of each row gets a separator.
+  const withRightBorder = (i: number) => (twoCol ? i % 2 === 0 : i < cells.length - 1);
 
   return (
     <Row gutter={[0, 0]} style={{ borderTop: border, borderBottom: border }}>
-      <Col xs={12} sm={6} style={{ borderRight: border }}>
-        <div style={cellStyle}>
-          <div style={numStyle(panelCpu)}>{panelCpu}%</div>
-          <div style={labelStyle}>{panelCpuLabel}</div>
-        </div>
-      </Col>
-      <Col xs={12} sm={6} style={{ borderRight: border }}>
-        <div style={cellStyle}>
-          <div style={numStyle(panelMemPct)}>{panelMemUsed}</div>
-          <div style={labelStyle}>{panelMemLabel}</div>
-        </div>
-      </Col>
-      <Col xs={12} sm={6} style={{ borderRight: border }}>
-        <div style={cellStyle}>
-          {coreRunning ? (
-            <>
-              <div style={numStyle(coreCpu)}>{coreCpu}%</div>
-              <div style={labelStyle}>{coreCpuLabel}</div>
-            </>
-          ) : (
-            <>
-              <div style={stoppedStyle}>—</div>
-              <div style={labelStyle}>{stoppedLabel}</div>
-            </>
-          )}
-        </div>
-      </Col>
-      <Col xs={12} sm={6}>
-        <div style={cellStyle}>
-          {coreRunning ? (
-            <>
-              <div style={numStyle(coreMemPct)}>{coreMemUsed}</div>
-              <div style={labelStyle}>{coreMemLabel}</div>
-            </>
-          ) : (
-            <>
-              <div style={stoppedStyle}>—</div>
-              <div style={labelStyle}>{stoppedLabel}</div>
-            </>
-          )}
-        </div>
-      </Col>
+      {cells.map((c, i) => (
+        <Col xs={12} sm={6} key={c.key} style={withRightBorder(i) ? { borderRight: border } : undefined}>
+          <div style={cellStyle}>
+            {c.live ? (
+              <>
+                <div style={numStyle(c.pct)}>{c.pct}%</div>
+                {c.detail ? <div style={detailStyle}>{c.detail}</div> : null}
+              </>
+            ) : (
+              <div style={emptyStyle}>—</div>
+            )}
+            <div style={labelStyle}>{c.label}</div>
+          </div>
+        </Col>
+      ))}
     </Row>
   );
 };
@@ -336,7 +351,6 @@ const Dashboard: React.FC = () => {
               panelMemLabel={t('dashboard.panelMem', 'Panel Mem')}
               coreCpuLabel={t('dashboard.coreCpu', 'Core CPU')}
               coreMemLabel={t('dashboard.coreMem', 'Core Mem')}
-              stoppedLabel={t('dashboard.stoppedStatus')}
             />
           </Card>
         </Col>
