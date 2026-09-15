@@ -94,10 +94,52 @@ paths:
   /dashboard:
     get:
       tags: [system]
-      summary: Dashboard snapshot (core + system + traffic)
+      summary: Dashboard snapshot (core, host, panel/core process, traffic)
+      description: |
+        Combined snapshot for the panel home page. Polling every few seconds is expected.
+
+        Process metrics (`panel`, `core`) are OS-level samples for the 3m-ui binary and the
+        managed Mihomo process. `cpu_percent` is a short delta (first sample after a gap may
+        be ~0). `memory_used` is RSS bytes; `memory_percent` is share of system RAM (0–100).
+        When the core is stopped, `core.pid` is 0 and CPU/memory fields are zero.
       responses:
         "200":
-          description: DashboardResponse
+          description: |
+            Object with `mihomo` (StatusResponse), `system` (host CPU/memory/disk/network),
+            `panel` / `core` (ProcessUsage), `listeners`, `users`, and `traffic` counters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mihomo:
+                    type: object
+                    properties:
+                      running: { type: boolean }
+                      version: { type: string }
+                      pid: { type: integer }
+                      uptime: { type: string }
+                  system:
+                    type: object
+                    description: Host-wide metrics (not a single process)
+                  panel:
+                    $ref: '#/components/schemas/ProcessUsage'
+                  core:
+                    $ref: '#/components/schemas/ProcessUsage'
+                  listeners:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      enabled: { type: integer }
+                      disabled: { type: integer }
+                  users:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      enabled: { type: integer }
+                      online: { type: integer }
+                  traffic:
+                    type: object
 
   /users:
     get:
@@ -1088,6 +1130,14 @@ paths:
 
 components:
   schemas:
+    ProcessUsage:
+      type: object
+      description: CPU and RSS for one OS process (panel binary or Mihomo core)
+      properties:
+        pid: { type: integer, description: Process id; 0 if not running }
+        cpu_percent: { type: number, format: float, description: 0–100 process CPU }
+        memory_used: { type: number, format: float, description: RSS bytes }
+        memory_percent: { type: number, format: float, description: 0–100 of system RAM }
     ProxyUser:
       type: object
       description: Safe proxy-user view (no password/uuid secrets)
