@@ -18,6 +18,8 @@ info:
     Cross-machine subscription: sync remote nodes via `/cluster/{id}/sync-nodes`,
     bind with `/users/{id}/remote-nodes`, then the user's sub URL merges local + remote.
 
+    Async core apply: Listener create/update/delete (and user create/update that changes credentials) persist to the panel DB and return as soon as the write succeeds. Mihomo config application is debounced in the background (~400ms); a successful HTTP response does not mean the core has finished reloading. Use POST /nodes/{id}/reload or the core restart endpoints if you need a synchronous apply. Activation failures are logged server-side and do not roll back the panel record.
+
     Proxy users support group/tags, per-user traffic reset cycle (`traffic_reset_days`)
     and post-expiry renew (`expire_renew_days`). Export all share links via
     `GET /users/export-links`.
@@ -130,6 +132,9 @@ paths:
     post:
       tags: [users]
       summary: Create proxy user
+      description: |
+        Creates the proxy user in the panel DB and returns 201 immediately.
+        Credential injection into Mihomo is scheduled asynchronously (debounced).
       requestBody:
         required: true
         content:
@@ -341,16 +346,16 @@ paths:
       tags: [nodes]
       summary: Create listener
       description: |
-        Alias of POST /listeners. For REALITY, supply a nonempty
-        reality-config.dest inside config, which is a JSON-encoded string.
-        The former Microsoft and SNI-derived destination defaults are removed.
-        Call POST /nodes/reality/scan first and copy selected.target into dest,
-        or choose a target manually. If selected is null, retry or enter a target
-        manually. Creation does not run a scan; missing credentials are still
-        generated on save. See the scan endpoint for selection details.
+        Alias of POST /listeners. Returns 201 after the panel DB write; Mihomo
+        ApplyConfig is debounced asynchronously (see API info). Empty/zero port is
+        auto-allocated. For REALITY, supply a nonempty reality-config.dest inside
+        config (JSON string). Call POST /nodes/reality/scan first and copy
+        selected.target into dest, or choose a target manually. Creation does not
+        run a scan; missing credentials are still generated on save.
+        Prefer POST /nodes/quick when only protocol + name are needed.
       responses:
         "201":
-          description: Created
+          description: Created (core apply may still be in progress)
         "400":
           description: Invalid listener, including a missing or blank REALITY destination
 
@@ -367,7 +372,8 @@ paths:
       tags: [nodes]
       summary: Update listener
       description: |
-        Alias of PUT /listeners/{id}. Submit the full listener, preserving its
+        Alias of PUT /listeners/{id}. Returns after the panel DB write; Mihomo
+        ApplyConfig is debounced asynchronously (see API info). Submit the full listener, preserving its
         other fields and credentials. For REALITY, config is a JSON-encoded
         string and must contain a nonempty reality-config.dest. Retain the saved
         destination unless deliberately changing it. An omitted destination is
@@ -381,9 +387,12 @@ paths:
     delete:
       tags: [nodes]
       summary: Delete listener
+      description: |
+        Soft-deletes the listener in the panel DB and returns immediately.
+        Mihomo ApplyConfig is debounced asynchronously (see API info).
       responses:
         "200":
-          description: Deleted
+          description: Deleted (core apply may still be in progress)
 
   /nodes/{id}/uri:
     get:
@@ -458,13 +467,11 @@ paths:
       tags: [nodes]
       summary: Create listener
       description: |
-        Alias of POST /nodes. For REALITY, supply a nonempty reality-config.dest
-        inside config, which is a JSON-encoded string. The former Microsoft and
-        SNI-derived destination defaults are removed. Call POST
-        /listeners/reality/scan first and copy selected.target into dest, or
-        choose a target manually. If selected is null, retry or enter a target
-        manually. Creation does not run a scan; missing credentials are still
-        generated on save. The example target is a placeholder and must be replaced.
+        Alias of POST /nodes. Returns after the panel DB write; Mihomo ApplyConfig
+        is debounced asynchronously (see API info). Empty/zero port is auto-allocated.
+        For REALITY, supply a nonempty reality-config.dest inside config (JSON string).
+        Call POST /listeners/reality/scan first and copy selected.target into dest,
+        or choose a target manually. Prefer POST /listeners/quick for name+protocol only.
       requestBody:
         required: true
         content:
