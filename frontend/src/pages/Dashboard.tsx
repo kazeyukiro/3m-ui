@@ -25,47 +25,110 @@ type ProcSample = {
 };
 
 const muted: React.CSSProperties = { fontSize: 12, color: 'rgba(0,0,0,0.45)', lineHeight: 1.4 };
-/** Compact process CPU + memory block for panel / core. */
-const ProcessUsageBlock: React.FC<{
-  sample: ProcSample | undefined;
-  running?: boolean;
-  stoppedLabel: string;
-  cpuLabel: string;
-  memLabel: string;
-  isMobile: boolean;
-}> = ({ sample, running = true, stoppedLabel, cpuLabel, memLabel, isMobile }) => {
-  const cpu = clampPct(sample?.cpu_percent);
-  const memPct = clampPct(sample?.memory_percent);
-  const memUsed = formatBytes(sample?.memory_used || 0);
-  const pid = sample?.pid && sample.pid > 0 ? sample.pid : undefined;
-  const gap = isMobile ? 6 : 8;
 
-  if (!running) {
-    return (
-      <div style={{ ...muted, paddingTop: 4 }}>
-        <Tag>{stoppedLabel}</Tag>
-      </div>
-    );
-  }
+/** Usage level → color. ≥80% high (red), ≥50% medium (orange), else inherit. */
+const HIGH = '#cf1322';
+const MED = '#d46b08';
+function usageColor(pct: number): string | undefined {
+  if (pct >= 80) return HIGH;
+  if (pct >= 50) return MED;
+  return undefined;
+}
+
+/**
+ * Double-column equal-width number wall (no bars).
+ * 4 cells: Panel CPU | Panel Mem | Core CPU | Core Mem
+ * Mobile: 2 cols (2×2 grid); Desktop: 4 cols (1×4 row).
+ * Big number + small label; color encodes high/medium usage.
+ */
+const ProcessUsageWall: React.FC<{
+  panel: ProcSample | undefined;
+  core: ProcSample | undefined;
+  coreRunning: boolean;
+  panelCpuLabel: string;
+  panelMemLabel: string;
+  coreCpuLabel: string;
+  coreMemLabel: string;
+  stoppedLabel: string;
+}> = ({ panel, core, coreRunning, panelCpuLabel, panelMemLabel, coreCpuLabel, coreMemLabel, stoppedLabel }) => {
+  const panelCpu = clampPct(panel?.cpu_percent);
+  const panelMemPct = clampPct(panel?.memory_percent);
+  const panelMemUsed = formatBytes(panel?.memory_used || 0);
+  const coreCpu = clampPct(core?.cpu_percent);
+  const coreMemPct = clampPct(core?.memory_percent);
+  const coreMemUsed = formatBytes(core?.memory_used || 0);
+
+  const cellStyle: React.CSSProperties = {
+    textAlign: 'center',
+    padding: '10px 4px',
+    minWidth: 0,
+  };
+  const numStyle = (pct: number): React.CSSProperties => ({
+    fontSize: 30,
+    fontWeight: 700,
+    lineHeight: 1.1,
+    fontVariantNumeric: 'tabular-nums',
+    letterSpacing: '-0.02em',
+    color: usageColor(pct),
+  });
+  const labelStyle: React.CSSProperties = {
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.45)',
+    marginTop: 4,
+    lineHeight: 1.4,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  };
+  const stoppedStyle: React.CSSProperties = {
+    ...numStyle(0),
+    fontSize: 20,
+    color: 'rgba(0,0,0,0.35)',
+  };
+  const border = '1px solid rgba(0,0,0,0.06)';
 
   return (
-    <Row gutter={[gap, gap]}>
-      <Col xs={24} sm={12}>
-        <div style={muted}>{cpuLabel} · {cpu}%</div>
-        <Progress
-          percent={cpu}
-          size="small"
-          showInfo={false}
-          status={cpu > 90 ? 'exception' : 'normal'}
-          style={{ marginBottom: 0 }}
-        />
+    <Row gutter={[0, 0]} style={{ borderTop: border, borderBottom: border }}>
+      <Col xs={12} sm={6} style={{ borderRight: border }}>
+        <div style={cellStyle}>
+          <div style={numStyle(panelCpu)}>{panelCpu}%</div>
+          <div style={labelStyle}>{panelCpuLabel}</div>
+        </div>
       </Col>
-      <Col xs={24} sm={12}>
-        <div style={muted}>{memLabel} · {memPct}%</div>
-        <Progress percent={memPct} size="small" showInfo={false} style={{ marginBottom: 0 }} />
-        <div style={muted}>
-          {memUsed}
-          {pid != null ? ` · PID ${pid}` : ''}
+      <Col xs={12} sm={6} style={{ borderRight: border }}>
+        <div style={cellStyle}>
+          <div style={numStyle(panelMemPct)}>{panelMemUsed}</div>
+          <div style={labelStyle}>{panelMemLabel}</div>
+        </div>
+      </Col>
+      <Col xs={12} sm={6} style={{ borderRight: border }}>
+        <div style={cellStyle}>
+          {coreRunning ? (
+            <>
+              <div style={numStyle(coreCpu)}>{coreCpu}%</div>
+              <div style={labelStyle}>{coreCpuLabel}</div>
+            </>
+          ) : (
+            <>
+              <div style={stoppedStyle}>—</div>
+              <div style={labelStyle}>{stoppedLabel}</div>
+            </>
+          )}
+        </div>
+      </Col>
+      <Col xs={12} sm={6}>
+        <div style={cellStyle}>
+          {coreRunning ? (
+            <>
+              <div style={numStyle(coreMemPct)}>{coreMemUsed}</div>
+              <div style={labelStyle}>{coreMemLabel}</div>
+            </>
+          ) : (
+            <>
+              <div style={stoppedStyle}>—</div>
+              <div style={labelStyle}>{stoppedLabel}</div>
+            </>
+          )}
         </div>
       </Col>
     </Row>
@@ -213,43 +276,34 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
 
-        {/* Process usage: full width on mobile, half on tablet+ */}
-        <Col xs={24} md={12}>
-          <Card
-            size={cardSize}
-            title={t('dashboard.panelUsage', 'Panel process')}
-            extra={data?.panel?.pid ? <Text type="secondary" style={{ fontSize: 12 }}>PID {data.panel.pid}</Text> : null}
-          >
-            <ProcessUsageBlock
-              sample={data?.panel}
-              running
-              stoppedLabel={t('dashboard.stoppedStatus')}
-              cpuLabel={t('dashboard.processCPU', 'CPU')}
-              memLabel={t('dashboard.processMemory', 'Memory')}
-              isMobile={isMobile}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
+        {/* Process usage: 4-cell number wall (Panel CPU/Mem + Core CPU/Mem) */}
+        <Col xs={24}>
           <Card
             size={cardSize}
             title={
-              <Space size={6} wrap>
-                <span>{t('dashboard.coreUsage', 'Core process')}</span>
+              <Space size={8} wrap>
+                <span>{t('dashboard.processUsage', 'Process usage')}</span>
                 <Tag color={coreRunning ? 'processing' : 'default'} style={{ margin: 0 }}>
                   {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
                 </Tag>
               </Space>
             }
-            extra={coreRunning && data?.core?.pid ? <Text type="secondary" style={{ fontSize: 12 }}>PID {data.core.pid}</Text> : null}
+            extra={
+              <Space size={12}>
+                {data?.panel?.pid ? <Text type="secondary" style={{ fontSize: 12 }}>PID {data.panel.pid}</Text> : null}
+                {coreRunning && data?.core?.pid ? <Text type="secondary" style={{ fontSize: 12 }}>PID {data.core.pid}</Text> : null}
+              </Space>
+            }
           >
-            <ProcessUsageBlock
-              sample={data?.core}
-              running={coreRunning}
+            <ProcessUsageWall
+              panel={data?.panel}
+              core={data?.core}
+              coreRunning={coreRunning}
+              panelCpuLabel={t('dashboard.panelCpu', 'Panel CPU')}
+              panelMemLabel={t('dashboard.panelMem', 'Panel Mem')}
+              coreCpuLabel={t('dashboard.coreCpu', 'Core CPU')}
+              coreMemLabel={t('dashboard.coreMem', 'Core Mem')}
               stoppedLabel={t('dashboard.stoppedStatus')}
-              cpuLabel={t('dashboard.processCPU', 'CPU')}
-              memLabel={t('dashboard.processMemory', 'Memory')}
-              isMobile={isMobile}
             />
           </Card>
         </Col>
