@@ -15,19 +15,47 @@ findHandler(page);
 assert.ok(handler, 'listener page must expose its submit handler');
 const javascript = ts.transpileModule(`globalThis.submit = ${handler};`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 
+/** Mirrors frontend/src/utils/listenerName.ts for the VM harness. */
+function nextListenerNameAfterConflict(current, names) {
+  const base = (current || '').replace(/__deleted_.*$/, '').trim() || '节点';
+  const used = new Set(names.map((n) => n.trim()).filter(Boolean));
+  if (current.trim()) used.add(current.trim());
+  const match = /^(.*?)(\d+)$/.exec(base);
+  if (match) {
+    let n = Number(match[2]) || 1;
+    const prefix = match[1];
+    for (let i = 0; i < 1000; i += 1) {
+      n += 1;
+      const candidate = `${prefix}${n}`;
+      if (!used.has(candidate)) return candidate;
+    }
+  }
+  for (let n = 1; n < 10000; n += 1) {
+    const candidate = `节点${n}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `节点${Date.now()}`;
+}
+
 function harness(create) {
   const existing = { id: 1, name: 'existing-node', protocol: 'shadowsocks', port: '1080', enabled: true };
   const values = { name: existing.name, protocol: existing.protocol, port: '2080', enabled: true };
-  const observed = { requests: 0, successes: [], errors: [], modalOpen: true, resets: 0, submitError: '' };
+  const observed = { requests: 0, successes: [], errors: [], infos: [], modalOpen: true, resets: 0, submitError: '', fieldNames: [] };
   const context = {
     submittingRef: { current: false },
     setSubmitting() {},
     setSubmitError: error => { observed.submitError = error; },
     editing: null, capabilities: null, useCapabilityForm: false,
     REALITY_PROTOCOLS: new Set(),
+    data: [existing],
+    nextListenerNameAfterConflict,
     form: {
       getFieldsValue: () => ({ ...values }),
       getFieldValue: key => values[key],
+      setFieldsValue: patch => {
+        Object.assign(values, patch);
+        if (patch.name != null) observed.fieldNames.push(patch.name);
+      },
       resetFields: () => { observed.resets++; },
     },
     formValuesToConfig: () => ({ cipher: 'aes-128-gcm', password: 'test-password' }),
@@ -40,27 +68,48 @@ function harness(create) {
     message: {
       success: text => observed.successes.push(text),
       error: text => observed.errors.push(text),
+      info: text => observed.infos.push(text),
     },
-    t: key => key,
+    t: (key, fallback) => (typeof fallback === 'string' ? fallback : key),
   };
   vm.createContext(context);
   vm.runInContext(javascript, context);
   return { submit: context.submit, observed };
 }
 
-test('a genuine listener name conflict keeps the form open and reports the error', async () => {
+test('name conflict auto-renames and creates successfully', async () => {
   const error = 'listener name "existing-node" already exists';
   const { submit, observed } = harness(async payload => {
-    assert.equal(payload.port, '2080');
+    if (payload.name === 'existing-node') {
+      assert.equal(payload.port, '2080');
+      throw new Error(error);
+    }
+    return { ...payload, id: 2, enabled: true };
+  });
+  await submit();
+  assert.equal(observed.requests, 2);
+  assert.ok(observed.fieldNames.length >= 1);
+  assert.notEqual(observed.fieldNames[0], 'existing-node');
+  assert.equal(observed.modalOpen, false);
+  assert.equal(observed.resets, 1);
+  assert.deepEqual(observed.successes, ['Saved']);
+  assert.deepEqual(observed.errors, []);
+  assert.ok(observed.infos.some((s) => /created as|Name was taken/i.test(String(s))));
+});
+
+test('name conflict that still fails after rename keeps the form open', async () => {
+  const error = 'listener name "existing-node" already exists';
+  const { submit, observed } = harness(async () => {
     throw new Error(error);
   });
   await submit();
-  assert.equal(observed.requests, 1);
-  assert.deepEqual(observed.successes, []);
-  assert.deepEqual(observed.errors, [error]);
-  assert.equal(observed.submitError, error);
+  assert.equal(observed.requests, 2);
   assert.equal(observed.modalOpen, true);
   assert.equal(observed.resets, 0);
+  assert.deepEqual(observed.successes, []);
+  assert.ok(observed.errors.length >= 1);
+  assert.match(observed.errors[0], /already exists/i);
+  assert.match(observed.submitError, /already exists/i);
 });
 
 test('a successful listener creation closes and clears the form', async () => {
