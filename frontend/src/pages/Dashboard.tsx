@@ -29,10 +29,18 @@ const muted: React.CSSProperties = { fontSize: 12, color: 'rgba(0,0,0,0.45)', li
 /** Usage level → color. ≥80% high (red), ≥50% medium (orange), else inherit. */
 const HIGH = '#cf1322';
 const MED = '#d46b08';
+const LOW = '#3f8600';
 function usageColor(pct: number): string | undefined {
   if (pct >= 80) return HIGH;
   if (pct >= 50) return MED;
   return undefined;
+}
+
+/** Bar variant: always resolves, so a healthy bar reads green rather than neutral. */
+function usageBarColor(pct: number): string {
+  if (pct >= 80) return HIGH;
+  if (pct >= 50) return MED;
+  return LOW;
 }
 
 /**
@@ -257,22 +265,47 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
 
-        {/* Host resources: 3-up on desktop, stacked on phone */}
-        <Col xs={24} sm={8}>
-          <Card size={cardSize} title={`${t('dashboard.cpu')} ${clampPct(sys.cpu?.percent)}%`}>
-            <Progress percent={clampPct(sys.cpu?.percent)} size="small" status={clampPct(sys.cpu?.percent) > 90 ? 'exception' : 'normal'} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card size={cardSize} title={`${t('dashboard.memory')} ${clampPct(sys.memory?.percent)}%`}>
-            <Progress percent={clampPct(sys.memory?.percent)} size="small" status={clampPct(sys.memory?.percent) > 90 ? 'exception' : 'normal'} />
-            <div style={muted}>{formatBytes(sys.memory?.used || 0)} / {formatBytes(sys.memory?.total || 0)}</div>
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card size={cardSize} title={`${t('dashboard.disk')} ${clampPct(sys.disk?.percent)}%`}>
-            <Progress percent={clampPct(sys.disk?.percent)} size="small" status={clampPct(sys.disk?.percent) > 90 ? 'exception' : 'normal'} />
-            <div style={muted}>{formatBytes(sys.disk?.used || 0)} / {formatBytes(sys.disk?.total || 0)}</div>
+        {/* Host resources: one compact card (was three) with slim color-coded bars */}
+        <Col xs={24} md={12} lg={8}>
+          <Card size={cardSize} title={t('dashboard.system')}>
+            <Space direction="vertical" size={isMobile ? 10 : 12} style={{ width: '100%' }}>
+              {[
+                { key: 'cpu', label: t('dashboard.cpu'), pct: clampPct(sys.cpu?.percent), detail: '' },
+                {
+                  key: 'memory',
+                  label: t('dashboard.memory'),
+                  pct: clampPct(sys.memory?.percent),
+                  detail: `${formatBytes(sys.memory?.used || 0)} / ${formatBytes(sys.memory?.total || 0)}`,
+                },
+                {
+                  key: 'disk',
+                  label: t('dashboard.disk'),
+                  pct: clampPct(sys.disk?.percent),
+                  detail: `${formatBytes(sys.disk?.used || 0)} / ${formatBytes(sys.disk?.total || 0)}`,
+                },
+              ].map((m) => {
+                const color = usageBarColor(m.pct);
+                return (
+                  <div key={m.key}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>{m.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color, fontVariantNumeric: 'tabular-nums' }}>
+                        {m.pct}%
+                      </span>
+                    </div>
+                    <Progress
+                      percent={m.pct}
+                      showInfo={false}
+                      size="small"
+                      strokeColor={color}
+                      trailColor="rgba(0,0,0,0.06)"
+                      strokeLinecap="butt"
+                    />
+                    {m.detail ? <div style={{ ...muted, fontSize: 11, marginTop: 2 }}>{m.detail}</div> : null}
+                  </div>
+                );
+              })}
+            </Space>
           </Card>
         </Col>
 
