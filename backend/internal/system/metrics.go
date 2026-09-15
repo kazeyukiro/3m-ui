@@ -98,9 +98,41 @@ func sampleDisk() DiskInfo {
 	}
 }
 
-// GetSystemStats returns live host metrics. Memory/disk used+total are in
-// **bytes** so the frontend can format them uniformly with formatBytes.
+// statsTTL bounds how often a fresh sample is taken. Measuring CPU blocks for
+// 200ms, so with the dashboard polling every second a sample-per-request would
+// spend a fifth of a core on measurement alone - and it would multiply with
+// every open tab. Requests arriving inside the window share one sample; a
+// 500ms TTL still leaves each 1s poll with its own fresh reading.
+const statsTTL = 500 * time.Millisecond
+
+var (
+	statsMu    sync.Mutex
+	statsCache *SystemStats
+	statsAt    time.Time
+)
+
+// GetSystemStats returns host metrics, reusing a sample taken within statsTTL.
 func GetSystemStats() *SystemStats {
+	statsMu.Lock()
+	if statsCache != nil && time.Since(statsAt) < statsTTL {
+		cached := *statsCache
+		statsMu.Unlock()
+		return &cached
+	}
+	statsMu.Unlock()
+
+	stats := sampleSystemStats()
+
+	statsMu.Lock()
+	statsCache = stats
+	statsAt = time.Now()
+	statsMu.Unlock()
+	return stats
+}
+
+// sampleSystemStats returns live host metrics. Memory/disk used+total are in
+// **bytes** so the frontend can format them uniformly with formatBytes.
+func sampleSystemStats() *SystemStats {
 	cpuPercent := sampleCPU()
 
 	var memoryInfo MemoryInfo

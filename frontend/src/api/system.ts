@@ -28,7 +28,8 @@ export interface DashboardResponse {
   };
 }
 
-export const fetchDashboard = () => client.get<DashboardResponse>('/dashboard').then(r => r.data);
+export const fetchDashboard = (signal?: AbortSignal) =>
+  client.get<DashboardResponse>('/dashboard', { signal }).then(r => r.data);
 export const startMihomo = () => client.post('/mihomo/start');
 export const stopMihomo = () => client.post('/mihomo/stop');
 export const restartMihomo = () => client.post('/mihomo/restart');

@@ -2,12 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, Grid, message } from 'antd';
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
+import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
 import PageHeader from '../components/PageHeader';
 import { formatBytes } from '../utils/format';
+import { startVisiblePolling } from '../utils/visiblePolling';
 
 const { Text } = Typography;
+
+/** Dashboard refresh cadence — CPU, memory and traffic rates read as live. */
+const DASHBOARD_POLL_MS = 1000;
 
 const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
 const clampPct = (v: unknown) => {
@@ -214,20 +219,20 @@ const Dashboard: React.FC = () => {
   const cardSize = isMobile ? 'small' as const : 'default' as const;
   const gutter = isMobile ? ([8, 8] as [number, number]) : ([16, 16] as [number, number]);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
-      const d = await fetchDashboard();
+      const d = await fetchDashboard(signal);
+      if (signal?.aborted) return;
       setData(d);
     } catch (e: any) {
+      if (signal?.aborted || isCanceledError(e)) return;
       message.error(e.message || t('dashboard.unavailable'));
     }
   };
 
-  useEffect(() => {
-    load();
-    const id = window.setInterval(load, 10000);
-    return () => clearInterval(id);
-  }, []);
+  // Poll every second, but never stack requests: a slow response delays the
+  // next one instead of piling up, and a hidden tab stops polling entirely.
+  useEffect(() => startVisiblePolling((signal) => load(signal), DASHBOARD_POLL_MS), []);
 
   const act = async (a: 'start' | 'stop' | 'restart') => {
     setBusy(true);
