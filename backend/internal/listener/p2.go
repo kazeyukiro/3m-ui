@@ -3,6 +3,7 @@ package listener
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -51,22 +52,10 @@ func (s *Service) RollbackVersion(listenerID uint, version int) error {
 	if err := s.SaveVersion(listenerID, "before-rollback"); err != nil {
 		return err
 	}
-	var previous models.Listener
-	if err := s.db.First(&previous, listenerID).Error; err != nil {
-		return err
-	}
 	if err := s.db.Save(&target).Error; err != nil {
 		return err
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Save(&previous).Error; rollbackErr != nil {
-			return fmt.Errorf("%v; rollback listener failed: %w", err, rollbackErr)
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return fmt.Errorf("%v; restored listener but failed to regenerate previous configuration: %w", err, regenerateErr)
-		}
-		return err
-	}
+	s.scheduleConfigApply()
 	return nil
 }
 func (s *Service) Clone(id uint, name, port string) (*models.Listener, error) {
@@ -97,21 +86,10 @@ func (s *Service) Clone(id uint, name, port string) (*models.Listener, error) {
 	if err := s.db.Create(&src).Error; err != nil {
 		return nil, err
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Unscoped().Delete(&src).Error; rollbackErr != nil {
-			return nil, fmt.Errorf("%v; rollback cloned listener failed: %w", err, rollbackErr)
-		}
-		return nil, err
-	}
 	if err := s.SaveVersion(src.ID, "clone"); err != nil {
-		if rollbackErr := s.db.Unscoped().Delete(&src).Error; rollbackErr != nil {
-			return nil, fmt.Errorf("save cloned listener history: %v; rollback failed: %w", err, rollbackErr)
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return nil, fmt.Errorf("save cloned listener history: %v; listener rolled back but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return nil, fmt.Errorf("save cloned listener history: %w", err)
+		log.Printf("warning: save cloned listener history: %v", err)
 	}
+	s.scheduleConfigApply()
 	return &src, nil
 }
 func (s *Service) BatchCreate(list []models.Listener) ([]models.Listener, error) {
@@ -162,30 +140,12 @@ func (s *Service) BatchCreate(list []models.Listener) ([]models.Listener, error)
 		}
 		return nil, err
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		for _, l := range created {
-			if rollbackErr := s.db.Delete(&l).Error; rollbackErr != nil {
-				return nil, fmt.Errorf("%v; rollback batch listener %d failed: %w", err, l.ID, rollbackErr)
-			}
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return nil, fmt.Errorf("%v; batch rollback completed but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return nil, err
-	}
 	for _, l := range created {
 		if versionErr := s.SaveVersion(l.ID, "batch-create"); versionErr != nil {
-			for _, createdListener := range created {
-				if rollbackErr := s.db.Delete(&createdListener).Error; rollbackErr != nil {
-					return nil, fmt.Errorf("save batch listener history: %v; rollback listener %d failed: %w", versionErr, createdListener.ID, rollbackErr)
-				}
-			}
-			if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-				return nil, fmt.Errorf("save batch listener history: %v; batch rolled back but previous configuration regeneration failed: %w", versionErr, regenerateErr)
-			}
-			return nil, fmt.Errorf("save batch listener history: %w", versionErr)
+			log.Printf("warning: save batch listener history for %d: %v", l.ID, versionErr)
 		}
 	}
+	s.scheduleConfigApply()
 	return created, nil
 }
 func (s *Service) ensureBatchEndpointsAvailable(created []models.Listener) error {
@@ -232,17 +192,7 @@ func (s *Service) BatchSetEnabled(ids []uint, enabled bool) error {
 	if err := s.db.Model(&models.Listener{}).Where("id IN ?", ids).Update("enabled", enabled).Error; err != nil {
 		return err
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		for i := range previous {
-			if rollbackErr := s.db.Save(&previous[i]).Error; rollbackErr != nil {
-				return fmt.Errorf("%v; rollback listener %d failed: %w", err, previous[i].ID, rollbackErr)
-			}
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return fmt.Errorf("%v; listener state restored but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return err
-	}
+	s.scheduleConfigApply()
 	return nil
 }
 func (s *Service) DiffVersion(listenerID uint, version int) (string, error) {
@@ -320,20 +270,9 @@ func (s *Service) InstantiateTemplate(templateID uint, name, port string) (*mode
 	if err := s.db.Create(l).Error; err != nil {
 		return nil, err
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Delete(l).Error; rollbackErr != nil {
-			return nil, fmt.Errorf("%v; rollback instantiated listener failed: %w", err, rollbackErr)
-		}
-		return nil, err
-	}
 	if err := s.SaveVersion(l.ID, "template"); err != nil {
-		if rollbackErr := s.db.Delete(l).Error; rollbackErr != nil {
-			return nil, fmt.Errorf("save template listener history: %v; rollback failed: %w", err, rollbackErr)
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return nil, fmt.Errorf("save template listener history: %v; listener rolled back but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return nil, fmt.Errorf("save template listener history: %w", err)
+		log.Printf("warning: save template listener history: %v", err)
 	}
+	s.scheduleConfigApply()
 	return l, nil
 }

@@ -3,6 +3,7 @@ package listener
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,12 +23,68 @@ type Service struct {
 		ApplyConfig(string) error
 	}
 	mu sync.Mutex
+
+	// Async ApplyConfig (same idea as user.Service credentials sync): Create/Update/Delete
+	// must not block the HTTP response on Mihomo restart, or the browser reports a false
+	// "Cannot reach the panel API" while the DB write already succeeded.
+	applySchedMu sync.Mutex
+	applyTimer   *time.Timer
+	applyPending bool
 }
 
 func NewService(db *gorm.DB, configPath string, mihomoApply interface {
 	ApplyConfig(string) error
 }) *Service {
 	return &Service{db: db, configPath: configPath, mihomoApply: mihomoApply}
+}
+
+// scheduleConfigApply debounces Mihomo config regeneration after listener mutations.
+// Always returns immediately to the HTTP layer; failures are logged, not rolled back.
+func (s *Service) scheduleConfigApply() {
+	if s == nil {
+		return
+	}
+	s.applySchedMu.Lock()
+	defer s.applySchedMu.Unlock()
+	s.applyPending = true
+	if s.applyTimer != nil {
+		s.applyTimer.Stop()
+	}
+	s.applyTimer = time.AfterFunc(400*time.Millisecond, s.flushConfigApply)
+}
+
+func (s *Service) flushConfigApply() {
+	if s == nil {
+		return
+	}
+	s.applySchedMu.Lock()
+	run := s.applyPending
+	s.applyPending = false
+	s.applySchedMu.Unlock()
+	if !run {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.regenerateConfigLocked(); err != nil {
+		//nolint:keep — panel stays source of truth; operator can Reload from UI.
+		log.Printf("warning: Mihomo config reload after listener change failed: %v", err)
+	}
+}
+
+// FlushConfigApplyForTest runs a pending async apply immediately (tests only).
+func (s *Service) FlushConfigApplyForTest() {
+	if s == nil {
+		return
+	}
+	s.applySchedMu.Lock()
+	if s.applyTimer != nil {
+		s.applyTimer.Stop()
+		s.applyTimer = nil
+	}
+	s.applyPending = true
+	s.applySchedMu.Unlock()
+	s.flushConfigApply()
 }
 
 func (s *Service) Create(l *models.Listener) error {
@@ -95,24 +152,11 @@ func (s *Service) Create(l *models.Listener) error {
 			return fmt.Errorf("failed to create listener: %w", err)
 		}
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		// Hard-delete: soft-delete would keep UNIQUE(name) occupied and block retries.
-		if rollbackErr := s.db.Unscoped().Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
-			return fmt.Errorf("%v; rollback newly created listener failed: %w", err, rollbackErr)
-		}
-		return err
-	}
+	// Persist history best-effort; do not fail the create if version write fails.
 	if err := s.SaveVersion(l.ID, "create"); err != nil {
-		// Version history is part of the create contract: do not report a
-		// failed create while leaving a listener that the caller cannot account for.
-		if rollbackErr := s.db.Unscoped().Delete(&models.Listener{}, l.ID).Error; rollbackErr != nil {
-			return fmt.Errorf("save listener history: %v; rollback created listener failed: %w", err, rollbackErr)
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return fmt.Errorf("save listener history: %v; listener rolled back but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return fmt.Errorf("save listener history: %w", err)
+		log.Printf("warning: save listener create history: %v", err)
 	}
+	s.scheduleConfigApply()
 	return nil
 }
 
@@ -154,15 +198,7 @@ func (s *Service) Update(l *models.Listener) error {
 	if err := s.db.Save(l).Error; err != nil {
 		return fmt.Errorf("failed to update listener: %w", err)
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Save(&previous).Error; rollbackErr != nil {
-			return fmt.Errorf("%v; rollback listener failed: %w", err, rollbackErr)
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return fmt.Errorf("%v; listener restored but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return err
-	}
+	s.scheduleConfigApply()
 	return nil
 }
 
@@ -181,10 +217,6 @@ func (s *Service) Delete(id uint) error {
 		return fmt.Errorf("save listener history: %w", err)
 	}
 
-	var bindings []models.ListenerUser
-	if err := s.db.Where("listener_id = ?", id).Find(&bindings).Error; err != nil {
-		return fmt.Errorf("failed to fetch listener bindings: %w", err)
-	}
 	// Free UNIQUE(name) before soft-delete so create-after-delete cannot race.
 	freed := fmt.Sprintf("%s__deleted_%d", previous.Name, id)
 	if err := s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", freed).Error; err != nil {
@@ -198,20 +230,7 @@ func (s *Service) Delete(id uint) error {
 		_ = s.db.Model(&models.Listener{}).Where("id = ?", id).Update("name", previous.Name).Error
 		return fmt.Errorf("failed to delete listener: %w", err)
 	}
-	if err := s.regenerateConfigLocked(); err != nil {
-		if rollbackErr := s.db.Unscoped().Save(&previous).Error; rollbackErr != nil {
-			return fmt.Errorf("%v; rollback deleted listener failed: %w", err, rollbackErr)
-		}
-		if len(bindings) > 0 {
-			if restoreErr := s.db.Unscoped().Save(&bindings).Error; restoreErr != nil {
-				return fmt.Errorf("%v; rollback listener bindings failed: %w", err, restoreErr)
-			}
-		}
-		if regenerateErr := s.regenerateConfigLocked(); regenerateErr != nil {
-			return fmt.Errorf("%v; listener and bindings restored but previous configuration regeneration failed: %w", err, regenerateErr)
-		}
-		return err
-	}
+	s.scheduleConfigApply()
 	return nil
 }
 

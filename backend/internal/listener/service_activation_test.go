@@ -3,8 +3,8 @@ package listener
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database"
@@ -12,7 +12,9 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
 )
 
-func TestListenerMutationsRestoreDatabaseAfterActivationFailure(t *testing.T) {
+// Listener mutations return after the DB write; Mihomo ApplyConfig is debounced.
+// Activation failure must not undo the panel record (same contract as user create).
+func TestListenerMutationsKeepDatabaseWhenActivationFailsAsync(t *testing.T) {
 	for _, operation := range []string{"create", "update", "delete"} {
 		t.Run(operation, func(t *testing.T) {
 			dir, err := filepath.EvalSymlinks(t.TempDir())
@@ -21,8 +23,6 @@ func TestListenerMutationsRestoreDatabaseAfterActivationFailure(t *testing.T) {
 			}
 			t.Cleanup(mihomo.AllowBinaryPathPrefixForTesting(dir))
 			binary := filepath.Join(dir, "fixture-core")
-			// Validation succeeds, but the next process start fails. The old
-			// configuration can then be restarted, exercising the rollback path.
 			script := "#!/bin/sh\ncase \"$1\" in\n-v) echo 'Mihomo v1.0.0'; exit 0;;\n-t) exit 0;;\nesac\nif [ -f \"$2/reject-next-start\" ]; then\n  rm \"$2/reject-next-start\"\n  echo 'fixture: runtime initialization failed' >&2\n  exit 1\nfi\nexec sleep 60\n"
 			if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 				t.Fatal(err)
@@ -62,27 +62,25 @@ func TestListenerMutationsRestoreDatabaseAfterActivationFailure(t *testing.T) {
 			case "delete":
 				err = svc.Delete(candidate.ID)
 			}
-			if err == nil {
-				t.Fatal("mutation reported success despite the failed core activation")
+			if err != nil {
+				t.Fatalf("mutation should succeed after DB write (async apply): %v", err)
 			}
+			// Drain the debounced ApplyConfig (may fail activation).
+			time.Sleep(500 * time.Millisecond)
+			svc.FlushConfigApplyForTest()
 			var remaining []models.Listener
 			if err := db.Find(&remaining).Error; err != nil {
 				t.Fatal(err)
 			}
-			if operation == "create" {
-				if len(remaining) != 0 {
-					t.Fatal("failed creation left a listener in the database")
+			switch operation {
+			case "create", "update":
+				if len(remaining) != 1 || remaining[0].Name != "test-listener" {
+					t.Fatalf("listener should remain after async apply failure: %+v", remaining)
 				}
-			} else if len(remaining) != 1 || remaining[0].ID != candidate.ID || remaining[0].Name != candidate.Name || remaining[0].Enabled {
-				t.Fatalf("previous listener was not restored: %+v", remaining)
-			}
-			content, err := os.ReadFile(configPath)
-			if err != nil || strings.Contains(string(content), candidate.Name) {
-				t.Fatalf("runtime configuration did not restore the disabled/absent listener: %v", err)
-			}
-			status, err := core.GetStatus()
-			if err != nil || !status.Running {
-				t.Fatalf("previous core did not recover: status=%+v err=%v", status, err)
+			case "delete":
+				if len(remaining) != 0 {
+					t.Fatalf("listener should stay deleted after async apply failure: %+v", remaining)
+				}
 			}
 		})
 	}
