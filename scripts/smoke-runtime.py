@@ -117,10 +117,21 @@ def main():
             else:
                 raise AssertionError("Bundled core did not start")
             # Persist real listener certificates as well as the Shadowsocks node.
+            # Create returns after the panel DB write; Mihomo generate/Apply (and
+            # certstore.Save) is debounced asynchronously — poll briefly.
             api("listeners", {"name": "certificate-smoke", "protocol": "trojan", "port": str(free_port()),
                               "bind_address": "127.0.0.1", "enabled": True, "config": "{}"})
-            certificates = {str(p.relative_to(data)): hashlib.sha256(p.read_bytes()).hexdigest()
-                            for p in (data / "listener-certs").rglob("*") if p.is_file()}
+            certificates = {}
+            for _ in range(40):
+                cert_dir = data / "listener-certs"
+                if cert_dir.is_dir():
+                    certificates = {
+                        str(p.relative_to(data)): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in cert_dir.rglob("*") if p.is_file()
+                    }
+                    if certificates:
+                        break
+                time.sleep(0.25)
             assert certificates, "Listener certificates were not persisted"
 
             class Target(http.server.BaseHTTPRequestHandler):
