@@ -107,7 +107,8 @@ const Listeners: React.FC = () => {
       const created = await quickCreateListener({ name: String(values.name).trim(), protocol: String(values.protocol).trim() });
       message.success(`${t('listeners.quickCreated', 'Created')}: ${created.name} :${created.port}`);
       setQuickModal(false);
-      if (!(await load(false))) message.warning(t('common.error'));
+      // List refresh may fail briefly while Mihomo reloads — create already succeeded.
+      if (!(await load(false))) message.info(t('listeners.reloadListHint', 'Created. Refresh the list if it does not appear yet.'));
     } catch (e: any) {
       if (e?.errorFields) return;
       message.error(e?.message || t('common.error'));
