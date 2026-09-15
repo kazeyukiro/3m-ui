@@ -61,7 +61,8 @@ func protocolDefaultUDP(protocol string) bool {
 
 // allocateFreePort picks an unused TCP port in 10000–60000.
 // Caller must hold s.mu when concurrent creates are possible.
-func (s *Service) allocateFreePort() (string, error) {
+// exclude lists ports already tried in this request so retries cannot redraw them.
+func (s *Service) allocateFreePort(exclude ...int) (string, error) {
 	var list []models.Listener
 	if err := s.db.Find(&list).Error; err != nil {
 		return "", fmt.Errorf("list listeners for port allocation: %w", err)
@@ -69,6 +70,11 @@ func (s *Service) allocateFreePort() (string, error) {
 	used := map[int]struct{}{}
 	for _, reserved := range []int{22, 53, 80, 443, 8080, 8443, 9090} {
 		used[reserved] = struct{}{}
+	}
+	for _, e := range exclude {
+		if e > 0 {
+			used[e] = struct{}{}
+		}
 	}
 	for _, l := range list {
 		ranges, ok := portRanges(l.Port)

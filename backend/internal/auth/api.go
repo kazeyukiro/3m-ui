@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/subtle"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -419,7 +420,14 @@ func RequireAuth(db *gorm.DB, secret string) gin.HandlerFunc {
 
 		var user models.User
 		if err := db.First(&user, claims.UserID).Error; err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			// SQLite can be briefly busy while listener Create/Delete holds the DB
+			// under a long config apply. That is not "session invalid" — do not
+			// force the client to log out (frontend maps any 401 → /login).
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "auth temporarily unavailable; retry shortly"})
 			return
 		}
 		if !strings.EqualFold(user.Role, "admin") {

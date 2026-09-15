@@ -191,7 +191,11 @@ const Listeners: React.FC = () => {
         message.error(msg || t('common.error'));
       }
     } finally {
-      if (!(await load(false))) message.warning(t('common.error'));
+      try {
+        if (!(await load(false))) message.warning(t('common.error'));
+      } catch {
+        /* load already swallows errors; never cascade into a forced logout path */
+      }
     }
   };
   const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,9 +33,11 @@ func NewService(db *gorm.DB, configPath string, mihomoApply interface {
 func (s *Service) Create(l *models.Listener) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	autoPort := false
 	if l != nil {
 		port := strings.TrimSpace(l.Port)
 		if port == "" || port == "0" {
+			autoPort = true
 			p, err := s.allocateFreePort()
 			if err != nil {
 				return err
@@ -49,7 +52,36 @@ func (s *Service) Create(l *models.Listener) error {
 		return err
 	}
 	if err := s.ensureEndpointAvailable(l); err != nil {
-		return err
+		// Retry with a new free port when allocation raced or form reused a port.
+		msg := strings.ToLower(err.Error())
+		if autoPort || strings.Contains(msg, "conflicts with existing") {
+			var last error = err
+			var tried []int
+			if cur, e := strconv.Atoi(strings.TrimSpace(l.Port)); e == nil && cur > 0 {
+				tried = append(tried, cur)
+			}
+			for attempt := 0; attempt < 8; attempt++ {
+				p, aerr := s.allocateFreePort(tried...)
+				if aerr != nil {
+					return last
+				}
+				if n, e := strconv.Atoi(p); e == nil {
+					tried = append(tried, n)
+				}
+				l.Port = p
+				if last = s.ensureEndpointAvailable(l); last == nil {
+					break
+				}
+				if cur, e := strconv.Atoi(strings.TrimSpace(l.Port)); e == nil && cur > 0 {
+					tried = append(tried, cur)
+				}
+			}
+			if last != nil {
+				return last
+			}
+		} else {
+			return err
+		}
 	}
 	if err := s.db.Create(l).Error; err != nil {
 		// Concurrent create or leftover unique row: reclaim soft-deleted and retry once.
@@ -217,8 +249,14 @@ func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
 	if err := s.ensureUniqueName(candidate); err != nil {
 		return err
 	}
+	// Check every live (non-soft-deleted) listener: a disabled node still owns its
+	// port in the panel DB and would conflict as soon as it is re-enabled.
 	var listeners []models.Listener
-	if err := s.db.Where("enabled = ? AND id <> ?", true, candidate.ID).Find(&listeners).Error; err != nil {
+	q := s.db.Where("id <> ?", candidate.ID)
+	if candidate.ID == 0 {
+		q = s.db
+	}
+	if err := q.Find(&listeners).Error; err != nil {
 		return fmt.Errorf("check listener endpoint conflicts: %w", err)
 	}
 	for _, existing := range listeners {

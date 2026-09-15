@@ -77,12 +77,20 @@ client.interceptors.response.use(
     const { status, data } = err.response;
 
     if (status === 401) {
+      const msg = apiErrorMessage(err) || 'Session expired';
+      // Only force logout on real auth failures — not transient upstream noise
+      // that some proxies surface as 401 when the panel is briefly busy.
       const path = window.location.pathname;
-      if (path !== '/login') {
+      if (path !== '/login' && /session|expired|invalid|authentication required|log in again|user not found/i.test(msg)) {
         useAuthStore.getState().logout();
         window.location.href = '/login';
       }
-      return Promise.reject(new Error(apiErrorMessage(err) || 'Session expired'));
+      return Promise.reject(new Error(msg));
+    }
+    if (status === 503) {
+      return Promise.reject(
+        new Error(apiErrorMessage(err) || 'Service temporarily unavailable; retry in a moment.'),
+      );
     }
     if (status === 403 && data?.code === 'PASSWORD_CHANGE_REQUIRED') {
       useAuthStore.getState().setMustChangePassword(true);
