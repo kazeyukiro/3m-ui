@@ -131,8 +131,8 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 				n.Users = []UserCred{{Password: key}}
 			}
 		}
-		// TUIC v4: token lives only in Config. Panel user rows must not become the token.
-		if n.Protocol == "tuic-v4" || (n.Protocol == "tuic" && len(stringListFrom(cfg, "token")) > 0) {
+		// TUIC v4: token only from Config. TUIC v5: never replace panel/config users with token.
+		if n.Protocol == "tuic-v4" {
 			var toks []UserCred
 			for _, tok := range stringListFrom(cfg, "token") {
 				tok = strings.TrimSpace(tok)
@@ -142,6 +142,24 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			}
 			if len(toks) > 0 {
 				n.Users = toks
+			}
+		} else if n.Protocol == "tuic" && len(stringListFrom(cfg, "token")) > 0 && len(n.Users) == 0 {
+			// Legacy token-only "tuic" without users.
+			for _, tok := range stringListFrom(cfg, "token") {
+				tok = strings.TrimSpace(tok)
+				if tok != "" {
+					n.Users = append(n.Users, UserCred{Password: tok})
+				}
+			}
+		} else if n.Protocol == "tuic-v5" || n.Protocol == "tuic" {
+			if len(n.Users) == 0 {
+				if users, ok := cfg["users"].(map[string]interface{}); ok {
+					for uuid, pw := range users {
+						if s, ok := pw.(string); ok && strings.TrimSpace(s) != "" {
+							n.Users = append(n.Users, UserCred{UUID: uuid, Username: uuid, Password: strings.TrimSpace(s)})
+						}
+					}
+				}
 			}
 		}
 	}

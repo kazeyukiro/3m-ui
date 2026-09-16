@@ -635,20 +635,26 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	}
 
 	isV4 := kind == "tuic-v4"
-	if kind == "tuic" {
-		// Prefer Config: non-empty token → v4; users map / UUID cred → v5.
-		if firstNonEmptyTokenValue(cfg["token"]) != "" {
-			isV4 = true
-		} else {
-			uuid := strings.TrimSpace(in.User.UUID)
-			if uuid == "" {
-				uuid = strings.TrimSpace(in.User.Username)
-			}
-			isV4 = !(looksLikeUUID(uuid) && strings.TrimSpace(in.User.Password) != "")
-		}
-	}
 	if kind == "tuic-v5" {
 		isV4 = false
+	} else if kind == "tuic" {
+		// Legacy: token without users → v4; else v5.
+		hasTok := firstNonEmptyTokenValue(cfg["token"]) != ""
+		hasUsers := false
+		if um, ok := cfg["users"].(map[string]interface{}); ok && len(um) > 0 {
+			hasUsers = true
+		}
+		uuid := strings.TrimSpace(in.User.UUID)
+		if uuid == "" {
+			uuid = strings.TrimSpace(in.User.Username)
+		}
+		if hasTok && !hasUsers {
+			isV4 = true
+		} else if looksLikeUUID(uuid) && strings.TrimSpace(in.User.Password) != "" {
+			isV4 = false
+		} else {
+			isV4 = hasTok && !looksLikeUUID(uuid)
+		}
 	}
 
 	params := map[string]string{

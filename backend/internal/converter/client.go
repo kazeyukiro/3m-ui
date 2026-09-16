@@ -126,14 +126,26 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if err != nil {
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
-	// Listener-native auth (password lives on the node, not per panel user):
-	// prefer Config so subscription matches the running inbound.
-	// Multi-user protocols (vless/vmess/trojan/anytls/hysteria2/shadowquic/…)
-	// keep bound panel credentials; only fill from Config when unbound/empty.
+	// Listener-native auth: prefer Config when it is the source of truth.
+	// TUIC v4 = token in Config; TUIC v5 = users map OR panel-bound UUID password.
+	// Never let a leftover token shadow v5 users / panel credentials.
 	cfgCreds := credentialsFromListenerConfig(protocol, opts)
 	switch protocol {
-	case "tuic", "tuic-v4", "tuic-v5", "shadowsocks", "snell", "sudoku":
+	case "tuic-v4", "shadowsocks", "snell", "sudoku":
 		if len(cfgCreds) > 0 {
+			credentials = cfgCreds
+		}
+	case "tuic-v5":
+		// Config users map wins; otherwise keep panel-bound credentials.
+		if tuicConfigHasUsers(opts) && len(cfgCreds) > 0 {
+			credentials = cfgCreds
+		} else if len(credentials) == 0 {
+			credentials = cfgCreds
+		}
+	case "tuic":
+		if tuicTokenNonEmpty(opts["token"]) && !tuicConfigHasUsers(opts) {
+			credentials = cfgCreds
+		} else if len(credentials) == 0 {
 			credentials = cfgCreds
 		}
 	default:
@@ -358,8 +370,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			result = append(result, p)
 		}
 	case "tuic", "tuic-v4", "tuic-v5":
-		// MetaCubeX proxies/tuic: type is always "tuic".
-		// V4 = token from Config only; V5 = uuid+password.
+		// MetaCubeX: inbound/outbound type is always "tuic".
+		// v4 = token only; v5 = uuid + password. Paths must not cross.
 		copyTUICOpts := func(p map[string]interface{}) {
 			for _, key := range []string{
 				"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size",
@@ -375,27 +387,22 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p["name-cert-verify"] = v
 			}
 			ensureTUICClientDefaults(p, opts)
-			// Formal cert: keep SNI as public host. Self-signed: skip-verify already set.
 			if p["sni"] == nil && p["servername"] == nil && server != "" {
 				p["sni"] = server
 			}
 		}
-		// Prefer Config token for any TUIC that still has token (v4 / dual).
-		if tuicTokenNonEmpty(opts["token"]) && protocol != "tuic-v5" {
-			p := makeProxy("")
-			tok := normalizeTUICToken(opts["token"])
-			if s, ok := tok.(string); !ok || strings.TrimSpace(s) == "" {
-				return nil, fmt.Errorf("listener %q: empty TUIC token in config", l.Name)
+		useToken := protocol == "tuic-v4" || (protocol == "tuic" && tuicTokenNonEmpty(opts["token"]) && !tuicConfigHasUsers(opts))
+		if useToken {
+			if !tuicTokenNonEmpty(opts["token"]) {
+				return nil, fmt.Errorf("listener %q: tuic-v4 requires non-empty token in listener config", l.Name)
 			}
-			p["token"] = tok
+			p := makeProxy("")
+			p["token"] = normalizeTUICToken(opts["token"])
 			copyTUICOpts(p)
 			result = append(result, p)
 			break
 		}
-		if protocol == "tuic-v4" {
-			return nil, fmt.Errorf("listener %q: tuic-v4 requires non-empty token in listener config", l.Name)
-		}
-		// V5 users from credentials (already preferred from Config when present).
+		// v5 / generic with users
 		emitted := 0
 		for i, cred := range credentials {
 			uuid := strings.TrimSpace(cred.UUID)
@@ -418,7 +425,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			emitted++
 		}
 		if emitted == 0 {
-			return nil, fmt.Errorf("listener %q: TUIC needs token (v4) or users uuid→password (v5) in config", l.Name)
+			return nil, fmt.Errorf("listener %q: tuic-v5 requires users uuid→password (config or bound panel user)", l.Name)
 		}
 
 	case "shadowquic":
@@ -1254,8 +1261,7 @@ func credentialsFromListenerConfig(protocol string, opts map[string]interface{})
 		if v, ok := opts[key].(string); ok && strings.TrimSpace(v) != "" {
 			out = append(out, user.Credential{Password: strings.TrimSpace(v)})
 		}
-	case "tuic", "tuic-v4", "tuic-v5":
-		// token list (v4) or users map UUID→password (v5)
+	case "tuic-v4":
 		if tok, ok := opts["token"]; ok {
 			switch x := tok.(type) {
 			case string:
@@ -1276,7 +1282,38 @@ func credentialsFromListenerConfig(protocol string, opts map[string]interface{})
 				}
 			}
 		}
+	case "tuic-v5":
 		if users, ok := opts["users"].(map[string]interface{}); ok {
+			for uuid, pw := range users {
+				if s, ok := pw.(string); ok && strings.TrimSpace(s) != "" {
+					out = append(out, user.Credential{UUID: uuid, Username: uuid, Password: strings.TrimSpace(s)})
+				}
+			}
+		}
+	case "tuic":
+		// Legacy: token-only → v4; else users map → v5
+		if tuicTokenNonEmpty(opts["token"]) && !tuicConfigHasUsers(opts) {
+			if tok, ok := opts["token"]; ok {
+				switch x := tok.(type) {
+				case string:
+					if strings.TrimSpace(x) != "" {
+						out = append(out, user.Credential{Password: strings.TrimSpace(x)})
+					}
+				case []interface{}:
+					for _, item := range x {
+						if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+							out = append(out, user.Credential{Password: strings.TrimSpace(s)})
+						}
+					}
+				case []string:
+					for _, s := range x {
+						if strings.TrimSpace(s) != "" {
+							out = append(out, user.Credential{Password: strings.TrimSpace(s)})
+						}
+					}
+				}
+			}
+		} else if users, ok := opts["users"].(map[string]interface{}); ok {
 			for uuid, pw := range users {
 				if s, ok := pw.(string); ok && strings.TrimSpace(s) != "" {
 					out = append(out, user.Credential{UUID: uuid, Username: uuid, Password: strings.TrimSpace(s)})
@@ -1348,6 +1385,22 @@ func tuicTokenNonEmpty(token interface{}) bool {
 			if strings.TrimSpace(s) != "" {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func tuicConfigHasUsers(opts map[string]interface{}) bool {
+	if opts == nil {
+		return false
+	}
+	users, ok := opts["users"].(map[string]interface{})
+	if !ok || len(users) == 0 {
+		return false
+	}
+	for _, pw := range users {
+		if s, ok := pw.(string); ok && strings.TrimSpace(s) != "" {
+			return true
 		}
 	}
 	return false
