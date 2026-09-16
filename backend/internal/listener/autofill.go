@@ -344,8 +344,10 @@ func autofillUsersArray(cfg map[string]interface{}) {
 }
 
 // autofillTUICUsers fills credentials per MetaCubeX listener docs:
-//   tuic-v4 → token: [TOKEN]  (users must not be used)
-//   tuic-v5 / tuic → users: {UUID: PASSWORD}  (token must not be used for pure v5)
+//
+//	tuic-v4 → token: [TOKEN]  (users must not be used)
+//	tuic-v5 / tuic → users: {UUID: PASSWORD}  (token must not be used for pure v5)
+//
 // https://wiki.metacubex.one/config/inbound/listeners/tuic-v4/
 // https://wiki.metacubex.one/config/inbound/listeners/tuic-v5/
 func autofillTUICUsers(cfg map[string]interface{}, proto string) {

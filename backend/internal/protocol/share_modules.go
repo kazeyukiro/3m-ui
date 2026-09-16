@@ -320,7 +320,6 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
 }
 
-
 // --- VMess (https://wiki.metacubex.one/config/proxies/vmess/) ---
 
 func (VMessCompiler) BuildShare(in ShareInput) (Share, error) {
@@ -710,7 +709,6 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	}
 	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
 }
-
 
 // --- helpers ---
 
