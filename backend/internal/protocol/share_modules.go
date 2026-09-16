@@ -636,18 +636,19 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 
 	isV4 := kind == "tuic-v4"
 	if kind == "tuic" {
-		// Ambiguous generic "tuic": prefer v5 when UUID-shaped credentials exist.
-		uuid := strings.TrimSpace(in.User.UUID)
-		if uuid == "" {
-			uuid = strings.TrimSpace(in.User.Username)
-		}
-		if looksLikeUUID(uuid) && strings.TrimSpace(in.User.Password) != "" {
-			isV4 = false
-		} else if strings.TrimSpace(in.User.Password) != "" && strings.TrimSpace(in.User.UUID) == "" && !looksLikeUUID(in.User.Username) {
+		// Prefer Config: non-empty token → v4; users map / UUID cred → v5.
+		if firstNonEmptyTokenValue(cfg["token"]) != "" {
 			isV4 = true
 		} else {
-			isV4 = false
+			uuid := strings.TrimSpace(in.User.UUID)
+			if uuid == "" {
+				uuid = strings.TrimSpace(in.User.Username)
+			}
+			isV4 = !(looksLikeUUID(uuid) && strings.TrimSpace(in.User.Password) != "")
 		}
+	}
+	if kind == "tuic-v5" {
+		isV4 = false
 	}
 
 	params := map[string]string{
