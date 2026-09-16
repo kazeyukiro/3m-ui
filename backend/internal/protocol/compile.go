@@ -265,33 +265,44 @@ func asUsersMap(cfg map[string]interface{}, fromCreds []UserCred, hasCredState b
 // Mihomo listener schema expects that shape (TUIC v5: users is a map keyed by UUID).
 // Falls back to Username when UUID is empty (legacy panel users without UUID).
 func asUsersMapUUID(cfg map[string]interface{}, fromCreds []UserCred, hasCredState bool) map[string]interface{} {
-	if len(fromCreds) > 0 {
-		out := make(map[string]interface{}, len(fromCreds))
-		for _, c := range fromCreds {
-			key := c.UUID
-			if key == "" {
-				key = c.Username
-			}
-			if key == "" {
-				key = "default"
-			}
-			out[key] = c.Password
-		}
-		return out
-	}
+	// Union: Config autofill UUID(s) + every bound panel user.
+	// Subscription exports panel UUID/password; inbound must accept the same
+	// keys or TUIC v5 auth fails (config-only random UUID ≠ panel UUID).
+	out := map[string]interface{}{}
 	if raw, ok := cfg["users"]; ok {
 		switch users := raw.(type) {
 		case map[string]interface{}:
-			return users
-		case map[interface{}]interface{}:
-			out := make(map[string]interface{}, len(users))
 			for k, v := range users {
-				out[fmt.Sprint(k)] = fmt.Sprint(v)
+				if s := strings.TrimSpace(fmt.Sprint(v)); s != "" {
+					out[k] = s
+				}
 			}
-			return out
+		case map[interface{}]interface{}:
+			for k, v := range users {
+				if s := strings.TrimSpace(fmt.Sprint(v)); s != "" {
+					out[fmt.Sprint(k)] = s
+				}
+			}
 		}
 	}
-	return nil
+	for _, c := range fromCreds {
+		key := strings.TrimSpace(c.UUID)
+		if key == "" {
+			key = strings.TrimSpace(c.Username)
+		}
+		if key == "" {
+			continue
+		}
+		pass := strings.TrimSpace(c.Password)
+		if pass == "" {
+			continue
+		}
+		out[key] = pass
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func normalizeUsersValue(value interface{}) []map[string]interface{} {

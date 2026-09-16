@@ -136,10 +136,10 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			credentials = cfgCreds
 		}
 	case "tuic-v5":
-		// Config users map wins; otherwise keep panel-bound credentials.
-		if tuicConfigHasUsers(opts) && len(cfgCreds) > 0 {
-			credentials = cfgCreds
-		} else if len(credentials) == 0 {
+		// Panel-bound UUID/password is what the subscription user authenticates
+		// with. Config autofill UUID is only a fallback when unbound.
+		// (Inbound compile merges both via asUsersMapUUID.)
+		if len(credentials) == 0 {
 			credentials = cfgCreds
 		}
 	case "tuic":
@@ -387,6 +387,15 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p["name-cert-verify"] = v
 			}
 			ensureTUICClientDefaults(p, opts)
+			if p["skip-cert-verify"] == nil {
+				if certutil.ShouldSkipCertVerify(opts) {
+					p["skip-cert-verify"] = true
+				} else if c, _, ok := certstore.Load(l.ID); ok && certutil.IsPanelSelfSignedPEM(c) {
+					p["skip-cert-verify"] = true
+				} else if cert, _ := opts["certificate"].(string); certutil.IsPanelSelfSignedPEM(cert) {
+					p["skip-cert-verify"] = true
+				}
+			}
 			if p["sni"] == nil && p["servername"] == nil && server != "" {
 				p["sni"] = server
 			}
