@@ -119,6 +119,18 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 		if n.Protocol == "shadowsocks" && n.Shadowsocks != nil && n.Shadowsocks.Password != "" && len(n.Users) == 0 {
 			n.Users = []UserCred{{Password: n.Shadowsocks.Password}}
 		}
+		// Snell: top-level psk (wiki proxies/snell).
+		if n.Protocol == "snell" && len(n.Users) == 0 {
+			if psk := strFrom(cfg, "psk"); psk != "" {
+				n.Users = []UserCred{{Password: psk}}
+			}
+		}
+		// Sudoku: top-level key.
+		if n.Protocol == "sudoku" && len(n.Users) == 0 {
+			if key := strFrom(cfg, "key"); key != "" {
+				n.Users = []UserCred{{Password: key}}
+			}
+		}
 		// TUIC v4: token: [TOKEN] (wiki inbound). Export one share per token.
 		if len(n.Users) == 0 && (n.Protocol == "tuic-v4" || n.Protocol == "tuic") {
 			for _, tok := range stringListFrom(cfg, "token") {

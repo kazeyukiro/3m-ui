@@ -291,7 +291,308 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 		shareQuery("hysteria2://"+url.PathEscape(pass)+"@"+netutil.JoinHostPort(host, port), params),
 		in.Node.Name,
 	)
-	return Share{URI: uri, QRContent: uri}, nil
+	extra := map[string]interface{}{"password": pass}
+	if spec.SNI != "" {
+		extra["sni"] = spec.SNI
+	}
+	if spec.SkipCert {
+		extra["skip-cert-verify"] = true
+	}
+	if spec.Obfs != "" {
+		extra["obfs"] = spec.Obfs
+	}
+	if spec.ObfsPassword != "" {
+		extra["obfs-password"] = spec.ObfsPassword
+	}
+	if spec.Up != "" {
+		extra["up"] = spec.Up
+	}
+	if spec.Down != "" {
+		extra["down"] = spec.Down
+	}
+	if len(spec.ALPN) > 0 {
+		extra["alpn"] = spec.ALPN
+	}
+	yamlOut, err := clientYAMLProxy("hysteria2", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
+}
+
+
+// --- VMess (https://wiki.metacubex.one/config/proxies/vmess/) ---
+
+func (VMessCompiler) BuildShare(in ShareInput) (Share, error) {
+	spec := in.Node.VMess
+	if spec == nil {
+		return Share{}, fmt.Errorf("vmess spec missing")
+	}
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	uuid := strings.TrimSpace(in.User.UUID)
+	if uuid == "" {
+		uuid = strings.TrimSpace(in.User.Username)
+	}
+	if uuid == "" {
+		return Share{}, fmt.Errorf("vmess share requires uuid")
+	}
+	cipher := strOr(spec.Cipher, "auto")
+	extra := map[string]interface{}{
+		"uuid":    uuid,
+		"alterId": spec.AlterID,
+		"cipher":  cipher,
+		"udp":     true,
+	}
+	netw := strOr(spec.Transport.Network, "tcp")
+	if netw != "" && netw != "tcp" {
+		extra["network"] = netw
+	}
+	if spec.Reality != nil {
+		extra["tls"] = true
+		if opts := realityOptsYAML(spec.Reality); opts != nil {
+			extra["reality-opts"] = opts
+		}
+		if spec.SNI != "" {
+			extra["servername"] = spec.SNI
+		} else if spec.Reality.ServerName != "" {
+			extra["servername"] = spec.Reality.ServerName
+		}
+		fp := strOr(spec.Fingerprint, "chrome")
+		extra["client-fingerprint"] = fp
+	} else if in.Node.TLS || spec.SkipCert || spec.SNI != "" {
+		extra["tls"] = true
+		if spec.SNI != "" {
+			extra["servername"] = spec.SNI
+		}
+		if spec.SkipCert {
+			extra["skip-cert-verify"] = true
+		}
+		if spec.Fingerprint != "" {
+			extra["client-fingerprint"] = spec.Fingerprint
+		}
+	}
+	if len(spec.ALPN) > 0 {
+		extra["alpn"] = spec.ALPN
+	}
+	if netw == "ws" && spec.Transport.WSPath != "" {
+		extra["ws-opts"] = map[string]interface{}{"path": spec.Transport.WSPath}
+	}
+	if netw == "grpc" && spec.Transport.GRPCService != "" {
+		extra["grpc-opts"] = map[string]interface{}{"grpc-service-name": spec.Transport.GRPCService}
+	}
+	yamlOut, err := clientYAMLProxy("vmess", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{ClientYAML: yamlOut}, nil
+}
+
+// --- Snell / Sudoku (GenericCompiler) ---
+// https://wiki.metacubex.one/config/proxies/snell/
+
+func (g GenericCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	cfg := in.Node.Generic
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	kind := strings.ToLower(g.Kind())
+	switch kind {
+	case "snell":
+		psk := strings.TrimSpace(in.User.Password)
+		if psk == "" {
+			psk = strFrom(cfg, "psk")
+		}
+		if psk == "" {
+			return Share{}, fmt.Errorf("snell share requires psk")
+		}
+		extra := map[string]interface{}{"psk": psk, "udp": true}
+		if ver := cfg["version"]; ver != nil {
+			extra["version"] = ver
+		} else {
+			extra["version"] = 4
+		}
+		yamlOut, err := clientYAMLProxy("snell", host, port, in, extra)
+		if err != nil {
+			return Share{}, err
+		}
+		return Share{ClientYAML: yamlOut}, nil
+	case "sudoku":
+		key := strings.TrimSpace(in.User.Password)
+		if key == "" {
+			key = strFrom(cfg, "key")
+		}
+		if key == "" {
+			return Share{}, fmt.Errorf("sudoku share requires key")
+		}
+		extra := map[string]interface{}{"key": key}
+		if m := strFrom(cfg, "aead-method"); m != "" {
+			extra["aead-method"] = m
+		}
+		yamlOut, err := clientYAMLProxy("sudoku", host, port, in, extra)
+		if err != nil {
+			return Share{}, err
+		}
+		return Share{ClientYAML: yamlOut}, nil
+	default:
+		return Share{}, fmt.Errorf("protocol %q does not implement share export", kind)
+	}
+}
+
+// --- AnyTLS https://wiki.metacubex.one/config/proxies/anytls/ ---
+
+func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	cfg := in.Node.Generic
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	pass := strings.TrimSpace(in.User.Password)
+	if pass == "" {
+		pass = strFrom(cfg, "password")
+	}
+	if pass == "" {
+		return Share{}, fmt.Errorf("anytls share requires password")
+	}
+	extra := map[string]interface{}{"password": pass, "udp": true}
+	sni := strings.TrimSpace(in.Node.AccessSNI)
+	if sni == "" {
+		sni = strFrom(cfg, "sni", "servername")
+	}
+	if sni == "" {
+		sni = host
+	}
+	extra["sni"] = sni
+	extra["client-fingerprint"] = strOr(strings.TrimSpace(in.Node.Fingerprint), "chrome")
+	extra["skip-cert-verify"] = true
+	if alpn := stringListFrom(cfg, "alpn"); len(alpn) > 0 {
+		extra["alpn"] = alpn
+	}
+	yamlOut, err := clientYAMLProxy("anytls", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{ClientYAML: yamlOut}, nil
+}
+
+// --- ShadowQUIC https://wiki.metacubex.one/config/proxies/shadowquic/ ---
+
+func (ShadowQUICCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	cfg := in.Node.Generic
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	user := strings.TrimSpace(in.User.Username)
+	pass := strings.TrimSpace(in.User.Password)
+	if user == "" {
+		user = strFrom(cfg, "username")
+	}
+	if pass == "" {
+		pass = strFrom(cfg, "password")
+	}
+	if user == "" || pass == "" {
+		return Share{}, fmt.Errorf("shadowquic share requires username and password")
+	}
+	extra := map[string]interface{}{"username": user, "password": pass}
+	if sni := strFrom(cfg, "sni"); sni != "" {
+		extra["sni"] = sni
+	} else if in.Node.AccessSNI != "" {
+		extra["sni"] = in.Node.AccessSNI
+	}
+	if alpn := stringListFrom(cfg, "alpn"); len(alpn) > 0 {
+		extra["alpn"] = alpn
+	} else {
+		extra["alpn"] = []string{"h3"}
+	}
+	if cc, _ := cfg["congestion-controller"].(string); strings.TrimSpace(cc) != "" {
+		extra["congestion-controller"] = cc
+	} else {
+		extra["congestion-controller"] = "cubic"
+	}
+	yamlOut, err := clientYAMLProxy("shadowquic", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{ClientYAML: yamlOut}, nil
+}
+
+// --- Mieru https://wiki.metacubex.one/config/proxies/mieru/ ---
+
+func (MieruCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	cfg := in.Node.Generic
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	user := strings.TrimSpace(in.User.Username)
+	pass := strings.TrimSpace(in.User.Password)
+	if user == "" || pass == "" {
+		return Share{}, fmt.Errorf("mieru share requires username and password")
+	}
+	extra := map[string]interface{}{"username": user, "password": pass}
+	if tr := strFrom(cfg, "transport"); tr != "" {
+		extra["transport"] = tr
+	} else {
+		extra["transport"] = "TCP"
+	}
+	if m := strFrom(cfg, "multiplexing"); m != "" {
+		extra["multiplexing"] = m
+	}
+	yamlOut, err := clientYAMLProxy("mieru", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{ClientYAML: yamlOut}, nil
+}
+
+// --- TrustTunnel ---
+
+func (TrustTunnelCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	cfg := in.Node.Generic
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	user := strings.TrimSpace(in.User.Username)
+	pass := strings.TrimSpace(in.User.Password)
+	if pass == "" {
+		return Share{}, fmt.Errorf("trusttunnel share requires password")
+	}
+	extra := map[string]interface{}{"password": pass, "skip-cert-verify": true}
+	if user != "" {
+		extra["username"] = user
+	}
+	sni := strings.TrimSpace(in.Node.AccessSNI)
+	if sni == "" {
+		sni = strFrom(cfg, "sni")
+	}
+	if sni != "" {
+		extra["sni"] = sni
+	}
+	yamlOut, err := clientYAMLProxy("trusttunnel", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{ClientYAML: yamlOut}, nil
 }
 
 // --- TUIC (inbound type is always "tuic"; v4=token, v5=uuid+password) ---
