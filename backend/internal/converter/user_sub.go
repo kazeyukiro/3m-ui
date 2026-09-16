@@ -7,6 +7,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
@@ -79,6 +80,7 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 
 	var allProxies []map[string]interface{}
 	var names []string
+	var skipReasons []string
 	for _, listener := range listeners {
 		creds := filtered[listener.ID]
 		host := ResolveListenerServer(config.GlobalConfig, req, listener)
@@ -86,8 +88,27 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 			host = serverHost
 		}
 		proxies, err := listenerToProxies(listener, host, creds)
-		if err != nil {
-			continue
+		if err != nil || len(proxies) == 0 {
+			// Fallback: protocol registry ClientYAML (same path as node URI share).
+			pcreds := make([]protocol.UserCred, 0, len(creds))
+			for _, c := range creds {
+				pcreds = append(pcreds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
+			}
+			if shares, err2 := protocol.ExportShares(listener, host, pcreds); err2 == nil {
+				for _, sh := range shares {
+					if maps := proxiesFromClientYAML(sh.ClientYAML); len(maps) > 0 {
+						proxies = append(proxies, maps...)
+					}
+				}
+			}
+			if len(proxies) == 0 {
+				if err != nil {
+					skipReasons = append(skipReasons, fmt.Sprintf("%s: %v", listener.Name, err))
+				} else {
+					skipReasons = append(skipReasons, fmt.Sprintf("%s: empty export", listener.Name))
+				}
+				continue
+			}
 		}
 		for _, p := range proxies {
 			if name, ok := p["name"].(string); ok {
@@ -105,6 +126,9 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 		allProxies, names = mergeExternalSubscriptionLinks(pu.ExternalLinks, allProxies, names)
 	}
 	if len(allProxies) == 0 {
+		if len(skipReasons) > 0 {
+			return nil, fmt.Errorf("no exportable proxies for user (%s)", strings.Join(skipReasons, "; "))
+		}
 		return nil, fmt.Errorf("no exportable proxies for user")
 	}
 	return yaml.Marshal(clientSubscriptionDocument(allProxies, names))
@@ -158,4 +182,19 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 	}
 	body := strings.Join(links, "\n")
 	return []byte(EncodeBase64([]byte(body))), nil
+}
+
+// proxiesFromClientYAML extracts the proxies list from a share ClientYAML document.
+func proxiesFromClientYAML(raw string) []map[string]interface{} {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var doc struct {
+		Proxies []map[string]interface{} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
+		return nil
+	}
+	return doc.Proxies
 }

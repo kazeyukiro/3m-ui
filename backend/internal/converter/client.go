@@ -351,13 +351,14 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			result = append(result, p)
 		}
 	case "tuic", "tuic-v4", "tuic-v5":
-		// Wiki: v4 uses token; v5 uses uuid+password. Prefer non-empty token for v4.
-		tokenVal, hasToken := opts["token"]
-		tokenOK := hasToken && tuicTokenNonEmpty(tokenVal)
-		if tokenOK && (protocol == "tuic-v4" || protocol == "tuic" && len(credentials) == 0) {
-			p := makeProxy("")
-			p["token"] = normalizeTUICToken(tokenVal)
-			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
+		// MetaCubeX proxies/tuic: type is always "tuic".
+		// V4 = token (string); V5 = uuid + password. Prefer Config token/users.
+		copyTUICOpts := func(p map[string]interface{}) {
+			for _, key := range []string{
+				"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size",
+				"sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout",
+				"heartbeat-interval", "fast-open", "max-open-streams", "disable-sni",
+			} {
 				copyOption(p, opts, key)
 			}
 			if v, ok := opts["ip"].(string); ok && v != "" {
@@ -367,22 +368,26 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p["name-cert-verify"] = v
 			}
 			ensureTUICClientDefaults(p, opts)
+			if p["sni"] == nil && p["servername"] == nil && server != "" {
+				p["sni"] = server
+			}
+		}
+		if tuicTokenNonEmpty(opts["token"]) {
+			p := makeProxy("")
+			p["token"] = normalizeTUICToken(opts["token"])
+			copyTUICOpts(p)
 			result = append(result, p)
 			break
 		}
-		if len(credentials) == 0 {
-			return nil, fmt.Errorf("listener %q requires TUIC V5 users or a V4 token", l.Name)
-		}
+		// V5 users from credentials (already preferred from Config when present).
+		emitted := 0
 		for i, cred := range credentials {
 			uuid := strings.TrimSpace(cred.UUID)
 			if uuid == "" {
 				uuid = strings.TrimSpace(cred.Username)
 			}
-			if uuid == "" {
-				continue
-			}
 			pass := strings.TrimSpace(cred.Password)
-			if pass == "" {
+			if uuid == "" || pass == "" {
 				continue
 			}
 			suffix := ""
@@ -392,21 +397,14 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p := makeProxy(suffix)
 			p["uuid"] = uuid
 			p["password"] = pass
-			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
-				copyOption(p, opts, key)
-			}
-			if v, ok := opts["ip"].(string); ok && v != "" {
-				p["ip"] = v
-			}
-			if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
-				p["name-cert-verify"] = v
-			}
-			ensureTUICClientDefaults(p, opts)
+			copyTUICOpts(p)
 			result = append(result, p)
+			emitted++
 		}
-		if len(result) == 0 {
-			return nil, fmt.Errorf("listener %q: no usable TUIC uuid/password (bind user or set users in config)", l.Name)
+		if emitted == 0 {
+			return nil, fmt.Errorf("listener %q: TUIC needs token (v4) or users uuid→password (v5) in config", l.Name)
 		}
+
 	case "shadowquic":
 		if len(credentials) == 0 {
 			return nil, fmt.Errorf("listener %q requires at least one active user for ShadowQUIC client export", l.Name)

@@ -115,13 +115,31 @@ func credentialsFromListenerConfig(protocol, raw string) []Credential {
 	if strings.TrimSpace(raw) == "" || json.Unmarshal([]byte(raw), &cfg) != nil {
 		return nil
 	}
+	result := []Credential{}
+	// TUIC v4 token before users map
+	if protocol == "tuic" || protocol == "tuic-v4" || protocol == "tuic-v5" {
+		switch tok := cfg["token"].(type) {
+		case string:
+			if strings.TrimSpace(tok) != "" {
+				result = append(result, Credential{Password: strings.TrimSpace(tok)})
+			}
+		case []interface{}:
+			for _, item := range tok {
+				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+					result = append(result, Credential{Password: strings.TrimSpace(s)})
+				}
+			}
+		}
+		if len(result) > 0 && (protocol == "tuic-v4" || cfg["users"] == nil) {
+			return result
+		}
+	}
 	users, ok := cfg["users"]
 	if !ok {
-		return nil
+		return result
 	}
-	result := []Credential{}
 	switch protocol {
-	case "anytls", "hysteria2", "mieru", "tuic":
+	case "anytls", "hysteria2", "mieru", "tuic", "tuic-v4", "tuic-v5":
 		if m, ok := users.(map[string]interface{}); ok {
 			for username, value := range m {
 				result = append(result, Credential{Username: username, Password: fmt.Sprint(value), UUID: username})
