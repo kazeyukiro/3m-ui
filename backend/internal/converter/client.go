@@ -151,11 +151,13 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if l.UDP && clientSupportsUDP(protocol) {
 		base["udp"] = true
 	}
-	// SS has no top-level tls/sni/servername/alpn fields — its TLS-like
-	// wrappers (shadow-tls/restls/jls-config) are emitted as the `plugin`
-	// format via applySSPluginWrappers, not via copyClientTLS.
-	// ShadowQUIC uses QUIC's built-in TLS — no certificate/tls/skip-cert-verify.
-	if protocol != "shadowsocks" && protocol != "shadowquic" && protocol != "mieru" {
+	// SS has no top-level tls/sni fields — wrappers go through plugin opts.
+	// ShadowQUIC / TUIC / Hysteria2 use QUIC or inherent TLS; do not emit
+	// proxy "tls: true" (not in official proxies schema and confuses clients).
+	switch protocol {
+	case "shadowsocks", "shadowquic", "mieru", "tuic", "tuic-v4", "tuic-v5", "hysteria2":
+		// skip copyClientTLS
+	default:
 		copyClientTLS(base, opts)
 	}
 	copyTransport(base, opts)
@@ -345,6 +347,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				if sn, ok := p["servername"].(string); ok && sn != "" {
 					p["sni"] = sn
 				}
+			}
+			if certutil.ShouldSkipCertVerify(opts) {
+				p["skip-cert-verify"] = true
+			} else if cert, _ := opts["certificate"].(string); strings.TrimSpace(cert) != "" {
+				p["skip-cert-verify"] = true
 			}
 			if value, ok := opts["ech-opts"]; ok {
 				p["ech-opts"] = value
@@ -823,7 +830,11 @@ func ensureTUICClientDefaults(p, opts map[string]interface{}) {
 	if p["congestion-controller"] == nil {
 		p["congestion-controller"] = "bbr"
 	}
+	// Panel mints self-signed PEMs (CN=localhost). Public host (domain/IP)
+	// will never match — clients must skip verify or the handshake fails.
 	if certutil.ShouldSkipCertVerify(opts) {
+		p["skip-cert-verify"] = true
+	} else if cert, _ := opts["certificate"].(string); strings.TrimSpace(cert) != "" {
 		p["skip-cert-verify"] = true
 	}
 	if p["udp"] == nil {
