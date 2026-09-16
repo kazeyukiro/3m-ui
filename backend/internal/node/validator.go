@@ -147,7 +147,20 @@ func validateObject(proto, prefix string, value map[string]interface{}, allowed 
 	return nil
 }
 
-var mapUserProtocols = map[string]bool{"anytls": true, "hysteria2": true, "mieru": true, "tuic": true}
+// mapUserProtocols lists protocols whose `users` field is a free-form map
+// (UUID→password) or array of {username,password,...} objects, where the
+// per-user keys must not be validated against the schema's NestedFields.
+//   - anytls / hysteria2 / mieru: map UUID→password
+//   - tuic (generic) / tuic-v5: v5 form is map UUID→password per wiki
+//   - tuic-v4 is intentionally NOT here — v4 uses `token: [string]`, and any
+//     `users` field on v4 is rejected by validateProtocolSpecific (line ~190).
+var mapUserProtocols = map[string]bool{
+	"anytls":    true,
+	"hysteria2": true,
+	"mieru":     true,
+	"tuic":      true,
+	"tuic-v5":   true,
+}
 
 func joinField(prefix, field string) string {
 	if prefix == "" {

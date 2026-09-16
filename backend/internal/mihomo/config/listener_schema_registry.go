@@ -176,8 +176,11 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 		),
 	},
 	"tuic-v4": {
-		Protocol:     "tuic-v4",
-		Fields:       listenerFields("users", "token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "mux-option"),
+		Protocol: "tuic-v4",
+		// v4 is token-only per wiki — `users` is intentionally NOT in Fields
+		// (validator rejects v4-with-users via validateProtocolSpecific).
+		// Symmetric to tuic-v5 which omits `token`.
+		Fields:       listenerFields("token", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "congestion-controller", "bbr-profile", "max-idle-time", "authentication-timeout", "alpn", "max-udp-relay-packet-size", "mux-option"),
 		NestedFields: listenerNested("mux-option.padding", "mux-option.brutal", "mux-option.brutal.enabled", "mux-option.brutal.up", "mux-option.brutal.down"),
 	},
 	"tuic-v5": {

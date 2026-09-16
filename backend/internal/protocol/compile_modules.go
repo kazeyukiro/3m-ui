@@ -139,12 +139,14 @@ func (t TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	}
 	kind := t.Kind()
 	if kind == "tuic-v4" {
-		// TUIC v4: non-empty token required (empty [] is treated as missing).
-		if s := firstStringToken(m["token"]); s != "" {
-			m["token"] = []string{s}
-		} else {
-			m["token"] = []string{randomToken()}
+		// TUIC v4: token array — preserve ALL non-empty tokens (wiki allows
+		// multi-token form: `token: [T1, T2, …]`, any one authenticates).
+		// Pre-fix this dropped all but the first token at compile time.
+		toks := allStringTokens(m["token"])
+		if len(toks) == 0 {
+			toks = []string{randomToken()}
 		}
+		m["token"] = toks
 		delete(m, "users")
 	} else {
 		// TUIC v5 / generic: users map UUID→password (wiki inbound tuic-v5).
@@ -264,4 +266,37 @@ func firstStringToken(tok interface{}) string {
 		}
 	}
 	return ""
+}
+
+// allStringTokens returns every non-empty trimmed string token from a
+// listener Config `token` field. Mihomo's TUIC v4 spec accepts multiple
+// tokens (`token: [T1, T2, …]`); any one authenticates the client.
+// Used by TUIC v4 compiler to preserve the full array instead of dropping
+// all but the first.
+func allStringTokens(tok interface{}) []string {
+	switch v := tok.(type) {
+	case string:
+		if s := strings.TrimSpace(v); s != "" {
+			return []string{s}
+		}
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					out = append(out, s)
+				}
+			}
+		}
+		return out
+	}
+	return nil
 }

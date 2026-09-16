@@ -85,3 +85,42 @@ func TestValidateNodeGeneratesVlessClientCredentialWhenMissing(t *testing.T) {
 		t.Fatalf("generated VLESS credential is incomplete: %#v", users[0])
 	}
 }
+
+// TestValidateNodeAcceptsTuicV5MapUsers verifies that tuic-v5 with the
+// wiki-standard `users: {UUID: password}` map shape is accepted.
+// Pre-fix this was rejected because mapUserProtocols omitted "tuic-v5",
+// causing validateObject to fall through to the nested-schema check and
+// fail with "field 'users' does not accept an object".
+func TestValidateNodeAcceptsTuicV5MapUsers(t *testing.T) {
+	err := ValidateNode(validNode("tuic-v5", `{"users":{"00000000-0000-0000-0000-000000000001":"password"},"certificate":"./server.crt","private-key":"./server.key","congestion-controller":"bbr","alpn":["h3"]}`))
+	if err != nil {
+		t.Fatalf("expected tuic-v5 with map users to validate, got: %v", err)
+	}
+}
+
+// TestValidateNodeAcceptsTuicV4TokenArray verifies that tuic-v4 with the
+// wiki-standard `token: [TOKEN]` array shape is accepted.
+func TestValidateNodeAcceptsTuicV4TokenArray(t *testing.T) {
+	err := ValidateNode(validNode("tuic-v4", `{"token":["T1","T2"],"certificate":"./server.crt","private-key":"./server.key","congestion-controller":"bbr","alpn":["h3"]}`))
+	if err != nil {
+		t.Fatalf("expected tuic-v4 with token array to validate, got: %v", err)
+	}
+}
+
+// TestValidateNodeRejectsTuicV4WithUsers verifies that tuic-v4 with a
+// `users` field is rejected — v4 is token-only per wiki.
+func TestValidateNodeRejectsTuicV4WithUsers(t *testing.T) {
+	err := ValidateNode(validNode("tuic-v4", `{"token":["T1"],"users":{"u":"p"}}`))
+	if err == nil {
+		t.Fatalf("expected tuic-v4-with-users rejection (must not set users OR unsupported field), got: nil")
+	}
+}
+
+// TestValidateNodeRejectsTuicV5WithToken verifies that tuic-v5 with a
+// `token` field is rejected — v5 is users-only per wiki.
+func TestValidateNodeRejectsTuicV5WithToken(t *testing.T) {
+	err := ValidateNode(validNode("tuic-v5", `{"users":{"u":"p"},"token":["T1"]}`))
+	if err == nil {
+		t.Fatalf("expected tuic-v5-with-token rejection (must not set token OR unsupported field), got: nil")
+	}
+}

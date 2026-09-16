@@ -297,6 +297,31 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 }
 
 func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
+	// Build the shared query-params map ONCE. Mihomo's TUIC URI parser expects
+	// snake_case keys (congestion_control, udp_relay_mode, max_udp_relay_packet_size,
+	// bbr_profile, allow_insecure) — NOT the YAML/listener hyphen-case form.
+	// Refs: protocol/share_modules.go BuildShare uses the same snake_case.
+	params := map[string]string{}
+	for key, out := range map[string]string{
+		"congestion-controller":     "congestion_control",
+		"bbr-profile":               "bbr_profile",
+		"udp-relay-mode":            "udp_relay_mode",
+		"max-udp-relay-packet-size": "max_udp_relay_packet_size",
+	} {
+		if v, ok := cfg[key].(string); ok && v != "" {
+			params[out] = v
+		}
+	}
+	if v, ok := firstString(cfg["alpn"]); ok {
+		params["alpn"] = v
+	}
+	if v, ok := cfg["sni"].(string); ok && v != "" {
+		params["sni"] = v
+	}
+	if certutil.ShouldSkipCertVerify(cfg) {
+		params["allow_insecure"] = "1"
+	}
+
 	// token is an array of strings per tuic-v4 (Mihomo listener config).
 	if tokens, ok := cfg["token"].([]interface{}); ok && len(tokens) > 0 {
 		result := make([]string, 0, len(tokens))
@@ -305,7 +330,10 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 			if !ok || strings.TrimSpace(ts) == "" {
 				continue
 			}
-			result = append(result, addName("tuic://"+url.PathEscape(ts)+"@"+netutil.JoinHostPort(host, port), name))
+			// v4 URI: tuic://<token>@host:port?<snake_case params>#<name>
+			// Pre-fix this path emitted zero query params, so v4 clients
+			// lost congestion_control / udp_relay_mode / alpn / sni / allow_insecure.
+			result = append(result, addName(query("tuic://"+url.PathEscape(ts)+"@"+netutil.JoinHostPort(host, port), params), name))
 		}
 		if len(result) > 0 {
 			return result, nil
@@ -323,21 +351,6 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 			if uuid == "" || password == "" {
 				continue
 			}
-			params := map[string]string{}
-			for key, out := range map[string]string{"congestion-controller": "congestion-controller", "bbr-profile": "bbr-profile", "udp-relay-mode": "udp-relay-mode"} {
-				if v, ok := cfg[key].(string); ok && v != "" {
-					params[out] = v
-				}
-			}
-			if v, ok := firstString(cfg["alpn"]); ok {
-				params["alpn"] = v
-			}
-			if v, ok := cfg["sni"].(string); ok && v != "" {
-				params["sni"] = v
-			}
-			if certutil.ShouldSkipCertVerify(cfg) {
-				params["allow_insecure"] = "1"
-			}
 			result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 		}
 		if len(result) > 0 {
@@ -353,21 +366,6 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 		password, ok := raw.(string)
 		if !ok || password == "" {
 			return nil, fmt.Errorf("tuic user %q has empty password", uuid)
-		}
-		params := map[string]string{}
-		for key, out := range map[string]string{"congestion-controller": "congestion-controller", "bbr-profile": "bbr-profile", "udp-relay-mode": "udp-relay-mode", "max-udp-relay-packet-size": "max-udp-relay-packet-size"} {
-			if v, ok := cfg[key].(string); ok && v != "" {
-				params[out] = v
-			}
-		}
-		if v, ok := firstString(cfg["alpn"]); ok {
-			params["alpn"] = v
-		}
-		if v, ok := cfg["sni"].(string); ok && v != "" {
-			params["sni"] = v
-		}
-		if certutil.ShouldSkipCertVerify(cfg) {
-			params["allow_insecure"] = "1"
 		}
 		result = append(result, addName(query("tuic://"+url.PathEscape(uuid)+":"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
