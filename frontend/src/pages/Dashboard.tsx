@@ -372,14 +372,7 @@ const Dashboard: React.FC = () => {
         <Col xs={24} md={12} lg={8}>
           <Card
             size={cardSize}
-            title={
-              <Space size={8} wrap>
-                <span>{t('dashboard.processUsage', 'Process usage')}</span>
-                <Tag color={coreRunning ? 'processing' : 'default'} style={{ margin: 0 }}>
-                  {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
-                </Tag>
-              </Space>
-            }
+            title={t('dashboard.processUsage', 'Process usage')}
           >
             <ProcessUsageWall
               panel={data?.panel}
