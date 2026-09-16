@@ -624,9 +624,14 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	if sni == "" {
 		sni = strings.TrimSpace(in.Node.PublicHost)
 	}
-	skipCert := true
+	skipCert := false
 	if v, ok := cfg["skip-cert-verify"].(bool); ok {
 		skipCert = v
+	} else if cert, _ := cfg["certificate"].(string); strings.Contains(cert, "3m-ui") {
+		// Panel GenerateSelfSigned uses O=3m-ui
+		skipCert = true
+	} else if cert, _ := cfg["certificate"].(string); strings.TrimSpace(cert) != "" && sni == "" {
+		skipCert = true
 	}
 
 	isV4 := kind == "tuic-v4"
@@ -672,14 +677,18 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 
 	var uri string
 	if isV4 {
-		token := strings.TrimSpace(in.User.Password)
+		// Token lives on the listener Config — never the panel user password.
+		token := firstNonEmptyTokenValue(cfg["token"])
 		if token == "" {
-			token = strings.TrimSpace(in.User.Username)
+			token = strings.TrimSpace(in.User.Password)
+			// Only accept User.Password when it came from config decode (no UUID).
+			if strings.TrimSpace(in.User.UUID) != "" || looksLikeUUID(in.User.Username) {
+				token = ""
+			}
 		}
 		if token == "" {
-			return Share{}, fmt.Errorf("tuic-v4 share requires token")
+			return Share{}, fmt.Errorf("tuic-v4 share requires token in listener config")
 		}
-		// Client URI: tuic://TOKEN@host:port?... (V4 has no uuid/password).
 		uri = shareName(
 			shareQuery("tuic://"+url.PathEscape(token)+"@"+netutil.JoinHostPort(host, port), params),
 			in.Node.Name,
@@ -846,4 +855,26 @@ func strOr(v, def string) string {
 		return v
 	}
 	return def
+}
+
+func firstNonEmptyTokenValue(tok interface{}) string {
+	switch v := tok.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return ""
 }

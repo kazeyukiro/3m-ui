@@ -131,13 +131,17 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 				n.Users = []UserCred{{Password: key}}
 			}
 		}
-		// TUIC v4: token: [TOKEN] (wiki inbound). Export one share per token.
-		if len(n.Users) == 0 && (n.Protocol == "tuic-v4" || n.Protocol == "tuic") {
+		// TUIC v4: token lives only in Config. Panel user rows must not become the token.
+		if n.Protocol == "tuic-v4" || (n.Protocol == "tuic" && len(stringListFrom(cfg, "token")) > 0) {
+			var toks []UserCred
 			for _, tok := range stringListFrom(cfg, "token") {
 				tok = strings.TrimSpace(tok)
 				if tok != "" {
-					n.Users = append(n.Users, UserCred{Password: tok})
+					toks = append(toks, UserCred{Password: tok})
 				}
+			}
+			if len(toks) > 0 {
+				n.Users = toks
 			}
 		}
 	}

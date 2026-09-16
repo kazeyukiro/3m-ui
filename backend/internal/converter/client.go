@@ -348,9 +348,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 					p["sni"] = sn
 				}
 			}
+			// Only panel self-signed (or explicit skip) — not operator-provided formal certs.
 			if certutil.ShouldSkipCertVerify(opts) {
-				p["skip-cert-verify"] = true
-			} else if cert, _ := opts["certificate"].(string); strings.TrimSpace(cert) != "" {
 				p["skip-cert-verify"] = true
 			}
 			if value, ok := opts["ech-opts"]; ok {
@@ -360,7 +359,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		}
 	case "tuic", "tuic-v4", "tuic-v5":
 		// MetaCubeX proxies/tuic: type is always "tuic".
-		// V4 = token (string); V5 = uuid + password. Prefer Config token/users.
+		// V4 = token from Config only; V5 = uuid+password.
 		copyTUICOpts := func(p map[string]interface{}) {
 			for _, key := range []string{
 				"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size",
@@ -376,16 +375,25 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p["name-cert-verify"] = v
 			}
 			ensureTUICClientDefaults(p, opts)
+			// Formal cert: keep SNI as public host. Self-signed: skip-verify already set.
 			if p["sni"] == nil && p["servername"] == nil && server != "" {
 				p["sni"] = server
 			}
 		}
-		if tuicTokenNonEmpty(opts["token"]) {
+		// Prefer Config token for any TUIC that still has token (v4 / dual).
+		if tuicTokenNonEmpty(opts["token"]) && protocol != "tuic-v5" {
 			p := makeProxy("")
-			p["token"] = normalizeTUICToken(opts["token"])
+			tok := normalizeTUICToken(opts["token"])
+			if s, ok := tok.(string); !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("listener %q: empty TUIC token in config", l.Name)
+			}
+			p["token"] = tok
 			copyTUICOpts(p)
 			result = append(result, p)
 			break
+		}
+		if protocol == "tuic-v4" {
+			return nil, fmt.Errorf("listener %q: tuic-v4 requires non-empty token in listener config", l.Name)
 		}
 		// V5 users from credentials (already preferred from Config when present).
 		emitted := 0
@@ -830,15 +838,15 @@ func ensureTUICClientDefaults(p, opts map[string]interface{}) {
 	if p["congestion-controller"] == nil {
 		p["congestion-controller"] = "bbr"
 	}
-	// Panel mints self-signed PEMs (CN=localhost). Public host (domain/IP)
-	// will never match — clients must skip verify or the handshake fails.
+	// Panel self-signed only. Formal certs (Let's Encrypt etc.) must verify.
 	if certutil.ShouldSkipCertVerify(opts) {
-		p["skip-cert-verify"] = true
-	} else if cert, _ := opts["certificate"].(string); strings.TrimSpace(cert) != "" {
 		p["skip-cert-verify"] = true
 	}
 	if p["udp"] == nil {
 		p["udp"] = true
+	}
+	if p["udp-relay-mode"] == nil {
+		p["udp-relay-mode"] = "native"
 	}
 }
 
