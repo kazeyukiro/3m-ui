@@ -361,8 +361,18 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 					p["sni"] = sn
 				}
 			}
-			// Only panel self-signed (or explicit skip) — not operator-provided formal certs.
-			if certutil.ShouldSkipCertVerify(opts) {
+			// Smart cert: panel self-signed / host mismatch → skip; formal matching host → verify.
+			cert, _ := opts["certificate"].(string)
+			if strings.TrimSpace(cert) == "" {
+				if c, _, ok := certstore.Load(l.ID); ok {
+					cert = c
+				}
+			}
+			var explicit *bool
+			if v, ok := opts["skip-cert-verify"].(bool); ok {
+				explicit = &v
+			}
+			if certutil.DecideClientSkipCertVerify(cert, server, explicit) {
 				p["skip-cert-verify"] = true
 			}
 			if value, ok := opts["ech-opts"]; ok {
@@ -387,15 +397,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
 				p["name-cert-verify"] = v
 			}
-			ensureTUICClientDefaults(p, opts)
-			// Belt-and-suspenders: still recover skip from certstore when defaults missed it.
-			if _, ok := p["skip-cert-verify"]; !ok {
-				if c, _, ok := certstore.Load(l.ID); ok && certutil.IsPanelSelfSignedPEM(c) {
-					p["skip-cert-verify"] = true
-				} else {
-					p["skip-cert-verify"] = true
-				}
-			}
+			ensureTUICClientDefaults(p, opts, server, l.ID)
 			if p["sni"] == nil && p["servername"] == nil && server != "" {
 				p["sni"] = server
 			}
@@ -847,23 +849,24 @@ func normalizeTUICToken(token interface{}) interface{} {
 	}
 }
 
-func ensureTUICClientDefaults(p, opts map[string]interface{}) {
+func ensureTUICClientDefaults(p, opts map[string]interface{}, connectHost string, listenerID uint) {
 	if p["alpn"] == nil {
 		p["alpn"] = []string{"h3"}
 	}
 	if p["congestion-controller"] == nil {
 		p["congestion-controller"] = "bbr"
 	}
-	// TUIC inbound is always TLS. Panel default cert is self-signed (CN=localhost,
-	// O=3m-ui) while subscription server is the public host — clients MUST skip
-	// verify or the handshake fails. Formal-cert operators set skip-cert-verify:false.
+	cert, _ := opts["certificate"].(string)
+	if strings.TrimSpace(cert) == "" && listenerID != 0 {
+		if c, _, ok := certstore.Load(listenerID); ok {
+			cert = c
+		}
+	}
+	var explicit *bool
 	if v, ok := opts["skip-cert-verify"].(bool); ok {
-		p["skip-cert-verify"] = v
-	} else if certutil.ShouldSkipCertVerify(opts) {
-		p["skip-cert-verify"] = true
-	} else {
-		// Config may omit the PEM (cert only on disk / in generated YAML).
-		// Prefer connectivity for panel installs over strict verify.
+		explicit = &v
+	}
+	if certutil.DecideClientSkipCertVerify(cert, connectHost, explicit) {
 		p["skip-cert-verify"] = true
 	}
 	if p["udp"] == nil {

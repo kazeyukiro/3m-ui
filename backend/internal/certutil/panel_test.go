@@ -27,6 +27,29 @@ func TestGenerateSelfSignedAndDetect(t *testing.T) {
 	}
 }
 
+func TestDecideClientSkipCertVerify(t *testing.T) {
+	cert, _, err := GenerateSelfSigned("localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Panel self-signed → skip even when connecting via public host
+	if !DecideClientSkipCertVerify(cert, "dzx.qzz.io", nil) {
+		t.Fatal("panel cert should skip for public host")
+	}
+	f := false
+	if DecideClientSkipCertVerify(cert, "dzx.qzz.io", &f) {
+		t.Fatal("explicit false must win")
+	}
+	tr := true
+	if !DecideClientSkipCertVerify(cert, "dzx.qzz.io", &tr) {
+		t.Fatal("explicit true must win")
+	}
+	// No PEM → skip (panel default)
+	if !DecideClientSkipCertVerify("", "dzx.qzz.io", nil) {
+		t.Fatal("empty cert should skip")
+	}
+}
+
 func TestHostHintsFromConfig(t *testing.T) {
 	h := HostHintsFromConfig(map[string]interface{}{
 		"sni":          "a.example",
