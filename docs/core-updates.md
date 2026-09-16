@@ -66,7 +66,7 @@ All endpoints require the existing administrator authentication.
 | --- | --- | --- |
 | GET | `/api/v1/mihomo/releases` | Recent stable and Pre releases with usable platform artifacts and release notes |
 | GET | `/api/v1/mihomo/update` | Capability, persistence/rollback state, and latest job |
-| POST | `/api/v1/mihomo/update` | JSON `{"version":"v1.19.30"}`; returns HTTP 202 with the accepted job |
+| POST | `/api/v1/mihomo/update` | JSON `{"version":"v1.19.31"}`; returns HTTP 202 with the accepted job |
 | POST | `/api/v1/mihomo/update/rollback` | Returns HTTP 202 with a job restoring the previous version |
 
 POST accepts a version only, never an arbitrary download URL or executable path.

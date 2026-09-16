@@ -224,7 +224,7 @@ listener while still detecting a missing middle port.
   passed with the Go race detector.
 - Frontend unit tests, TypeScript, lint on the changed runtime components, and
   the production build passed. Vite retained its bundle-size warning.
-- On Linux ARM64 with Mihomo v1.19.30, disposable Shadowsocks and VLESS + TLS
+- On Linux ARM64 with Mihomo v1.19.31, disposable Shadowsocks and VLESS + TLS
   listeners passed actual proxied HTTP 204 requests. Wrong passwords/UUIDs
   failed and did not reach the target, verifying there was no direct bypass.
 - Cancelling an in-flight request stopped the temporary client and removed its

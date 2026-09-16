@@ -118,7 +118,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	},
 	"vmess": {
 		Protocol: "vmess",
-		Fields:   listenerFields("users", "alterId", "ws-path", "grpc-service-name", "grpc-user-agent", "ping-interval", "max-connections", "min-streams", "max-streams", "mekya-config", "mkcp-config", "shadow-tls", "res-tls", "jls-config", "reality-config", "tlsmirror-config", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "allow-insecure", "mux-option"),
+		Fields:   listenerFields("users", "alterId", "ws-path", "grpc-service-name", "grpc-user-agent", "ping-interval", "max-connections", "min-streams", "max-streams", "mekya-config", "mkcp-config", "shadow-tls", "res-tls", "jls-config", "reality-config", "tlsmirror-config", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key", "mux-option"),
 		NestedFields: listenerNested(
 			"mekya-config.enable", "mekya-config.max-write-size", "mekya-config.max-write-duration-ms", "mekya-config.max-simultaneous-write-connection", "mekya-config.packet-writing-buffer", "mekya-config.polling-interval-initial", "mekya-config.h2-pool-size",
 			"mekya-config.kcp.mtu", "mekya-config.kcp.tti", "mekya-config.kcp.uplink-capacity", "mekya-config.kcp.downlink-capacity", "mekya-config.kcp.congestion", "mekya-config.kcp.write-buffer", "mekya-config.kcp.read-buffer", "mekya-config.kcp.seed", "mekya-config.kcp.header",

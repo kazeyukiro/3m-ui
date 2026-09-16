@@ -137,19 +137,28 @@ func (t TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	if tok, ok := m["token"].(string); ok {
 		m["token"] = []string{tok}
 	}
+	// Official Mihomo: always type "tuic". Auth mode is token (v4) vs users (v5).
+	// Panel protocol names: tuic-v4 / tuic-v5. Legacy "tuic" auto-detects.
 	kind := t.Kind()
-	if kind == "tuic-v4" {
-		// TUIC v4: token array — preserve ALL non-empty tokens (wiki allows
-		// multi-token form: `token: [T1, T2, …]`, any one authenticates).
-		// Pre-fix this dropped all but the first token at compile time.
-		toks := allStringTokens(m["token"])
+	toks := allStringTokens(m["token"])
+	hasUsers := false
+	if um, ok := m["users"].(map[string]interface{}); ok && len(um) > 0 {
+		hasUsers = true
+	}
+	isV4 := kind == "tuic-v4"
+	if kind == "tuic-v5" {
+		isV4 = false
+	} else if kind == "tuic" {
+		// Wiki: exactly one of token or users. Prefer explicit token-only as v4.
+		isV4 = len(toks) > 0 && !hasUsers
+	}
+	if isV4 {
 		if len(toks) == 0 {
 			toks = []string{randomToken()}
 		}
 		m["token"] = toks
 		delete(m, "users")
 	} else {
-		// TUIC v5 / generic: users map UUID→password (wiki inbound tuic-v5).
 		delete(m, "token")
 		users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
 		if len(users) > 0 {

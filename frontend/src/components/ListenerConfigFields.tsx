@@ -485,15 +485,24 @@ export function formValuesToConfig(
       // TUIC/Sudoku-only fields per wiki + fix-A HIGH-5.
       set('bbr-profile', values['bbr-profile']);
       break;
-    case 'tuic':
     case 'tuic-v4':
-    case 'tuic-v5':
+      // Wiki inbound tuic-v4: token only (array).
       if (values.token) {
         const tokens = String(values.token).split(',').map((s: string) => s.trim()).filter(Boolean);
         if (tokens.length > 0) {
-          set('token', tokens); // Mihomo expects token as array
+          set('token', tokens);
         }
       }
+      set('congestion-controller', values['congestion-controller']);
+      set('alpn', values.alpn);
+      set('max-idle-time', values['max-idle-time']);
+      set('authentication-timeout', values['authentication-timeout']);
+      set('max-udp-relay-packet-size', values['max-udp-relay-packet-size']);
+      set('bbr-profile', values['bbr-profile']);
+      break;
+    case 'tuic-v5':
+    case 'tuic':
+      // Wiki inbound tuic-v5: users UUID→password (panel-bound or config); no token field.
       set('congestion-controller', values['congestion-controller']);
       set('alpn', values.alpn);
       set('max-idle-time', values['max-idle-time']);
@@ -1135,7 +1144,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {(protocol === 'tuic' || protocol === 'tuic-v4' || protocol === 'tuic-v5') && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          {(protocol === 'tuic-v4' || protocol === 'tuic') && (
+          {(protocol === 'tuic-v4') && (
             <Form.Item name="token" label={t('listeners.token')} tooltip={t('listeners.tokenHint')}>
               <Input placeholder={t('listeners.tokenPlaceholder')} />
             </Form.Item>
