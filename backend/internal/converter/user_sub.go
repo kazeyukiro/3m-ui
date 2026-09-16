@@ -96,7 +96,7 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 			}
 			if shares, err2 := protocol.ExportShares(listener, host, pcreds); err2 == nil {
 				for _, sh := range shares {
-					if maps := proxiesFromClientYAML(sh.ClientYAML); len(maps) > 0 {
+					if maps := proxiesFromClientYAML(sh.ClientYAML, listener.Name, 0); len(maps) > 0 {
 						proxies = append(proxies, maps...)
 					}
 				}
@@ -182,19 +182,4 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 	}
 	body := strings.Join(links, "\n")
 	return []byte(EncodeBase64([]byte(body))), nil
-}
-
-// proxiesFromClientYAML extracts the proxies list from a share ClientYAML document.
-func proxiesFromClientYAML(raw string) []map[string]interface{} {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	var doc struct {
-		Proxies []map[string]interface{} `yaml:"proxies"`
-	}
-	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
-		return nil
-	}
-	return doc.Proxies
 }
