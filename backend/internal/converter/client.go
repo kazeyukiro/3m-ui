@@ -388,12 +388,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				p["name-cert-verify"] = v
 			}
 			ensureTUICClientDefaults(p, opts)
-			if p["skip-cert-verify"] == nil {
-				if certutil.ShouldSkipCertVerify(opts) {
+			// Belt-and-suspenders: still recover skip from certstore when defaults missed it.
+			if _, ok := p["skip-cert-verify"]; !ok {
+				if c, _, ok := certstore.Load(l.ID); ok && certutil.IsPanelSelfSignedPEM(c) {
 					p["skip-cert-verify"] = true
-				} else if c, _, ok := certstore.Load(l.ID); ok && certutil.IsPanelSelfSignedPEM(c) {
-					p["skip-cert-verify"] = true
-				} else if cert, _ := opts["certificate"].(string); certutil.IsPanelSelfSignedPEM(cert) {
+				} else {
 					p["skip-cert-verify"] = true
 				}
 			}
@@ -855,8 +854,16 @@ func ensureTUICClientDefaults(p, opts map[string]interface{}) {
 	if p["congestion-controller"] == nil {
 		p["congestion-controller"] = "bbr"
 	}
-	// Panel self-signed only. Formal certs (Let's Encrypt etc.) must verify.
-	if certutil.ShouldSkipCertVerify(opts) {
+	// TUIC inbound is always TLS. Panel default cert is self-signed (CN=localhost,
+	// O=3m-ui) while subscription server is the public host — clients MUST skip
+	// verify or the handshake fails. Formal-cert operators set skip-cert-verify:false.
+	if v, ok := opts["skip-cert-verify"].(bool); ok {
+		p["skip-cert-verify"] = v
+	} else if certutil.ShouldSkipCertVerify(opts) {
+		p["skip-cert-verify"] = true
+	} else {
+		// Config may omit the PEM (cert only on disk / in generated YAML).
+		// Prefer connectivity for panel installs over strict verify.
 		p["skip-cert-verify"] = true
 	}
 	if p["udp"] == nil {
