@@ -342,14 +342,12 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			result = append(result, p)
 		}
 	case "tuic", "tuic-v4", "tuic-v5":
-		// TUIC client YAML (proxies-tuic wiki) supports the optional
-		// `ip` (UDP NAT source IP hint) and `name-cert-verify`
-		// (cert hostname to verify) fields. Only emit them when the
-		// listener carries a non-empty value, so we don't pollute the
-		// client YAML with `ip: ""` placeholders.
-		if token, ok := opts["token"]; ok {
+		// Wiki: v4 uses token; v5 uses uuid+password. Prefer non-empty token for v4.
+		tokenVal, hasToken := opts["token"]
+		tokenOK := hasToken && tuicTokenNonEmpty(tokenVal)
+		if tokenOK && (protocol == "tuic-v4" || protocol == "tuic" && len(credentials) == 0) {
 			p := makeProxy("")
-			p["token"] = normalizeTUICToken(token)
+			p["token"] = normalizeTUICToken(tokenVal)
 			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
 				copyOption(p, opts, key)
 			}
@@ -361,34 +359,44 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			ensureTUICClientDefaults(p, opts)
 			result = append(result, p)
-		} else {
-			if len(credentials) == 0 {
-				return nil, fmt.Errorf("listener %q requires TUIC V5 users or a V4 token", l.Name)
+			break
+		}
+		if len(credentials) == 0 {
+			return nil, fmt.Errorf("listener %q requires TUIC V5 users or a V4 token", l.Name)
+		}
+		for i, cred := range credentials {
+			uuid := strings.TrimSpace(cred.UUID)
+			if uuid == "" {
+				uuid = strings.TrimSpace(cred.Username)
 			}
-			for i, cred := range credentials {
-				p := makeProxy(fmt.Sprintf("%d", i+1))
-				// Server users map is keyed by UUID (fallback username). Client must match.
-				uuid := strings.TrimSpace(cred.UUID)
-				if uuid == "" {
-					uuid = strings.TrimSpace(cred.Username)
-				}
-				if uuid == "" {
-					return nil, fmt.Errorf("listener %q: TUIC V5 user is missing uuid", l.Name)
-				}
-				p["uuid"] = uuid
-				p["password"] = cred.Password
-				for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
-					copyOption(p, opts, key)
-				}
-				if v, ok := opts["ip"].(string); ok && v != "" {
-					p["ip"] = v
-				}
-				if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
-					p["name-cert-verify"] = v
-				}
-				ensureTUICClientDefaults(p, opts)
-				result = append(result, p)
+			if uuid == "" {
+				continue
 			}
+			pass := strings.TrimSpace(cred.Password)
+			if pass == "" {
+				continue
+			}
+			suffix := ""
+			if len(credentials) > 1 {
+				suffix = fmt.Sprintf("%d", i+1)
+			}
+			p := makeProxy(suffix)
+			p["uuid"] = uuid
+			p["password"] = pass
+			for _, key := range []string{"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size", "sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval", "fast-open", "max-open-streams", "disable-sni"} {
+				copyOption(p, opts, key)
+			}
+			if v, ok := opts["ip"].(string); ok && v != "" {
+				p["ip"] = v
+			}
+			if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
+				p["name-cert-verify"] = v
+			}
+			ensureTUICClientDefaults(p, opts)
+			result = append(result, p)
+		}
+		if len(result) == 0 {
+			return nil, fmt.Errorf("listener %q: no usable TUIC uuid/password (bind user or set users in config)", l.Name)
 		}
 	case "shadowquic":
 		if len(credentials) == 0 {
@@ -1296,4 +1304,24 @@ func credentialsFromListenerConfig(protocol string, opts map[string]interface{})
 		}
 	}
 	return out
+}
+
+func tuicTokenNonEmpty(token interface{}) bool {
+	switch x := token.(type) {
+	case string:
+		return strings.TrimSpace(x) != ""
+	case []interface{}:
+		for _, item := range x {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+	case []string:
+		for _, s := range x {
+			if strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }

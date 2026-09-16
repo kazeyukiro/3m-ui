@@ -43,8 +43,12 @@ func userBoundListeners(db *gorm.DB, pu models.ProxyUser) ([]models.Listener, ma
 				match = append(match, c)
 			}
 		}
+		// Listener is bound: always export it. Protocols whose auth lives in
+		// Config (TUIC token/users, SS password, snell psk, …) often have no
+		// panel-mirrored credential row matching this user UUID — skipping
+		// them made subscription omit the node while per-node URI still worked.
 		if len(match) == 0 {
-			continue
+			match = append(match, creds...)
 		}
 		listeners = append(listeners, listener)
 		filtered[listener.ID] = match
