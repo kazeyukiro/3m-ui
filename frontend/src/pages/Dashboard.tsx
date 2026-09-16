@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, Grid, message, theme } from 'antd';
+import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, message, theme } from 'antd';
 import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { isCanceledError } from '../api/client';
@@ -41,6 +41,12 @@ type ProcSample = {
  * rides along as a neutral sub-line. A group with no sample renders "—"
  * instead of a misleading 0%; the card header already carries the
  * running/stopped state, so metrics keep their own label.
+ *
+ * The groups always stack: the card shares a row with the host resource card,
+ * so it is at most a third of the viewport. Side by side, each metric cell
+ * would be ~60px wide below 1200px — narrower than the 28px figures inside
+ * it. Stacked it reads as a process table (rows = processes, columns =
+ * metrics) and stays legible at every width.
  */
 const ProcessUsageWall: React.FC<{
   panel: ProcSample | undefined;
@@ -53,8 +59,6 @@ const ProcessUsageWall: React.FC<{
   pidLabel: string;
 }> = ({ panel, core, coreRunning, panelLabel, coreLabel, cpuLabel, memLabel, pidLabel }) => {
   const { token } = theme.useToken();
-  const screens = Grid.useBreakpoint();
-  const stacked = !screens.sm; // xs: groups stacked; sm+: side by side
 
   /** Usage level → color. ≥80% high (red), ≥50% medium (orange), else inherit. */
   const usageColor = (pct: number): string | undefined => {
@@ -126,32 +130,17 @@ const ProcessUsageWall: React.FC<{
     ...numStyle(0),
     color: token.colorTextDisabled,
   };
-  const cellStyle: React.CSSProperties = { textAlign: 'center', padding: '10px 4px', minWidth: 0 };
+  const cellStyle: React.CSSProperties = { textAlign: 'center', padding: '8px 4px', minWidth: 0 };
   const border = `1px solid ${token.colorBorderSecondary}`;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: stacked ? 'column' : 'row',
-        border,
-        borderRadius: 6,
-        overflow: 'hidden',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', border, borderRadius: 6, overflow: 'hidden' }}>
       {groups.map((g, i) => (
         <div
           key={g.key}
           style={{
-            flex: 1,
             minWidth: 0,
-            ...(stacked
-              ? i > 0
-                ? { borderTop: border }
-                : null
-              : i > 0
-                ? { borderLeft: border }
-                : null),
+            ...(i > 0 ? { borderTop: border } : null),
           }}
         >
           <div
@@ -377,8 +366,10 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
 
-        {/* Process usage: Panel / Core groups, each carrying its own PID */}
-        <Col xs={24}>
+        {/* Process usage: Panel / Core groups, each carrying its own PID.
+            Shares a row with the host resource card on md+ instead of sitting
+            alone at the bottom of the page. */}
+        <Col xs={24} md={12} lg={8}>
           <Card
             size={cardSize}
             title={
