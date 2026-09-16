@@ -59,7 +59,7 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 		return trojanURIs(listener.Name, host, port, cfg)
 	case "hysteria2":
 		return hysteria2URIs(listener.Name, host, port, cfg)
-	case "tuic":
+	case "tuic", "tuic-v4", "tuic-v5":
 		return tuicURIs(listener.Name, host, port, cfg)
 	case "shadowquic":
 		return shadowQUICURIs(listener.Name, host, port, cfg)
