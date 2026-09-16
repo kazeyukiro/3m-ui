@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://3m-ui.top/docs/
+    about: Install, panel settings, API notes
+  - name: Mihomo listener docs (TUIC etc.)
+    url: https://wiki.metacubex.one/config/inbound/listeners/
+    about: Official MetaCubeX inbound schema

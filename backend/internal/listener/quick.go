@@ -46,6 +46,17 @@ func SeedQuickConfig(protocol string) map[string]interface{} {
 		cfg["version"] = 4
 	case "shadowquic":
 		cfg["udp"] = true
+	case "tuic-v4":
+		// Wiki inbound tuic-v4: token list + TLS (cert filled by autofill).
+		cfg["udp"] = true
+		cfg["token"] = []string{} // signal v4; autofill fills a random token
+		cfg["alpn"] = []string{"h3"}
+		cfg["congestion-controller"] = "bbr"
+	case "tuic-v5", "tuic":
+		// Wiki inbound tuic-v5: users UUID→password + TLS.
+		cfg["udp"] = true
+		cfg["alpn"] = []string{"h3"}
+		cfg["congestion-controller"] = "bbr"
 	}
 	return cfg
 }

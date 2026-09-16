@@ -45,8 +45,8 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		// array form users [{username, password}]
 		autofillUsersArray(cfg)
 	case "tuic", "tuic-v4", "tuic-v5":
-		// TUIC v4 uses token (array of strings); v5 uses users [{username, password}].
-		autofillTUICUsers(cfg)
+		// Wiki: v4 uses token[]; v5 uses users map UUID→password. type is always "tuic".
+		autofillTUICUsers(cfg, proto)
 	case "shadowsocks":
 		cipher, _ := cfg["cipher"].(string)
 		if cipher == "" {
@@ -343,18 +343,38 @@ func autofillUsersArray(cfg map[string]interface{}) {
 	cfg["users"] = users
 }
 
-// autofillTUICUsers fills credentials for TUIC listeners. TUIC v4 uses a token
-// array (left untouched when set); TUIC v5 uses a `users` map keyed by UUID /
-// username (matching the Mihomo TUIC compiler `asUsersMapUUID`, which reads
-// `cfg["users"]` as a map - never as an array). When neither token nor a users
-// map is present we default to the v5 map form with a single `default` user.
-func autofillTUICUsers(cfg map[string]interface{}) {
-	// TUIC v4 uses `token` (array of strings); v5 uses `users` as map{UUID: PASSWORD}.
-	// If token is set, leave it (v4). Otherwise default to v5 map form.
-	if _, hasToken := cfg["token"]; hasToken {
+// autofillTUICUsers fills credentials per MetaCubeX listener docs:
+//   tuic-v4 → token: [TOKEN]  (users must not be used)
+//   tuic-v5 / tuic → users: {UUID: PASSWORD}  (token must not be used for pure v5)
+// https://wiki.metacubex.one/config/inbound/listeners/tuic-v4/
+// https://wiki.metacubex.one/config/inbound/listeners/tuic-v5/
+func autofillTUICUsers(cfg map[string]interface{}, proto string) {
+	proto = strings.ToLower(strings.TrimSpace(proto))
+	if proto == "tuic-v4" {
+		delete(cfg, "users")
+		if tok, ok := cfg["token"]; ok && tok != nil {
+			switch v := tok.(type) {
+			case string:
+				if strings.TrimSpace(v) != "" {
+					cfg["token"] = []string{v}
+					return
+				}
+			case []interface{}:
+				if len(v) > 0 {
+					return
+				}
+			case []string:
+				if len(v) > 0 {
+					return
+				}
+			}
+		}
+		cfg["token"] = []string{randomPassword(24)}
 		return
 	}
-	// If users already exists as a map, fill empty passwords.
+
+	// v5 / generic tuic: UUID → password map; strip token so compile does not prefer v4 mode.
+	delete(cfg, "token")
 	if users, ok := cfg["users"].(map[string]interface{}); ok && len(users) > 0 {
 		for k, v := range users {
 			if s, ok := v.(string); !ok || strings.TrimSpace(s) == "" {
@@ -364,7 +384,6 @@ func autofillTUICUsers(cfg map[string]interface{}) {
 		cfg["users"] = users
 		return
 	}
-	// Also handle map[interface{}]interface{} (from YAML/JSON decode)
 	if users, ok := cfg["users"].(map[interface{}]interface{}); ok && len(users) > 0 {
 		out := make(map[string]interface{}, len(users))
 		for k, v := range users {
@@ -378,8 +397,6 @@ func autofillTUICUsers(cfg map[string]interface{}) {
 		cfg["users"] = out
 		return
 	}
-	// No users map exists - create default v5 map form with a real UUID key
-	// (TUIC clients reject non-UUID uuid fields).
 	cfg["users"] = map[string]interface{}{uuid.New().String(): randomPassword(16)}
 }
 

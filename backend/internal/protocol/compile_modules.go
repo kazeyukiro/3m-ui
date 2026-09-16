@@ -146,13 +146,12 @@ func (t TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 		// Remove users — v4 uses token, not users.
 		delete(m, "users")
 	} else {
-		// TUIC v5 (or generic tuic): users map{UUID: PASSWORD}.
-		// If token is present, it takes precedence (v4 compat mode).
-		if _, hasToken := m["token"]; !hasToken {
-			users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
-			if len(users) > 0 {
-				m["users"] = users
-			}
+		// TUIC v5 / generic: users map UUID→password (wiki inbound tuic-v5).
+		// Explicit v5 must not keep token (outbound wiki: token is V4-only).
+		delete(m, "token")
+		users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
+		if len(users) > 0 {
+			m["users"] = users
 		}
 	}
 	// Sensible defaults when operator left advanced QUIC fields empty.
