@@ -140,6 +140,14 @@ func AutofillListenerDefaults(l *models.Listener) error {
 // sanitizeServerConfig drops panel-only and client-only keys that must not
 // reach Mihomo listener validation / config generation.
 func sanitizeServerConfig(cfg map[string]interface{}) {
+	// Identity / transport owned by the Listener model — must not appear in Config JSON
+	// (ValidateListenerConfig rejects them as "managed by 3m-ui").
+	for _, k := range []string{
+		"name", "type", "port", "listen", "bind_address", "proxy", "rule",
+		"enabled", "status", "tls", "udp", "routing-mark",
+	} {
+		delete(cfg, k)
+	}
 	delete(cfg, "security_layer")
 	delete(cfg, "transport_layer")
 	delete(cfg, "access_profile")

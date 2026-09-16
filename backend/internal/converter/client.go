@@ -126,6 +126,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if err != nil {
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
+	// When no panel user is bound, still export from config-embedded auth
+	// (TUIC token/users, SS password, snell psk, anytls map, …).
+	if len(credentials) == 0 {
+		credentials = credentialsFromListenerConfig(protocol, opts)
+	}
 	portStr := ResolveListenerPort(l)
 	var portVal interface{} = portStr
 	if p, err := strconv.Atoi(portStr); err == nil {
@@ -1196,4 +1201,99 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// credentialsFromListenerConfig builds synthetic credentials from Mihomo-style
+// listener config so subscription/share works without a panel user binding.
+func credentialsFromListenerConfig(protocol string, opts map[string]interface{}) []user.Credential {
+	var out []user.Credential
+	switch protocol {
+	case "shadowsocks", "snell", "sudoku":
+		key := "password"
+		if protocol == "snell" {
+			key = "psk"
+		}
+		if protocol == "sudoku" {
+			key = "key"
+		}
+		if v, ok := opts[key].(string); ok && strings.TrimSpace(v) != "" {
+			out = append(out, user.Credential{Password: strings.TrimSpace(v)})
+		}
+	case "tuic", "tuic-v4", "tuic-v5":
+		// token list (v4) or users map UUID→password (v5)
+		if tok, ok := opts["token"]; ok {
+			switch x := tok.(type) {
+			case string:
+				if strings.TrimSpace(x) != "" {
+					out = append(out, user.Credential{Password: strings.TrimSpace(x)})
+				}
+			case []interface{}:
+				for _, item := range x {
+					if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+						out = append(out, user.Credential{Password: strings.TrimSpace(s)})
+					}
+				}
+			case []string:
+				for _, s := range x {
+					if strings.TrimSpace(s) != "" {
+						out = append(out, user.Credential{Password: strings.TrimSpace(s)})
+					}
+				}
+			}
+		}
+		if users, ok := opts["users"].(map[string]interface{}); ok {
+			for uuid, pw := range users {
+				if s, ok := pw.(string); ok && strings.TrimSpace(s) != "" {
+					out = append(out, user.Credential{UUID: uuid, Username: uuid, Password: strings.TrimSpace(s)})
+				}
+			}
+		}
+	case "anytls", "hysteria2", "mieru", "trusttunnel", "shadowquic", "trojan":
+		if users, ok := opts["users"].(map[string]interface{}); ok {
+			for name, pw := range users {
+				if s, ok := pw.(string); ok && strings.TrimSpace(s) != "" {
+					out = append(out, user.Credential{Username: name, Password: strings.TrimSpace(s)})
+				}
+			}
+		}
+		if arr, ok := opts["users"].([]interface{}); ok {
+			for _, item := range arr {
+				m, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				u, _ := m["username"].(string)
+				pw, _ := m["password"].(string)
+				uuid, _ := m["uuid"].(string)
+				if strings.TrimSpace(pw) == "" && strings.TrimSpace(uuid) == "" {
+					continue
+				}
+				out = append(out, user.Credential{Username: u, Password: pw, UUID: uuid})
+			}
+		}
+		if protocol == "anytls" || protocol == "hysteria2" {
+			if v, ok := opts["password"].(string); ok && strings.TrimSpace(v) != "" && len(out) == 0 {
+				out = append(out, user.Credential{Password: strings.TrimSpace(v)})
+			}
+		}
+	case "vless", "vmess":
+		if arr, ok := opts["users"].([]interface{}); ok {
+			for _, item := range arr {
+				m, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				uuid, _ := m["uuid"].(string)
+				if uuid == "" {
+					uuid, _ = m["username"].(string)
+				}
+				if strings.TrimSpace(uuid) == "" {
+					continue
+				}
+				pw, _ := m["password"].(string)
+				out = append(out, user.Credential{UUID: uuid, Username: uuid, Password: pw})
+			}
+		}
+	}
+	return out
 }
