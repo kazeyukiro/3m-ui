@@ -126,10 +126,19 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if err != nil {
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
-	// When no panel user is bound, still export from config-embedded auth
-	// (TUIC token/users, SS password, snell psk, anytls map, …).
-	if len(credentials) == 0 {
-		credentials = credentialsFromListenerConfig(protocol, opts)
+	// Prefer Config-embedded auth for protocols that store credentials on the
+	// listener (TUIC token/users, SS password, …). Bound panel UUID rows must
+	// not shadow them or subscription export mismatches the running inbound.
+	cfgCreds := credentialsFromListenerConfig(protocol, opts)
+	switch protocol {
+	case "tuic", "tuic-v4", "tuic-v5", "shadowsocks", "snell", "sudoku", "anytls", "shadowquic":
+		if len(cfgCreds) > 0 {
+			credentials = cfgCreds
+		}
+	default:
+		if len(credentials) == 0 {
+			credentials = cfgCreds
+		}
 	}
 	portStr := ResolveListenerPort(l)
 	var portVal interface{} = portStr
