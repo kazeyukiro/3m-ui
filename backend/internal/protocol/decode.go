@@ -104,18 +104,52 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 	if len(n.Users) == 0 {
 		// Fall back to config-embedded users for share/export of legacy rows.
 		for _, row := range normalizeUsersValue(cfg["users"]) {
-			n.Users = append(n.Users, UserCred{
+			u := UserCred{
 				Username: strMap(row, "username"),
 				Password: strMap(row, "password"),
 				UUID:     strMap(row, "uuid"),
 				Flow:     strMap(row, "flow"),
-			})
+			}
+			// TUIC v5 / Hysteria-style map is {UUID: password}; normalize puts UUID in username.
+			if u.UUID == "" && u.Username != "" && looksLikeUUID(u.Username) {
+				u.UUID = u.Username
+			}
+			n.Users = append(n.Users, u)
 		}
 		if n.Protocol == "shadowsocks" && n.Shadowsocks != nil && n.Shadowsocks.Password != "" && len(n.Users) == 0 {
 			n.Users = []UserCred{{Password: n.Shadowsocks.Password}}
 		}
+		// TUIC v4: token: [TOKEN] (wiki inbound). Export one share per token.
+		if len(n.Users) == 0 && (n.Protocol == "tuic-v4" || n.Protocol == "tuic") {
+			for _, tok := range stringListFrom(cfg, "token") {
+				tok = strings.TrimSpace(tok)
+				if tok != "" {
+					n.Users = append(n.Users, UserCred{Password: tok})
+				}
+			}
+		}
 	}
 	return n, nil
+}
+
+func looksLikeUUID(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func decodeTransport(cfg map[string]interface{}) TransportSpec {

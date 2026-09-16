@@ -294,6 +294,123 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	return Share{URI: uri, QRContent: uri}, nil
 }
 
+// --- TUIC (inbound type is always "tuic"; v4=token, v5=uuid+password) ---
+// Docs: https://wiki.metacubex.one/config/proxies/tuic/
+//       https://wiki.metacubex.one/config/inbound/listeners/tuic-v4/
+//       https://wiki.metacubex.one/config/inbound/listeners/tuic-v5/
+
+func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	cfg := in.Node.Generic
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	kind := t.Kind()
+	alpn := stringListFrom(cfg, "alpn")
+	if len(alpn) == 0 {
+		alpn = []string{"h3"}
+	}
+	cc, _ := cfg["congestion-controller"].(string)
+	if strings.TrimSpace(cc) == "" {
+		cc = "bbr"
+	}
+	sni := strings.TrimSpace(in.Node.AccessSNI)
+	if sni == "" {
+		sni = strFrom(cfg, "sni", "servername")
+	}
+	if sni == "" {
+		sni = strings.TrimSpace(in.Node.PublicHost)
+	}
+	skipCert := true
+	if v, ok := cfg["skip-cert-verify"].(bool); ok {
+		skipCert = v
+	}
+
+	isV4 := kind == "tuic-v4"
+	if kind == "tuic" {
+		// Ambiguous generic "tuic": prefer v5 when UUID-shaped credentials exist.
+		uuid := strings.TrimSpace(in.User.UUID)
+		if uuid == "" {
+			uuid = strings.TrimSpace(in.User.Username)
+		}
+		if looksLikeUUID(uuid) && strings.TrimSpace(in.User.Password) != "" {
+			isV4 = false
+		} else if strings.TrimSpace(in.User.Password) != "" && strings.TrimSpace(in.User.UUID) == "" && !looksLikeUUID(in.User.Username) {
+			isV4 = true
+		} else {
+			isV4 = false
+		}
+	}
+
+	params := map[string]string{
+		"congestion_control": cc,
+		"udp_relay_mode":     "native",
+	}
+	if sni != "" {
+		params["sni"] = sni
+	}
+	applyALPNParams(params, alpn)
+	if skipCert {
+		params["allow_insecure"] = "1"
+	}
+
+	extra := map[string]interface{}{
+		"udp":                   true,
+		"congestion-controller": cc,
+		"udp-relay-mode":        "native",
+		"alpn":                  alpn,
+	}
+	if sni != "" {
+		extra["sni"] = sni
+	}
+	if skipCert {
+		extra["skip-cert-verify"] = true
+	}
+
+	var uri string
+	if isV4 {
+		token := strings.TrimSpace(in.User.Password)
+		if token == "" {
+			token = strings.TrimSpace(in.User.Username)
+		}
+		if token == "" {
+			return Share{}, fmt.Errorf("tuic-v4 share requires token")
+		}
+		// Client URI: tuic://TOKEN@host:port?... (V4 has no uuid/password).
+		uri = shareName(
+			shareQuery("tuic://"+url.PathEscape(token)+"@"+netutil.JoinHostPort(host, port), params),
+			in.Node.Name,
+		)
+		extra["token"] = token
+	} else {
+		uuid := strings.TrimSpace(in.User.UUID)
+		if uuid == "" {
+			uuid = strings.TrimSpace(in.User.Username)
+		}
+		pass := strings.TrimSpace(in.User.Password)
+		if uuid == "" || pass == "" {
+			return Share{}, fmt.Errorf("tuic-v5 share requires uuid and password")
+		}
+		userinfo := url.UserPassword(uuid, pass).String()
+		uri = shareName(
+			shareQuery("tuic://"+userinfo+"@"+netutil.JoinHostPort(host, port), params),
+			in.Node.Name,
+		)
+		extra["uuid"] = uuid
+		extra["password"] = pass
+	}
+
+	yamlOut, err := clientYAMLProxy("tuic", host, port, in, extra)
+	if err != nil {
+		return Share{}, err
+	}
+	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
+}
+
+
 // --- helpers ---
 
 func applyTransportParams(params map[string]string, t TransportSpec) {
