@@ -35,25 +35,32 @@ func EnsureListenerCredentials(l *models.Listener) error {
 			}
 			cfg["users"] = []interface{}{map[string]interface{}{"username": "client", "uuid": uuid}}
 		case "trojan", "shadowquic":
-			// Official listener schema uses a list of {username, password} objects.
 			password, err := randomSecret(24)
 			if err != nil {
 				return fmt.Errorf("generate client credential: %w", err)
 			}
 			cfg["users"] = []interface{}{map[string]interface{}{"username": "client", "password": password}}
-		case "hysteria2", "anytls", "mieru", "tuic":
-			// Official schema for these protocols uses a username→password map.
+		case "tuic-v4":
+			// Wiki inbound: token: [TOKEN] only — never users.
+			password, err := randomSecret(24)
+			if err != nil {
+				return fmt.Errorf("generate TUIC v4 token: %w", err)
+			}
+			delete(cfg, "users")
+			cfg["token"] = []string{password}
+		case "hysteria2", "anytls", "mieru", "tuic", "tuic-v5":
 			password, err := randomSecret(24)
 			if err != nil {
 				return fmt.Errorf("generate client credential: %w", err)
 			}
 			username := "client"
-			if proto == "tuic" {
+			if proto == "tuic" || proto == "tuic-v5" {
 				username, err = randomUUID()
 				if err != nil {
 					return fmt.Errorf("generate TUIC client uuid: %w", err)
 				}
 			}
+			delete(cfg, "token")
 			cfg["users"] = map[string]interface{}{username: password}
 		}
 		encoded, err := json.Marshal(cfg)
@@ -67,25 +74,54 @@ func EnsureListenerCredentials(l *models.Listener) error {
 
 func requiresUserCredentials(proto string) bool {
 	switch strings.ToLower(proto) {
-	case "vless", "vmess", "trojan", "hysteria2", "anytls", "mieru", "shadowquic", "tuic":
+	case "vless", "vmess", "trojan", "hysteria2", "anytls", "mieru", "shadowquic", "tuic", "tuic-v4", "tuic-v5":
 		return true
 	default:
 		return false
 	}
 }
+
 func hasExportCredentials(proto string, cfg map[string]interface{}) bool {
+	proto = strings.ToLower(proto)
+	if proto == "tuic-v4" {
+		return tokenNonEmpty(cfg["token"])
+	}
 	users, ok := cfg["users"]
 	if !ok || users == nil {
+		// plain "tuic" may be v4-style token-only
+		if proto == "tuic" {
+			return tokenNonEmpty(cfg["token"])
+		}
 		return false
 	}
-	switch strings.ToLower(proto) {
-	case "hysteria2", "anytls", "mieru", "tuic":
+	switch proto {
+	case "hysteria2", "anytls", "mieru", "tuic", "tuic-v5":
 		m, ok := users.(map[string]interface{})
 		return ok && len(m) > 0
 	default:
 		list, ok := users.([]interface{})
 		return ok && len(list) > 0
 	}
+}
+
+func tokenNonEmpty(tok interface{}) bool {
+	switch v := tok.(type) {
+	case string:
+		return strings.TrimSpace(v) != ""
+	case []string:
+		for _, s := range v {
+			if strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 func randomSecret(length int) (string, error) {
 	b := make([]byte, length)

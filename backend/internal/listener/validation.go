@@ -9,6 +9,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	dbconfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 )
 
 func ValidateModel(l *models.Listener) error {
@@ -48,6 +49,9 @@ func ValidateModel(l *models.Listener) error {
 	}
 	if err := dbconfig.ValidateListenerConfig(protocol, l.Config); err != nil {
 		return fmt.Errorf("listener %q: %w", l.Name, err)
+	}
+	if err := node.ValidateNode(l); err != nil {
+		return err
 	}
 	if l.TLS {
 		if !dbconfig.ListenerSupportsTLS(protocol) {

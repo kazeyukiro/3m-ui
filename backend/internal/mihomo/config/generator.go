@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -291,6 +293,40 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			if strings.TrimSpace(c) != "" && strings.TrimSpace(k) != "" {
 				_ = certstore.Save(l.ID, c, k)
 			}
+		}
+		// TUIC v4 must never reach Mihomo with an empty token slice.
+		if protocolName == "tuic-v4" || protocolName == "tuic" {
+			tok := configMap["token"]
+			empty := true
+			switch v := tok.(type) {
+			case string:
+				empty = strings.TrimSpace(v) == ""
+			case []string:
+				for _, s := range v {
+					if strings.TrimSpace(s) != "" {
+						empty = false
+						break
+					}
+				}
+			case []interface{}:
+				for _, item := range v {
+					if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+						empty = false
+						break
+					}
+				}
+			default:
+				empty = tok == nil
+			}
+			if protocolName == "tuic-v4" && empty {
+				b := make([]byte, 16)
+				_, _ = rand.Read(b)
+				configMap["token"] = []string{hex.EncodeToString(b)}
+				delete(configMap, "users")
+			}
+		}
+		if patched, mErr := json.Marshal(configMap); mErr == nil {
+			l.Config = string(patched)
 		}
 		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
 			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))

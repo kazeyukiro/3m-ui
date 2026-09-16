@@ -179,14 +179,35 @@ func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 		if !hasCertificatePair(cfg) {
 			return fmt.Errorf("trusttunnel listener requires certificate and private-key")
 		}
-	case "tuic":
+	case "tuic", "tuic-v4", "tuic-v5":
+		// Panel uses tuic-v4 / tuic-v5; Mihomo YAML type is always "tuic".
 		users, token := hasNonEmpty(cfg["users"]), hasNonEmpty(cfg["token"])
-		if users == token {
-			return fmt.Errorf("tuic listener must configure exactly one of users (TUIC V5) or token (TUIC V4)")
-		}
-		if users {
+		switch proto {
+		case "tuic-v4":
+			if !token {
+				return fmt.Errorf("tuic-v4 listener requires a non-empty token array")
+			}
+			if users {
+				return fmt.Errorf("tuic-v4 listener must not set users (token-only)")
+			}
+		case "tuic-v5":
+			if !users {
+				return fmt.Errorf("tuic-v5 listener requires users map (UUID → password)")
+			}
+			if token {
+				return fmt.Errorf("tuic-v5 listener must not set token (users-only)")
+			}
 			if values, ok := cfg["users"].(map[string]interface{}); !ok || len(values) == 0 {
-				return fmt.Errorf("tuic V5 listener users must be a username-to-password map")
+				return fmt.Errorf("tuic-v5 listener users must be a UUID-to-password map")
+			}
+		default: // "tuic" legacy: exactly one of token or users
+			if users == token {
+				return fmt.Errorf("tuic listener must configure exactly one of users (TUIC V5) or token (TUIC V4)")
+			}
+			if users {
+				if values, ok := cfg["users"].(map[string]interface{}); !ok || len(values) == 0 {
+					return fmt.Errorf("tuic V5 listener users must be a username-to-password map")
+				}
 			}
 		}
 	case "vless", "vmess":
@@ -366,8 +387,25 @@ func hasNonEmpty(value interface{}) bool {
 	}
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
-	case reflect.Slice, reflect.Map:
+	case reflect.Map:
 		return v.Len() > 0
+	case reflect.Slice:
+		if v.Len() == 0 {
+			return false
+		}
+		// token: [""] must not count as configured
+		allEmpty := true
+		for i := 0; i < v.Len(); i++ {
+			elem := v.Index(i).Interface()
+			if s, ok := elem.(string); ok {
+				if strings.TrimSpace(s) != "" {
+					return true
+				}
+			} else if elem != nil {
+				allEmpty = false
+			}
+		}
+		return !allEmpty && v.Len() > 0
 	default:
 		return true
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
+	"github.com/kazeyukiro/3m-ui/backend/internal/credentials"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"golang.org/x/crypto/curve25519"
 )
@@ -120,6 +121,17 @@ func AutofillListenerDefaults(l *models.Listener) error {
 	sanitizeServerConfig(cfg)
 
 	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	l.Config = string(raw)
+	if err := credentials.EnsureListenerCredentials(l); err != nil {
+		return fmt.Errorf("ensure listener credentials: %w", err)
+	}
+	if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
+		return fmt.Errorf("reload config after credentials: %w", err)
+	}
+	raw, err = json.Marshal(cfg)
 	if err != nil {
 		return err
 	}
