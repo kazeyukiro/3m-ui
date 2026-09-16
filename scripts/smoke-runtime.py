@@ -110,12 +110,23 @@ def main():
                 "config": json.dumps({"cipher": "aes-128-gcm", "password": ss_password}),
             })
             # Core may finish start slightly after the listener response; poll briefly.
-            for _ in range(40):
+            for _ in range(80):
                 if api("mihomo/status").get("running"):
                     break
                 time.sleep(0.25)
             else:
                 raise AssertionError("Bundled core did not start")
+            # ApplyConfig is debounced asynchronously. On slow arm64 runners the
+            # SS socket may lag the "running" status — wait until TCP accepts.
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                try:
+                    with socket.create_connection(("127.0.0.1", listener_port), timeout=1):
+                        break
+                except OSError:
+                    time.sleep(0.25)
+            else:
+                raise AssertionError(f"Shadowsocks listener did not bind on 127.0.0.1:{listener_port}")
             # Persist real listener certificates as well as the Shadowsocks node.
             # Create returns after the panel DB write; Mihomo generate/Apply (and
             # certstore.Save) is debounced asynchronously — poll briefly.
@@ -163,18 +174,19 @@ def main():
             processes.append(client)
 
             def check_connection():
-                for _ in range(40):
+                # Allow extra time on ARM runners (client core + first QUIC/TCP path).
+                for _ in range(80):
                     try:
-                        connection = http.client.HTTPConnection("127.0.0.1", proxy_port, timeout=2)
+                        connection = http.client.HTTPConnection("127.0.0.1", proxy_port, timeout=3)
                         connection.request("GET", f"http://127.0.0.1:{target.server_port}/")
                         response = connection.getresponse()
                         content = response.read()
                         connection.close()
                         if response.status == 200 and content == b"3m-ui-real-proxy-ok":
                             return
-                    except OSError:
+                    except (OSError, http.client.HTTPException):
                         pass
-                    time.sleep(0.25)
+                    time.sleep(0.35)
                 raise AssertionError("Actual HTTP -> Shadowsocks -> target request failed")
 
             check_connection()
