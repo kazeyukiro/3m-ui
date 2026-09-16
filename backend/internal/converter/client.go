@@ -126,12 +126,13 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	if err != nil {
 		return nil, fmt.Errorf("invalid listener config for %q: %w", l.Name, err)
 	}
-	// Prefer Config-embedded auth for protocols that store credentials on the
-	// listener (TUIC token/users, SS password, …). Bound panel UUID rows must
-	// not shadow them or subscription export mismatches the running inbound.
+	// Listener-native auth (password lives on the node, not per panel user):
+	// prefer Config so subscription matches the running inbound.
+	// Multi-user protocols (vless/vmess/trojan/anytls/hysteria2/shadowquic/…)
+	// keep bound panel credentials; only fill from Config when unbound/empty.
 	cfgCreds := credentialsFromListenerConfig(protocol, opts)
 	switch protocol {
-	case "tuic", "tuic-v4", "tuic-v5", "shadowsocks", "snell", "sudoku", "anytls", "shadowquic":
+	case "tuic", "tuic-v4", "tuic-v5", "shadowsocks", "snell", "sudoku":
 		if len(cfgCreds) > 0 {
 			credentials = cfgCreds
 		}

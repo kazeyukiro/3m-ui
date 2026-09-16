@@ -138,16 +138,15 @@ func (t TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
 	}
 	kind := t.Kind()
 	if kind == "tuic-v4" {
-		// TUIC v4: token-based auth. Ensure token is present.
-		if _, hasToken := m["token"]; !hasToken {
-			// Generate a default token if none set.
+		// TUIC v4: non-empty token required (empty [] is treated as missing).
+		if s := firstStringToken(m["token"]); s != "" {
+			m["token"] = []string{s}
+		} else {
 			m["token"] = []string{randomToken()}
 		}
-		// Remove users — v4 uses token, not users.
 		delete(m, "users")
 	} else {
 		// TUIC v5 / generic: users map UUID→password (wiki inbound tuic-v5).
-		// Explicit v5 must not keep token (outbound wiki: token is V4-only).
 		delete(m, "token")
 		users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
 		if len(users) > 0 {
@@ -242,4 +241,26 @@ func randomToken() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+func firstStringToken(tok interface{}) string {
+	switch v := tok.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return ""
 }

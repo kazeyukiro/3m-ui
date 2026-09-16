@@ -45,8 +45,8 @@ func SeedQuickConfig(protocol string) map[string]interface{} {
 		cfg["version"] = 4
 	case "shadowquic":
 	case "tuic-v4":
-		// Wiki inbound tuic-v4: token list + TLS (cert filled by autofill).
-		cfg["token"] = []string{} // signal v4; autofill fills a random token
+		// Wiki inbound tuic-v4: token list + TLS (cert/token filled by autofill).
+		// Do NOT set token: [] — empty slice is truthy in compile and yields broken auth.
 		cfg["alpn"] = []string{"h3"}
 		cfg["congestion-controller"] = "bbr"
 	case "tuic-v5", "tuic":

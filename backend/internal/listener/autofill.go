@@ -362,22 +362,9 @@ func autofillTUICUsers(cfg map[string]interface{}, proto string) {
 	proto = strings.ToLower(strings.TrimSpace(proto))
 	if proto == "tuic-v4" {
 		delete(cfg, "users")
-		if tok, ok := cfg["token"]; ok && tok != nil {
-			switch v := tok.(type) {
-			case string:
-				if strings.TrimSpace(v) != "" {
-					cfg["token"] = []string{v}
-					return
-				}
-			case []interface{}:
-				if len(v) > 0 {
-					return
-				}
-			case []string:
-				if len(v) > 0 {
-					return
-				}
-			}
+		if tok := firstNonEmptyToken(cfg["token"]); tok != "" {
+			cfg["token"] = []string{tok}
+			return
 		}
 		cfg["token"] = []string{randomPassword(24)}
 		return
@@ -690,4 +677,26 @@ func enabledMap(cfg map[string]interface{}, key string) bool {
 		return len(m) > 0
 	}
 	return true
+}
+
+func firstNonEmptyToken(tok interface{}) string {
+	switch v := tok.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return ""
 }
