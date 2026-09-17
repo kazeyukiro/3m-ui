@@ -361,20 +361,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 					p["sni"] = sn
 				}
 			}
-			// Smart cert: panel self-signed / host mismatch → skip; formal matching host → verify.
-			cert, _ := opts["certificate"].(string)
-			if strings.TrimSpace(cert) == "" {
-				if c, _, ok := certstore.Load(l.ID); ok {
-					cert = c
-				}
-			}
-			var explicit *bool
-			if v, ok := opts["skip-cert-verify"].(bool); ok {
-				explicit = &v
-			}
-			if certutil.DecideClientSkipCertVerify(cert, server, explicit) {
-				p["skip-cert-verify"] = true
-			}
+			applyClientSkipCertVerify(p, opts, server, l.ID)
 			if value, ok := opts["ech-opts"]; ok {
 				p["ech-opts"] = value
 			}
@@ -384,9 +371,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		// MetaCubeX: inbound/outbound type is always "tuic".
 		// v4 = token only; v5 = uuid + password. Paths must not cross.
 		copyTUICOpts := func(p map[string]interface{}) {
+			// Do NOT copy skip-cert-verify from server Config — that field is
+			// client-side only and is decided below via certutil.
 			for _, key := range []string{
 				"congestion-controller", "bbr-profile", "alpn", "max-udp-relay-packet-size",
-				"sni", "skip-cert-verify", "udp-relay-mode", "reduce-rtt", "request-timeout",
+				"sni", "udp-relay-mode", "reduce-rtt", "request-timeout",
 				"heartbeat-interval", "fast-open", "max-open-streams", "disable-sni",
 			} {
 				copyOption(p, opts, key)
@@ -397,10 +386,23 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if v, ok := opts["name-cert-verify"].(string); ok && v != "" {
 				p["name-cert-verify"] = v
 			}
-			ensureTUICClientDefaults(p, opts, server, l.ID)
+			if p["alpn"] == nil {
+				p["alpn"] = []string{"h3"}
+			}
+			if p["congestion-controller"] == nil {
+				p["congestion-controller"] = "bbr"
+			}
+			if p["udp"] == nil {
+				p["udp"] = true
+			}
+			if p["udp-relay-mode"] == nil {
+				p["udp-relay-mode"] = "native"
+			}
 			if p["sni"] == nil && p["servername"] == nil && server != "" {
 				p["sni"] = server
 			}
+			// Always decide last so v4 (token) and v5 (uuid) both get the flag.
+			applyClientSkipCertVerify(p, opts, server, l.ID)
 		}
 		useToken := protocol == "tuic-v4" || (protocol == "tuic" && tuicTokenNonEmpty(opts["token"]) && !tuicConfigHasUsers(opts))
 		if useToken {
@@ -827,8 +829,7 @@ func decodeOptions(raw string) (map[string]interface{}, error) {
 	return options, nil
 }
 
-// ensureTUICClientDefaults fills alpn/congestion and skip-cert-verify for
-// panel self-signed certificates. TUIC is QUIC/UDP and typically uses ALPN h3.
+// normalizeTUICToken converts listener token ([]string) to client string.
 func normalizeTUICToken(token interface{}) interface{} {
 	// Listener stores token as []string; proxies-tuic client uses a single string.
 	switch v := token.(type) {
@@ -849,31 +850,42 @@ func normalizeTUICToken(token interface{}) interface{} {
 	}
 }
 
-func ensureTUICClientDefaults(p, opts map[string]interface{}, connectHost string, listenerID uint) {
-	if p["alpn"] == nil {
-		p["alpn"] = []string{"h3"}
+// applyClientSkipCertVerify sets skip-cert-verify on a client proxy map using
+// smart cert detection (panel self-signed, host match, explicit override).
+func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost string, listenerID uint) {
+	if p == nil {
+		return
 	}
-	if p["congestion-controller"] == nil {
-		p["congestion-controller"] = "bbr"
-	}
-	cert, _ := opts["certificate"].(string)
+	cert := certPEMFromOpts(opts)
 	if strings.TrimSpace(cert) == "" && listenerID != 0 {
 		if c, _, ok := certstore.Load(listenerID); ok {
 			cert = c
 		}
 	}
 	var explicit *bool
-	if v, ok := opts["skip-cert-verify"].(bool); ok {
-		explicit = &v
+	if opts != nil {
+		if v, ok := opts["skip-cert-verify"].(bool); ok {
+			explicit = &v
+		}
 	}
 	if certutil.DecideClientSkipCertVerify(cert, connectHost, explicit) {
 		p["skip-cert-verify"] = true
+	} else {
+		delete(p, "skip-cert-verify")
 	}
-	if p["udp"] == nil {
-		p["udp"] = true
+}
+
+func certPEMFromOpts(opts map[string]interface{}) string {
+	if opts == nil {
+		return ""
 	}
-	if p["udp-relay-mode"] == nil {
-		p["udp-relay-mode"] = "native"
+	switch v := opts["certificate"].(type) {
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		return ""
 	}
 }
 
@@ -890,7 +902,8 @@ func copyClientTLS(dst, src map[string]interface{}) {
 	for _, key := range []string{"sni", "servername", "alpn", "fingerprint", "client-fingerprint", "skip-cert-verify", "name-cert-verify"} {
 		copyOption(dst, src, key)
 	}
-	// Panel self-signed certificates → clients must skip verify.
+	// Smart skip: panel self-signed / explicit; formal matching host left to caller
+	// (copyClientTLS has no connect host — use ShouldSkipCertVerify for panel PEM).
 	if certutil.ShouldSkipCertVerify(src) {
 		dst["skip-cert-verify"] = true
 	}

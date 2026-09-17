@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/curve25519"
 	"gopkg.in/yaml.v3"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
 
@@ -631,12 +632,14 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	if sni == "" {
 		sni = host
 	}
-	skipCert := false
+	var explicitSkip *bool
 	if v, ok := cfg["skip-cert-verify"].(bool); ok {
-		skipCert = v
-	} else if cert, _ := cfg["certificate"].(string); strings.Contains(cert, "3m-ui") {
-		// Panel GenerateSelfSigned uses O=3m-ui
-		skipCert = true
+		explicitSkip = &v
+	}
+	certPEM, _ := cfg["certificate"].(string)
+	skipCert := certutil.DecideClientSkipCertVerify(certPEM, sni, explicitSkip)
+	if !skipCert && (sni == "" || certutil.IsPanelSelfSignedPEM(certPEM)) {
+		skipCert = certutil.IsPanelSelfSignedPEM(certPEM) || strings.TrimSpace(certPEM) == ""
 	}
 
 	isV4 := kind == "tuic-v4"
