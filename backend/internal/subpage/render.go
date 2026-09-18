@@ -488,6 +488,7 @@ const defaultHTML = `<!DOCTYPE html>
     .uri-text {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      -webkit-user-select: text; user-select: text;
     }
     .btn-sm { padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; flex-shrink: 0; width: auto; }
     footer { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 8px; }
@@ -693,39 +694,80 @@ const defaultHTML = `<!DOCTYPE html>
   function copyText(text) {
     var ok = I18N[lang].copied;
     var fail = I18N[lang].copyFail;
+    text = (text || "").replace(/^\s+|\s+$/g, "");
     if (!text) { showToast(fail); return; }
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(function () { showToast(ok); }).catch(function () { fallback(text, ok, fail); });
-    } else {
-      fallback(text, ok, fail);
+    // Prefer async Clipboard API on secure contexts; always have a sync fallback
+    // for HTTP panel access, older WebViews, and some in-app browsers.
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function" && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () {
+        showToast(ok);
+      }).catch(function () {
+        fallbackCopy(text, ok, fail);
+      });
+      return;
     }
+    fallbackCopy(text, ok, fail);
   }
 
-  function fallback(text, ok, fail) {
+  function fallbackCopy(text, ok, fail) {
     var ta = document.createElement("textarea");
     ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.setAttribute("aria-hidden", "true");
+    // iOS / WebView: keep in viewport, avoid display:none (breaks select).
+    ta.style.position = "fixed";
+    ta.style.top = "0";
+    ta.style.left = "0";
+    ta.style.width = "2em";
+    ta.style.height = "2em";
+    ta.style.padding = "0";
+    ta.style.margin = "0";
+    ta.style.border = "none";
+    ta.style.outline = "none";
+    ta.style.boxShadow = "none";
+    ta.style.background = "transparent";
+    ta.style.opacity = "0";
     document.body.appendChild(ta);
+    ta.focus();
     ta.select();
+    try { ta.setSelectionRange(0, text.length); } catch (e) {}
+    var success = false;
     try {
-      document.execCommand("copy");
-      showToast(ok);
+      success = document.execCommand("copy");
     } catch (e) {
-      showToast(fail);
+      success = false;
     }
     document.body.removeChild(ta);
+    showToast(success ? ok : fail);
+  }
+
+  function resolveUriText(btn) {
+    // Prefer visible URI text (full string, no HTML attribute length/escape issues).
+    var item = btn.closest ? btn.closest(".uri-item") : null;
+    if (item) {
+      var textEl = item.querySelector(".uri-text");
+      if (textEl) {
+        var fromText = (textEl.textContent || "").replace(/^\s+|\s+$/g, "");
+        if (fromText) return fromText;
+      }
+    }
+    // Fallback: data-uri (html/template-escaped, browser-decoded by getAttribute).
+    return btn.getAttribute("data-uri") || "";
   }
 
   document.getElementById("lang-zh").addEventListener("click", function () { applyLang("zh"); });
   document.getElementById("lang-en").addEventListener("click", function () { applyLang("en"); });
 
   document.querySelectorAll(".copy-link-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
+    btn.addEventListener("click", function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
       copyText(this.getAttribute("data-url") || "");
     });
   });
   document.querySelectorAll(".copy-uri-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      copyText(this.getAttribute("data-uri") || "");
+    btn.addEventListener("click", function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      copyText(resolveUriText(this));
     });
   });
 
