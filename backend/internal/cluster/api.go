@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -26,6 +27,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.PUT("/:id", h.Update)
 	rg.DELETE("/:id", h.Delete)
 	rg.POST("/:id/health", h.Health)
+	rg.POST("/:id/login", h.LoginRemote)
 	rg.GET("/:id/dashboard", h.RemoteDashboard)
 	rg.GET("/:id/users", h.RemoteUsers)
 	rg.GET("/:id/nodes", h.RemoteNodes)
@@ -299,13 +301,46 @@ func (h *Handler) Proxy(c *gin.Context) {
 	c.Data(status, "application/json; charset=utf-8", raw)
 }
 
+func (h *Handler) LoginRemote(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username and password required"})
+		return
+	}
+	row, err := h.svc.LoginRemote(id, body.Username, body.Password)
+	if err != nil {
+		writeRemoteErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, row)
+}
+
 func writeRemoteErr(c *gin.Context, err error) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
 	log.Printf("cluster remote operation failed: %v", err)
-	c.JSON(http.StatusBadGateway, gin.H{"error": "upstream cluster operation failed"})
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		msg = "upstream cluster operation failed"
+	}
+	if len(msg) > 800 {
+		msg = msg[:800]
+	}
+	// Keep a stable prefix so operators/search still find the generic case,
+	// but include the real cause (auth, HTTP status, dial error).
+	if !strings.Contains(strings.ToLower(msg), "upstream") {
+		msg = "upstream cluster operation failed: " + msg
+	}
+	c.JSON(http.StatusBadGateway, gin.H{"error": msg})
 }
 
 func (h *Handler) SyncNodes(c *gin.Context) {

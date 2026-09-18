@@ -1,8 +1,18 @@
 import React from 'react';
 import { Layout, Menu } from 'antd';
 import {
-  DashboardOutlined, NodeIndexOutlined, UserOutlined, SettingOutlined,
-  CodeOutlined, FileTextOutlined, ApiOutlined, LogoutOutlined, LineChartOutlined, CloudServerOutlined, BranchesOutlined, ShareAltOutlined,
+  DashboardOutlined,
+  DeploymentUnitOutlined,
+  TeamOutlined,
+  ShareAltOutlined,
+  FundProjectionScreenOutlined,
+  CloudServerOutlined,
+  ForkOutlined,
+  RocketOutlined,
+  ProfileOutlined,
+  ControlOutlined,
+  ToolOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -19,16 +29,16 @@ export function useSidebarMenuItems(onNavigate?: () => void) {
 
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
-    { key: '/listeners', icon: <NodeIndexOutlined />, label: t('nav.listeners') },
-    { key: '/users', icon: <UserOutlined />, label: t('nav.users') },
+    { key: '/listeners', icon: <DeploymentUnitOutlined />, label: t('nav.listeners') },
+    { key: '/users', icon: <TeamOutlined />, label: t('nav.users') },
     { key: '/share', icon: <ShareAltOutlined />, label: t('nav.share') },
-    { key: '/traffic', icon: <LineChartOutlined />, label: t('nav.traffic') },
+    { key: '/traffic', icon: <FundProjectionScreenOutlined />, label: t('nav.traffic') },
     { key: '/cluster', icon: <CloudServerOutlined />, label: t('nav.cluster') },
-    { key: '/routing', icon: <BranchesOutlined />, label: t('nav.routing') },
-    { key: '/core', icon: <ApiOutlined />, label: t('nav.core') },
-    { key: '/logs', icon: <FileTextOutlined />, label: t('nav.logs') },
-    { key: '/config', icon: <CodeOutlined />, label: t('nav.config') },
-    { key: '/settings', icon: <SettingOutlined />, label: t('nav.settings') },
+    { key: '/routing', icon: <ForkOutlined />, label: t('nav.routing') },
+    { key: '/core', icon: <RocketOutlined />, label: t('nav.core') },
+    { key: '/logs', icon: <ProfileOutlined />, label: t('nav.logs') },
+    { key: '/config', icon: <ControlOutlined />, label: t('nav.config') },
+    { key: '/settings', icon: <ToolOutlined />, label: t('nav.settings') },
   ];
 
   const onMenuClick = ({ key }: { key: string }) => {

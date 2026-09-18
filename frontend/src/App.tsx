@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider, App as AntApp } from 'antd';
+import { ConfigProvider, App as AntApp, theme } from 'antd';
 import enUS from 'antd/locale/en_US';
 import zhCN from 'antd/locale/zh_CN';
 import zhTW from 'antd/locale/zh_TW';
@@ -21,7 +21,6 @@ import plPL from 'antd/locale/pl_PL';
 import ukUA from 'antd/locale/uk_UA';
 import { I18nProvider, useI18n } from './i18n';
 import { useThemeStore } from './stores/themeStore';
-import { materialAntTheme } from './theme/materialAnt';
 import AppLayout from './components/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -76,7 +75,19 @@ const ThemedApp: React.FC = () => {
         };
         return map[locale] || enUS;
       })()}
-      theme={materialAntTheme(isDark)}
+      theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        // In dark mode, antd v6's default colorTextSecondary (~rgba(255,255,255,0.65))
+        // and colorTextTertiary (~rgba(255,255,255,0.45)) fall below WCAG AA 4.5:1
+        // contrast on dark card backgrounds. Boost them so subtitles, muted
+        // metadata, and Statistic titles stay readable.
+        // See https://github.com/ant-design/ant-design/issues/41317
+        token: isDark ? {
+          colorTextSecondary: 'rgba(255, 255, 255, 0.85)',
+          colorTextTertiary: 'rgba(255, 255, 255, 0.65)',
+          colorTextQuaternary: 'rgba(255, 255, 255, 0.55)',
+        } : {},
+      }}
     >
       <AntApp>
         <BrowserRouter>

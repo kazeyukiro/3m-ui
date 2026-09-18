@@ -341,7 +341,79 @@ func (s *Service) ProxyRemote(id uint, method, path string, body []byte) (int, [
 	if err != nil {
 		return resp.StatusCode, nil, err
 	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		detail := strings.TrimSpace(string(raw))
+		if len(detail) > 300 {
+			detail = detail[:300]
+		}
+		hint := "remote rejected the API token (HTTP %d). Use a JWT from POST /api/v1/auth/login on the remote panel, or Cluster → Login to refresh the token"
+		if detail != "" {
+			return resp.StatusCode, raw, fmt.Errorf(hint+": %s", resp.StatusCode, detail)
+		}
+		return resp.StatusCode, raw, fmt.Errorf(hint, resp.StatusCode)
+	}
 	return resp.StatusCode, raw, nil
+}
+
+// LoginRemote authenticates against the remote panel and stores the JWT as api_token.
+func (s *Service) LoginRemote(id uint, username, password string) (*models.RemoteServer, error) {
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
+	if username == "" || password == "" {
+		return nil, fmt.Errorf("username and password are required")
+	}
+	var row models.RemoteServer
+	if err := s.db.First(&row, id).Error; err != nil {
+		return nil, err
+	}
+	target := strings.TrimRight(row.BaseURL, "/") + "/api/v1/auth/login"
+	payload, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	req, err := http.NewRequest(http.MethodPost, target, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("login request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 300 {
+		msg := strings.TrimSpace(string(raw))
+		if msg == "" {
+			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("remote login failed: %s", msg)
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil || strings.TrimSpace(out.Token) == "" {
+		// Some panels nest token under data
+		var wrap map[string]interface{}
+		if json.Unmarshal(raw, &wrap) == nil {
+			if tok, ok := wrap["token"].(string); ok {
+				out.Token = tok
+			} else if data, ok := wrap["data"].(map[string]interface{}); ok {
+				if tok, ok := data["token"].(string); ok {
+					out.Token = tok
+				}
+			}
+		}
+	}
+	if strings.TrimSpace(out.Token) == "" {
+		return nil, fmt.Errorf("remote login response missing token")
+	}
+	if err := validateAPIToken(out.Token); err != nil {
+		return nil, err
+	}
+	row.APIToken = strings.TrimSpace(out.Token)
+	row.LastError = ""
+	if err := s.db.Save(&row).Error; err != nil {
+		return nil, err
+	}
+	return sanitize(&row), nil
 }
 
 func sanitize(row *models.RemoteServer) *models.RemoteServer {

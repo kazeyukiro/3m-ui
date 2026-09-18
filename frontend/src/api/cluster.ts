@@ -64,3 +64,6 @@ export const pushClusterNode = (
   remoteId: number,
   payload: { local_node_id: number; dry_run?: boolean; new_name?: string; new_port?: string },
 ) => client.post(`/cluster/${remoteId}/push-node`, payload).then((r) => r.data);
+
+export const loginClusterRemote = (id: number, username: string, password: string) =>
+  client.post<RemoteServer>(`/cluster/${id}/login`, { username, password }).then((r) => r.data);
