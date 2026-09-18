@@ -3,6 +3,7 @@ package traffic
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -32,6 +33,10 @@ type Collector struct {
 	prevConn         map[string]connSample
 	lastConnections  []ConnectionView
 	lastListenerName map[uint]string // listener ID -> name, cached for API consumers
+	// consecutiveMihomoFailures tracks failed CollectOnce cycles. After several
+	// failures we clear online flags so the UI does not show stale "online"
+	// users while the core is unreachable.
+	consecutiveMihomoFailures int
 }
 
 type connSample struct {
@@ -69,8 +74,22 @@ func NewCollectorFromDefaults(db *gorm.DB, svc *Service, userSvc *UserService) *
 func (c *Collector) CollectOnce() error {
 	connResp, connErr := c.client.Connections()
 	if connErr != nil {
+		c.mu.Lock()
+		c.consecutiveMihomoFailures++
+		fails := c.consecutiveMihomoFailures
+		c.mu.Unlock()
+		// After repeated failures, drop online markers so the dashboard does
+		// not keep showing users as online while the core is down.
+		if fails >= 3 && c.userSvc != nil {
+			if err := c.userSvc.MarkOffline(nil); err != nil {
+				log.Printf("traffic: clear online after mihomo failures: %v", err)
+			}
+		}
 		return fmt.Errorf("fetch mihomo connections: %w", connErr)
 	}
+	c.mu.Lock()
+	c.consecutiveMihomoFailures = 0
+	c.mu.Unlock()
 
 	// /traffic gives an instantaneous up/down rate sample (bytes in the
 	// last second) directly from Mihomo, which is more accurate than
@@ -92,9 +111,9 @@ func (c *Collector) CollectOnce() error {
 	if err != nil {
 		return fmt.Errorf("load listener users: %w", err)
 	}
-	usernames, err := c.loadUsernames()
+	idToName, inboundKeyToID, err := c.loadUserIdentities()
 	if err != nil {
-		return fmt.Errorf("load proxy usernames: %w", err)
+		return fmt.Errorf("load proxy user identities: %w", err)
 	}
 
 	c.mu.Lock()
@@ -162,13 +181,15 @@ func (c *Collector) CollectOnce() error {
 		// path applies, the connection stays unattributed.
 		var proxyUserID *uint
 		if inboundUser != "" {
-			// Mihomo told us the authenticated username directly.
-			for id, name := range usernames {
-				if name == inboundUser {
-					uid := id
-					proxyUserID = &uid
-					break
-				}
+			// Mihomo reports the authenticated identity in inboundUser.
+			// VLESS/TUIC v5 often use UUID; HY2/AnyTLS/Trojan use username.
+			key := strings.TrimSpace(inboundUser)
+			if id, ok := inboundKeyToID[key]; ok {
+				uid := id
+				proxyUserID = &uid
+			} else if id, ok := inboundKeyToID[strings.ToLower(key)]; ok {
+				uid := id
+				proxyUserID = &uid
 			}
 		} else if listenerID != nil {
 			// Fall back: only attribute when the listener has exactly one
@@ -182,7 +203,7 @@ func (c *Collector) CollectOnce() error {
 
 		if proxyUserID != nil {
 			view.ProxyUserID = proxyUserID
-			view.Username = usernames[*proxyUserID]
+			view.Username = idToName[*proxyUserID]
 			d := userDeltas[*proxyUserID]
 			d.up += deltaUp
 			d.down += deltaDown
@@ -196,7 +217,7 @@ func (c *Collector) CollectOnce() error {
 		views = append(views, view)
 	}
 
-	// Persist per-user deltas and refresh online/last-seen state.
+	// Persist per-user deltas when traffic moved this tick.
 	for uid, d := range userDeltas {
 		if d.up == 0 && d.down == 0 {
 			continue
@@ -209,6 +230,11 @@ func (c *Collector) CollectOnce() error {
 			log.Printf("traffic: record sample for user %d failed: %v", uid, err)
 			continue
 		}
+	}
+	// Mark every user with an attributed connection online, including idle
+	// connections with zero byte delta this tick (keep-alive / no traffic yet).
+	if err := c.userSvc.MarkOnline(activeUserIDs); err != nil {
+		log.Printf("traffic: mark online failed: %v", err)
 	}
 	for _, uid := range activeUserIDs {
 		user.TouchFirstUse(c.db, uid)
@@ -279,17 +305,28 @@ func (c *Collector) loadListenerUsers() (map[uint][]uint, error) {
 	return out, nil
 }
 
-func (c *Collector) loadUsernames() (map[uint]string, error) {
+// loadUserIdentities returns id→username for display and a reverse map from
+// Mihomo inboundUser strings (panel username or UUID) → ProxyUser ID.
+func (c *Collector) loadUserIdentities() (idToName map[uint]string, inboundKeyToID map[string]uint, err error) {
 	var rows []struct {
 		ID       uint
 		Username string
+		UUID     string
 	}
-	if err := c.db.Model(&models.ProxyUser{}).Select("id, username").Find(&rows).Error; err != nil {
-		return nil, err
+	if err := c.db.Model(&models.ProxyUser{}).Select("id, username, uuid").Find(&rows).Error; err != nil {
+		return nil, nil, err
 	}
-	out := make(map[uint]string, len(rows))
+	idToName = make(map[uint]string, len(rows))
+	inboundKeyToID = make(map[string]uint, len(rows)*3)
 	for _, r := range rows {
-		out[r.ID] = r.Username
+		idToName[r.ID] = r.Username
+		if u := strings.TrimSpace(r.Username); u != "" {
+			inboundKeyToID[u] = r.ID
+		}
+		if id := strings.TrimSpace(r.UUID); id != "" {
+			inboundKeyToID[id] = r.ID
+			inboundKeyToID[strings.ToLower(id)] = r.ID
+		}
 	}
-	return out, nil
+	return idToName, inboundKeyToID, nil
 }

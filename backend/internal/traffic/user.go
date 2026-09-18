@@ -46,10 +46,26 @@ func (s *UserService) AddSample(userID uint, up, down int64, online bool) error 
 		Updates(updates).Error
 }
 
+// MarkOnline sets online=true and refreshes last_seen for users that have an
+// attributed connection this tick, even when traffic deltas are zero (idle
+// keep-alive). Without this, a connected user with no byte transfer stays offline.
+func (s *UserService) MarkOnline(userIDs []uint) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	now := time.Now()
+	return s.db.Model(&models.ProxyUser{}).
+		Where("id IN ?", userIDs).
+		Updates(map[string]any{
+			"online":    true,
+			"last_seen": now,
+		}).Error
+}
+
 // MarkOffline clears the Online flag for every proxy user not present in
 // the given set of currently-active user IDs. Called once per collection
-// tick after AddSample has marked the currently-seen users online, so a
-// user's Online status always reflects the most recent tick.
+// tick after AddSample/MarkOnline has marked the currently-seen users online.
+// An empty active set marks every currently-online user offline.
 func (s *UserService) MarkOffline(activeUserIDs []uint) error {
 	q := s.db.Model(&models.ProxyUser{}).Where("online = ?", true)
 	if len(activeUserIDs) > 0 {
