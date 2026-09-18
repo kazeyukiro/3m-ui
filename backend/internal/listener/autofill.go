@@ -319,11 +319,15 @@ func autofillReality(cfg map[string]interface{}) error {
 func autofillUUIDUsers(cfg map[string]interface{}) error {
 	users := normalizeUsersSlice(cfg["users"])
 	if len(users) == 0 {
-		users = []map[string]interface{}{{"uuid": uuid.NewString()}}
+		users = []map[string]interface{}{{"uuid": uuid.NewString(), "username": "user"}}
 	} else {
 		for _, u := range users {
 			if uid, _ := u["uuid"].(string); strings.TrimSpace(uid) == "" {
 				u["uuid"] = uuid.NewString()
+			}
+			// Optional bookkeeping name; core only requires uuid.
+			if un, _ := u["username"].(string); strings.TrimSpace(un) == "" {
+				u["username"] = "user"
 			}
 		}
 	}

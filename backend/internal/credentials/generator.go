@@ -26,6 +26,11 @@ func EnsureListenerCredentials(l *models.Listener) error {
 	if proto == "" {
 		proto = strings.ToLower(strings.TrimSpace(l.Type))
 	}
+	// Backfill optional username on existing VLESS/VMess uuid rows (autofill may
+	// only mint uuid; panel validators historically required username).
+	if proto == "vless" || proto == "vmess" {
+		normalizeUUIDUserRows(cfg)
+	}
 	if requiresUserCredentials(proto) && !hasExportCredentials(proto, cfg) {
 		switch proto {
 		case "vless", "vmess":
@@ -68,8 +73,45 @@ func EnsureListenerCredentials(l *models.Listener) error {
 			return fmt.Errorf("encode listener credentials: %w", err)
 		}
 		l.Config = string(encoded)
+		return nil
+	}
+	// Persist username backfill even when credentials already existed.
+	if proto == "vless" || proto == "vmess" {
+		encoded, err := json.Marshal(cfg)
+		if err != nil {
+			return fmt.Errorf("encode listener credentials: %w", err)
+		}
+		l.Config = string(encoded)
 	}
 	return nil
+}
+
+func normalizeUUIDUserRows(cfg map[string]interface{}) {
+	raw, ok := cfg["users"]
+	if !ok || raw == nil {
+		return
+	}
+	list, ok := raw.([]interface{})
+	if !ok {
+		return
+	}
+	changed := false
+	for _, item := range list {
+		row, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if uid, _ := row["uuid"].(string); strings.TrimSpace(uid) == "" {
+			continue
+		}
+		if un, _ := row["username"].(string); strings.TrimSpace(un) == "" {
+			row["username"] = "user"
+			changed = true
+		}
+	}
+	if changed {
+		cfg["users"] = list
+	}
 }
 
 func requiresUserCredentials(proto string) bool {

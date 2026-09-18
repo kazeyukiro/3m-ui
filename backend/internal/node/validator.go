@@ -351,13 +351,18 @@ func validateUserRow(proto string, index int, raw interface{}, uuidMode bool) er
 			return fmt.Errorf("%s listener users[%d]: unsupported field %q", proto, index, key)
 		}
 	}
+	// Official Mihomo VLESS/VMess listener users are keyed by uuid (and optional
+	// flow/alterId). username is panel/bookkeeping only — not required by the core.
+	if uuidMode {
+		if !hasString(row["uuid"]) {
+			return fmt.Errorf("%s listener users[%d] requires uuid", proto, index)
+		}
+		return nil
+	}
 	if !hasString(row["username"]) {
 		return fmt.Errorf("%s listener users[%d] requires username", proto, index)
 	}
-	if uuidMode && !hasString(row["uuid"]) {
-		return fmt.Errorf("%s listener users[%d] requires uuid", proto, index)
-	}
-	if !uuidMode && !hasString(row["password"]) {
+	if !hasString(row["password"]) {
 		return fmt.Errorf("%s listener users[%d] requires password", proto, index)
 	}
 	return nil
