@@ -33,6 +33,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/templates/:id/instantiate", h.InstantiateTemplate)
 	rg.POST("/batch", h.BatchCreate)
 	rg.POST("/batch/enabled", h.BatchEnabled)
+	rg.POST("/batch/certificate", h.BatchCertificate)
 	rg.GET("/:id", h.GetListener)
 	rg.PUT("/:id", h.UpdateListener)
 	rg.DELETE("/:id", h.DeleteListener)
@@ -262,6 +263,20 @@ func (h *Handler) RollbackVersion(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"status": "ok"})
+}
+
+func (h *Handler) BatchCertificate(c *gin.Context) {
+	var in ApplyCertificateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	out, err := h.svc.BatchApplyCertificate(in)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, out)
 }
 func (h *Handler) BatchEnabled(c *gin.Context) {
 	var req struct {

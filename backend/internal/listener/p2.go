@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
 )
@@ -275,4 +278,162 @@ func (s *Service) InstantiateTemplate(templateID uint, name, port string) (*mode
 	}
 	s.scheduleConfigApply()
 	return l, nil
+}
+
+// ApplyCertificateInput applies a TLS certificate pair to multiple listeners' config.
+type ApplyCertificateInput struct {
+	IDs          []uint `json:"ids"`
+	Certificate  string `json:"certificate"`
+	PrivateKey   string `json:"private_key"`
+	CertFile     string `json:"cert_file"`
+	KeyFile      string `json:"key_file"`
+	FromPanelSSL bool   `json:"from_panel_ssl"`
+}
+
+// ApplyCertificateResult reports per-node outcomes for bulk certificate apply.
+type ApplyCertificateResult struct {
+	Updated []uint                    `json:"updated"`
+	Failed  []ApplyCertificateFailure `json:"failed"`
+}
+
+// ApplyCertificateFailure is one listener that could not receive the certificate.
+type ApplyCertificateFailure struct {
+	ID    uint   `json:"id"`
+	Name  string `json:"name,omitempty"`
+	Error string `json:"error"`
+}
+
+// BatchApplyCertificate writes certificate + private-key into each listener's
+// Config JSON (Mihomo listener fields) and reloads the core once.
+func (s *Service) BatchApplyCertificate(in ApplyCertificateInput) (*ApplyCertificateResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(in.IDs) == 0 {
+		return nil, fmt.Errorf("no listener ids supplied")
+	}
+	certPEM, keyPEM, err := resolveCertificatePair(s, in)
+	if err != nil {
+		return nil, err
+	}
+	out := &ApplyCertificateResult{
+		Updated: make([]uint, 0, len(in.IDs)),
+		Failed:  make([]ApplyCertificateFailure, 0),
+	}
+	for _, id := range in.IDs {
+		var l models.Listener
+		if err := s.db.First(&l, id).Error; err != nil {
+			out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Error: "listener not found"})
+			continue
+		}
+		if err := s.SaveVersion(l.ID, "before-batch-certificate"); err != nil {
+			out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Name: l.Name, Error: err.Error()})
+			continue
+		}
+		cfg := map[string]interface{}{}
+		raw := strings.TrimSpace(l.Config)
+		if raw != "" {
+			if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+				out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Name: l.Name, Error: "invalid config JSON"})
+				continue
+			}
+		}
+		if cfg == nil {
+			cfg = map[string]interface{}{}
+		}
+		cfg["certificate"] = certPEM
+		cfg["private-key"] = keyPEM
+		encoded, err := json.Marshal(cfg)
+		if err != nil {
+			out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Name: l.Name, Error: err.Error()})
+			continue
+		}
+		l.Config = string(encoded)
+		if err := AutofillListenerDefaults(&l); err != nil {
+			out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Name: l.Name, Error: err.Error()})
+			continue
+		}
+		if err := ValidateModel(&l); err != nil {
+			out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Name: l.Name, Error: err.Error()})
+			continue
+		}
+		if err := s.db.Save(&l).Error; err != nil {
+			out.Failed = append(out.Failed, ApplyCertificateFailure{ID: id, Name: l.Name, Error: err.Error()})
+			continue
+		}
+		out.Updated = append(out.Updated, id)
+	}
+	if len(out.Updated) > 0 {
+		s.scheduleConfigApply()
+	}
+	return out, nil
+}
+
+func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyPEM string, err error) {
+	certPEM = strings.TrimSpace(in.Certificate)
+	keyPEM = strings.TrimSpace(in.PrivateKey)
+	certFile := strings.TrimSpace(in.CertFile)
+	keyFile := strings.TrimSpace(in.KeyFile)
+
+	if in.FromPanelSSL {
+		st, loadErr := acme.LoadSettings(s.db)
+		if loadErr != nil {
+			return "", "", fmt.Errorf("load panel SSL settings: %w", loadErr)
+		}
+		certFile = strings.TrimSpace(st.CertFile)
+		keyFile = strings.TrimSpace(st.KeyFile)
+		if certFile == "" || keyFile == "" {
+			return "", "", fmt.Errorf("panel SSL has no manual cert_file/key_file; paste PEM or set panel SSL files first")
+		}
+	}
+
+	if certFile != "" || keyFile != "" {
+		if certFile == "" || keyFile == "" {
+			return "", "", fmt.Errorf("cert_file and key_file must both be set")
+		}
+		if !isAllowedTLSPath(certFile) || !isAllowedTLSPath(keyFile) {
+			return "", "", fmt.Errorf("cert_file/key_file must be under an allowed TLS directory")
+		}
+		cb, rerr := os.ReadFile(filepath.Clean(certFile))
+		if rerr != nil {
+			return "", "", fmt.Errorf("read cert_file: %w", rerr)
+		}
+		kb, rerr := os.ReadFile(filepath.Clean(keyFile))
+		if rerr != nil {
+			return "", "", fmt.Errorf("read key_file: %w", rerr)
+		}
+		certPEM = string(cb)
+		keyPEM = string(kb)
+	}
+
+	certPEM = strings.TrimSpace(certPEM)
+	keyPEM = strings.TrimSpace(keyPEM)
+	if certPEM == "" || keyPEM == "" {
+		return "", "", fmt.Errorf("certificate and private_key are required (PEM text, files, or from_panel_ssl)")
+	}
+	if !strings.Contains(certPEM, "BEGIN CERTIFICATE") {
+		return "", "", fmt.Errorf("certificate does not look like a PEM certificate")
+	}
+	if !strings.Contains(keyPEM, "PRIVATE KEY") {
+		return "", "", fmt.Errorf("private_key does not look like a PEM private key")
+	}
+	return certPEM, keyPEM, nil
+}
+
+func isAllowedTLSPath(p string) bool {
+	clean := filepath.Clean(p)
+	prefixes := []string{
+		"/etc/ssl/",
+		"/etc/3m-ui/",
+		"/var/lib/3m-ui/",
+		"/etc/letsencrypt/",
+		"/root/.acme.sh/",
+		"/etc/nginx/ssl/",
+		"/etc/caddy/certs/",
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(clean, prefix) {
+			return true
+		}
+	}
+	return false
 }

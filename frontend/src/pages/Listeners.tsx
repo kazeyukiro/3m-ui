@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
-import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined, MoreOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined, MoreOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import {
   fetchListeners, createListener, quickCreateListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
 } from '../api/nodes';
 import {
   listListenerTemplates, createListenerTemplate, deleteListenerTemplate, instantiateListenerTemplate,
-  cloneListener, batchSetListenersEnabled, listListenerVersions, diffListenerVersion, rollbackListenerVersion,
+  cloneListener, batchSetListenersEnabled, batchApplyCertificate, listListenerVersions, diffListenerVersion, rollbackListenerVersion,
   ListenerTemplate, ListenerVersion,
 } from '../api/listeners';
 import { useI18n } from '../i18n';
@@ -68,6 +68,9 @@ const Listeners: React.FC = () => {
   const [diffModal, setDiffModal] = useState(false);
   const [diffText, setDiffText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certForm] = Form.useForm();
+  const [certApplying, setCertApplying] = useState(false);
   const protocol = Form.useWatch('protocol', form);
   const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
   const [useCapabilityForm] = useState(false); // full ListenerConfigFields; capability form is a reduced schema view
@@ -207,6 +210,46 @@ const Listeners: React.FC = () => {
   const saveTemplate = async (values: { name: string }) => { if (!templateSource) return; try { await createListenerTemplate({ name: values.name, protocol: templateSource.protocol, config: templateSource.config }); message.success(t('listeners.templateCreated')); setTemplateModal(false); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
   const openInstantiate = (template: ListenerTemplate) => { setInstantiateSource(template); instantiateForm.setFieldsValue({ name: template.name.replace(/\s+template$/i, ''), port: '' }); setInstantiateModal(true); };
   const doInstantiate = async (values: { name: string; port: string }) => { if (!instantiateSource) return; try { await instantiateListenerTemplate(instantiateSource.id, values); message.success(t('listeners.instantiated')); setInstantiateModal(false); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const applyCertToSelected = async () => {
+    const ids = selectedRowKeys.map(Number).filter((n) => n > 0);
+    if (!ids.length) return;
+    try {
+      const v = await certForm.validateFields();
+      setCertApplying(true);
+      const payload: Record<string, unknown> = { ids };
+      if (v.from_panel_ssl) {
+        payload.from_panel_ssl = true;
+      } else if (v.cert_file || v.key_file) {
+        payload.cert_file = v.cert_file;
+        payload.key_file = v.key_file;
+      } else {
+        payload.certificate = v.certificate;
+        payload.private_key = v.private_key;
+      }
+      const res = await batchApplyCertificate(payload as any);
+      const ok = (res.updated || []).length;
+      const fail = (res.failed || []).length;
+      if (fail === 0) {
+        message.success(t('listeners.certApplyOk', { count: ok }) || `Applied certificate to ${ok} node(s)`);
+      } else {
+        const first = res.failed?.[0];
+        message.warning(
+          `${t('listeners.certApplyPartial') || 'Partial success'}: ${ok} ok, ${fail} failed` +
+            (first ? ` — ${first.name || first.id}: ${first.error}` : ''),
+        );
+      }
+      setCertModalOpen(false);
+      certForm.resetFields();
+      setSelectedRowKeys([]);
+      await load(false);
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      message.error(e.message || t('common.error'));
+    } finally {
+      setCertApplying(false);
+    }
+  };
+
   const batchEnabled = async (enabled: boolean) => { const ids = selectedRowKeys.map(Number); if (!ids.length) return; try { await batchSetListenersEnabled(ids, enabled); message.success(t('listeners.batchDone')); setSelectedRowKeys([]); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
   const openVersions = async (record: Listener) => { try { setVersionListener(record); setVersions(await listListenerVersions(normalizeId(record))); setVersionsModal(true); } catch (e: any) { message.error(e.message); } };
   const showDiff = async (version: number) => { if (!versionListener) return; try { setDiffText(await diffListenerVersion(normalizeId(versionListener), version)); setDiffModal(true); } catch (e: any) { message.error(e.message); } };
@@ -241,7 +284,7 @@ const columns = [
     <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
     {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
       description={<Space wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
-    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<SafetyCertificateOutlined />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
             <Spin spinning={loading}>
               <div className="mobile-entity-list">
                 {filteredListeners.length === 0 && !loading ? (
@@ -352,6 +395,37 @@ const columns = [
       </Space>
     </Modal>
 
+      <Modal
+        open={certModalOpen}
+        title={t('listeners.applyCertTitle') || 'Apply certificate to selected nodes'}
+        onCancel={() => setCertModalOpen(false)}
+        onOk={applyCertToSelected}
+        confirmLoading={certApplying}
+        width={640}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 12, opacity: 0.75 }}>
+          {t('listeners.applyCertHint') ||
+            'Writes certificate + private-key into each selected node config. Use panel SSL files or paths under /etc/letsencrypt.'}
+        </p>
+        <Form form={certForm} layout="vertical" initialValues={{ from_panel_ssl: false }}>
+          <Form.Item name="from_panel_ssl" label={t('listeners.certFromPanel') || 'Use panel SSL files'} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="certificate" label={t('listeners.certPem') || 'Certificate PEM'}>
+            <Input.TextArea rows={5} placeholder="-----BEGIN CERTIFICATE-----" />
+          </Form.Item>
+          <Form.Item name="private_key" label={t('listeners.certKeyPem') || 'Private key PEM'}>
+            <Input.TextArea rows={4} placeholder="-----BEGIN PRIVATE KEY-----" />
+          </Form.Item>
+          <Form.Item name="cert_file" label={t('listeners.certFile') || 'Or cert file path'} extra="/etc/letsencrypt/live/example.com/fullchain.pem">
+            <Input placeholder="/etc/letsencrypt/live/.../fullchain.pem" />
+          </Form.Item>
+          <Form.Item name="key_file" label={t('listeners.keyFile') || 'Or key file path'}>
+            <Input placeholder="/etc/letsencrypt/live/.../privkey.pem" />
+          </Form.Item>
+        </Form>
+      </Modal>
   </div>;
 };
 

@@ -60,3 +60,18 @@ export interface RealityScanResponse {
 
 export const scanRealityTargets = (signal: AbortSignal) =>
   client.post<RealityScanResponse>('/listeners/reality/scan', {}, { signal, timeout: 40000 }).then(r => r.data);
+
+export interface ApplyCertificateResult {
+  updated: number[];
+  failed: { id: number; name?: string; error: string }[];
+}
+
+/** Apply TLS certificate/private-key to multiple listeners in one request. */
+export const batchApplyCertificate = (payload: {
+  ids: number[];
+  certificate?: string;
+  private_key?: string;
+  cert_file?: string;
+  key_file?: string;
+  from_panel_ssl?: boolean;
+}) => client.post<ApplyCertificateResult>('/nodes/batch/certificate', payload).then((r) => r.data);
