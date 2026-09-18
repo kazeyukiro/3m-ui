@@ -230,7 +230,7 @@ const Listeners: React.FC = () => {
       const ok = (res.updated || []).length;
       const fail = (res.failed || []).length;
       if (fail === 0) {
-        message.success(t('listeners.certApplyOk', { count: ok }) || `Applied certificate to ${ok} node(s)`);
+        message.success((t('listeners.certApplyOk', 'Certificate applied to {count} node(s)') || '').replace('{count}', String(ok)) || `Applied certificate to ${ok} node(s)`);
       } else {
         const first = res.failed?.[0];
         message.warning(
