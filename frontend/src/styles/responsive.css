@@ -778,3 +778,163 @@ html.dark .app-header-bar,
 .app-shell-mobile .ant-row {
   align-content: flex-start !important;
 }
+
+/* ========== UX polish v1.3.4+ (mobile + desktop) ========== */
+
+/* Shared: comfortable touch targets */
+.ant-btn {
+  min-height: 32px;
+}
+.ant-btn-lg {
+  min-height: 40px;
+}
+
+/* Desktop: denser but readable workspace */
+@media (min-width: 768px) {
+  .app-page-content {
+    padding: 20px 24px !important;
+  }
+
+  .ant-form-vertical .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  /* Action buttons in tables stay on one line when possible */
+  .ant-table-cell .ant-space {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .ant-card-extra .ant-btn,
+  .page-toolbar .ant-btn {
+    min-height: 32px;
+  }
+
+  /* Modal forms: avoid ultra-wide fields */
+  .ant-modal-body .ant-form {
+    max-width: 100%;
+  }
+
+  /* Statistic / dashboard cards equal height feel */
+  .ant-row > .ant-col .ant-card {
+    height: 100%;
+  }
+}
+
+/* Mobile: reduce friction */
+@media (max-width: 767px) {
+  /* Content: tighter, less empty chrome */
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Full-width primary actions in toolbars */
+  .ant-card-extra {
+    width: 100%;
+    margin-top: 8px !important;
+  }
+  .ant-card-extra .ant-space {
+    width: 100%;
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  .ant-card-extra .ant-btn {
+    flex: 1 1 calc(50% - 8px);
+    min-height: 40px;
+    justify-content: center;
+  }
+  .ant-card-extra .ant-input-search {
+    flex: 1 1 100%;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Form: labels above, full width controls */
+  .ant-form-item {
+    margin-bottom: 12px !important;
+  }
+  .ant-form-item-label {
+    padding-bottom: 2px !important;
+  }
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select,
+  .ant-picker,
+  .ant-input-number {
+    width: 100% !important;
+  }
+  .ant-btn.ant-btn-primary {
+    min-height: 44px;
+  }
+
+  /* Descriptions / detail blocks denser */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 6px 8px !important;
+  }
+
+  /* Tabs: scrollable labels on small screens */
+  .ant-tabs-nav-list {
+    flex-wrap: nowrap;
+  }
+  .ant-tabs-tab {
+    padding: 10px 12px !important;
+  }
+
+  /* Drawer full-height usable area */
+  .ant-drawer-body {
+    padding: 12px !important;
+  }
+
+  /* Alert compact */
+  .ant-alert {
+    padding: 8px 12px !important;
+  }
+
+  /* Space between stacked mobile cards */
+  .ant-card + .ant-card {
+    margin-top: 10px;
+  }
+
+  /* Login / simple pages: avoid double safe-area gap */
+  .login-page,
+  .ant-layout-content > .ant-result {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Bottom nav: clearer active state + safe area */
+.app-bottom-nav {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+[data-theme='dark'] .app-bottom-nav {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+.app-bottom-nav-item {
+  min-height: 48px;
+  padding: 4px 2px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+.app-bottom-nav-item.is-active {
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 12%, transparent);
+  font-weight: 600;
+}
+.app-bottom-nav-label {
+  font-size: 11px;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Desktop sidebar: slightly roomier hit area */
+@media (min-width: 768px) {
+  .ant-layout-sider .ant-menu-item {
+    margin-block: 2px !important;
+  }
+}
