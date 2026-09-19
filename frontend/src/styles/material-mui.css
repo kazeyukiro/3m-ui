@@ -1,0 +1,144 @@
+/**
+ * Material-like polish on top of Ant Design tokens.
+ * Does not override brand/primary colors — only shape, type, icons, elevation.
+ */
+
+/* —— Typography weight closer to MD —— */
+.ant-btn {
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* Contained primary / default solid buttons: flatter Material surface */
+.ant-btn-primary:not(:disabled):not(.ant-btn-dangerous) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.ant-btn-primary:not(:disabled):not(.ant-btn-dangerous):hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+[data-theme='dark'] .ant-btn-primary:not(:disabled):not(.ant-btn-dangerous) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+/* Text / link buttons — MUI text button feel */
+.ant-btn-text,
+.ant-btn-link {
+  font-weight: 500;
+}
+
+/* Icon-only buttons ≈ MUI IconButton (circular hit area) */
+.ant-btn.ant-btn-icon-only {
+  border-radius: 50% !important;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ant-btn.ant-btn-icon-only.ant-btn-sm {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+}
+.ant-btn.ant-btn-icon-only.ant-btn-lg {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+}
+.ant-btn.ant-btn-icon-only .anticon {
+  font-size: 20px;
+  line-height: 1;
+}
+.ant-btn.ant-btn-icon-only.ant-btn-sm .anticon {
+  font-size: 18px;
+}
+.ant-btn.ant-btn-icon-only.ant-btn-lg .anticon {
+  font-size: 24px;
+}
+
+/* —— Icons: Material density (slightly larger, optical center) —— */
+.anticon {
+  vertical-align: -0.125em;
+}
+.ant-btn > .anticon + span,
+.ant-btn > span + .anticon {
+  margin-inline-start: 8px;
+}
+.ant-menu-item .anticon,
+.ant-menu-submenu-title .anticon {
+  font-size: 20px !important;
+  min-width: 24px;
+  margin-inline-end: 12px !important;
+}
+.ant-page-header-heading-left .anticon,
+.ant-card-head .anticon {
+  font-size: 20px;
+}
+
+/* Sidebar / bottom nav icons */
+.app-bottom-nav-icon,
+.app-bottom-more-icon {
+  font-size: 22px !important;
+}
+
+/* —— Cards like MUI Paper —— */
+.ant-card {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  border: none !important;
+}
+[data-theme='dark'] .ant-card {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* —— Inputs: underline-ish focus ring softer —— */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-picker {
+  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s;
+}
+.ant-input:focus,
+.ant-input-affix-wrapper-focused,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.18) !important;
+}
+[data-theme='dark'] .ant-input:focus,
+[data-theme='dark'] .ant-input-affix-wrapper-focused,
+[data-theme='dark'] .ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.28) !important;
+}
+
+/* —— Tables —— */
+.ant-table-wrapper .ant-table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* —— Tags / chips —— */
+.ant-tag {
+  border: none;
+  font-weight: 500;
+  padding-inline: 8px;
+  line-height: 22px;
+}
+
+/* —— Modal paper —— */
+.ant-modal-content {
+  box-shadow:
+    0 11px 15px -7px rgba(0, 0, 0, 0.16),
+    0 24px 38px 3px rgba(0, 0, 0, 0.1),
+    0 9px 46px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* —— Switch track closer to MD —— */
+.ant-switch {
+  min-width: 42px;
+}
