@@ -401,6 +401,46 @@ paths:
         "400":
           description: Invalid listener, including a missing or blank REALITY destination
 
+
+  /nodes/batch/certificate:
+    post:
+      tags: [Nodes]
+      summary: Apply TLS certificate to multiple listeners
+      description: |
+        Writes certificate + private-key into each listener config.
+        Provide PEM fields, or cert_file+key_file (allowlisted paths), or from_panel_ssl.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer } }
+                certificate: { type: string }
+                private_key: { type: string }
+                cert_file: { type: string }
+                key_file: { type: string }
+                from_panel_ssl: { type: boolean }
+      responses:
+        "200":
+          description: Per-node results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: array, items: { type: integer } }
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        error: { type: string }
   /nodes/{id}:
     parameters:
       - $ref: "#/components/parameters/IdPath"
@@ -1166,8 +1206,9 @@ components:
         expire_time: { type: string, format: date-time }
         online: { type: boolean }
         blocked: { type: boolean }
-        ip_limit: { type: integer, description: "0 = unlimited concurrent IPs" }
-        hwid_limit: { type: integer, description: "0 = unlimited / track only" }
+        ip_limit: { type: integer, description: "0 = unlimited concurrent source IPs; enforced by ~5s connection poll (disconnect excess)" }
+        hwid_limit: { type: integer, description: "0 = unlimited (still records x-hwid when sent); >0 requires x-hwid on sub fetch and caps devices" }
+        sub_pull_limit: { type: integer, description: "0 = unlimited; max successful subscription pulls per rolling 24h" }
         remark: { type: string }
         group: { type: string, description: Admin group label }
         tags: { type: string, description: "Comma-separated labels" }
@@ -1185,8 +1226,9 @@ components:
         password: { type: string, description: Empty = auto-generate on create }
         uuid: { type: string, description: Empty = auto-generate }
         traffic_limit: { type: integer, format: int64 }
-        ip_limit: { type: integer }
-        hwid_limit: { type: integer }
+        ip_limit: { type: integer, description: "0 = unlimited concurrent source IPs" }
+        hwid_limit: { type: integer, description: "0 = unlimited; >0 requires x-hwid" }
+        sub_pull_limit: { type: integer, description: "0 = unlimited pulls per rolling 24h" }
         remark: { type: string }
         group: { type: string }
         tags: { type: string }

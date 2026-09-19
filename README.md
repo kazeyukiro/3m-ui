@@ -27,14 +27,21 @@
 
 | 类别 | 能力 |
 |------|------|
-| **节点** | 协议注册表驱动的 Listener：VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC 等；Reality、TLS 自签（落盘可恢复）、传输层字段互斥校验 |
-| **用户** | 绑定节点、流量限额、到期、IP/HWID 限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
-| **订阅** | UA 自动识别 Clash/Mihomo YAML、v2ray Base64、sing-box JSON；可选 `?target=`；HTML 订阅页 |
+| **节点** | 协议注册表驱动的 Listener：VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC 等；Reality、TLS 自签（落盘可恢复）、一键批量写入证书（`POST /nodes/batch/certificate`）、传输层字段互斥校验 |
+| **用户** | 绑定节点、流量限额、到期、IP 并发限制（约 5s 轮询踢连接）、HWID 设备限制（`hwid_limit>0` 时订阅须带 `x-hwid`）、订阅拉取次数（滚动 24h）、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
+| **订阅** | UA 自动识别 Clash/Mihomo YAML、v2ray Base64（`?target=v2ray` 始终 Base64）、sing-box JSON；可选 `?target=`；HTML 订阅页；TUIC/HY2 分享链含 SNI/`allow_insecure` 等客户端参数 |
 | **配置** | 生成 → 校验 → 应用 分离；失败回滚上一份 `config.yaml` |
 | **运维** | 核心启停/更新、日志、仪表盘、在线连接、Geo、面板 SSL/ACME、WARP 一键、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、同步节点镜像、合并订阅、可选推送节点（默认远程禁用） |
 | **安全** | JWT、首登改密、TOTP 两步验证、web_path 路径前缀、凭据加密、CORS |
+
+
+### 补充说明（用户限制 / 证书 / 订阅）
+
+- [用户限制：IP · HWID · 订阅拉取](docs/users-limits.md)
+- [批量应用节点证书](docs/batch-certificate.md)
+- [订阅格式与 target](docs/subscription-formats.md)
 
 前端：**React + Ant Design**（`frontend/`），构建后嵌入单一 Go 二进制。
 

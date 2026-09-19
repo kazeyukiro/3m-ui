@@ -24,9 +24,9 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 
 | Area | Capabilities |
 |------|------|
-| **Nodes** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **Users** | Bind nodes, traffic/expiry, IP/HWID limits, start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
-| **Subscriptions** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
+| **Nodes** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed; batch certificate apply; transport field validation |
+| **Users** | Bind nodes, traffic/expiry, concurrent IP limit (~5s poll disconnect), HWID device limit (`x-hwid` required when `hwid_limit>0`), subscription pull limit (rolling 24h), start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
+| **Subscriptions** | UA routing for Clash/Mihomo YAML, v2ray Base64 (`?target=v2ray` always Base64), sing-box JSON; optional `?target=`; HTML info page; TUIC/HY2 share TLS params |
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Ops** | Core start/stop/update, logs, dashboard, online connections, Geo, panel SSL/ACME, WARP one-click, backup/restore |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
@@ -90,6 +90,13 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX inspiration
 - Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
+
+### Extra docs (limits / certs / subscriptions)
+
+- [User limits: IP · HWID · sub pulls](docs/users-limits.md)
+- [Batch node certificates](docs/batch-certificate.md)
+- [Subscription formats](docs/subscription-formats.md)
+
 - Go, Node.js, and the open-source community
 
 Contributors: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
