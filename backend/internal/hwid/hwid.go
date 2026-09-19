@@ -26,11 +26,16 @@ const (
 	HeaderMaxDevicesReached = "x-hwid-max-devices-reached"
 )
 
-// Remnawave v3+: /^[a-zA-Z0-9=-]{10,64}$/
-var hwidPattern = regexp.MustCompile(`^[a-zA-Z0-9=\-]{10,64}$`)
+// Accept common client device ids: UUID, hex, base64url, and short opaque tokens.
+// Remnawave v3 baseline was [a-zA-Z0-9=-]{10,64}; real clients also send _, +, /, :
+// and lengths beyond 64 (capped at 128 to match the DB column).
+var hwidPattern = regexp.MustCompile(`^[a-zA-Z0-9=_+\-./:]{8,128}$`)
 
 var (
 	ErrMaxDevices = errors.New("hwid device limit reached")
+	// ErrRequired is returned when HWIDLimit > 0 but the client did not send a
+	// valid x-hwid (limit cannot be enforced without a device id).
+	ErrRequired = errors.New("hwid required when device limit is enabled")
 )
 
 type DeviceInfo struct {
@@ -47,6 +52,10 @@ func ParseRequest(r *http.Request) DeviceInfo {
 		return DeviceInfo{}
 	}
 	raw := strings.TrimSpace(r.Header.Get(HeaderHWID))
+	// Some clients put the id in a query parameter as a fallback.
+	if raw == "" {
+		raw = strings.TrimSpace(r.URL.Query().Get("hwid"))
+	}
 	info := DeviceInfo{
 		DeviceOS:    strings.TrimSpace(r.Header.Get(HeaderDeviceOS)),
 		VerOS:       strings.TrimSpace(r.Header.Get(HeaderVerOS)),
@@ -61,8 +70,9 @@ func ParseRequest(r *http.Request) DeviceInfo {
 	return info
 }
 
-// Enforce registers or refreshes the device and returns whether the subscription
-// body should be denied. limit<=0 means unlimited (still records known devices).
+// Enforce registers or refreshes the device. limit<=0 means unlimited (still
+// records known devices when x-hwid is present). When limit>0, a valid x-hwid
+// is required and the active device count must stay within limit.
 func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Header) error {
 	if db == nil || userID == 0 {
 		return nil
@@ -74,49 +84,76 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 	if !info.Present {
 		if active {
 			hdr.Set(HeaderNotSupported, "true")
+			return ErrRequired
 		}
 		return nil
 	}
 
-	var existing models.HWIDDevice
-	// UNIQUE(proxy_user_id, hwid) includes soft-deleted rows.
-	err := db.Unscoped().Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&existing).Error
 	now := time.Now().UTC()
-	if err == nil {
-		existing.DeviceOS = firstNonEmpty(info.DeviceOS, existing.DeviceOS)
-		existing.VerOS = firstNonEmpty(info.VerOS, existing.VerOS)
-		existing.DeviceModel = firstNonEmpty(info.DeviceModel, existing.DeviceModel)
-		existing.UserAgent = firstNonEmpty(info.UserAgent, existing.UserAgent)
-		existing.LastSeenAt = now
-		existing.DeletedAt = gorm.DeletedAt{}
-		_ = db.Unscoped().Save(&existing).Error
-		return nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-
-	// New device
-	if limit > 0 {
-		var count int64
-		if err := db.Model(&models.HWIDDevice{}).Where("proxy_user_id = ?", userID).Count(&count).Error; err != nil {
+	return db.Transaction(func(tx *gorm.DB) error {
+		var existing models.HWIDDevice
+		// UNIQUE(proxy_user_id, hwid) includes soft-deleted rows.
+		err := tx.Unscoped().
+			Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).
+			First(&existing).Error
+		if err == nil {
+			existing.DeviceOS = firstNonEmpty(info.DeviceOS, existing.DeviceOS)
+			existing.VerOS = firstNonEmpty(info.VerOS, existing.VerOS)
+			existing.DeviceModel = firstNonEmpty(info.DeviceModel, existing.DeviceModel)
+			existing.UserAgent = firstNonEmpty(truncate(info.UserAgent, 512), existing.UserAgent)
+			existing.LastSeenAt = now
+			existing.DeletedAt = gorm.DeletedAt{}
+			return tx.Unscoped().Save(&existing).Error
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if int(count) >= limit {
-			hdr.Set(HeaderMaxDevicesReached, "true")
-			return ErrMaxDevices
+
+		if limit > 0 {
+			var count int64
+			if err := tx.Model(&models.HWIDDevice{}).Where("proxy_user_id = ?", userID).Count(&count).Error; err != nil {
+				return err
+			}
+			if int(count) >= limit {
+				hdr.Set(HeaderMaxDevicesReached, "true")
+				return ErrMaxDevices
+			}
 		}
+		row := models.HWIDDevice{
+			ProxyUserID: userID,
+			HWID:        info.HWID,
+			DeviceOS:    truncate(info.DeviceOS, 64),
+			VerOS:       truncate(info.VerOS, 64),
+			DeviceModel: truncate(info.DeviceModel, 128),
+			UserAgent:   truncate(info.UserAgent, 512),
+			LastSeenAt:  now,
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			// Concurrent first-seen: unique race — refresh as existing.
+			if isUniqueConflict(err) {
+				var raced models.HWIDDevice
+				if e2 := tx.Unscoped().Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&raced).Error; e2 == nil {
+					raced.LastSeenAt = now
+					raced.DeletedAt = gorm.DeletedAt{}
+					raced.DeviceOS = firstNonEmpty(info.DeviceOS, raced.DeviceOS)
+					raced.VerOS = firstNonEmpty(info.VerOS, raced.VerOS)
+					raced.DeviceModel = firstNonEmpty(info.DeviceModel, raced.DeviceModel)
+					raced.UserAgent = firstNonEmpty(truncate(info.UserAgent, 512), raced.UserAgent)
+					return tx.Unscoped().Save(&raced).Error
+				}
+			}
+			return err
+		}
+		return nil
+	})
+}
+
+func isUniqueConflict(err error) bool {
+	if err == nil {
+		return false
 	}
-	row := models.HWIDDevice{
-		ProxyUserID: userID,
-		HWID:        info.HWID,
-		DeviceOS:    info.DeviceOS,
-		VerOS:       info.VerOS,
-		DeviceModel: info.DeviceModel,
-		UserAgent:   truncate(info.UserAgent, 512),
-		LastSeenAt:  now,
-	}
-	return db.Create(&row).Error
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "unique") || strings.Contains(s, "duplicate") || strings.Contains(s, "constraint")
 }
 
 func List(db *gorm.DB, userID uint) ([]models.HWIDDevice, error) {

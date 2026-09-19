@@ -85,7 +85,17 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 					c.JSON(http.StatusForbidden, gin.H{"error": "hwid device limit reached"})
 					return
 				}
+				if errors.Is(err, hwid.ErrRequired) {
+					c.Header(hwid.HeaderNotSupported, "true")
+					if pu.HWIDLimit > 0 {
+						c.Header(hwid.HeaderActive, "true")
+					}
+					c.JSON(http.StatusForbidden, gin.H{"error": "hwid required: enable device binding in a compatible client (x-hwid)"})
+					return
+				}
 				log.Printf("hwid enforce: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hwid enforcement failed"})
+				return
 			}
 			if wantsHTML {
 				writeSubHTML(c, db, cfg, pu, tok)
