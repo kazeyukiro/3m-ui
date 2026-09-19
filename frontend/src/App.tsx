@@ -21,7 +21,6 @@ import plPL from 'antd/locale/pl_PL';
 import ukUA from 'antd/locale/uk_UA';
 import { I18nProvider, useI18n } from './i18n';
 import { useThemeStore } from './stores/themeStore';
-import { materialThemeConfig } from './theme/materialAnt';
 import AppLayout from './components/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -78,7 +77,13 @@ const ThemedApp: React.FC = () => {
       })()}
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        ...materialThemeConfig(isDark),
+        // Dark secondary text contrast (WCAG AA on dark cards).
+        // See https://github.com/ant-design/ant-design/issues/41317
+        token: isDark ? {
+          colorTextSecondary: 'rgba(255, 255, 255, 0.85)',
+          colorTextTertiary: 'rgba(255, 255, 255, 0.65)',
+          colorTextQuaternary: 'rgba(255, 255, 255, 0.55)',
+        } : {},
       }}
     >
       <AntApp>
