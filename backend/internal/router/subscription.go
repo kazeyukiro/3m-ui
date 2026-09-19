@@ -92,6 +92,9 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				return
 			}
 			// Native v2ray / base64 subscription (classic client subscription).
+			// v2rayNG / v2rayN / most classic clients require a Base64 body of
+			// share links. target=v2ray|base64 always returns Base64.
+			// target=uri|raw may return plaintext when encrypt=0.
 			if target == "v2ray" || target == "base64" || target == "raw" || target == "uri" {
 				raw, err = converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials)
 				if err != nil {
@@ -99,6 +102,7 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 					return
 				}
+				forceBase64 := target == "v2ray" || target == "base64"
 				page := subpage.LoadPageSettings(db)
 				encrypt := page.Encrypt
 				if q := strings.ToLower(c.Query("encrypt")); q == "0" || q == "false" {
@@ -106,7 +110,10 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				} else if q == "1" || q == "true" {
 					encrypt = true
 				}
-				if !encrypt {
+				// Classic v2ray subscription must stay Base64 regardless of the
+				// HTML page "encrypt URI list" toggle — that toggle only applies
+				// to target=uri|raw (human-readable link lists).
+				if !forceBase64 && !encrypt {
 					if decoded, decErr := base64.StdEncoding.DecodeString(string(raw)); decErr == nil {
 						raw = decoded
 					}

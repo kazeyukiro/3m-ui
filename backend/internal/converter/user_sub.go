@@ -51,6 +51,13 @@ func userBoundListeners(db *gorm.DB, pu models.ProxyUser) ([]models.Listener, ma
 		if len(match) == 0 {
 			match = append(match, creds...)
 		}
+		if len(match) == 0 {
+			match = append(match, user.Credential{
+				Username: pu.Username,
+				Password: pu.Password,
+				UUID:     pu.UUID,
+			})
+		}
 		listeners = append(listeners, listener)
 		filtered[listener.ID] = match
 	}
@@ -157,6 +164,7 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 	serverHost := ResolveServerAddress(config.GlobalConfig, req)
 
 	var links []string
+	var skipReasons []string
 	for _, listener := range listeners {
 		creds := filtered[listener.ID]
 		host := ResolveListenerServer(config.GlobalConfig, req, listener)
@@ -164,7 +172,22 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 			host = serverHost
 		}
 		uris, err := gen(listener, host, creds)
+		if err != nil || len(uris) == 0 {
+			pcreds := make([]protocol.UserCred, 0, len(creds))
+			for _, c := range creds {
+				pcreds = append(pcreds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
+			}
+			if shares, err2 := protocol.ExportShareURIs(listener, host, pcreds); err2 == nil && len(shares) > 0 {
+				uris = shares
+				err = nil
+			}
+		}
 		if err != nil {
+			skipReasons = append(skipReasons, fmt.Sprintf("%s: %v", listener.Name, err))
+			continue
+		}
+		if len(uris) == 0 {
+			skipReasons = append(skipReasons, fmt.Sprintf("%s: empty URI export", listener.Name))
 			continue
 		}
 		for _, u := range uris {
@@ -178,6 +201,9 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 		links = appendRemoteShareURIs(mirrors, links)
 	}
 	if len(links) == 0 {
+		if len(skipReasons) > 0 {
+			return nil, fmt.Errorf("no exportable share links for user (%s)", strings.Join(skipReasons, "; "))
+		}
 		return nil, fmt.Errorf("no exportable share links for user")
 	}
 	body := strings.Join(links, "\n")
