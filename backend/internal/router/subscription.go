@@ -94,9 +94,9 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 					c.JSON(http.StatusForbidden, gin.H{"error": "hwid required: enable device binding in a compatible client (x-hwid)"})
 					return
 				}
-				log.Printf("hwid enforce: %v", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "hwid enforcement failed"})
-				return
+				// Unexpected errors: log only. Never 500 a subscription for HWID
+				// bookkeeping — hwid_limit=0 must always remain fetchable.
+				log.Printf("hwid enforce (ignored): %v", err)
 			}
 			if err := subpull.Enforce(db, pu.ID, pu.SubPullLimit); err != nil {
 				if errors.Is(err, subpull.ErrLimitReached) {

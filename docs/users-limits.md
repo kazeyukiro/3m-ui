@@ -17,7 +17,7 @@ Compatible with Happ / Remnawave-style headers: `x-hwid`, `x-device-os`, `x-ver-
 
 | Value | Meaning |
 |-------|---------|
-| `0` | No device cap (devices still recorded when `x-hwid` is sent) |
+| `0` | No device cap (devices still recorded when `x-hwid` is sent; DB errors never block the subscription) |
 | `N ≥ 1` | At most **N** devices; **subscription requests without a valid `x-hwid` are rejected (403)** |
 
 Device list: `GET /api/v1/users/{id}/hwid-devices`. Delete one or clear all via the Users UI / DELETE APIs.
