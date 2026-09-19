@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const DefaultInterval = 10 * time.Second
+const DefaultInterval = 5 * time.Second
 
 type Scheduler struct {
 	collector *Collector

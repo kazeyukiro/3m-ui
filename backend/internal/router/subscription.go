@@ -17,6 +17,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/hwid"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
+	"github.com/kazeyukiro/3m-ui/backend/internal/subpull"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
@@ -95,6 +96,19 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				}
 				log.Printf("hwid enforce: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "hwid enforcement failed"})
+				return
+			}
+			if err := subpull.Enforce(db, pu.ID, pu.SubPullLimit); err != nil {
+				if errors.Is(err, subpull.ErrLimitReached) {
+					c.Header("Retry-After", "3600")
+					c.JSON(http.StatusTooManyRequests, gin.H{
+						"error": "subscription pull limit reached (per 24h)",
+						"limit": pu.SubPullLimit,
+					})
+					return
+				}
+				log.Printf("subpull enforce: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "subscription pull limit check failed"})
 				return
 			}
 			if wantsHTML {

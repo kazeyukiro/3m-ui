@@ -16,6 +16,7 @@ export interface ProxyUser {
   blocked?: boolean;
   ip_limit?: number;
   hwid_limit?: number;
+  sub_pull_limit?: number;
   remark?: string;
   group?: string;
   tags?: string;

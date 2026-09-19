@@ -83,6 +83,7 @@ const Users: React.FC = () => {
         traffic_limit: trafficGB && trafficGB > 0 ? Math.round(Number(trafficGB) * 1024 * 1024 * 1024) : 0,
         ip_limit: values.ip_limit != null ? Number(values.ip_limit) : 0,
         hwid_limit: values.hwid_limit != null ? Number(values.hwid_limit) : 0,
+        sub_pull_limit: values.sub_pull_limit != null ? Number(values.sub_pull_limit) : 0,
         remark: values.remark || '',
         group: values.group || '',
         tags: values.tags || '',
@@ -169,6 +170,8 @@ const Users: React.FC = () => {
       password: undefined,
       ip_limit: record.ip_limit || 0,
       hwid_limit: record.hwid_limit || 0,
+                            sub_pull_limit: record.sub_pull_limit || 0,
+      sub_pull_limit: record.sub_pull_limit || 0,
       remark: record.remark || '',
       group: record.group || '',
       tags: record.tags || '',
@@ -374,7 +377,7 @@ const Users: React.FC = () => {
                   onClick={() => {
                     setEditing(null);
                     form.resetFields();
-                    form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0 });
+                    form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0, sub_pull_limit: 0 });
                     submittingRef.current = false;
                     setSubmitting(false);
                     setModalOpen(true);
@@ -503,7 +506,7 @@ const Users: React.FC = () => {
               onClick={() => {
                 setEditing(null);
                 form.resetFields();
-                form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0 });
+                form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0, sub_pull_limit: 0 });
                 submittingRef.current = false;
                 setSubmitting(false);
                 setModalOpen(true);
@@ -556,6 +559,8 @@ const Users: React.FC = () => {
                                 : undefined,
                             ip_limit: record.ip_limit || 0,
                             hwid_limit: record.hwid_limit || 0,
+                            sub_pull_limit: record.sub_pull_limit || 0,
+      sub_pull_limit: record.sub_pull_limit || 0,
                             remark: record.remark,
                             group: record.group || '',
                             tags: record.tags || '',
@@ -627,6 +632,8 @@ const Users: React.FC = () => {
                                       : undefined,
                                   ip_limit: record.ip_limit || 0,
                                   hwid_limit: record.hwid_limit || 0,
+                            sub_pull_limit: record.sub_pull_limit || 0,
+      sub_pull_limit: record.sub_pull_limit || 0,
                                   remark: record.remark,
                             group: record.group || '',
                             tags: record.tags || '',
@@ -734,7 +741,15 @@ const Users: React.FC = () => {
           >
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-        <Form.Item name="start_on_first_use" label={t('users.startOnFirstUse', 'Start on first use')} valuePropName="checked">
+        
+          <Form.Item
+            name="sub_pull_limit"
+            label={t('users.subPullLimit') || 'Subscription pull limit'}
+            tooltip={t('users.subPullLimitHint') || '0 = unlimited. Max successful subscription fetches per rolling 24 hours.'}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+<Form.Item name="start_on_first_use" label={t('users.startOnFirstUse', 'Start on first use')} valuePropName="checked">
           <Switch />
         </Form.Item>
         <Form.Item name="expire_days_after_first" label={t('users.expireDaysAfterFirst', 'Days after first use')}>
