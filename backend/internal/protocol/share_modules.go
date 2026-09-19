@@ -675,6 +675,7 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	applyALPNParams(params, alpn)
 	if skipCert {
 		params["allow_insecure"] = "1"
+		params["allowInsecure"] = "1"
 	}
 
 	extra := map[string]interface{}{

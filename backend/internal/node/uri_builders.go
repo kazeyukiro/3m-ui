@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -11,6 +12,25 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"golang.org/x/crypto/curve25519"
 )
+
+// clientSkipCert decides skip-cert-verify for share/subscription URIs using
+// the connect host (IP vs domain vs certificate SAN).
+func looksLikeIP(host string) bool {
+	h := strings.Trim(host, "[]")
+	return net.ParseIP(h) != nil
+}
+
+func clientSkipCert(cfg map[string]interface{}, connectHost string) bool {
+	if cfg == nil {
+		return true
+	}
+	var explicit *bool
+	if b, ok := cfg["skip-cert-verify"].(bool); ok {
+		explicit = &b
+	}
+	cert, _ := cfg["certificate"].(string)
+	return certutil.DecideClientSkipCertVerify(cert, connectHost, explicit)
+}
 
 func tlsParams(cfg map[string]interface{}) map[string]string {
 	params := map[string]string{}
@@ -275,8 +295,9 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		if v, ok := cfg["sni"].(string); ok && v != "" {
 			params["sni"] = v
 		}
-		if certutil.ShouldSkipCertVerify(cfg) {
+		if clientSkipCert(cfg, host) {
 			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
 		}
 		if v, ok := cfg["obfs"].(string); ok && v != "" {
 			params["obfs"] = v
@@ -300,7 +321,7 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 	// Build the shared query-params map ONCE. Mihomo's TUIC URI parser expects
 	// snake_case keys (congestion_control, udp_relay_mode, max_udp_relay_packet_size,
 	// bbr_profile, allow_insecure) — NOT the YAML/listener hyphen-case form.
-	// Refs: protocol/share_modules.go BuildShare uses the same snake_case.
+	// NekoBox / sing-box also accept allowInsecure; emit both for compatibility.
 	params := map[string]string{}
 	for key, out := range map[string]string{
 		"congestion-controller":     "congestion_control",
@@ -312,14 +333,32 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 			params[out] = v
 		}
 	}
+	// Working defaults used by most TUIC clients when the listener left these empty.
+	if params["congestion_control"] == "" {
+		params["congestion_control"] = "bbr"
+	}
+	if params["udp_relay_mode"] == "" {
+		params["udp_relay_mode"] = "native"
+	}
 	if v, ok := firstString(cfg["alpn"]); ok {
 		params["alpn"] = v
+	}
+	if params["alpn"] == "" {
+		params["alpn"] = "h3"
 	}
 	if v, ok := cfg["sni"].(string); ok && v != "" {
 		params["sni"] = v
 	}
-	if certutil.ShouldSkipCertVerify(cfg) {
+	if v, ok := cfg["servername"].(string); ok && v != "" {
+		params["sni"] = v
+	}
+	// When connecting by domain name, default SNI to that host so formal certs verify.
+	if params["sni"] == "" && host != "" && !looksLikeIP(host) {
+		params["sni"] = host
+	}
+	if clientSkipCert(cfg, host) {
 		params["allow_insecure"] = "1"
+		params["allowInsecure"] = "1"
 	}
 
 	// token is an array of strings per tuic-v4 (Mihomo listener config).
@@ -390,8 +429,9 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		if v, ok := cfg["client-fingerprint"].(string); ok && v != "" {
 			params["fp"] = v
 		}
-		if certutil.ShouldSkipCertVerify(cfg) {
+		if clientSkipCert(cfg, host) {
 			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
 		}
 		if v, ok := cfg["idle-session-check-interval"].(string); ok && v != "" {
 			params["idle_session_check_interval"] = v
