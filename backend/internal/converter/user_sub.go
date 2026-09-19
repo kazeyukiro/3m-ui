@@ -8,6 +8,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
+	"github.com/kazeyukiro/3m-ui/backend/internal/security"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
@@ -52,9 +53,15 @@ func userBoundListeners(db *gorm.DB, pu models.ProxyUser) ([]models.Listener, ma
 			match = append(match, creds...)
 		}
 		if len(match) == 0 {
+			// Password is stored encrypted on ProxyUser; decrypt best-effort for
+			// password-auth protocols. UUID-only schemes (VLESS/VMess) only need UUID.
+			plain := ""
+			if dec, err := security.Decrypt(pu.PasswordEncrypted); err == nil {
+				plain = dec
+			}
 			match = append(match, user.Credential{
 				Username: pu.Username,
-				Password: pu.Password,
+				Password: plain,
 				UUID:     pu.UUID,
 			})
 		}
