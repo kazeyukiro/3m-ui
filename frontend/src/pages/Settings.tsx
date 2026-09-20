@@ -14,6 +14,8 @@ import {
   Switch,
   Select,
   InputNumber,
+  Table,
+  Popconfirm,
   Alert,
   Layout,
   Menu,
@@ -47,7 +49,15 @@ import {
   CloudServerOutlined,
   FieldTimeOutlined,
 } from '@ant-design/icons';
-import { downloadBackup, restoreDatabase, openApiUrl } from '../api/system';
+import {
+  downloadBackup,
+  restoreDatabase,
+  openApiUrl,
+  listLocalBackups,
+  deleteLocalBackup,
+  cleanupLocalBackups,
+  type LocalBackupItem,
+} from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
 import { setupTOTP, enableTOTP, disableTOTP, fetchMe } from '../api/auth';
@@ -82,6 +92,40 @@ const Settings: React.FC = () => {
   }>({});
   const [panelForm] = Form.useForm();
   const { t, locale, setLocale } = useI18n();
+  const [localBackups, setLocalBackups] = useState<LocalBackupItem[]>([]);
+  const [backupTotalBytes, setBackupTotalBytes] = useState(0);
+  const [backupDir, setBackupDir] = useState('');
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [cleanupKeep, setCleanupKeep] = useState(3);
+  const [cleanupDays, setCleanupDays] = useState(7);
+
+  const formatBytes = (n: number) => {
+    if (!n || n < 0) return '0 B';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const loadLocalBackups = async () => {
+    setBackupsLoading(true);
+    try {
+      const data = await listLocalBackups();
+      setLocalBackups(data.items || []);
+      setBackupTotalBytes(data.total_bytes || 0);
+      setBackupDir(data.dir || '');
+    } catch (e: any) {
+      message.error(e?.message || t('common.error'));
+    } finally {
+      setBackupsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLocalBackups();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isMobile = useIsMobile();
   const [totpEnabled, setTotpEnabled] = useState(false);
   const [totpSecret, setTotpSecret] = useState('');
@@ -829,6 +873,124 @@ const Settings: React.FC = () => {
                     <Button icon={<CloudUploadOutlined />}>{t('settings.restoreBackup') || 'Restore'}</Button>
                   </Upload>
                 </Space>
+                <div className="settings-local-backups" style={{ marginTop: 16 }}>
+                  <div
+                    style={{
+                      marginBottom: 8,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <span style={{ wordBreak: 'break-word' }}>
+                      {t('settings.localBackups') || 'On-disk backups'}
+                      {backupDir ? (
+                        <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                          ({backupDir})
+                        </Typography.Text>
+                      ) : null}
+                      <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                        {formatBytes(backupTotalBytes)} · {localBackups.length}
+                      </Typography.Text>
+                    </span>
+                    <Button size="small" onClick={() => void loadLocalBackups()} loading={backupsLoading}>
+                      {t('common.refresh') || 'Refresh'}
+                    </Button>
+                  </div>
+                  <Space wrap style={{ marginBottom: 12, width: '100%' }} size={[8, 8]}>
+                    <InputNumber
+                      min={1}
+                      max={100}
+                      value={cleanupKeep}
+                      onChange={(v) => setCleanupKeep(Number(v) || 1)}
+                      addonBefore={t('settings.backupKeep') || 'Keep last'}
+                      style={{ width: '100%', minWidth: 140, maxWidth: 220 }}
+                    />
+                    <InputNumber
+                      min={1}
+                      max={3650}
+                      value={cleanupDays}
+                      onChange={(v) => setCleanupDays(Number(v) || 1)}
+                      addonBefore={t('settings.backupOlderDays') || 'Older than (days)'}
+                      style={{ width: '100%', minWidth: 160, maxWidth: 260 }}
+                    />
+                    <Button
+                      danger
+                      block={false}
+                      style={{ minHeight: 32 }}
+                      onClick={async () => {
+                        try {
+                          const res = await cleanupLocalBackups({
+                            keep: cleanupKeep,
+                            older_than_days: cleanupDays,
+                          });
+                          message.success(
+                            `${t('settings.backupCleaned') || 'Cleaned'}: ${res.deleted_count} · -${formatBytes(res.freed_bytes || 0)}`,
+                          );
+                          await loadLocalBackups();
+                        } catch (e: any) {
+                          message.error(e?.message || t('common.error'));
+                        }
+                      }}
+                    >
+                      {t('settings.cleanupBackups') || 'Cleanup'}
+                    </Button>
+                  </Space>
+                  <Table
+                    size="small"
+                    loading={backupsLoading}
+                    rowKey="name"
+                    dataSource={localBackups}
+                    pagination={{ pageSize: 5, simple: true, hideOnSinglePage: true }}
+                    scroll={{ x: 480 }}
+                    locale={{ emptyText: t('common.empty') || 'No data' }}
+                    columns={[
+                      {
+                        title: t('common.name') || 'Name',
+                        dataIndex: 'name',
+                        ellipsis: true,
+                      },
+                      {
+                        title: t('settings.backupSize') || 'Size',
+                        dataIndex: 'size',
+                        width: 96,
+                        render: (v: number) => formatBytes(v || 0),
+                      },
+                      {
+                        title: t('settings.backupTime') || 'Time',
+                        dataIndex: 'mod_time',
+                        width: 160,
+                        render: (v: string) => (v ? new Date(v).toLocaleString() : '—'),
+                      },
+                      {
+                        title: t('common.actions') || 'Actions',
+                        key: 'act',
+                        width: 88,
+                        fixed: 'right',
+                        render: (_: unknown, row: LocalBackupItem) => (
+                          <Popconfirm
+                            title={t('common.confirmDelete') || 'Delete?'}
+                            onConfirm={async () => {
+                              try {
+                                await deleteLocalBackup(row.name);
+                                message.success(t('common.ok') || 'OK');
+                                await loadLocalBackups();
+                              } catch (e: any) {
+                                message.error(e?.message || t('common.error'));
+                              }
+                            }}
+                          >
+                            <Button size="small" danger type="link">
+                              {t('common.delete') || 'Delete'}
+                            </Button>
+                          </Popconfirm>
+                        ),
+                      },
+                    ]}
+                  />
+                </div>
               </Card>
               <Card title={<><ApiOutlined /> {t('settings.apiDocs') || 'API'}</>}>
                 <Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">

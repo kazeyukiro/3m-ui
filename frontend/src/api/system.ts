@@ -66,3 +66,23 @@ export const registerWarp = () =>
   client.post<{ private_key: string; public_key: string; address: string; reserved?: string; yaml: string }>(
     '/system/templates/warp/register',
   ).then((r) => r.data);
+
+
+export interface LocalBackupItem {
+  name: string;
+  size: number;
+  mod_time: string;
+  is_dir?: boolean;
+}
+
+export const listLocalBackups = () =>
+  client.get<{ items: LocalBackupItem[]; total_bytes: number; dir: string }>('/system/backups').then((r) => r.data);
+
+export const deleteLocalBackup = (name: string) =>
+  client.delete(`/system/backups/${encodeURIComponent(name)}`);
+
+export const cleanupLocalBackups = (body: { keep?: number; older_than_days?: number }) =>
+  client.post<{ ok: boolean; deleted: string[]; deleted_count: number; kept: number; freed_bytes: number }>(
+    '/system/backups/cleanup',
+    body,
+  ).then((r) => r.data);

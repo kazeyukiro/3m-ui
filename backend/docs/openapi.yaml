@@ -901,6 +901,44 @@ paths:
       responses:
         "200":
           description: application/zip
+  /system/backups:
+    get:
+      tags: [System]
+      summary: List on-disk install/update backups
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Backup list
+  /system/backups/cleanup:
+    post:
+      tags: [System]
+      summary: Cleanup on-disk backups by keep count and/or age
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keep: { type: integer, description: "Keep newest N (0 = ignore)" }
+                older_than_days: { type: integer, description: "Delete older than N days (0 = ignore)" }
+      responses:
+        "200":
+          description: Cleanup result
+  /system/backups/{name}:
+    delete:
+      tags: [System]
+      summary: Delete one on-disk backup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+
   /system/backup/restore-db:
     post:
       tags: [system]

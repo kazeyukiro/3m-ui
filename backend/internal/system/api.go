@@ -32,6 +32,9 @@ func (h *Handler) WithBackupPaths(dbPath, mihomoConfig string) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/status", h.GetSystemStatus)
 	rg.GET("/backup", h.ExportBackup)
+	rg.GET("/backups", h.ListLocalBackups)
+	rg.DELETE("/backups/:name", h.DeleteLocalBackup)
+	rg.POST("/backups/cleanup", h.CleanupLocalBackups)
 	rg.POST("/backup/restore-db", h.RestoreDatabase)
 	rg.POST("/templates/reverse-proxy", h.ReverseProxy)
 	rg.POST("/templates/acme", h.ACME)
@@ -208,4 +211,46 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mode %q: must be wireguard, masque, or both", mode)})
 	}
+}
+
+func (h *Handler) backupDir() string {
+	return backupsDirFromDB(h.dbPath)
+}
+
+func (h *Handler) ListLocalBackups(c *gin.Context) {
+	items, total, err := listLocalBackups(h.backupDir())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items, "total_bytes": total, "dir": h.backupDir()})
+}
+
+func (h *Handler) DeleteLocalBackup(c *gin.Context) {
+	name := c.Param("name")
+	if err := deleteLocalBackup(h.backupDir(), name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "deleted": name})
+}
+
+func (h *Handler) CleanupLocalBackups(c *gin.Context) {
+	var body struct {
+		Keep          int `json:"keep"`
+		OlderThanDays int `json:"older_than_days"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	deleted, kept, freed, err := cleanupLocalBackups(h.backupDir(), body.Keep, body.OlderThanDays)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"ok":            true,
+		"deleted":       deleted,
+		"deleted_count": len(deleted),
+		"kept":          kept,
+		"freed_bytes":   freed,
+	})
 }

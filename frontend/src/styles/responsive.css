@@ -938,3 +938,18 @@ html.dark .app-header-bar,
     margin-block: 2px !important;
   }
 }
+
+
+/* Settings local backups — mobile */
+@media (max-width: 767px) {
+  .settings-local-backups .ant-input-number-group-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .settings-local-backups .ant-space {
+    width: 100%;
+  }
+  .settings-local-backups .ant-btn-dangerous {
+    width: 100%;
+  }
+}
