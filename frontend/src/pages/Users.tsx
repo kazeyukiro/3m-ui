@@ -3,12 +3,12 @@ import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, TabletOutlined, FundOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, FundOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
   fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
-  fetchUserHWIDDevices, deleteUserHWIDDevice, clearUserHWIDDevices, fetchUserNodeTraffic, type HWIDDevice, type UserNodeTrafficItem,
+  fetchUserNodeTraffic, type UserNodeTrafficItem,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
@@ -28,10 +28,6 @@ const Users: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const [hwidOpen, setHwidOpen] = useState(false);
-  const [hwidUser, setHwidUser] = useState<ProxyUser | null>(null);
-  const [hwidRows, setHwidRows] = useState<HWIDDevice[]>([]);
-  const [hwidLoading, setHwidLoading] = useState(false);
   const [nodeTrafficOpen, setNodeTrafficOpen] = useState(false);
   const [nodeTrafficUser, setNodeTrafficUser] = useState<ProxyUser | null>(null);
   const [nodeTrafficRows, setNodeTrafficRows] = useState<UserNodeTrafficItem[]>([]);
@@ -86,8 +82,7 @@ const Users: React.FC = () => {
         enabled: !!values.enabled,
         traffic_limit: trafficGB && trafficGB > 0 ? Math.round(Number(trafficGB) * 1024 * 1024 * 1024) : 0,
         ip_limit: values.ip_limit != null ? Number(values.ip_limit) : 0,
-        hwid_limit: values.hwid_limit != null ? Number(values.hwid_limit) : 0,
-        sub_pull_limit: values.sub_pull_limit != null ? Number(values.sub_pull_limit) : 0,
+                sub_pull_limit: values.sub_pull_limit != null ? Number(values.sub_pull_limit) : 0,
         remark: values.remark || '',
         group: values.group || '',
         tags: values.tags || '',
@@ -143,18 +138,6 @@ const Users: React.FC = () => {
     }
   };
 
-  const openHwid = async (record: ProxyUser) => {
-    setHwidUser(record);
-    setHwidOpen(true);
-    setHwidLoading(true);
-    try {
-      setHwidRows(await fetchUserHWIDDevices(record.id));
-    } catch (e: any) {
-      message.error(e?.message || t('common.error'));
-    } finally {
-      setHwidLoading(false);
-    }
-  };
 
   const openNodeTraffic = async (record: ProxyUser) => {
     setNodeTrafficUser(record);
@@ -188,8 +171,7 @@ const Users: React.FC = () => {
       expire_time: exp,
       password: undefined,
       ip_limit: record.ip_limit || 0,
-      hwid_limit: record.hwid_limit || 0,
-                            sub_pull_limit: record.sub_pull_limit || 0,
+                                  sub_pull_limit: record.sub_pull_limit || 0,
       remark: record.remark || '',
       group: record.group || '',
       tags: record.tags || '',
@@ -363,7 +345,6 @@ const Users: React.FC = () => {
               <Button size="small" icon={<ClearOutlined />} />
             </Popconfirm>
           </Tooltip>
-          <Button size="small" icon={<TabletOutlined />} onClick={() => openHwid(record)} title={t('users.devices', 'Devices')} aria-label={t('users.devices', 'Devices')} />
           <Button size="small" icon={<FundOutlined />} onClick={() => openNodeTraffic(record)} title={t('users.nodeTraffic', 'Node traffic')} aria-label={t('users.nodeTraffic', 'Node traffic')} />
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
@@ -396,7 +377,7 @@ const Users: React.FC = () => {
                   onClick={() => {
                     setEditing(null);
                     form.resetFields();
-                    form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0, sub_pull_limit: 0 });
+                    form.setFieldsValue({ enabled: true, ip_limit: 0, sub_pull_limit: 0 });
                     submittingRef.current = false;
                     setSubmitting(false);
                     setModalOpen(true);
@@ -525,7 +506,7 @@ const Users: React.FC = () => {
               onClick={() => {
                 setEditing(null);
                 form.resetFields();
-                form.setFieldsValue({ enabled: true, ip_limit: 0, hwid_limit: 0, sub_pull_limit: 0 });
+                form.setFieldsValue({ enabled: true, ip_limit: 0, sub_pull_limit: 0 });
                 submittingRef.current = false;
                 setSubmitting(false);
                 setModalOpen(true);
@@ -577,8 +558,7 @@ const Users: React.FC = () => {
                                 ? dayjs(record.expire_time)
                                 : undefined,
                             ip_limit: record.ip_limit || 0,
-                            hwid_limit: record.hwid_limit || 0,
-                            sub_pull_limit: record.sub_pull_limit || 0,
+                                                        sub_pull_limit: record.sub_pull_limit || 0,
                             remark: record.remark,
                             group: record.group || '',
                             tags: record.tags || '',
@@ -628,10 +608,7 @@ const Users: React.FC = () => {
                         </div>
                       </div>
                       <Dropdown
-                        menu={{
-                          items: [
-                            {
-                              key: 'devices', label: t('users.devices', 'Devices'), onClick: () => openHwid(record) },
+                        menu=
                             { key: 'edit',
                               icon: <EditOutlined />,
                               label: t('common.edit'),
@@ -649,8 +626,7 @@ const Users: React.FC = () => {
                                       ? dayjs(record.expire_time)
                                       : undefined,
                                   ip_limit: record.ip_limit || 0,
-                                  hwid_limit: record.hwid_limit || 0,
-                            sub_pull_limit: record.sub_pull_limit || 0,
+                                                              sub_pull_limit: record.sub_pull_limit || 0,
                                   remark: record.remark,
                             group: record.group || '',
                             tags: record.tags || '',
@@ -731,33 +707,6 @@ const Users: React.FC = () => {
         className={isMobile ? 'mobile-full-modal' : undefined}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit} disabled={submitting}>
-          <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="password" label={t('users.password')} rules={[{ required: !editing }]}>
-            <Input.Password placeholder={editing ? t('users.passwordKeep') : ''} />
-          </Form.Item>
-          <Form.Item
-            name="traffic_limit_gb"
-            label={t('users.trafficLimitGB')}
-            tooltip={t('users.trafficLimitHint')}
-          >
-            <InputNumber min={0} step={1} style={{ width: '100%' }} placeholder="0 = unlimited" />
-          </Form.Item>
-          <Form.Item
-            name="ip_limit"
-            label={t('users.ipLimit') || 'IP limit'}
-            tooltip={t('users.ipLimitHint') || '0 = unlimited concurrent client IPs'}
-          >
-            <InputNumber min={0} step={1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="hwid_limit"
-            label={t('users.hwidLimit') || 'HWID device limit'}
-            tooltip={t('users.hwidLimitHint') || '0 = unlimited. Compatible with Happ x-hwid import headers (Remnawave-style).'}
-          >
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
         
           <Form.Item
             name="sub_pull_limit"
@@ -843,45 +792,6 @@ const Users: React.FC = () => {
           }))}
         />
       </Modal>
-
-
-    <Modal
-      open={hwidOpen}
-      title={hwidUser ? `${t('users.devices', 'Devices')} — ${hwidUser.username}` : t('users.devices', 'Devices')}
-      onCancel={() => { setHwidOpen(false); setHwidUser(null); }}
-      footer={[
-        <Button key="clear" danger disabled={!hwidUser || !hwidRows.length} onClick={async () => {
-          if (!hwidUser) return;
-          await clearUserHWIDDevices(hwidUser.id);
-          setHwidRows([]);
-          message.success(t('common.success'));
-        }}>{t('users.clearDevices', 'Clear all')}</Button>,
-        <Button key="close" type="primary" onClick={() => setHwidOpen(false)}>{t('common.close', 'Close')}</Button>,
-      ]}
-      width={isMobile ? '100%' : 720}
-    >
-      <Table
-        rowKey="id"
-        loading={hwidLoading}
-        dataSource={hwidRows}
-        size="small"
-        pagination={false}
-        scroll={{ x: true }}
-        columns={[
-          { title: 'HWID', dataIndex: 'hwid', ellipsis: true },
-          { title: t('users.deviceOs', 'OS'), dataIndex: 'device_os', width: 90 },
-          { title: t('users.deviceModel', 'Model'), dataIndex: 'device_model', ellipsis: true },
-          { title: t('users.lastSeen', 'Last seen'), dataIndex: 'last_seen_at', width: 160, render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
-          { title: t('common.actions'), key: 'a', width: 90, render: (_: any, r: HWIDDevice) => (
-            <Button size="small" danger onClick={async () => {
-              if (!hwidUser) return;
-              await deleteUserHWIDDevice(hwidUser.id, r.id);
-              setHwidRows((rows) => rows.filter((x) => x.id !== r.id));
-            }}>{t('common.delete')}</Button>
-          )},
-        ]}
-      />
-    </Modal>
       <Modal
         open={nodeTrafficOpen}
         title={nodeTrafficUser ? `${t('users.nodeTraffic', 'Node traffic')} — ${nodeTrafficUser.username}` : t('users.nodeTraffic', 'Node traffic')}

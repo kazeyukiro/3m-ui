@@ -25,7 +25,7 @@ Nhẹ, tự lưu trữ. Quản lý listener, người dùng, subscription và tr
 | Hạng mục | Khả năng |
 |------|------|
 | **Node** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **Người dùng** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **Người dùng** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **Subscription** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Cấu hình** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Vận hành** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |

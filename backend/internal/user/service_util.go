@@ -31,7 +31,6 @@ type SafeUser struct {
 	Enabled               bool       `json:"enabled"`
 	Blocked               bool       `json:"blocked"`
 	IPLimit               int        `json:"ip_limit"`
-	HWIDLimit             int        `json:"hwid_limit"`
 	SubPullLimit          int        `json:"sub_pull_limit"`
 	Remark                string     `json:"remark"`
 	Group                 string     `json:"group"`
@@ -63,7 +62,6 @@ func ToSafeUser(u *models.ProxyUser) SafeUser {
 		Enabled:               u.Enabled,
 		Blocked:               !IsCredentialActive(*u),
 		IPLimit:               u.IPLimit,
-		HWIDLimit:             u.HWIDLimit,
 		SubPullLimit:          u.SubPullLimit,
 		Remark:                u.Remark,
 		Group:                 u.Group,

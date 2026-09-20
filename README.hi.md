@@ -25,7 +25,7 @@
 | क्षेत्र | क्षमताएँ |
 |------|------|
 | **नोड्स** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **उपयोगकर्ता** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **उपयोगकर्ता** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **सब्सक्रिप्शन** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **कॉन्फ़िग** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **ऑप्स** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |

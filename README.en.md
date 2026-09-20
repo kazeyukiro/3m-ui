@@ -25,7 +25,7 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | Area | Capabilities |
 |------|------|
 | **Nodes** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY; TLS self-signed; batch certificate; **traffic multiplier**; transport validation |
-| **Users** | Bind nodes, traffic/expiry, **per-node usage** (billed = raw × node multiplier), IP/HWID/sub-pull limits, start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
+| **Users** | Bind nodes, traffic/expiry, **per-node usage** (billed = raw × node multiplier), IP/sub-pull limits, start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
 | **Subscriptions** | UA routing for Clash/Mihomo YAML, v2ray Base64 (`?target=v2ray` always Base64), sing-box JSON; optional `?target=`; HTML info page; TUIC/HY2 share TLS params |
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Ops** | Core start/stop/update, logs, dashboard, online connections, Geo, panel SSL/ACME, WARP one-click, backup/restore |
@@ -93,7 +93,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 
 ### Extra docs (limits / certs / subscriptions)
 
-- [User limits: IP · HWID · sub pulls](docs/users-limits.md)
+- [User limits: IP · sub pulls](docs/users-limits.md)
 - [Per-node traffic & multiplier](docs/node-traffic.md)
 - [Batch node certificates](docs/batch-certificate.md)
 - [Subscription formats](docs/subscription-formats.md)

@@ -14,7 +14,6 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"github.com/kazeyukiro/3m-ui/backend/internal/hwid"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpull"
@@ -75,29 +74,6 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			}
 			isProxyUser = true
 			user.TouchFirstUse(db, pu.ID)
-			// HWID device registration (Happ / Remnawave-compatible headers).
-			info := hwid.ParseRequest(c.Request)
-			if err := hwid.Enforce(db, pu.ID, pu.HWIDLimit, info, c.Writer.Header()); err != nil {
-				if errors.Is(err, hwid.ErrMaxDevices) {
-					c.Header(hwid.HeaderMaxDevicesReached, "true")
-					if pu.HWIDLimit > 0 {
-						c.Header(hwid.HeaderActive, "true")
-					}
-					c.JSON(http.StatusForbidden, gin.H{"error": "hwid device limit reached"})
-					return
-				}
-				if errors.Is(err, hwid.ErrRequired) {
-					c.Header(hwid.HeaderNotSupported, "true")
-					if pu.HWIDLimit > 0 {
-						c.Header(hwid.HeaderActive, "true")
-					}
-					c.JSON(http.StatusForbidden, gin.H{"error": "hwid required: enable device binding in a compatible client (x-hwid)"})
-					return
-				}
-				// Unexpected errors: log only. Never 500 a subscription for HWID
-				// bookkeeping — hwid_limit=0 must always remain fetchable.
-				log.Printf("hwid enforce (ignored): %v", err)
-			}
 			if err := subpull.Enforce(db, pu.ID, pu.SubPullLimit); err != nil {
 				if errors.Is(err, subpull.ErrLimitReached) {
 					c.Header("Retry-After", "3600")

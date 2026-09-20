@@ -25,7 +25,7 @@
 | 類別 | 能力 |
 |------|------|
 | **節點** | 協定登錄表驅動的 Listener（VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC 等）；REALITY 目標掃描、TLS 自簽、傳輸層欄位校驗 |
-| **使用者** | 綁定節點、流量限額、到期、IP/HWID 限制、批次操作、訂閱 Token |
+| **使用者** | 綁定節點、流量限額、到期、IP 限制、批次操作、訂閱 Token |
 | **訂閱** | UA 識別 Clash/Mihomo YAML、v2ray Base64、sing-box JSON；可選 `?target=`；HTML 訂閱頁 |
 | **設定** | 產生 → 校驗 → 套用；失敗回滾上一份 `config.yaml` |
 | **維運** | 核心啟停/更新、日誌、儀表板、Geo、面板 SSL/ACME、備份還原 |

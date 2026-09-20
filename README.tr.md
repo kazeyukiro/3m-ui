@@ -25,7 +25,7 @@ Hafif ve self-hosted. Linux üzerinde [Mihomo](https://github.com/MetaCubeX/miho
 | Alan | Yetenekler |
 |------|------|
 | **Düğümler** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **Kullanıcılar** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **Kullanıcılar** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **Abonelikler** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Yapılandırma** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **İşletim** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |

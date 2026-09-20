@@ -21,8 +21,6 @@ type ProxyUser struct {
 	Enabled           bool       `gorm:"not null;default:true" json:"enabled"`
 	// IPLimit is max concurrent client IPs (0 = unlimited). Max concurrent client IPs.
 	IPLimit int `gorm:"not null;default:0" json:"ip_limit"`
-	// HWIDLimit is max devices allowed via subscription HWID headers (0 = unlimited / tracking only when seen).
-	HWIDLimit int `gorm:"not null;default:0" json:"hwid_limit"`
 	// SubPullLimit is max subscription fetches per rolling 24h (0 = unlimited).
 	SubPullLimit int `gorm:"not null;default:0" json:"sub_pull_limit"`
 	// SubPullCount is successful pulls in the current window (server-side counter).

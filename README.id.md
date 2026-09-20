@@ -25,7 +25,7 @@ Ringan dan self-hosted. Kelola listener, pengguna, langganan, dan status [Mihomo
 | Area | Kemampuan |
 |------|------|
 | **Node** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **Pengguna** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **Pengguna** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **Langganan** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Konfigurasi** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Operasi** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |

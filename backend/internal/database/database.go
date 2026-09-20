@@ -46,14 +46,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("ensure unique sub tokens: %w", err)
 	}
 
-	if err := prepareHWIDDeviceSchema(db); err != nil {
-		return nil, fmt.Errorf("prepare hwid_devices schema: %w", err)
-	}
 
 	err = db.AutoMigrate(
 		&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
 		&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
-		&models.ProxyUser{}, &models.UserNodeTraffic{}, &models.HWIDDevice{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
+		&models.ProxyUser{}, &models.UserNodeTraffic{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
 	)
 	if err != nil {
 		// One more cleanup pass then retry — soft-deleted collisions are the usual cause.
@@ -62,7 +59,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		if retryErr := db.AutoMigrate(
 			&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
 			&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
-			&models.ProxyUser{}, &models.UserNodeTraffic{}, &models.HWIDDevice{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
+			&models.ProxyUser{}, &models.UserNodeTraffic{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
 		); retryErr != nil {
 			return nil, fmt.Errorf("failed to run database auto-migration: %w (after dedupe retry)", retryErr)
 		}
@@ -154,59 +151,3 @@ func randomHexToken(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// prepareHWIDDeviceSchema runs before AutoMigrate.
-// SQLite index names are global: a leftover uidx_user_hwid from hw_id_devices
-// causes "index uidx_user_hwid already exists" when creating hwid_devices.
-func prepareHWIDDeviceSchema(db *gorm.DB) error {
-	if db == nil {
-		return nil
-	}
-	// Drop legacy unique index names (SQLite does not scope indexes per table).
-	for _, idx := range []string{
-		"uidx_user_hwid",
-		"idx_hw_id_devices_proxy_user_id",
-		"idx_hwid_devices_proxy_user_id",
-	} {
-		if err := db.Exec("DROP INDEX IF EXISTS `" + idx + "`").Error; err != nil {
-			log.Printf("database: drop index %s: %v", idx, err)
-		}
-	}
-	for _, name := range []string{"hw_id_devices", "hwid_devices"} {
-		if !db.Migrator().HasTable(name) {
-			continue
-		}
-		rows, err := db.Raw("PRAGMA table_info(`" + name + "`)").Rows()
-		if err != nil {
-			// Non-SQLite: drop legacy table name only.
-			if name == "hw_id_devices" {
-				_ = db.Migrator().DropTable(name)
-			}
-			continue
-		}
-		hasHWID := false
-		colCount := 0
-		for rows.Next() {
-			var cid int
-			var cname, ctype string
-			var notnull, pk int
-			var dflt interface{}
-			if scanErr := rows.Scan(&cid, &cname, &ctype, &notnull, &dflt, &pk); scanErr != nil {
-				_ = rows.Close()
-				return scanErr
-			}
-			colCount++
-			if cname == "hwid" {
-				hasHWID = true
-			}
-		}
-		_ = rows.Close()
-		// Drop legacy table always; drop current if missing hwid column.
-		if name == "hw_id_devices" || (colCount > 0 && !hasHWID) {
-			log.Printf("database: dropping HWID table %s for clean migrate (hasHWID=%v)", name, hasHWID)
-			if err := db.Exec("DROP TABLE IF EXISTS `" + name + "`").Error; err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}

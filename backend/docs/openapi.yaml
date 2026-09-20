@@ -1210,7 +1210,6 @@ components:
         online: { type: boolean }
         blocked: { type: boolean }
         ip_limit: { type: integer, description: "0 = unlimited concurrent source IPs; enforced by ~5s connection poll (disconnect excess)" }
-        hwid_limit: { type: integer, description: "0 = unlimited (still records x-hwid when sent); >0 requires x-hwid on sub fetch and caps devices" }
         sub_pull_limit: { type: integer, description: "0 = unlimited; max successful subscription pulls per rolling 24h" }
         remark: { type: string }
         group: { type: string, description: Admin group label }
@@ -1230,7 +1229,6 @@ components:
         uuid: { type: string, description: Empty = auto-generate }
         traffic_limit: { type: integer, format: int64 }
         ip_limit: { type: integer, description: "0 = unlimited concurrent source IPs" }
-        hwid_limit: { type: integer, description: "0 = unlimited; >0 requires x-hwid" }
         sub_pull_limit: { type: integer, description: "0 = unlimited pulls per rolling 24h" }
         remark: { type: string }
         group: { type: string }

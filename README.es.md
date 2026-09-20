@@ -25,7 +25,7 @@ Ligero y autoalojado. Gestiona listeners, usuarios, suscripciones y estado de [M
 | Área | Capacidades |
 |------|------|
 | **Nodos** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **Usuarios** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **Usuarios** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **Suscripciones** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Configuración** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Operaciones** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |

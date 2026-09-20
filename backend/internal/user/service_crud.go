@@ -103,7 +103,6 @@ func (s *Service) Create(in CreateInput) (*models.ProxyUser, error) {
 		UUID:                 uuid,
 		TrafficLimit:         in.TrafficLimit,
 		IPLimit:              max0(in.IPLimit),
-		HWIDLimit:            max0(in.HWIDLimit),
 		SubPullLimit:         max0(in.SubPullLimit),
 		Remark:               strings.TrimSpace(in.Remark),
 		Group:                strings.TrimSpace(in.Group),
@@ -170,8 +169,6 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	if in.IPLimit != nil {
 		u.IPLimit = max0(*in.IPLimit)
 	}
-	if in.HWIDLimit != nil {
-		u.HWIDLimit = max0(*in.HWIDLimit)
 	}
 	if in.SubPullLimit != nil {
 		u.SubPullLimit = max0(*in.SubPullLimit)

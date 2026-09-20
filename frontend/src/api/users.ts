@@ -15,7 +15,6 @@ export interface ProxyUser {
   expire_time?: string;
   blocked?: boolean;
   ip_limit?: number;
-  hwid_limit?: number;
   sub_pull_limit?: number;
   remark?: string;
   group?: string;
@@ -88,23 +87,6 @@ export const exportUserLinks = (params?: { q?: string; group?: string }) =>
     .then((r) => r.data);
 
 
-export interface HWIDDevice {
-  id: number;
-  proxy_user_id: number;
-  hwid: string;
-  device_os?: string;
-  ver_os?: string;
-  device_model?: string;
-  user_agent?: string;
-  last_seen_at?: string;
-}
-
-export const fetchUserHWIDDevices = (userId: number) =>
-  client.get<{ items: HWIDDevice[] }>(`/users/${userId}/hwid-devices`).then((r) => r.data.items || []);
-export const deleteUserHWIDDevice = (userId: number, deviceId: number) =>
-  client.delete(`/users/${userId}/hwid-devices/${deviceId}`);
-export const clearUserHWIDDevices = (userId: number) =>
-  client.delete(`/users/${userId}/hwid-devices`);
 
 
 export interface UserNodeTrafficItem {

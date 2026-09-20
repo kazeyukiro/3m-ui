@@ -72,7 +72,6 @@ type CreateInput struct {
 	UUID                 string     `json:"uuid"`
 	TrafficLimit         int64      `json:"traffic_limit"`
 	IPLimit              int        `json:"ip_limit"`
-	HWIDLimit            int        `json:"hwid_limit"`
 	SubPullLimit         int        `json:"sub_pull_limit"`
 	Remark               string     `json:"remark"`
 	Group                string     `json:"group"`
@@ -94,7 +93,6 @@ type UpdateInput struct {
 	UUID                 string     `json:"uuid"`
 	TrafficLimit         *int64     `json:"traffic_limit"`
 	IPLimit              *int       `json:"ip_limit"`
-	HWIDLimit            *int       `json:"hwid_limit"`
 	SubPullLimit         *int       `json:"sub_pull_limit"`
 	Remark               *string    `json:"remark"`
 	Group                *string    `json:"group"`

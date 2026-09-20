@@ -25,7 +25,7 @@
 | 구분 | 기능 |
 |------|------|
 | **노드** | Protocol-registry listeners (VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC, …); REALITY target scan; TLS self-signed certs; transport field validation |
-| **사용자** | Bind nodes, traffic limits, expiry, IP/HWID limits, batch ops, subscription tokens |
+| **사용자** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **구독** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **설정** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **운영** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
