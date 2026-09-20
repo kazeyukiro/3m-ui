@@ -22,7 +22,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, extra, style }
     <div
       className="page-header"
       style={{
-        marginBottom: isMobile ? 10 : 20,
+        marginBottom: isMobile ? 8 : 16,
         flex: 'none',
         flexGrow: 0,
         flexShrink: 0,

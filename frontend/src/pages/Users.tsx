@@ -369,7 +369,7 @@ const Users: React.FC = () => {
       <PageHeader title={t('users.title')} subtitle={t('users.subtitle', 'Manage accounts, traffic limits, node bindings and subscriptions.')} />
       <Card
         extra={
-          <Space wrap style={{ width: isMobile ? '100%' : undefined }}>
+          <Space className="page-toolbar" wrap style={{ width: isMobile ? '100%' : undefined }}>
             <Input.Search
               allowClear
               placeholder={t('common.search')}
