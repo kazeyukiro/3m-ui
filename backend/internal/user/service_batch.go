@@ -111,6 +111,8 @@ func (s *Service) Batch(action BatchAction, ids []uint, opts BatchOpts) (int, er
 		}
 		return int(res.RowsAffected), nil
 	case BatchResetTraffic:
+		_ = s.db.Unscoped().Where("proxy_user_id IN ?", clean).Delete(&models.UserNodeTraffic{})
+		// fallthrough traffic zero
 		res := s.db.Model(&models.ProxyUser{}).Where("id IN ?", clean).Updates(map[string]interface{}{
 			"traffic_used":   0,
 			"upload_bytes":   0,

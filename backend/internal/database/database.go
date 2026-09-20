@@ -53,7 +53,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	err = db.AutoMigrate(
 		&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
 		&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
-		&models.ProxyUser{}, &models.HWIDDevice{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
+		&models.ProxyUser{}, &models.UserNodeTraffic{}, &models.HWIDDevice{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
 	)
 	if err != nil {
 		// One more cleanup pass then retry — soft-deleted collisions are the usual cause.
@@ -62,7 +62,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		if retryErr := db.AutoMigrate(
 			&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
 			&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
-			&models.ProxyUser{}, &models.HWIDDevice{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
+			&models.ProxyUser{}, &models.UserNodeTraffic{}, &models.HWIDDevice{}, &models.TrafficRecord{}, &models.PanelSetting{}, &models.RemoteServer{}, &models.RemoteNodeMirror{}, &models.ProxyUserRemoteNode{},
 		); retryErr != nil {
 			return nil, fmt.Errorf("failed to run database auto-migration: %w (after dedupe retry)", retryErr)
 		}

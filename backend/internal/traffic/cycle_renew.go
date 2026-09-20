@@ -30,6 +30,7 @@ func MaybeApplyUserCycles(db *gorm.DB) {
 				next := u.LastTrafficCycleReset.Add(time.Duration(u.TrafficResetDays) * 24 * time.Hour)
 				if !now.Before(next) {
 					updates["traffic_used"] = 0
+					_ = db.Unscoped().Where("proxy_user_id = ?", u.ID).Delete(&models.UserNodeTraffic{})
 					updates["upload_bytes"] = 0
 					updates["download_bytes"] = 0
 					updates["last_traffic_cycle_reset"] = now

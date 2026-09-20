@@ -20,6 +20,9 @@ func (s *Service) ResetTraffic(id uint) (*models.ProxyUser, error) {
 	if err := s.db.Model(u).Select("TrafficUsed", "UploadBytes", "DownloadBytes").Updates(u).Error; err != nil {
 		return nil, fmt.Errorf("reset traffic: %w", err)
 	}
+	if err := s.db.Unscoped().Where("proxy_user_id = ?", id).Delete(&models.UserNodeTraffic{}).Error; err != nil {
+		return nil, fmt.Errorf("reset node traffic: %w", err)
+	}
 	if err := s.notifyCredentialsChanged(); err != nil {
 		return u, fmt.Errorf("traffic reset, but Mihomo configuration could not be updated: %w", err)
 	}

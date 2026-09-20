@@ -23,4 +23,8 @@ type Listener struct {
 	AccessSNI         string `gorm:"type:varchar(255);column:access_sni" json:"access_sni,omitempty"`
 	ClientFingerprint string `gorm:"type:varchar(64)" json:"client_fingerprint,omitempty"`
 	AccessALPN        string `gorm:"type:varchar(255);column:access_alpn" json:"access_alpn,omitempty"`
+
+	// TrafficMultiplier scales raw bytes toward the user's traffic quota (default 1).
+	// Example: 1.5 means 1 byte transferred counts as 1.5 against traffic_limit.
+	TrafficMultiplier float64 `gorm:"not null;default:1" json:"traffic_multiplier"`
 }

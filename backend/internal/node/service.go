@@ -41,6 +41,9 @@ func (s *Service) SetRegenerator(r ConfigRegenerator) {
 }
 
 func (s *Service) Create(l *models.Listener) error {
+	if l.TrafficMultiplier <= 0 {
+		l.TrafficMultiplier = 1
+	}
 	if err := ValidateNode(l); err != nil {
 		return err
 	}
@@ -76,6 +79,9 @@ func (s *Service) GetByID(id uint) (*models.Listener, error) {
 }
 
 func (s *Service) Update(l *models.Listener) error {
+	if l.TrafficMultiplier <= 0 {
+		l.TrafficMultiplier = 1
+	}
 	if err := ValidateNode(l); err != nil {
 		return err
 	}

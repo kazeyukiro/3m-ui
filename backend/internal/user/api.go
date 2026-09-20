@@ -43,6 +43,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/:id/remote-nodes", h.ListRemoteNodes)
 	rg.GET("/:id/nodes", h.GetListeners)
 	rg.POST("/:id/reset-traffic", h.ResetTraffic)
+	rg.GET("/:id/node-traffic", h.ListNodeTraffic)
 	rg.GET("/:id/subscription", h.GetSubscription)
 	rg.POST("/:id/subscription/rotate", h.RotateSubscription)
 	rg.GET("/:id/hwid-devices", h.ListHWIDDevices)
@@ -455,4 +456,51 @@ func (h *Handler) ClearHWIDDevices(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) ListNodeTraffic(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if h.svc == nil || h.svc.DB() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "service unavailable"})
+		return
+	}
+	var rows []models.UserNodeTraffic
+	if err := h.svc.DB().Where("proxy_user_id = ?", id).Order("traffic_used desc").Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	type item struct {
+		ListenerID     uint    `json:"listener_id"`
+		ListenerName   string  `json:"listener_name"`
+		UploadBytes    int64   `json:"upload_bytes"`
+		DownloadBytes  int64   `json:"download_bytes"`
+		TrafficUsed    int64   `json:"traffic_used"`
+		Multiplier     float64 `json:"multiplier"`
+		BilledUpload   int64   `json:"billed_upload"`
+		BilledDownload int64   `json:"billed_download"`
+		BilledUsed     int64   `json:"billed_used"`
+	}
+	out := make([]item, 0, len(rows))
+	for _, r := range rows {
+		name := ""
+		mult := 1.0
+		var lis models.Listener
+		if err := h.svc.DB().Select("id", "name", "traffic_multiplier").First(&lis, r.ListenerID).Error; err == nil {
+			name = lis.Name
+			if lis.TrafficMultiplier > 0 {
+				mult = lis.TrafficMultiplier
+			}
+		}
+		bu := int64(float64(r.UploadBytes)*mult + 0.5)
+		bd := int64(float64(r.DownloadBytes)*mult + 0.5)
+		out = append(out, item{
+			ListenerID: r.ListenerID, ListenerName: name,
+			UploadBytes: r.UploadBytes, DownloadBytes: r.DownloadBytes, TrafficUsed: r.TrafficUsed,
+			Multiplier: mult, BilledUpload: bu, BilledDownload: bd, BilledUsed: bu + bd,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"items": out})
 }

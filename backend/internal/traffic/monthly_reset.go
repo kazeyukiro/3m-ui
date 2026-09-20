@@ -34,17 +34,12 @@ func MaybeResetMonthlyTraffic(db *gorm.DB) {
 		return
 	}
 
-	// Claim the day BEFORE resetting traffic. If the reset itself fails (e.g.
-	// DB locked), the next tick will see today already claimed and skip the
-	// reset rather than double-counting. If the claim fails, do not reset —
-	// safer to skip a day than to reset twice.
 	var claimed bool
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var existing models.PanelSetting
 		err := tx.Where("key = ?", "traffic_reset_last").First(&existing).Error
 		if err == nil {
 			if existing.Value == today {
-				// Another worker already claimed today.
 				return nil
 			}
 			existing.Value = today
@@ -67,7 +62,6 @@ func MaybeResetMonthlyTraffic(db *gorm.DB) {
 		return
 	}
 	if !claimed {
-		// Another worker already claimed today within the transaction.
 		return
 	}
 
@@ -77,8 +71,9 @@ func MaybeResetMonthlyTraffic(db *gorm.DB) {
 		"download_bytes": 0,
 	})
 	if res.Error != nil {
-		log.Printf("traffic: monthly reset failed (day already claimed): %v", res.Error)
+		log.Printf("traffic: monthly reset failed: %v", res.Error)
 		return
 	}
+	_ = ClearAllNodeTraffic(db)
 	log.Printf("traffic: monthly reset applied for day %d (%d users)", day, res.RowsAffected)
 }

@@ -3,12 +3,12 @@ import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, TabletOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, TabletOutlined, FundOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
   fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
-  fetchUserHWIDDevices, deleteUserHWIDDevice, clearUserHWIDDevices, type HWIDDevice,
+  fetchUserHWIDDevices, deleteUserHWIDDevice, clearUserHWIDDevices, fetchUserNodeTraffic, type HWIDDevice, type UserNodeTrafficItem,
 } from '../api/users';
 import { fetchListeners, Listener } from '../api/nodes';
 import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
@@ -32,6 +32,10 @@ const Users: React.FC = () => {
   const [hwidUser, setHwidUser] = useState<ProxyUser | null>(null);
   const [hwidRows, setHwidRows] = useState<HWIDDevice[]>([]);
   const [hwidLoading, setHwidLoading] = useState(false);
+  const [nodeTrafficOpen, setNodeTrafficOpen] = useState(false);
+  const [nodeTrafficUser, setNodeTrafficUser] = useState<ProxyUser | null>(null);
+  const [nodeTrafficRows, setNodeTrafficRows] = useState<UserNodeTrafficItem[]>([]);
+  const [nodeTrafficLoading, setNodeTrafficLoading] = useState(false);
   const [editing, setEditing] = useState<ProxyUser | null>(null);
   const [form] = Form.useForm();
   const [keyword, setKeyword] = useState('');
@@ -149,6 +153,21 @@ const Users: React.FC = () => {
       message.error(e?.message || t('common.error'));
     } finally {
       setHwidLoading(false);
+    }
+  };
+
+  const openNodeTraffic = async (record: ProxyUser) => {
+    setNodeTrafficUser(record);
+    setNodeTrafficOpen(true);
+    setNodeTrafficLoading(true);
+    try {
+      const data = await fetchUserNodeTraffic(record.id);
+      setNodeTrafficRows(data.items || []);
+    } catch (e: any) {
+      message.error(e?.message || t('common.error'));
+      setNodeTrafficRows([]);
+    } finally {
+      setNodeTrafficLoading(false);
     }
   };
 
@@ -345,6 +364,7 @@ const Users: React.FC = () => {
             </Popconfirm>
           </Tooltip>
           <Button size="small" icon={<TabletOutlined />} onClick={() => openHwid(record)} title={t('users.devices', 'Devices')} aria-label={t('users.devices', 'Devices')} />
+          <Button size="small" icon={<FundOutlined />} onClick={() => openNodeTraffic(record)} title={t('users.nodeTraffic', 'Node traffic')} aria-label={t('users.nodeTraffic', 'Node traffic')} />
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
             <Button size="small" icon={<DeleteOutlined />} danger />
@@ -862,6 +882,35 @@ const Users: React.FC = () => {
         ]}
       />
     </Modal>
+      <Modal
+        open={nodeTrafficOpen}
+        title={nodeTrafficUser ? `${t('users.nodeTraffic', 'Node traffic')} — ${nodeTrafficUser.username}` : t('users.nodeTraffic', 'Node traffic')}
+        onCancel={() => setNodeTrafficOpen(false)}
+        footer={<Button onClick={() => setNodeTrafficOpen(false)}>{t('common.close') || 'Close'}</Button>}
+        width={720}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
+          {t('users.nodeTrafficHint') || 'Raw bytes per node; billed = raw × node traffic multiplier (counts toward user quota).'}
+        </p>
+        <Table
+          size="small"
+          loading={nodeTrafficLoading}
+          rowKey="listener_id"
+          dataSource={nodeTrafficRows}
+          pagination={false}
+          scroll={{ x: 560 }}
+          locale={{ emptyText: t('common.empty') || 'No data' }}
+          columns={[
+            { title: t('listeners.name') || 'Node', dataIndex: 'listener_name', ellipsis: true },
+            { title: t('users.multiplier') || '×', dataIndex: 'multiplier', width: 56, render: (v: number) => (v != null ? v : 1) },
+            { title: t('users.rawUsed') || 'Raw', dataIndex: 'traffic_used', width: 100, render: (v: number) => formatBytes(v || 0) },
+            { title: t('users.billedUsed') || 'Billed', dataIndex: 'billed_used', width: 100, render: (v: number) => formatBytes(v || 0) },
+            { title: t('users.upload') || '↑', dataIndex: 'upload_bytes', width: 90, render: (v: number) => formatBytes(v || 0) },
+            { title: t('users.download') || '↓', dataIndex: 'download_bytes', width: 90, render: (v: number) => formatBytes(v || 0) },
+          ]}
+        />
+      </Modal>
 
     </div>
   );

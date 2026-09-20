@@ -5,6 +5,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UserService struct {
@@ -15,40 +16,115 @@ func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{db: db}
 }
 
-// AddSample records an incremental (per-tick delta, not cumulative) upload
-// and download sample for a proxy user: it appends a TrafficRecord history
-// row and updates ProxyUser's cumulative counters (TrafficUsed,
-// UploadBytes, DownloadBytes) plus LastSeen/Online when online is true.
-func (s *UserService) AddSample(userID uint, up, down int64, online bool) error {
-	record := &models.TrafficRecord{
-		ProxyUserID:   userID,
-		UploadBytes:   up,
-		DownloadBytes: down,
-		Online:        online,
-	}
-	if err := s.db.Create(record).Error; err != nil {
-		return err
-	}
-
-	updates := map[string]any{
-		"traffic_used":   gorm.Expr("traffic_used + ?", up+down),
-		"upload_bytes":   gorm.Expr("upload_bytes + ?", up),
-		"download_bytes": gorm.Expr("download_bytes + ?", down),
-	}
-	if online {
-		now := time.Now()
-		updates["last_seen"] = now
-		updates["online"] = true
-	}
-
-	return s.db.Model(&models.ProxyUser{}).
-		Where("id = ?", userID).
-		Updates(updates).Error
+// NodeDelta is raw byte growth on one listener for one user in a collection tick.
+type NodeDelta struct {
+	ListenerID uint
+	Up, Down   int64
+	Multiplier float64
 }
 
-// MarkOnline sets online=true and refreshes last_seen for users that have an
-// attributed connection this tick, even when traffic deltas are zero (idle
-// keep-alive). Without this, a connected user with no byte transfer stays offline.
+func clampMultiplier(m float64) float64 {
+	if m <= 0 {
+		return 1
+	}
+	if m > 100 {
+		return 100
+	}
+	return m
+}
+
+func billable(raw int64, mult float64) int64 {
+	mult = clampMultiplier(mult)
+	if raw == 0 {
+		return 0
+	}
+	return int64(float64(raw)*mult + 0.5)
+}
+
+// AddSample records global counters (multiplier already applied by caller for billable totals).
+func (s *UserService) AddSample(userID uint, up, down int64, online bool) error {
+	return s.AddSampleDetailed(userID, up, down, nil, online)
+}
+
+// AddSampleDetailed updates user billable totals and optional per-node raw counters.
+// up/down must already be billable (after node multipliers). nodeParts carry raw bytes.
+func (s *UserService) AddSampleDetailed(userID uint, billedUp, billedDown int64, nodeParts []NodeDelta, online bool) error {
+	if billedUp == 0 && billedDown == 0 && len(nodeParts) == 0 {
+		return nil
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if billedUp != 0 || billedDown != 0 {
+			record := &models.TrafficRecord{
+				ProxyUserID:   userID,
+				UploadBytes:   billedUp,
+				DownloadBytes: billedDown,
+				Online:        online,
+			}
+			if err := tx.Create(record).Error; err != nil {
+				return err
+			}
+			updates := map[string]any{
+				"traffic_used":   gorm.Expr("traffic_used + ?", billedUp+billedDown),
+				"upload_bytes":   gorm.Expr("upload_bytes + ?", billedUp),
+				"download_bytes": gorm.Expr("download_bytes + ?", billedDown),
+			}
+			if online {
+				now := time.Now()
+				updates["last_seen"] = now
+				updates["online"] = true
+			}
+			if err := tx.Model(&models.ProxyUser{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		for _, p := range nodeParts {
+			if p.ListenerID == 0 || (p.Up == 0 && p.Down == 0) {
+				continue
+			}
+			raw := p.Up + p.Down
+			row := models.UserNodeTraffic{
+				ProxyUserID:   userID,
+				ListenerID:    p.ListenerID,
+				UploadBytes:   p.Up,
+				DownloadBytes: p.Down,
+				TrafficUsed:   raw,
+			}
+			// Upsert then add deltas when row already exists.
+			err := tx.Clauses(clause.OnConflict{
+				Columns: []clause.Column{{Name: "proxy_user_id"}, {Name: "listener_id"}},
+				DoUpdates: clause.Assignments(map[string]interface{}{
+					"upload_bytes":   gorm.Expr("upload_bytes + ?", p.Up),
+					"download_bytes": gorm.Expr("download_bytes + ?", p.Down),
+					"traffic_used":   gorm.Expr("traffic_used + ?", raw),
+					"updated_at":     time.Now().UTC(),
+				}),
+			}).Create(&row).Error
+			if err != nil {
+				// Fallback without OnConflict
+				var existing models.UserNodeTraffic
+				qerr := tx.Where("proxy_user_id = ? AND listener_id = ?", userID, p.ListenerID).First(&existing).Error
+				if qerr == gorm.ErrRecordNotFound {
+					if cerr := tx.Create(&row).Error; cerr != nil {
+						return cerr
+					}
+					continue
+				}
+				if qerr != nil {
+					return qerr
+				}
+				if err := tx.Model(&existing).Updates(map[string]any{
+					"upload_bytes":   gorm.Expr("upload_bytes + ?", p.Up),
+					"download_bytes": gorm.Expr("download_bytes + ?", p.Down),
+					"traffic_used":   gorm.Expr("traffic_used + ?", raw),
+				}).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
 func (s *UserService) MarkOnline(userIDs []uint) error {
 	if len(userIDs) == 0 {
 		return nil
@@ -62,16 +138,22 @@ func (s *UserService) MarkOnline(userIDs []uint) error {
 		}).Error
 }
 
-// MarkOffline clears the Online flag for every proxy user not present in
-// the given set of currently-active user IDs. Called once per collection
-// tick after AddSample/MarkOnline has marked the currently-seen users online.
-// An empty active set marks every currently-online user offline.
 func (s *UserService) MarkOffline(activeUserIDs []uint) error {
 	q := s.db.Model(&models.ProxyUser{}).Where("online = ?", true)
 	if len(activeUserIDs) > 0 {
 		q = q.Where("id NOT IN ?", activeUserIDs)
 	}
 	return q.Update("online", false).Error
+}
+
+// ClearNodeTraffic removes per-node counters for a user (e.g. after reset).
+func (s *UserService) ClearNodeTraffic(userID uint) error {
+	return s.db.Unscoped().Where("proxy_user_id = ?", userID).Delete(&models.UserNodeTraffic{}).Error
+}
+
+// ClearAllNodeTraffic clears every per-node counter (monthly global reset).
+func ClearAllNodeTraffic(db *gorm.DB) error {
+	return db.Unscoped().Where("1 = 1").Delete(&models.UserNodeTraffic{}).Error
 }
 
 func IsExpired(u models.ProxyUser) bool {

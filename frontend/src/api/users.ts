@@ -105,3 +105,19 @@ export const deleteUserHWIDDevice = (userId: number, deviceId: number) =>
   client.delete(`/users/${userId}/hwid-devices/${deviceId}`);
 export const clearUserHWIDDevices = (userId: number) =>
   client.delete(`/users/${userId}/hwid-devices`);
+
+
+export interface UserNodeTrafficItem {
+  listener_id: number;
+  listener_name: string;
+  upload_bytes: number;
+  download_bytes: number;
+  traffic_used: number;
+  multiplier: number;
+  billed_upload: number;
+  billed_download: number;
+  billed_used: number;
+}
+
+export const fetchUserNodeTraffic = (userId: number) =>
+  client.get<{ items: UserNodeTrafficItem[] }>(`/users/${userId}/node-traffic`).then((r) => r.data);

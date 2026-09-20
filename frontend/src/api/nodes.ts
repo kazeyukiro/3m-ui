@@ -22,6 +22,7 @@ export interface Listener {
   created_at?: string;
   /** Per-node Access Profile (m-ui) */
   public_host?: string;
+  traffic_multiplier?: number;
   public_port?: string;
   access_sni?: string;
   client_fingerprint?: string;

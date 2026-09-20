@@ -103,7 +103,7 @@ func (c *Collector) CollectOnce() error {
 		trafficAvailable = true
 	}
 
-	listenerNameToID, listenerIDToName, err := c.loadListeners()
+	listenerNameToID, listenerIDToName, listenerMultMap, err := c.loadListeners()
 	if err != nil {
 		return fmt.Errorf("load listeners: %w", err)
 	}
@@ -124,9 +124,17 @@ func (c *Collector) CollectOnce() error {
 	views := make([]ConnectionView, 0, len(connResp.Connections))
 
 	type userDelta struct {
-		up, down int64
+		up, down int64 // billable (after multiplier)
+	}
+	type nodeKey struct {
+		uid, lid uint
 	}
 	userDeltas := make(map[uint]userDelta)
+	nodeDeltas := make(map[nodeKey]struct{ up, down int64 })
+	listenerMult := listenerMultMap
+	if listenerMult == nil {
+		listenerMult = make(map[uint]float64)
+	}
 	activeUserIDs := make([]uint, 0)
 	seenUser := make(map[uint]bool)
 
@@ -204,9 +212,20 @@ func (c *Collector) CollectOnce() error {
 		if proxyUserID != nil {
 			view.ProxyUserID = proxyUserID
 			view.Username = idToName[*proxyUserID]
+			mult := 1.0
+			if listenerID != nil {
+				if m, ok := listenerMult[*listenerID]; ok {
+					mult = m
+				}
+				nk := nodeKey{uid: *proxyUserID, lid: *listenerID}
+				nd := nodeDeltas[nk]
+				nd.up += deltaUp
+				nd.down += deltaDown
+				nodeDeltas[nk] = nd
+			}
 			d := userDeltas[*proxyUserID]
-			d.up += deltaUp
-			d.down += deltaDown
+			d.up += billable(deltaUp, mult)
+			d.down += billable(deltaDown, mult)
 			userDeltas[*proxyUserID] = d
 			if !seenUser[*proxyUserID] {
 				seenUser[*proxyUserID] = true
@@ -217,16 +236,27 @@ func (c *Collector) CollectOnce() error {
 		views = append(views, view)
 	}
 
-	// Persist per-user deltas when traffic moved this tick.
-	for uid, d := range userDeltas {
-		if d.up == 0 && d.down == 0 {
+	// Group node deltas by user for detailed samples.
+	nodesByUser := make(map[uint][]NodeDelta)
+	for nk, nd := range nodeDeltas {
+		if nd.up == 0 && nd.down == 0 {
 			continue
 		}
-		if err := c.userSvc.AddSample(uid, d.up, d.down, true); err != nil {
-			// Don't abort the whole collection cycle for one user's DB error:
-			// other users' deltas would be lost and the global snapshot below
-			// would never run, leaving the dashboard stale. Log via the wrapped
-			// error and keep going so the remaining users are still processed.
+		mult := 1.0
+		if m, ok := listenerMult[nk.lid]; ok {
+			mult = m
+		}
+		nodesByUser[nk.uid] = append(nodesByUser[nk.uid], NodeDelta{
+			ListenerID: nk.lid, Up: nd.up, Down: nd.down, Multiplier: mult,
+		})
+	}
+	// Persist per-user deltas when traffic moved this tick.
+	for uid, d := range userDeltas {
+		parts := nodesByUser[uid]
+		if d.up == 0 && d.down == 0 && len(parts) == 0 {
+			continue
+		}
+		if err := c.userSvc.AddSampleDetailed(uid, d.up, d.down, parts, true); err != nil {
 			log.Printf("traffic: record sample for user %d failed: %v", uid, err)
 			continue
 		}
@@ -270,21 +300,24 @@ func (c *Collector) CurrentConnections() []ConnectionView {
 	return out
 }
 
-func (c *Collector) loadListeners() (nameToID map[string]uint, idToName map[uint]string, err error) {
+func (c *Collector) loadListeners() (nameToID map[string]uint, idToName map[uint]string, mult map[uint]float64, err error) {
 	var rows []struct {
-		ID   uint
-		Name string
+		ID                uint
+		Name              string
+		TrafficMultiplier float64
 	}
-	if err := c.db.Model(&models.Listener{}).Select("id, name").Find(&rows).Error; err != nil {
-		return nil, nil, err
+	if err := c.db.Model(&models.Listener{}).Select("id", "name", "traffic_multiplier").Find(&rows).Error; err != nil {
+		return nil, nil, nil, err
 	}
 	nameToID = make(map[string]uint, len(rows))
 	idToName = make(map[uint]string, len(rows))
+	mult = make(map[uint]float64, len(rows))
 	for _, r := range rows {
 		nameToID[r.Name] = r.ID
 		idToName[r.ID] = r.Name
+		mult[r.ID] = clampMultiplier(r.TrafficMultiplier)
 	}
-	return nameToID, idToName, nil
+	return nameToID, idToName, mult, nil
 }
 
 // loadListenerUsers returns, for each Listener ID, the ProxyUser IDs bound
