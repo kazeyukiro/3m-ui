@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -61,6 +62,10 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		); retryErr != nil {
 			return nil, fmt.Errorf("failed to run database auto-migration: %w (after dedupe retry)", retryErr)
 		}
+	}
+
+	if err := ensureHWIDDeviceSchema(db); err != nil {
+		return nil, fmt.Errorf("ensure hwid_devices schema: %w", err)
 	}
 
 	GlobalDB = db
@@ -147,4 +152,49 @@ func randomHexToken(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// ensureHWIDDeviceSchema fixes tables created before explicit column tags.
+// GORM previously mapped HWID -> h_w_i_d and table HWIDDevice -> hw_id_devices,
+// so lookups on "hwid" failed with "no such column".
+func ensureHWIDDeviceSchema(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	// Drop legacy / broken tables that lack a real "hwid" column.
+	for _, name := range []string{"hw_id_devices", "hwid_devices"} {
+		if !db.Migrator().HasTable(name) {
+			continue
+		}
+		var n int
+		// PRAGMA table_info works on SQLite (panel default).
+		rows, err := db.Raw("PRAGMA table_info(`" + name + "`)").Rows()
+		if err != nil {
+			// Non-SQLite: try AutoMigrate only.
+			break
+		}
+		hasHWID := false
+		for rows.Next() {
+			var cid int
+			var cname, ctype string
+			var notnull, pk int
+			var dflt interface{}
+			if scanErr := rows.Scan(&cid, &cname, &ctype, &notnull, &dflt, &pk); scanErr != nil {
+				_ = rows.Close()
+				return scanErr
+			}
+			if cname == "hwid" {
+				hasHWID = true
+			}
+			n++
+		}
+		_ = rows.Close()
+		if n > 0 && !hasHWID {
+			log.Printf("database: dropping broken HWID table %s (missing column hwid)", name)
+			if err := db.Exec("DROP TABLE IF EXISTS `" + name + "`").Error; err != nil {
+				return err
+			}
+		}
+	}
+	return db.AutoMigrate(&models.HWIDDevice{})
 }
