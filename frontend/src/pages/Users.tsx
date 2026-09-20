@@ -607,9 +607,11 @@ const Users: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <Dropdown
-                        menu=
-                            { key: 'edit',
+                                            <Dropdown
+                        menu={{
+                          items: [
+                            {
+                              key: 'edit',
                               icon: <EditOutlined />,
                               label: t('common.edit'),
                               onClick: () => {
@@ -626,15 +628,21 @@ const Users: React.FC = () => {
                                       ? dayjs(record.expire_time)
                                       : undefined,
                                   ip_limit: record.ip_limit || 0,
-                                                              sub_pull_limit: record.sub_pull_limit || 0,
+                                  sub_pull_limit: record.sub_pull_limit || 0,
                                   remark: record.remark,
-                            group: record.group || '',
-                            tags: record.tags || '',
-                            traffic_reset_days: record.traffic_reset_days || 0,
-                            expire_renew_days: record.expire_renew_days || 0,
+                                  group: record.group || '',
+                                  tags: record.tags || '',
+                                  traffic_reset_days: record.traffic_reset_days || 0,
+                                  expire_renew_days: record.expire_renew_days || 0,
                                 });
                                 setModalOpen(true);
                               },
+                            },
+                            {
+                              key: 'nodeTraffic',
+                              icon: <FundOutlined />,
+                              label: t('users.nodeTraffic', 'Node traffic'),
+                              onClick: () => openNodeTraffic(record),
                             },
                             {
                               key: 'nodes',
@@ -648,7 +656,7 @@ const Users: React.FC = () => {
                               label: t('users.resetTraffic') || 'Reset traffic',
                               onClick: () => onResetTraffic(record.id),
                             },
-                            { type: 'divider' },
+                            { type: 'divider' as const },
                             {
                               key: 'del',
                               icon: <DeleteOutlined />,

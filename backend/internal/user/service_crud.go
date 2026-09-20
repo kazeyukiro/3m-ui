@@ -169,7 +169,6 @@ func (s *Service) Update(id uint, in UpdateInput) (*models.ProxyUser, error) {
 	if in.IPLimit != nil {
 		u.IPLimit = max0(*in.IPLimit)
 	}
-	}
 	if in.SubPullLimit != nil {
 		u.SubPullLimit = max0(*in.SubPullLimit)
 	}
