@@ -268,7 +268,8 @@ const Listeners: React.FC = () => {
 const columns = [
     { title: t('listeners.name'), dataIndex: 'name', key: 'name', ellipsis: true, width: 150 },
     { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', width: 100, render: (p: string) => <Tag>{p}</Tag> },
-    { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 90 },
+    { title: t('listeners.trafficMultiplier') || '×', dataIndex: 'traffic_multiplier', width: 72, render: (v: number) => (v != null && v > 0 ? v : 1) },
+      { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 90 },
     { title: runtimeText.enabledSetting, dataIndex: 'enabled', key: 'enabled', width: 90, render: (v: boolean) => <Tag color={v ? 'blue' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
     { title: runtimeText.title, key: 'runtime', width: 170, render: (_: unknown, record: Listener) => <div>
       <ListenerRuntimeTag enabled={record.enabled} status={statuses[record.id]} checking={testing.includes(record.id)} onClick={() => showRuntime(record)} />

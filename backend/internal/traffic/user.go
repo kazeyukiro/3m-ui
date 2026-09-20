@@ -128,7 +128,7 @@ func (s *UserService) AddSampleDetailed(userID uint, billedUp, billedDown int64,
 // OnlineGrace keeps a user marked online for this long after the last tick
 // that saw an attributed connection. Without it, a single empty /connections
 // snapshot (common during brief idle or API blips) flips the UI to offline.
-const OnlineGrace = 60 * time.Second
+const OnlineGrace = 5 * time.Minute
 
 func (s *UserService) MarkOnline(userIDs []uint) error {
 	if len(userIDs) == 0 {

@@ -51,7 +51,7 @@ const Users: React.FC = () => {
     if (!ls) return false;
     const t0 = new Date(ls).getTime();
     if (!Number.isFinite(t0)) return false;
-    return Date.now() - t0 < 60_000;
+    return Date.now() - t0 < 5 * 60_000;
   };
 
     const load = async () => {

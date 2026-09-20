@@ -47,6 +47,23 @@ type SafeUser struct {
 	TelegramName          string     `json:"telegram_name"`
 }
 
+// OnlineDisplayGrace: list/API "online" if last activity within this window.
+const OnlineDisplayGrace = 5 * time.Minute
+
+// IsEffectivelyOnline reports whether the user should show as online in the UI.
+func IsEffectivelyOnline(u *models.ProxyUser) bool {
+	if u == nil {
+		return false
+	}
+	if u.Online {
+		return true
+	}
+	if u.LastSeen == nil || u.LastSeen.IsZero() {
+		return false
+	}
+	return time.Since(*u.LastSeen) < OnlineDisplayGrace
+}
+
 func ToSafeUser(u *models.ProxyUser) SafeUser {
 	return SafeUser{
 		ID:                    u.ID,
@@ -57,7 +74,7 @@ func ToSafeUser(u *models.ProxyUser) SafeUser {
 		UploadBytes:           u.UploadBytes,
 		DownloadBytes:         u.DownloadBytes,
 		LastSeen:              u.LastSeen,
-		Online:                u.Online,
+		Online:                IsEffectivelyOnline(u),
 		ExpireTime:            u.ExpireTime,
 		Enabled:               u.Enabled,
 		Blocked:               !IsCredentialActive(*u),
