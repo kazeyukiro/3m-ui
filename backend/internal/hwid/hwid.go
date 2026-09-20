@@ -10,6 +10,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Happ / Remnawave-compatible request headers for subscription import.
@@ -20,11 +21,12 @@ const (
 	HeaderDeviceModel = "x-device-model"
 )
 
-// Response headers when device limit is active.
+// Response headers when device limit is active (Remnawave / v2rayTUN compatible).
 const (
 	HeaderActive            = "x-hwid-active"
 	HeaderNotSupported      = "x-hwid-not-supported"
 	HeaderMaxDevicesReached = "x-hwid-max-devices-reached"
+	HeaderLimitFlag         = "x-hwid-limit" // v2rayTUN expects this when limit is on
 )
 
 const maxHWIDLen = 128
@@ -34,6 +36,14 @@ var (
 	ErrMaxDevices = errors.New("hwid device limit reached")
 	ErrRequired   = errors.New("hwid required when device limit is enabled")
 )
+
+// Alternate request header names some clients use.
+var hwidHeaderAliases = []string{
+	HeaderHWID,
+	"x-device-id",
+	"x-hardware-id",
+	"hwid",
+}
 
 type DeviceInfo struct {
 	HWID        string
@@ -48,14 +58,25 @@ func ParseRequest(r *http.Request) DeviceInfo {
 	if r == nil {
 		return DeviceInfo{}
 	}
-	raw := strings.TrimSpace(r.Header.Get(HeaderHWID))
+	raw := ""
+	for _, h := range hwidHeaderAliases {
+		if v := strings.TrimSpace(r.Header.Get(h)); v != "" {
+			raw = v
+			break
+		}
+	}
 	if raw == "" && r.URL != nil {
-		raw = strings.TrimSpace(r.URL.Query().Get("hwid"))
+		for _, q := range []string{"hwid", "x-hwid", "device_id"} {
+			if v := strings.TrimSpace(r.URL.Query().Get(q)); v != "" {
+				raw = v
+				break
+			}
+		}
 	}
 	info := DeviceInfo{
-		DeviceOS:    strings.TrimSpace(r.Header.Get(HeaderDeviceOS)),
-		VerOS:       strings.TrimSpace(r.Header.Get(HeaderVerOS)),
-		DeviceModel: strings.TrimSpace(r.Header.Get(HeaderDeviceModel)),
+		DeviceOS:    firstHeader(r, HeaderDeviceOS, "x-os", "device-os"),
+		VerOS:       firstHeader(r, HeaderVerOS, "x-os-version", "x-ver-os"),
+		DeviceModel: firstHeader(r, HeaderDeviceModel, "x-model", "device-model"),
 		UserAgent:   strings.TrimSpace(r.UserAgent()),
 	}
 	if id, ok := normalizeHWID(raw); ok {
@@ -63,6 +84,15 @@ func ParseRequest(r *http.Request) DeviceInfo {
 		info.Present = true
 	}
 	return info
+}
+
+func firstHeader(r *http.Request, names ...string) string {
+	for _, n := range names {
+		if v := strings.TrimSpace(r.Header.Get(n)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func normalizeHWID(raw string) (string, bool) {
@@ -93,8 +123,12 @@ func normalizeHWID(raw string) (string, bool) {
 
 // Enforce applies HWID policy for a subscription fetch.
 //
-// limit <= 0: never deny. Best-effort device tracking only; DB errors ignored.
-// limit > 0: require x-hwid; deny new devices when at capacity; known devices always OK.
+// Devices are recorded only when the client actually sends a usable device id
+// (Happ / v2rayTun / Remnawave-compatible). Clash Meta / v2rayNG without HWID
+// support will never appear in the device list — that is expected.
+//
+// limit <= 0: never deny; best-effort track.
+// limit > 0: require x-hwid; deny new devices when at capacity.
 func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Header) error {
 	if db == nil || userID == 0 {
 		return nil
@@ -102,6 +136,7 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 	active := limit > 0
 	if active && hdr != nil {
 		hdr.Set(HeaderActive, "true")
+		hdr.Set(HeaderLimitFlag, "true")
 	}
 
 	if !info.Present {
@@ -116,13 +151,13 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 
 	now := time.Now().UTC()
 
-	// Existing device (including soft-deleted) → refresh and allow.
 	var existing models.HWIDDevice
 	qerr := db.Unscoped().Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&existing).Error
 	if qerr == nil {
 		if err := touchDevice(db, &existing, info, now); err != nil {
-			log.Printf("hwid: touch user=%d: %v", userID, err)
-			// Still allow — device is known.
+			log.Printf("hwid: touch user=%d hwid=%q: %v", userID, info.HWID, err)
+		} else {
+			log.Printf("hwid: seen user=%d hwid=%q os=%q model=%q", userID, info.HWID, info.DeviceOS, info.DeviceModel)
 		}
 		return nil
 	}
@@ -131,16 +166,14 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 		if !active {
 			return nil
 		}
-		// Active limit but cannot read DB → fail open to avoid mass 500.
 		return nil
 	}
 
-	// New device
 	if active {
 		var count int64
 		if err := db.Model(&models.HWIDDevice{}).Where("proxy_user_id = ?", userID).Count(&count).Error; err != nil {
 			log.Printf("hwid: count user=%d: %v", userID, err)
-			return nil // fail open
+			return nil
 		}
 		if int(count) >= limit {
 			if hdr != nil {
@@ -159,19 +192,29 @@ func Enforce(db *gorm.DB, userID uint, limit int, info DeviceInfo, hdr http.Head
 		UserAgent:   truncate(info.UserAgent, 512),
 		LastSeenAt:  now,
 	}
-	if err := db.Create(&row).Error; err != nil {
-		if isUniqueConflict(err) {
-			// Concurrent insert — treat as known.
-			var raced models.HWIDDevice
-			if e2 := db.Unscoped().Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&raced).Error; e2 == nil {
-				_ = touchDevice(db, &raced, info, now)
-				return nil
+	// Upsert-friendly create: on unique race, treat as known.
+	err := db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "proxy_user_id"}, {Name: "hwid"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"device_os", "ver_os", "device_model", "user_agent", "last_seen_at", "deleted_at", "updated_at",
+		}),
+	}).Create(&row).Error
+	if err != nil {
+		// Fallback without OnConflict (older SQLite / driver quirks).
+		if err2 := db.Create(&row).Error; err2 != nil {
+			if isUniqueConflict(err2) {
+				var raced models.HWIDDevice
+				if e3 := db.Unscoped().Where("proxy_user_id = ? AND hwid = ?", userID, info.HWID).First(&raced).Error; e3 == nil {
+					_ = touchDevice(db, &raced, info, now)
+					log.Printf("hwid: race-resolved user=%d hwid=%q", userID, info.HWID)
+					return nil
+				}
 			}
+			log.Printf("hwid: create failed user=%d hwid=%q: %v (onconflict: %v)", userID, info.HWID, err2, err)
+			return nil
 		}
-		log.Printf("hwid: create user=%d hwid=%q: %v", userID, info.HWID, err)
-		// Unlimited: never block. Limited + under count: fail open (already passed count).
-		return nil
 	}
+	log.Printf("hwid: registered user=%d hwid=%q os=%q model=%q", userID, info.HWID, info.DeviceOS, info.DeviceModel)
 	return nil
 }
 

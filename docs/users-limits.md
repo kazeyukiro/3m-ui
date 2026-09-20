@@ -37,3 +37,23 @@ HTML subscription pages and client downloads both count.
 
 - User CRUD: `ip_limit`, `hwid_limit`, `sub_pull_limit` on create/update
 - Subscription: public `/api/v1/client/sub/{token}` (and aliases)
+
+
+## Why is the device list empty?
+
+HWID is recorded **only when a client fetches the user subscription URL** and sends a device id header (typically `x-hwid`).
+
+| Client | Usually sends `x-hwid`? |
+|--------|-------------------------|
+| Happ | Yes (on subscription update) |
+| v2RayTun | Yes (when HWID feature enabled) |
+| FlClashX / some Remnawave forks | Yes |
+| Clash Meta / mihomo / v2rayNG / NekoBox (stock) | **No** — will never appear in device list |
+
+Also check:
+
+1. You opened the **user** subscription link (`/api/v1/client/sub/{token}`), not an access-token or single-node URI.
+2. After enabling HWID support in the app, **force update** the subscription (not only connect).
+3. Reverse proxies must forward `x-hwid` / `x-device-os` / `x-device-model` (do not strip unknown headers).
+4. Panel log lines `hwid: registered` / `hwid: seen` confirm the server received the header.
+
