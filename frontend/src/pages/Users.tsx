@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, TabletOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
@@ -344,7 +344,7 @@ const Users: React.FC = () => {
               <Button size="small" icon={<ClearOutlined />} />
             </Popconfirm>
           </Tooltip>
-          <Button size="small" onClick={() => openHwid(record)}>{t('users.devices', 'Devices')}</Button>
+          <Button size="small" icon={<TabletOutlined />} onClick={() => openHwid(record)} title={t('users.devices', 'Devices')} aria-label={t('users.devices', 'Devices')} />
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
             <Button size="small" icon={<DeleteOutlined />} danger />
