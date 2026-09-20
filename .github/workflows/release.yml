@@ -1,22 +1,35 @@
 name: Release stable or release candidate
+
+# Ways to release:
+# 1) Push a SemVer tag:  git tag v1.3.5 && git push origin v1.3.5
+# 2) GitHub web UI → Actions → "Release stable or release candidate" → Run workflow
+#      Version: 1.3.5 or v1.3.5 (required)
+#      Ref:     branch or SHA to tag (default main)
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing SemVer tag to build (v1.2.3 or v1.3.0-rc.1)
+      version:
+        description: "Version to release (1.3.5 or v1.3.5; RC e.g. 1.4.0-rc.1)"
         required: true
         type: string
+      ref:
+        description: "Git ref to tag (branch name or commit SHA). Default: main"
+        required: false
+        type: string
+        default: main
 permissions:
   contents: read
 concurrency:
-  group: release-formal-${{ inputs.tag || github.ref_name }}
+  group: release-formal-${{ inputs.version || github.ref_name }}
   cancel-in-progress: false
 jobs:
   metadata:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       sha: ${{ steps.meta.outputs.sha }}
@@ -24,16 +37,65 @@ jobs:
       latest: ${{ steps.meta.outputs.latest }}
       image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
-      # Manual runs must build the requested tag, not the branch selected in UI.
-      - uses: actions/checkout@v4
+      - name: Normalize version to SemVer tag
+        id: tagname
+        env:
+          RAW: ${{ inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          RAW="${RAW#refs/tags/}"
+          case "$RAW" in
+            v*) TAG="$RAW" ;;
+            *)  TAG="v$RAW" ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Normalized release tag: $TAG"
+
+      - name: Checkout source (web UI uses ref; tag push uses the tag)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          ref: ${{ inputs.ref || 'main' }}
+          fetch-depth: 0
+
+      - name: Checkout tag (tag-push path)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tagname.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Create annotated tag when releasing from the web UI
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.tagname.outputs.tag }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          echo "Source ref resolves to $SHA"
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            # Peel annotated tags to the underlying commit.
+            EXISTING="$(git rev-parse "refs/tags/$TAG^{commit}" 2>/dev/null || git rev-parse "refs/tags/$TAG")"
+            if [ "$EXISTING" != "$SHA" ]; then
+              echo "Tag $TAG already points at $EXISTING, not $SHA. Refusing to move an immutable release tag." >&2
+              exit 1
+            fi
+            echo "Tag $TAG already exists on $SHA"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG" "$SHA"
+            git push origin "refs/tags/$TAG"
+            echo "Created and pushed tag $TAG → $SHA"
+          fi
+
       - name: Resolve exact tag and channel
         id: meta
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ steps.tagname.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           python3 scripts/release-metadata.py "$TAG"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if gh release view "$TAG" >/dev/null 2>release-error; then
@@ -44,12 +106,14 @@ jobs:
             cat release-error >&2
             exit 1
           fi
+
   build:
     needs: metadata
     uses: ./.github/workflows/release-build.yml
     with:
       source_sha: ${{ needs.metadata.outputs.sha }}
       version: ${{ needs.metadata.outputs.tag }}
+
   release:
     needs: [metadata, build]
     runs-on: ubuntu-latest
@@ -100,12 +164,11 @@ jobs:
           Docker images are published to ghcr.io/<owner>/<repository>:<tag>.
           The latest image and default installer follow stable releases only.
           NOTES
-          # Reserve a new release; no --clobber or action asset overwrite behavior.
-          # A failed upload leaves a draft that maintainers must inspect explicitly.
           gh release create "$TAG" --verify-tag --draft --title "$TAG" \
             --notes-file release-notes.md --generate-notes
           gh release upload "$TAG" release-files/*
           gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST"
+
   image:
     needs: [metadata, release]
     permissions:
