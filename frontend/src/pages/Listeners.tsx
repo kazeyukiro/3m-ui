@@ -95,7 +95,7 @@ const Listeners: React.FC = () => {
     if (port) form.setFieldsValue({ port });
   };
 
-  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision', reality_dest: 'www.microsoft.com:443', 'reality-config.dest': 'www.microsoft.com:443' }); setModalOpen(true); };
+  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, traffic_multiplier: 1, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision', reality_dest: 'www.microsoft.com:443', 'reality-config.dest': 'www.microsoft.com:443' }); setModalOpen(true); };
   const openQuick = () => {
     quickForm.resetFields();
     quickForm.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), protocol: 'vless' });
@@ -310,6 +310,7 @@ const columns = [
                           <div className="mobile-entity-meta">
                             <Tag>{record.protocol}</Tag>
                             <span>:{record.port}</span>
+                            <span>×{(record as any).traffic_multiplier != null && Number((record as any).traffic_multiplier) > 0 ? Number((record as any).traffic_multiplier) : 1}</span>
                             <Tag color={record.enabled ? 'blue' : 'default'}>
                               {record.enabled ? t('common.enabled') : t('common.disabled')}
                             </Tag>
@@ -360,10 +361,19 @@ const columns = [
       {submitError && <Alert type="error" showIcon title={runtimeText.failed} description={<><div>{submitError}</div><div>{runtimeText.failedHint}</div></>} style={{ marginBottom: 16 }} />}
       <Form disabled={submitting} form={form} layout="vertical" onFinish={onSubmit} scrollToFirstError={{ block: 'center', focus: true }} preserve>
         <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
-        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp', 'traffic_multiplier']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
         <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" addonAfter={!editing ? <Button type="link" size="small" onClick={regeneratePort}>{t('listeners.randomPort')}</Button> : undefined} /></Form.Item>
         <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip="IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1"><Input placeholder="0.0.0.0 or ::" /></Form.Item>
         <Form.Item name="enabled" label={runtimeText.enabledSetting} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        <Form.Item
+          name="traffic_multiplier"
+          label={t('listeners.trafficMultiplier') || '流量倍率'}
+          tooltip={t('listeners.trafficMultiplierHint') || '实际流量 × 倍率计入用户配额。默认 1，例如 1.5 表示多计 50%。'}
+          initialValue={1}
+          rules={[{ type: 'number', min: 0.01, max: 100, message: '0.01 – 100' }]}
+        >
+          <InputNumber min={0.01} max={100} step={0.1} style={{ width: '100%' }} placeholder="1" size={isMobile ? 'large' : 'middle'} />
+        </Form.Item>
         {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
         <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
         <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>
