@@ -46,7 +46,6 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("ensure unique sub tokens: %w", err)
 	}
 
-
 	err = db.AutoMigrate(
 		&models.User{}, &models.Listener{}, &models.ListenerUser{}, &models.ListenerVersion{},
 		&models.ListenerTemplate{}, &models.Subscription{}, &models.AccessToken{}, &models.Config{},
@@ -150,4 +149,3 @@ func randomHexToken(n int) (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
-

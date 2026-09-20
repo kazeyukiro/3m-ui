@@ -408,8 +408,6 @@ func (h *Handler) ListRemoteNodes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mirror_ids": ids})
 }
 
-
-
 func (h *Handler) ListNodeTraffic(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
