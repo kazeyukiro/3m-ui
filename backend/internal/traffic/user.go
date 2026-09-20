@@ -125,6 +125,11 @@ func (s *UserService) AddSampleDetailed(userID uint, billedUp, billedDown int64,
 	})
 }
 
+// OnlineGrace keeps a user marked online for this long after the last tick
+// that saw an attributed connection. Without it, a single empty /connections
+// snapshot (common during brief idle or API blips) flips the UI to offline.
+const OnlineGrace = 60 * time.Second
+
 func (s *UserService) MarkOnline(userIDs []uint) error {
 	if len(userIDs) == 0 {
 		return nil
@@ -138,10 +143,25 @@ func (s *UserService) MarkOnline(userIDs []uint) error {
 		}).Error
 }
 
+// MarkOffline clears online for users not seen this tick, but only after
+// OnlineGrace since last_seen. Active IDs are never cleared.
 func (s *UserService) MarkOffline(activeUserIDs []uint) error {
+	return s.markOffline(activeUserIDs, OnlineGrace)
+}
+
+// MarkOfflineImmediate clears online without grace (e.g. Mihomo unreachable).
+func (s *UserService) MarkOfflineImmediate(activeUserIDs []uint) error {
+	return s.markOffline(activeUserIDs, 0)
+}
+
+func (s *UserService) markOffline(activeUserIDs []uint, grace time.Duration) error {
 	q := s.db.Model(&models.ProxyUser{}).Where("online = ?", true)
 	if len(activeUserIDs) > 0 {
 		q = q.Where("id NOT IN ?", activeUserIDs)
+	}
+	if grace > 0 {
+		cutoff := time.Now().Add(-grace)
+		q = q.Where("last_seen IS NULL OR last_seen < ?", cutoff)
 	}
 	return q.Update("online", false).Error
 }

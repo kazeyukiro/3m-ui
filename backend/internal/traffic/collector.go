@@ -81,7 +81,7 @@ func (c *Collector) CollectOnce() error {
 		// After repeated failures, drop online markers so the dashboard does
 		// not keep showing users as online while the core is down.
 		if fails >= 3 && c.userSvc != nil {
-			if err := c.userSvc.MarkOffline(nil); err != nil {
+			if err := c.userSvc.MarkOfflineImmediate(nil); err != nil {
 				log.Printf("traffic: clear online after mihomo failures: %v", err)
 			}
 		}
@@ -198,6 +198,12 @@ func (c *Collector) CollectOnce() error {
 			} else if id, ok := inboundKeyToID[strings.ToLower(key)]; ok {
 				uid := id
 				proxyUserID = &uid
+			} else {
+				compact := strings.ReplaceAll(strings.ToLower(key), "-", "")
+				if id, ok := inboundKeyToID[compact]; ok {
+					uid := id
+					proxyUserID = &uid
+				}
 			}
 		} else if listenerID != nil {
 			// Fall back: only attribute when the listener has exactly one
@@ -355,10 +361,15 @@ func (c *Collector) loadUserIdentities() (idToName map[uint]string, inboundKeyTo
 		idToName[r.ID] = r.Username
 		if u := strings.TrimSpace(r.Username); u != "" {
 			inboundKeyToID[u] = r.ID
+			inboundKeyToID[strings.ToLower(u)] = r.ID
 		}
 		if id := strings.TrimSpace(r.UUID); id != "" {
 			inboundKeyToID[id] = r.ID
 			inboundKeyToID[strings.ToLower(id)] = r.ID
+			compact := strings.ReplaceAll(strings.ToLower(id), "-", "")
+			if compact != "" && compact != strings.ToLower(id) {
+				inboundKeyToID[compact] = r.ID
+			}
 		}
 	}
 	return idToName, inboundKeyToID, nil

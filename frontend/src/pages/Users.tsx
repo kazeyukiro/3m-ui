@@ -45,7 +45,16 @@ const Users: React.FC = () => {
   const [selectedRemoteIds, setSelectedRemoteIds] = useState<number[]>([]);
   const [bindLoading, setBindLoading] = useState(false);
 
-  const load = async () => {
+  const isUserOnline = (r: ProxyUser) => {
+    if (r.online) return true;
+    const ls = (r as any).last_seen || (r as any).last_seen_at;
+    if (!ls) return false;
+    const t0 = new Date(ls).getTime();
+    if (!Number.isFinite(t0)) return false;
+    return Date.now() - t0 < 60_000;
+  };
+
+    const load = async () => {
     setLoading(true);
     try {
       setData(await fetchUsers());
@@ -313,15 +322,15 @@ const Users: React.FC = () => {
         { text: t('users.disabled') || 'Disabled', value: 'disabled' },
       ],
       onFilter: (value: any, r: ProxyUser) => {
-        if (value === 'online') return !!r.online;
-        if (value === 'offline') return !r.online;
+        if (value === 'online') return isUserOnline(r);
+        if (value === 'offline') return !isUserOnline(r);
         if (value === 'enabled') return !!r.enabled;
         if (value === 'disabled') return !r.enabled;
         return true;
       },
       render: (_: any, r: ProxyUser) => (
         <Space size={4} wrap>
-          {r.online ? <Tag color="success">{t('users.online')}</Tag> : <Tag>{t('users.offline')}</Tag>}
+          {isUserOnline(r) ? <Tag color="success">{t('users.online')}</Tag> : <Tag>{t('users.offline')}</Tag>}
           {r.blocked ? <Tag color="error">{t('users.blocked')}</Tag> : null}
           {!r.enabled ? <Tag color="default">{t('common.disabled')}</Tag> : null}
         </Space>
@@ -575,8 +584,8 @@ const Users: React.FC = () => {
                           ) : null}
                         </div>
                         <div className="mobile-entity-meta">
-                          <Tag color={record.online ? 'success' : 'default'}>
-                            {record.online ? t('users.online') : t('users.offline')}
+                          <Tag color={isUserOnline(record) ? 'success' : 'default'}>
+                            {isUserOnline(record) ? t('users.online') : t('users.offline')}
                           </Tag>
                           <Tag color={record.enabled ? 'processing' : 'default'}>
                             {record.enabled ? t('common.enabled') : t('common.disabled')}
