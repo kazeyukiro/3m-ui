@@ -57,3 +57,8 @@ Also check:
 3. Reverse proxies must forward `x-hwid` / `x-device-os` / `x-device-model` (do not strip unknown headers).
 4. Panel log lines `hwid: registered` / `hwid: seen` confirm the server received the header.
 
+
+
+## Related
+
+- [Per-node traffic & multiplier](node-traffic.md)
