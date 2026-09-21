@@ -724,7 +724,26 @@ const Users: React.FC = () => {
         className={isMobile ? 'mobile-full-modal' : undefined}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit} disabled={submitting}>
-        
+          <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="password" label={t('users.password')} rules={[{ required: !editing }]}>
+            <Input.Password placeholder={editing ? t('users.passwordKeep') : ''} />
+          </Form.Item>
+          <Form.Item
+            name="traffic_limit_gb"
+            label={t('users.trafficLimitGB') || 'Traffic limit (GB)'}
+            tooltip={t('users.trafficLimitHint') || '0 = unlimited. Counts billed traffic (raw × node multiplier).'}
+          >
+            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0 = unlimited" />
+          </Form.Item>
+          <Form.Item
+            name="ip_limit"
+            label={t('users.ipLimit') || 'IP limit'}
+            tooltip={t('users.ipLimitHint') || '0 = unlimited concurrent client IPs'}
+          >
+            <InputNumber min={0} step={1} style={{ width: '100%' }} />
+          </Form.Item>
           <Form.Item
             name="sub_pull_limit"
             label={t('users.subPullLimit') || 'Subscription pull limit'}
