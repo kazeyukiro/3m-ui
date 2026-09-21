@@ -448,8 +448,6 @@ func (g GenericCompiler) BuildShare(in ShareInput) (Share, error) {
 // --- AnyTLS https://wiki.metacubex.one/config/proxies/anytls/ ---
 
 func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
-	// URI: https://github.com/anytls/anytls-go/blob/main/docs/uri_scheme.md
-	//   anytls://[password@]host[:port]/?sni=...&insecure=0|1#name
 	host, port, err := shareHostPort(in.Node, "")
 	if err != nil {
 		return Share{}, err
@@ -469,40 +467,28 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if sni == "" {
 		sni = strFrom(cfg, "sni", "servername")
 	}
-	// Official: omit port → 443. We always include explicit port when known.
-	insecure := true
-	if b, ok := cfg["skip-cert-verify"].(bool); ok {
-		insecure = b
-	} else if b, ok := cfg["allow-insecure"].(bool); ok {
-		insecure = b
+	if sni == "" {
+		sni = host
 	}
-	// Legitimate cert + domain connect host → prefer secure unless explicitly skipped.
-	if !insecure {
-		// keep false
-	} else if cert, _ := cfg["certificate"].(string); strings.TrimSpace(cert) != "" {
-		// panel may still want skip for self-signed; default true for share convenience
-		insecure = true
-	}
-
+	fp := strOr(strings.TrimSpace(in.Node.Fingerprint), "chrome")
 	params := map[string]string{}
 	if sni != "" {
 		params["sni"] = sni
 	}
-	if insecure {
-		params["insecure"] = "1"
+	if fp != "" {
+		params["fp"] = fp
 	}
-	userinfo := url.User(pass).String()
+	params["insecure"] = "1"
+	params["allowInsecure"] = "1"
 	uri := shareName(
-		shareQuery("anytls://"+userinfo+"@"+netutil.JoinHostPort(host, port), params),
+		shareQuery("anytls://"+url.PathEscape(pass)+"@"+netutil.JoinHostPort(host, port), params),
 		in.Node.Name,
 	)
 
 	extra := map[string]interface{}{"password": pass, "udp": true}
-	if sni != "" {
-		extra["sni"] = sni
-	}
-	extra["client-fingerprint"] = strOr(strings.TrimSpace(in.Node.Fingerprint), "chrome")
-	extra["skip-cert-verify"] = insecure
+	extra["sni"] = sni
+	extra["client-fingerprint"] = fp
+	extra["skip-cert-verify"] = true
 	if alpn := stringListFrom(cfg, "alpn"); len(alpn) > 0 {
 		extra["alpn"] = alpn
 	}

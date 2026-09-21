@@ -411,47 +411,43 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 	return result, nil
 }
 
-// anytlsURIs builds share links per official AnyTLS URI scheme:
-//
-//	anytls://[password@]hostname[:port]/?sni=...&insecure=1#name
-//
-// https://github.com/anytls/anytls-go/blob/main/docs/uri_scheme.md
 func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
 	users := userMap(cfg)
 	if len(users) == 0 {
 		return nil, fmt.Errorf("anytls listener requires at least one user for URI export")
 	}
-	sni := ""
-	if v, ok := cfg["sni"].(string); ok && strings.TrimSpace(v) != "" {
-		sni = strings.TrimSpace(v)
-	} else if v, ok := cfg["servername"].(string); ok && strings.TrimSpace(v) != "" {
-		sni = strings.TrimSpace(v)
-	}
-	insecure := clientSkipCert(cfg, host)
 	result := make([]string, 0, len(users))
 	for username, raw := range users {
 		password, ok := raw.(string)
-		if !ok || strings.TrimSpace(password) == "" {
+		if !ok || password == "" {
 			return nil, fmt.Errorf("anytls user %q has empty password", username)
 		}
-		result = append(result, buildAnyTLSURI(strings.TrimSpace(password), host, port, sni, name, insecure))
+		params := map[string]string{}
+		if v, ok := cfg["sni"].(string); ok && v != "" {
+			params["sni"] = v
+		} else if v, ok := cfg["servername"].(string); ok && v != "" {
+			params["sni"] = v
+		}
+		if v, ok := cfg["client-fingerprint"].(string); ok && v != "" {
+			params["fp"] = v
+		}
+		if clientSkipCert(cfg, host) {
+			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
+		}
+		if v, ok := cfg["idle-session-check-interval"].(string); ok && v != "" {
+			params["idle_session_check_interval"] = v
+		}
+		if v, ok := cfg["idle-session-timeout"].(string); ok && v != "" {
+			params["idle_session_timeout"] = v
+		}
+		if v, ok := cfg["min-idle-session"].(string); ok && v != "" {
+			params["min_idle_session"] = v
+		}
+		_ = username
+		result = append(result, addName(query("anytls://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
-}
-
-// buildAnyTLSURI encodes password as URI userinfo and only official query keys.
-func buildAnyTLSURI(password, host, port, sni, name string, insecure bool) string {
-	// Auth is the password in the standard URI username position (percent-encoded).
-	userinfo := url.User(password).String()
-	base := "anytls://" + userinfo + "@" + netutil.JoinHostPort(host, port)
-	params := map[string]string{}
-	if strings.TrimSpace(sni) != "" {
-		params["sni"] = strings.TrimSpace(sni)
-	}
-	if insecure {
-		params["insecure"] = "1"
-	}
-	return addName(query(base, params), name)
 }
 
 func realityPublicKey(cfg map[string]interface{}) (string, error) {
