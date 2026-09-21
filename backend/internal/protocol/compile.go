@@ -178,15 +178,23 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 			u := map[string]interface{}{}
 			switch field {
 			case "uuid":
+				// VLESS/VMess: uuid is auth; name is what Mihomo exposes as
+				// metadata.inboundUser (connections API). Without name, the
+				// panel cannot attribute traffic/online status per user.
 				if c.UUID != "" {
 					u["uuid"] = c.UUID
+				}
+				if c.Username != "" {
+					u["name"] = c.Username
 				}
 				if c.Flow != "" {
 					u["flow"] = c.Flow
 				}
 			case "password":
+				// Trojan etc.: prefer username+password; name also helps tracking.
 				if c.Username != "" {
 					u["username"] = c.Username
+					u["name"] = c.Username
 					u["password"] = c.Password
 				} else {
 					u["password"] = c.Password

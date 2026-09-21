@@ -107,3 +107,49 @@ func TestShadowsocksCompilerPreservesDisabledUDP(t *testing.T) {
 		t.Fatalf("TCP-only Shadowsocks listener must emit udp: false, got %#v", result["udp"])
 	}
 }
+
+func TestVLESSCompilerSetsUserNameForTracking(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Users: []UserCred{{
+			Username: "alice",
+			UUID:     "11111111-1111-4111-8111-111111111111",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users, ok := result["users"].([]map[string]interface{})
+	if !ok || len(users) != 1 {
+		t.Fatalf("unexpected users: %#v", result["users"])
+	}
+	if users[0]["name"] != "alice" {
+		t.Fatalf("expected name=alice for inboundUser tracking, got %#v", users[0]["name"])
+	}
+	if users[0]["uuid"] != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("expected uuid preserved, got %#v", users[0]["uuid"])
+	}
+}
+
+func TestVMessCompilerSetsUserNameForTracking(t *testing.T) {
+	result, err := (VMessCompiler{}).Compile(CompileInput{
+		Name:     "vmess",
+		Protocol: "vmess",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Users: []UserCred{{
+			Username: "bob",
+			UUID:     "22222222-2222-4222-8222-222222222222",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users := result["users"].([]map[string]interface{})
+	if users[0]["name"] != "bob" {
+		t.Fatalf("expected name=bob, got %#v", users[0]["name"])
+	}
+}
