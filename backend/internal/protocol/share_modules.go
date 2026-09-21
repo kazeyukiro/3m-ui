@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"golang.org/x/crypto/curve25519"
@@ -471,6 +472,16 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 		sni = host
 	}
 	fp := strOr(strings.TrimSpace(in.Node.Fingerprint), "chrome")
+
+	// Formal certs must verify; only skip for panel self-signed / explicit flag /
+	// hostname mismatch. Never hardcode insecure=1.
+	var explicitSkip *bool
+	if v, ok := cfg["skip-cert-verify"].(bool); ok {
+		explicitSkip = &v
+	}
+	certPEM := resolveShareCertPEM(cfg)
+	skipCert := certutil.DecideClientSkipCertVerify(certPEM, sni, explicitSkip)
+
 	params := map[string]string{}
 	if sni != "" {
 		params["sni"] = sni
@@ -478,8 +489,10 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if fp != "" {
 		params["fp"] = fp
 	}
-	params["insecure"] = "1"
-	params["allowInsecure"] = "1"
+	if skipCert {
+		params["insecure"] = "1"
+		params["allowInsecure"] = "1"
+	}
 	uri := shareName(
 		shareQuery("anytls://"+url.PathEscape(pass)+"@"+netutil.JoinHostPort(host, port), params),
 		in.Node.Name,
@@ -488,7 +501,7 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	extra := map[string]interface{}{"password": pass, "udp": true}
 	extra["sni"] = sni
 	extra["client-fingerprint"] = fp
-	extra["skip-cert-verify"] = true
+	extra["skip-cert-verify"] = skipCert
 	if alpn := stringListFrom(cfg, "alpn"); len(alpn) > 0 {
 		extra["alpn"] = alpn
 	}
@@ -497,6 +510,28 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 		return Share{}, err
 	}
 	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
+}
+
+// resolveShareCertPEM returns PEM text from config (inline or file path).
+func resolveShareCertPEM(cfg map[string]interface{}) string {
+	if cfg == nil {
+		return ""
+	}
+	cert, _ := cfg["certificate"].(string)
+	cert = strings.TrimSpace(cert)
+	if cert == "" {
+		return ""
+	}
+	if strings.Contains(cert, "BEGIN CERTIFICATE") {
+		return cert
+	}
+	// Path on disk (common when operators paste Let's Encrypt fullchain path).
+	if strings.HasPrefix(cert, "/") || strings.HasSuffix(cert, ".pem") || strings.HasSuffix(cert, ".crt") {
+		if b, err := os.ReadFile(cert); err == nil && len(b) > 0 {
+			return string(b)
+		}
+	}
+	return cert
 }
 
 // --- ShadowQUIC https://wiki.metacubex.one/config/proxies/shadowquic/ ---
