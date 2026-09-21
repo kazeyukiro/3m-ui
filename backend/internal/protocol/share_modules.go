@@ -448,6 +448,8 @@ func (g GenericCompiler) BuildShare(in ShareInput) (Share, error) {
 // --- AnyTLS https://wiki.metacubex.one/config/proxies/anytls/ ---
 
 func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
+	// URI: https://github.com/anytls/anytls-go/blob/main/docs/uri_scheme.md
+	//   anytls://[password@]host[:port]/?sni=...&insecure=0|1#name
 	host, port, err := shareHostPort(in.Node, "")
 	if err != nil {
 		return Share{}, err
@@ -463,17 +465,44 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if pass == "" {
 		return Share{}, fmt.Errorf("anytls share requires password")
 	}
-	extra := map[string]interface{}{"password": pass, "udp": true}
 	sni := strings.TrimSpace(in.Node.AccessSNI)
 	if sni == "" {
 		sni = strFrom(cfg, "sni", "servername")
 	}
-	if sni == "" {
-		sni = host
+	// Official: omit port → 443. We always include explicit port when known.
+	insecure := true
+	if b, ok := cfg["skip-cert-verify"].(bool); ok {
+		insecure = b
+	} else if b, ok := cfg["allow-insecure"].(bool); ok {
+		insecure = b
 	}
-	extra["sni"] = sni
+	// Legitimate cert + domain connect host → prefer secure unless explicitly skipped.
+	if !insecure {
+		// keep false
+	} else if cert, _ := cfg["certificate"].(string); strings.TrimSpace(cert) != "" {
+		// panel may still want skip for self-signed; default true for share convenience
+		insecure = true
+	}
+
+	params := map[string]string{}
+	if sni != "" {
+		params["sni"] = sni
+	}
+	if insecure {
+		params["insecure"] = "1"
+	}
+	userinfo := url.User(pass).String()
+	uri := shareName(
+		shareQuery("anytls://"+userinfo+"@"+netutil.JoinHostPort(host, port), params),
+		in.Node.Name,
+	)
+
+	extra := map[string]interface{}{"password": pass, "udp": true}
+	if sni != "" {
+		extra["sni"] = sni
+	}
 	extra["client-fingerprint"] = strOr(strings.TrimSpace(in.Node.Fingerprint), "chrome")
-	extra["skip-cert-verify"] = true
+	extra["skip-cert-verify"] = insecure
 	if alpn := stringListFrom(cfg, "alpn"); len(alpn) > 0 {
 		extra["alpn"] = alpn
 	}
@@ -481,7 +510,7 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if err != nil {
 		return Share{}, err
 	}
-	return Share{ClientYAML: yamlOut}, nil
+	return Share{URI: uri, QRContent: uri, ClientYAML: yamlOut}, nil
 }
 
 // --- ShadowQUIC https://wiki.metacubex.one/config/proxies/shadowquic/ ---
