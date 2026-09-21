@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
@@ -416,6 +417,19 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 	if len(users) == 0 {
 		return nil, fmt.Errorf("anytls listener requires at least one user for URI export")
 	}
+	certPEM := loadCertPEMFromCfg(cfg)
+	configured := ""
+	if v, ok := cfg["sni"].(string); ok {
+		configured = strings.TrimSpace(v)
+	}
+	if configured == "" {
+		if v, ok := cfg["servername"].(string); ok {
+			configured = strings.TrimSpace(v)
+		}
+	}
+	sni := certutil.ResolveClientSNI(configured, "", host, certPEM)
+	// Re-evaluate skip against resolved SNI so formal certs verify when SAN matches.
+	skip := clientSkipCertWithPEM(cfg, certPEM, sni)
 	result := make([]string, 0, len(users))
 	for username, raw := range users {
 		password, ok := raw.(string)
@@ -423,15 +437,13 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 			return nil, fmt.Errorf("anytls user %q has empty password", username)
 		}
 		params := map[string]string{}
-		if v, ok := cfg["sni"].(string); ok && v != "" {
-			params["sni"] = v
-		} else if v, ok := cfg["servername"].(string); ok && v != "" {
-			params["sni"] = v
+		if sni != "" {
+			params["sni"] = sni
 		}
 		if v, ok := cfg["client-fingerprint"].(string); ok && v != "" {
 			params["fp"] = v
 		}
-		if clientSkipCert(cfg, host) {
+		if skip {
 			params["insecure"] = "1"
 			params["allowInsecure"] = "1"
 		}
@@ -448,6 +460,39 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		result = append(result, addName(query("anytls://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
+}
+
+func loadCertPEMFromCfg(cfg map[string]interface{}) string {
+	if cfg == nil {
+		return ""
+	}
+	cert, _ := cfg["certificate"].(string)
+	cert = strings.TrimSpace(cert)
+	if cert == "" {
+		return ""
+	}
+	if strings.Contains(cert, "BEGIN CERTIFICATE") {
+		return cert
+	}
+	if strings.HasPrefix(cert, "/") || strings.HasSuffix(cert, ".pem") || strings.HasSuffix(cert, ".crt") {
+		if b, err := os.ReadFile(cert); err == nil {
+			return string(b)
+		}
+	}
+	return ""
+}
+
+func clientSkipCertWithPEM(cfg map[string]interface{}, certPEM, verifyHost string) bool {
+	var explicit *bool
+	if cfg != nil {
+		if b, ok := cfg["skip-cert-verify"].(bool); ok {
+			explicit = &b
+		}
+	}
+	if certPEM == "" && cfg != nil {
+		certPEM, _ = cfg["certificate"].(string)
+	}
+	return certutil.DecideClientSkipCertVerify(certPEM, verifyHost, explicit)
 }
 
 func realityPublicKey(cfg map[string]interface{}) (string, error) {

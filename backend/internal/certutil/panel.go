@@ -42,6 +42,47 @@ func ShouldSkipCertVerify(cfg map[string]interface{}) bool {
 	return IsPanelSelfSignedPEM(cert)
 }
 
+// PreferredSNIFromCert returns the best TLS ServerName from a certificate PEM:
+// first DNS SAN, else non-empty CN. Empty when no usable name (e.g. IP-only cert).
+// Used when the operator has a formal cert but left Access SNI blank.
+func PreferredSNIFromCert(certPEM string) string {
+	cert := firstCertificate(certPEM)
+	if cert == nil {
+		return ""
+	}
+	for _, name := range cert.DNSNames {
+		name = strings.TrimSpace(name)
+		if name != "" && net.ParseIP(name) == nil {
+			return name
+		}
+	}
+	cn := strings.TrimSpace(cert.Subject.CommonName)
+	if cn != "" && net.ParseIP(cn) == nil {
+		return cn
+	}
+	return ""
+}
+
+// ResolveClientSNI picks SNI for subscription/share clients.
+// Order: explicit config → public host (if not IP) → connect host (if not IP) →
+// certificate DNS/CN (formal cert without panel SNI) → connect host as last resort.
+func ResolveClientSNI(configured, publicHost, connectHost, certPEM string) string {
+	for _, cand := range []string{configured, publicHost, connectHost} {
+		cand = normalizeVerifyHost(cand)
+		if cand == "" {
+			continue
+		}
+		if net.ParseIP(cand) == nil {
+			return cand
+		}
+	}
+	if sni := PreferredSNIFromCert(certPEM); sni != "" {
+		return sni
+	}
+	// IP-only connect with no cert names: still return host for completeness.
+	return normalizeVerifyHost(connectHost)
+}
+
 // DecideClientSkipCertVerify chooses skip-cert-verify for client subscription/share.
 //
 // Priority:

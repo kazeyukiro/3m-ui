@@ -464,22 +464,20 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if pass == "" {
 		return Share{}, fmt.Errorf("anytls share requires password")
 	}
-	sni := strings.TrimSpace(in.Node.AccessSNI)
-	if sni == "" {
-		sni = strFrom(cfg, "sni", "servername")
-	}
-	if sni == "" {
-		sni = host
-	}
 	fp := strOr(strings.TrimSpace(in.Node.Fingerprint), "chrome")
 
-	// Formal certs must verify; only skip for panel self-signed / explicit flag /
-	// hostname mismatch. Never hardcode insecure=1.
 	var explicitSkip *bool
 	if v, ok := cfg["skip-cert-verify"].(bool); ok {
 		explicitSkip = &v
 	}
 	certPEM := resolveShareCertPEM(cfg)
+	// Formal cert + blank SNI: derive from certificate SAN/CN (same idea as TUIC).
+	sni := certutil.ResolveClientSNI(
+		strOr(strings.TrimSpace(in.Node.AccessSNI), strFrom(cfg, "sni", "servername")),
+		in.Node.PublicHost,
+		host,
+		certPEM,
+	)
 	skipCert := certutil.DecideClientSkipCertVerify(certPEM, sni, explicitSkip)
 
 	params := map[string]string{}
@@ -668,29 +666,18 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	if strings.TrimSpace(cc) == "" {
 		cc = "bbr"
 	}
-	sni := strings.TrimSpace(in.Node.AccessSNI)
-	if sni == "" {
-		sni = strFrom(cfg, "sni", "servername")
-	}
-	if sni == "" {
-		sni = strings.TrimSpace(in.Node.PublicHost)
-	}
-	// SNI defaults to the server host so formal (Let's Encrypt etc.) certs
-	// can verify. Only fall back to skipCert for panel self-signed PEMs
-	// (O=3m-ui marker) — NOT for any cert-without-SNI (which would break
-	// formal-cert listeners when the operator forgot to set SNI).
-	if sni == "" {
-		sni = host
-	}
 	var explicitSkip *bool
 	if v, ok := cfg["skip-cert-verify"].(bool); ok {
 		explicitSkip = &v
 	}
-	certPEM, _ := cfg["certificate"].(string)
+	certPEM := resolveShareCertPEM(cfg)
+	sni := certutil.ResolveClientSNI(
+		strOr(strings.TrimSpace(in.Node.AccessSNI), strFrom(cfg, "sni", "servername")),
+		in.Node.PublicHost,
+		host,
+		certPEM,
+	)
 	skipCert := certutil.DecideClientSkipCertVerify(certPEM, sni, explicitSkip)
-	if !skipCert && (sni == "" || certutil.IsPanelSelfSignedPEM(certPEM)) {
-		skipCert = certutil.IsPanelSelfSignedPEM(certPEM) || strings.TrimSpace(certPEM) == ""
-	}
 
 	isV4 := kind == "tuic-v4"
 	if kind == "tuic-v5" {
