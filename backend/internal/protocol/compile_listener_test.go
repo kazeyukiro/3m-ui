@@ -126,8 +126,8 @@ func TestVLESSCompilerSetsUserNameForTracking(t *testing.T) {
 	if !ok || len(users) != 1 {
 		t.Fatalf("unexpected users: %#v", result["users"])
 	}
-	if users[0]["name"] != "alice" {
-		t.Fatalf("expected name=alice for inboundUser tracking, got %#v", users[0]["name"])
+	if users[0]["username"] != "alice" {
+		t.Fatalf("expected username=alice for inboundUser tracking, got %#v", users[0]["name"])
 	}
 	if users[0]["uuid"] != "11111111-1111-4111-8111-111111111111" {
 		t.Fatalf("expected uuid preserved, got %#v", users[0]["uuid"])
@@ -149,7 +149,7 @@ func TestVMessCompilerSetsUserNameForTracking(t *testing.T) {
 		t.Fatalf("compile failed: %v", err)
 	}
 	users := result["users"].([]map[string]interface{})
-	if users[0]["name"] != "bob" {
-		t.Fatalf("expected name=bob, got %#v", users[0]["name"])
+	if users[0]["username"] != "bob" {
+		t.Fatalf("expected username=bob, got %#v", users[0]["name"])
 	}
 }

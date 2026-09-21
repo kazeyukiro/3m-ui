@@ -178,23 +178,28 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 			u := map[string]interface{}{}
 			switch field {
 			case "uuid":
-				// VLESS/VMess: uuid is auth; name is what Mihomo exposes as
-				// metadata.inboundUser (connections API). Without name, the
-				// panel cannot attribute traffic/online status per user.
+				// Official MetaCubeX VLESS/VMess user object uses:
+				//   username (display / inboundUser) + uuid (+ optional flow)
+				// NOT "name". Wrong key is ignored by mihomo → inboundUser empty.
+				// Wiki: users: [{username, uuid, flow}]
 				if c.UUID != "" {
 					u["uuid"] = c.UUID
 				}
-				if c.Username != "" {
-					u["name"] = c.Username
+				uname := strings.TrimSpace(c.Username)
+				if uname == "" {
+					uname = strings.TrimSpace(c.UUID) // still better than blank for tracking
+				}
+				if uname != "" {
+					u["username"] = uname
 				}
 				if c.Flow != "" {
 					u["flow"] = c.Flow
 				}
 			case "password":
-				// Trojan etc.: prefer username+password; name also helps tracking.
+				// Trojan / ShadowQUIC / TrustTunnel: username + password.
+				// username is reported as inboundUser when present.
 				if c.Username != "" {
 					u["username"] = c.Username
-					u["name"] = c.Username
 					u["password"] = c.Password
 				} else {
 					u["password"] = c.Password
