@@ -417,8 +417,9 @@ func (h *Handler) ListNodeTraffic(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "service unavailable"})
 		return
 	}
+	db := h.svc.DB()
 	var rows []models.UserNodeTraffic
-	if err := h.svc.DB().Where("proxy_user_id = ?", id).Order("traffic_used desc").Find(&rows).Error; err != nil {
+	if err := db.Where("proxy_user_id = ?", id).Order("traffic_used desc").Find(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -433,12 +434,14 @@ func (h *Handler) ListNodeTraffic(c *gin.Context) {
 		BilledDownload int64   `json:"billed_download"`
 		BilledUsed     int64   `json:"billed_used"`
 	}
-	out := make([]item, 0, len(rows))
+	seen := make(map[uint]struct{}, len(rows))
+	out := make([]item, 0, len(rows)+4)
 	for _, r := range rows {
+		seen[r.ListenerID] = struct{}{}
 		name := ""
 		mult := 1.0
 		var lis models.Listener
-		if err := h.svc.DB().Select("id", "name", "traffic_multiplier").First(&lis, r.ListenerID).Error; err == nil {
+		if err := db.Select("id", "name", "traffic_multiplier").First(&lis, r.ListenerID).Error; err == nil {
 			name = lis.Name
 			if lis.TrafficMultiplier > 0 {
 				mult = lis.TrafficMultiplier
@@ -451,6 +454,30 @@ func (h *Handler) ListNodeTraffic(c *gin.Context) {
 			UploadBytes: r.UploadBytes, DownloadBytes: r.DownloadBytes, TrafficUsed: r.TrafficUsed,
 			Multiplier: mult, BilledUpload: bu, BilledDownload: bd, BilledUsed: bu + bd,
 		})
+	}
+	// Include bound listeners with zero traffic so the UI lists expected nodes.
+	var binds []models.ListenerUser
+	if err := db.Where("proxy_user_id = ?", id).Find(&binds).Error; err == nil {
+		for _, b := range binds {
+			if _, ok := seen[b.ListenerID]; ok {
+				continue
+			}
+			name := ""
+			mult := 1.0
+			var lis models.Listener
+			if err := db.Select("id", "name", "traffic_multiplier").First(&lis, b.ListenerID).Error; err == nil {
+				name = lis.Name
+				if lis.TrafficMultiplier > 0 {
+					mult = lis.TrafficMultiplier
+				}
+			} else {
+				continue
+			}
+			out = append(out, item{
+				ListenerID: b.ListenerID, ListenerName: name,
+				Multiplier: mult,
+			})
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"items": out})
 }

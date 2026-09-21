@@ -111,6 +111,7 @@ func (c *Collector) CollectOnce() error {
 	if err != nil {
 		return fmt.Errorf("load listener users: %w", err)
 	}
+	userListeners := invertListenerUsers(listenerUsers)
 	idToName, inboundKeyToID, err := c.loadUserIdentities()
 	if err != nil {
 		return fmt.Errorf("load proxy user identities: %w", err)
@@ -158,7 +159,7 @@ func (c *Collector) CollectOnce() error {
 
 		var listenerID *uint
 		var listenerName string
-		var network, host, sourceIP, destIP, destPort, inboundUser string
+		var network, host, sourceIP, destIP, destPort, inboundUser, inboundName string
 		if conn.Metadata != nil {
 			network = conn.Metadata.Network
 			host = conn.Metadata.Host
@@ -166,9 +167,15 @@ func (c *Collector) CollectOnce() error {
 			destIP = conn.Metadata.DestinationIP
 			destPort = conn.Metadata.DestinationPort
 			inboundUser = conn.Metadata.InboundUser
-			if id, ok := listenerNameToID[conn.Metadata.InboundName]; ok {
-				listenerID = &id
-				listenerName = conn.Metadata.InboundName
+			inboundName = conn.Metadata.InboundName
+			if id, ok := resolveListenerID(listenerNameToID, inboundName, destPort); ok {
+				lid := id
+				listenerID = &lid
+				if n, ok := listenerIDToName[lid]; ok {
+					listenerName = n
+				} else {
+					listenerName = inboundName
+				}
 			}
 		}
 		if network == "" {
@@ -185,35 +192,31 @@ func (c *Collector) CollectOnce() error {
 		view.Chains = conn.Chains
 		view.Start = conn.Start
 
-		// Attribution, in order of confidence. Never guess: if neither
-		// path applies, the connection stays unattributed.
+		// Attribution (order of confidence):
+		//  1) inboundUser → ProxyUser (UUID / username)
+		//  2) single-user listener fallback
+		//  3) if user known but node missing: sole bound listener for that user
+		//  4) if node known but user missing already handled in (2)
 		var proxyUserID *uint
-		if inboundUser != "" {
-			// Mihomo reports the authenticated identity in inboundUser.
-			// VLESS/TUIC v5 often use UUID; HY2/AnyTLS/Trojan use username.
-			key := strings.TrimSpace(inboundUser)
-			if id, ok := inboundKeyToID[key]; ok {
-				uid := id
-				proxyUserID = &uid
-			} else if id, ok := inboundKeyToID[strings.ToLower(key)]; ok {
-				uid := id
-				proxyUserID = &uid
-			} else {
-				compact := strings.ReplaceAll(strings.ToLower(key), "-", "")
-				if id, ok := inboundKeyToID[compact]; ok {
-					uid := id
-					proxyUserID = &uid
-				}
-			}
+		if uid, ok := resolveProxyUser(inboundKeyToID, inboundUser); ok {
+			proxyUserID = &uid
 		} else if listenerID != nil {
-			// Fall back: only attribute when the listener has exactly one
-			// bound ProxyUser, since with more than one we cannot tell
-			// which of them this connection belongs to.
-			if ids := listenerUsers[*listenerID]; len(ids) == 1 {
-				uid := ids[0]
+			if uid, ok := soleUserForListener(listenerUsers, *listenerID); ok {
 				proxyUserID = &uid
 			}
 		}
+		// Fill missing node from user's sole binding (VLESS name mismatch recovery).
+		if proxyUserID != nil && listenerID == nil {
+			if lid, ok := soleListenerForUser(userListeners, *proxyUserID); ok {
+				listenerID = &lid
+				if n, ok := listenerIDToName[lid]; ok {
+					listenerName = n
+					view.ListenerName = n
+				}
+				view.ListenerID = listenerID
+			}
+		}
+		// If both known, prefer counting on that node even when inboundName was fuzzy.
 
 		if proxyUserID != nil {
 			view.ProxyUserID = proxyUserID
@@ -315,15 +318,110 @@ func (c *Collector) loadListeners() (nameToID map[string]uint, idToName map[uint
 	if err := c.db.Model(&models.Listener{}).Select("id", "name", "traffic_multiplier").Find(&rows).Error; err != nil {
 		return nil, nil, nil, err
 	}
-	nameToID = make(map[string]uint, len(rows))
+	nameToID = make(map[string]uint, len(rows)*3)
 	idToName = make(map[uint]string, len(rows))
 	mult = make(map[uint]float64, len(rows))
 	for _, r := range rows {
-		nameToID[r.Name] = r.ID
 		idToName[r.ID] = r.Name
 		mult[r.ID] = clampMultiplier(r.TrafficMultiplier)
+		for _, key := range listenerNameKeys(r.Name) {
+			nameToID[key] = r.ID
+		}
 	}
 	return nameToID, idToName, mult, nil
+}
+
+// listenerNameKeys returns lookup keys for a panel listener name.
+func listenerNameKeys(name string) []string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	lower := strings.ToLower(name)
+	out := []string{name, lower}
+	if lower != name {
+		out = append(out, lower)
+	}
+	return uniqueStrings(out)
+}
+
+func uniqueStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+// resolveListenerID maps Mihomo inboundName to a Listener ID (exact + case-insensitive).
+func resolveListenerID(nameToID map[string]uint, inboundName, _ string) (uint, bool) {
+	inboundName = strings.TrimSpace(inboundName)
+	if inboundName == "" {
+		return 0, false
+	}
+	if id, ok := nameToID[inboundName]; ok {
+		return id, true
+	}
+	if id, ok := nameToID[strings.ToLower(inboundName)]; ok {
+		return id, true
+	}
+	return 0, false
+}
+
+// resolveProxyUser maps inboundUser to ProxyUser ID.
+func resolveProxyUser(inboundKeyToID map[string]uint, inboundUser string) (uint, bool) {
+	key := strings.TrimSpace(inboundUser)
+	if key == "" {
+		return 0, false
+	}
+	if id, ok := inboundKeyToID[key]; ok {
+		return id, true
+	}
+	lower := strings.ToLower(key)
+	if id, ok := inboundKeyToID[lower]; ok {
+		return id, true
+	}
+	compact := strings.ReplaceAll(lower, "-", "")
+	if id, ok := inboundKeyToID[compact]; ok {
+		return id, true
+	}
+	return 0, false
+}
+
+// soleUserForListener returns the only bound user when the listener has exactly one.
+func soleUserForListener(listenerUsers map[uint][]uint, lid uint) (uint, bool) {
+	ids := listenerUsers[lid]
+	if len(ids) == 1 {
+		return ids[0], true
+	}
+	return 0, false
+}
+
+// soleListenerForUser returns the only bound listener when the user has exactly one.
+func soleListenerForUser(userListeners map[uint][]uint, uid uint) (uint, bool) {
+	ids := userListeners[uid]
+	if len(ids) == 1 {
+		return ids[0], true
+	}
+	return 0, false
+}
+
+func invertListenerUsers(listenerUsers map[uint][]uint) map[uint][]uint {
+	out := make(map[uint][]uint)
+	for lid, uids := range listenerUsers {
+		for _, uid := range uids {
+			out[uid] = append(out[uid], lid)
+		}
+	}
+	return out
 }
 
 // loadListenerUsers returns, for each Listener ID, the ProxyUser IDs bound

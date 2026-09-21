@@ -5,7 +5,6 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type UserService struct {
@@ -82,43 +81,30 @@ func (s *UserService) AddSampleDetailed(userID uint, billedUp, billedDown int64,
 				continue
 			}
 			raw := p.Up + p.Down
-			row := models.UserNodeTraffic{
-				ProxyUserID:   userID,
-				ListenerID:    p.ListenerID,
-				UploadBytes:   p.Up,
-				DownloadBytes: p.Down,
-				TrafficUsed:   raw,
+			var existing models.UserNodeTraffic
+			qerr := tx.Where("proxy_user_id = ? AND listener_id = ?", userID, p.ListenerID).First(&existing).Error
+			if qerr == gorm.ErrRecordNotFound {
+				row := models.UserNodeTraffic{
+					ProxyUserID:   userID,
+					ListenerID:    p.ListenerID,
+					UploadBytes:   p.Up,
+					DownloadBytes: p.Down,
+					TrafficUsed:   raw,
+				}
+				if cerr := tx.Create(&row).Error; cerr != nil {
+					return cerr
+				}
+				continue
 			}
-			// Upsert then add deltas when row already exists.
-			err := tx.Clauses(clause.OnConflict{
-				Columns: []clause.Column{{Name: "proxy_user_id"}, {Name: "listener_id"}},
-				DoUpdates: clause.Assignments(map[string]interface{}{
-					"upload_bytes":   gorm.Expr("upload_bytes + ?", p.Up),
-					"download_bytes": gorm.Expr("download_bytes + ?", p.Down),
-					"traffic_used":   gorm.Expr("traffic_used + ?", raw),
-					"updated_at":     time.Now().UTC(),
-				}),
-			}).Create(&row).Error
-			if err != nil {
-				// Fallback without OnConflict
-				var existing models.UserNodeTraffic
-				qerr := tx.Where("proxy_user_id = ? AND listener_id = ?", userID, p.ListenerID).First(&existing).Error
-				if qerr == gorm.ErrRecordNotFound {
-					if cerr := tx.Create(&row).Error; cerr != nil {
-						return cerr
-					}
-					continue
-				}
-				if qerr != nil {
-					return qerr
-				}
-				if err := tx.Model(&existing).Updates(map[string]any{
-					"upload_bytes":   gorm.Expr("upload_bytes + ?", p.Up),
-					"download_bytes": gorm.Expr("download_bytes + ?", p.Down),
-					"traffic_used":   gorm.Expr("traffic_used + ?", raw),
-				}).Error; err != nil {
-					return err
-				}
+			if qerr != nil {
+				return qerr
+			}
+			if err := tx.Model(&existing).Updates(map[string]any{
+				"upload_bytes":   gorm.Expr("upload_bytes + ?", p.Up),
+				"download_bytes": gorm.Expr("download_bytes + ?", p.Down),
+				"traffic_used":   gorm.Expr("traffic_used + ?", raw),
+			}).Error; err != nil {
+				return err
 			}
 		}
 		return nil
