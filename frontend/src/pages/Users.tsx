@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, FundOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, FundOutlined } from '../icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,

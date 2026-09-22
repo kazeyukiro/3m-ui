@@ -1,5 +1,5 @@
 import { Alert, Button, Descriptions, Drawer, Space, Table, Tag, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '../icons';
 import type { ListenerRuntime } from '../api/listenerRuntime';
 import type { Listener } from '../api/nodes';
 import { listenerAvailability, listenerDiagnosticReason } from '../utils/listenerAvailability';

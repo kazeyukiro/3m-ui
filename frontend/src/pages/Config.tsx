@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, DownloadOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, DownloadOutlined, CheckOutlined, FileTextOutlined } from '../icons';
 import {
   fetchProxies, createProxy, updateProxy, deleteProxy,
   fetchConfigYAML, generateConfig, validateConfigYAML, applyConfigYAML, rollbackConfig,

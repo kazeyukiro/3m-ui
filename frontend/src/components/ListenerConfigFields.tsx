@@ -3,7 +3,7 @@ import { message,
   Form, Input, InputNumber, Select, Switch, Divider, Alert, Space, Typography, Button, Card, Radio,
 } from 'antd';
 import { generateMaterial } from '../api/listeners';
-import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { MinusCircleOutlined, PlusOutlined } from '../icons';
 import { useI18n } from '../i18n';
 import RealityTargetFields from './RealityTargetFields';
 

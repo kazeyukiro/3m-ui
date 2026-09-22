@@ -48,7 +48,7 @@ import {
   ProfileOutlined,
   CloudServerOutlined,
   FieldTimeOutlined,
-} from '@ant-design/icons';
+} from '../icons';
 import {
   downloadBackup,
   restoreDatabase,

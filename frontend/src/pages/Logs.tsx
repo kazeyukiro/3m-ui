@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, List, Tag, Button, Space, Empty, Spin, message, theme } from 'antd';
-import { ReloadOutlined, ClearOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ClearOutlined } from '../icons';
 import dayjs from 'dayjs';
 import client from '../api/client';
 import { useI18n } from '../i18n';

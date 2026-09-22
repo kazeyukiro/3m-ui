@@ -6,7 +6,7 @@ import {
   UserOutlined,
   GlobalOutlined,
   BgColorsOutlined,
-} from '@ant-design/icons';
+} from '../icons';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore, ThemeMode } from '../stores/themeStore';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';

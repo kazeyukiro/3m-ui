@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, InputNumber, Select, message, Popconfirm } from 'antd';
-import { PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, SaveOutlined } from '../icons';
 import { fetchGroups, saveGroups, fetchRules, saveRules, GroupEntry } from '../api/routing';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';

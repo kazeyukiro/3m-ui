@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Tag, Space, Statistic, Row, Col, message, Button } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '../icons';
 import { fetchTrafficStatus, fetchTrafficUsers, fetchConnections, UserTraffic, ConnectionView, TrafficStatus } from '../api/traffic';
 import { useI18n } from '../i18n';
 import PageHeader from '../components/PageHeader';

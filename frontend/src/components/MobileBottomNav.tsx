@@ -14,7 +14,7 @@ import {
   ProfileOutlined,
   ControlOutlined,
   LogoutOutlined,
-} from '@ant-design/icons';
+} from '../icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';

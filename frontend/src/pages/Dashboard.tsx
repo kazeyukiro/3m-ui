@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, message, theme } from 'antd';
-import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '../icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';

@@ -7,7 +7,7 @@ import {
   BgColorsOutlined,
   SafetyOutlined,
   ArrowLeftOutlined,
-} from '@ant-design/icons';
+} from '../icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { login } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';

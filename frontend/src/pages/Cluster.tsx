@@ -14,7 +14,7 @@ import {
   HddOutlined,
   LoginOutlined,
   ReloadOutlined,
-} from '@ant-design/icons';
+} from '../icons';
 import {
   fetchCluster,
   createClusterNode,

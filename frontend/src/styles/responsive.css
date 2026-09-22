@@ -1189,3 +1189,9 @@ html.dark .app-header-bar,
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+

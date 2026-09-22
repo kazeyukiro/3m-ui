@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, Button, Card, Descriptions, Modal, Select, Space, Spin, Steps, Typography, message } from 'antd';
-import { PlayCircleOutlined, StopOutlined, RedoOutlined, DownloadOutlined, RollbackOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, StopOutlined, RedoOutlined, DownloadOutlined, RollbackOutlined } from '../icons';
 import { coreAPI, type CoreStatus, type CoreRelease, type CoreUpdateStatus } from '../api/core';
 import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';

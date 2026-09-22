@@ -13,7 +13,7 @@ import {
   ControlOutlined,
   ToolOutlined,
   LogoutOutlined,
-} from '@ant-design/icons';
+} from '../icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n } from '../i18n';

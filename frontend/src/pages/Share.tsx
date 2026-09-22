@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert, Button, Card, Collapse, Empty, Input, Select, Space, Spin, Tabs, Tag, Typography, message,
 } from 'antd';
-import { CopyOutlined, QrcodeOutlined, ReloadOutlined, LinkOutlined } from '@ant-design/icons';
+import { CopyOutlined, QrcodeOutlined, ReloadOutlined, LinkOutlined } from '../icons';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
