@@ -30,7 +30,7 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Ops** | Core start/stop/update, logs, dashboard, online connections, Geo, panel SSL/ACME, WARP one-click, backup/restore |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
-| **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions |
+| **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; **push local nodes by name** (created disabled on remote) |
 
 ---
 
@@ -89,7 +89,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX inspiration
-- Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
+- Gin, GORM, React, Ant Design, Lucide Icons, Zustand, golang-jwt/jwt
 
 ### Extra docs (limits / certs / subscriptions)
 
@@ -97,6 +97,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - [Per-node traffic & multiplier](docs/node-traffic.md)
 - [Batch node certificates](docs/batch-certificate.md)
 - [Subscription formats](docs/subscription-formats.md)
+- [Cluster / push nodes](docs/cluster.md)
 
 - Go, Node.js, and the open-source community
 

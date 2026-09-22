@@ -30,7 +30,7 @@ Leve e auto-hospedado. Gerencie listeners, usuários, assinaturas e status do [M
 | **Configuração** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Operações** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
-| **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions |
+| **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; push local nodes by name (disabled on remote) |
 
 ---
 
@@ -68,7 +68,7 @@ Binários estáticos: [Releases](https://github.com/kazeyukiro/3m-ui/releases).
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX inspiration
-- Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
+- Gin, GORM, React, Ant Design, Lucide Icons, Zustand, golang-jwt/jwt
 - Go, Node.js, and the open-source community
 
 Contribuidores: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)

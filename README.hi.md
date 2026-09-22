@@ -68,7 +68,7 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX inspiration
-- Gin, GORM, React, Ant Design, Zustand, golang-jwt/jwt
+- Gin, GORM, React, Ant Design, Lucide Icons, Zustand, golang-jwt/jwt
 - Go, Node.js, and the open-source community
 
 योगदानकर्ता: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)

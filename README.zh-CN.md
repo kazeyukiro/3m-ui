@@ -30,7 +30,7 @@
 | **配置** | 生成 → 校验 → 应用；失败回滚上一份 `config.yaml` |
 | **运维** | 核心启停/更新、日志、仪表盘、在线连接、Geo、面板 SSL/ACME、WARP 一键、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
-| **多机** | 登记远程面板、健康检查、节点镜像同步、合并订阅 |
+| **多机** | 登记远程面板、健康检查、节点镜像同步、合并订阅；按名称选择本机节点推送到远程（默认禁用） |
 
 ---
 
@@ -96,7 +96,7 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — 核心引擎与 Listener 模型
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — Listener 示例
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — 面板交互参考
-- Gin、GORM、React、Ant Design、Zustand、golang-jwt/jwt
+- Gin、GORM、React、Ant Design、Lucide Icons、Zustand、golang-jwt/jwt
 - Go、Node.js 与开源社区
 
 贡献者：[Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)

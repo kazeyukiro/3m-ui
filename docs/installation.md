@@ -220,3 +220,7 @@ without content hashes use `no-cache` with ETags so new deployments are detected
 Identity and gzip responses have separate validators and use `Vary: Accept-Encoding`.
 No reverse-proxy compression setting or writable asset directory is required.
 Missing `/assets/` files return an uncached 404 rather than the SPA HTML fallback.
+
+## Frontend stack (panel UI)
+
+The embedded web UI is **React + Ant Design**, with icons from **Lucide** (`lucide-react`, adapted in `frontend/src/icons.tsx`). Building the panel binary runs `npm ci` / `npm install` and `npm run build` under `frontend/`.
