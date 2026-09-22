@@ -1,6 +1,7 @@
 import client from '../api/client';
+import { fetchListeners, type Listener, normalizeId } from '../api/nodes';
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag, Typography } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag, Typography, Select } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -59,6 +60,18 @@ const ClusterPage: React.FC = () => {
   const [loginId, setLoginId] = useState<number | null>(null);
   const [loginForm] = Form.useForm();
 
+  // Push local listener → remote panel (pick by name, not raw ID)
+  const [pushOpen, setPushOpen] = useState(false);
+  const [pushRemoteId, setPushRemoteId] = useState<number | null>(null);
+  const [pushRemoteName, setPushRemoteName] = useState('');
+  const [localNodes, setLocalNodes] = useState<Listener[]>([]);
+  const [localNodesLoading, setLocalNodesLoading] = useState(false);
+  const [pushLocalId, setPushLocalId] = useState<number | undefined>(undefined);
+  const [pushNewName, setPushNewName] = useState('');
+  const [pushNewPort, setPushNewPort] = useState('');
+  const [pushPreview, setPushPreview] = useState<string>('');
+  const [pushBusy, setPushBusy] = useState(false);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -73,6 +86,105 @@ const ClusterPage: React.FC = () => {
   useEffect(() => {
     load();
   }, []);
+
+  const openPushModal = async (remote: RemoteServer) => {
+    setPushRemoteId(remote.id);
+    setPushRemoteName(remote.name || remote.base_url || String(remote.id));
+    setPushLocalId(undefined);
+    setPushNewName('');
+    setPushNewPort('');
+    setPushPreview('');
+    setPushOpen(true);
+    setLocalNodesLoading(true);
+    try {
+      const list = await fetchListeners();
+      setLocalNodes(Array.isArray(list) ? list : []);
+    } catch (e: any) {
+      message.error(errMsg(e));
+      setLocalNodes([]);
+    } finally {
+      setLocalNodesLoading(false);
+    }
+  };
+
+  const runPushDryRun = async (localId: number) => {
+    if (!pushRemoteId || !localId) return;
+    try {
+      const dry = await pushClusterNode(pushRemoteId, {
+        local_node_id: localId,
+        dry_run: true,
+        new_name: pushNewName.trim() || undefined,
+        new_port: pushNewPort.trim() || undefined,
+      });
+      const payload = dry?.payload || dry;
+      setPushPreview(JSON.stringify(payload, null, 2));
+    } catch (e: any) {
+      setPushPreview('');
+      message.error(errMsg(e));
+    }
+  };
+
+  const submitPush = async () => {
+    if (!pushRemoteId || !pushLocalId) {
+      message.warning(t('cluster.pushNodeSelect') || 'Select a local node');
+      return;
+    }
+    setPushBusy(true);
+    try {
+      const dry = await pushClusterNode(pushRemoteId, {
+        local_node_id: pushLocalId,
+        dry_run: true,
+        new_name: pushNewName.trim() || undefined,
+        new_port: pushNewPort.trim() || undefined,
+      });
+      setPushPreview(JSON.stringify(dry?.payload || dry, null, 2));
+      Modal.confirm({
+        title: t('cluster.pushNodeConfirm') || 'Push this node to remote?',
+        content: (
+          <div>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+              {t('cluster.pushNodeHint') ||
+                'A copy will be created on the remote panel as disabled (safe). You can enable it after checking port conflicts.'}
+            </Typography.Paragraph>
+            <pre
+              style={{
+                maxHeight: 220,
+                overflow: 'auto',
+                fontSize: 12,
+                background: 'rgba(0,0,0,0.04)',
+                padding: 8,
+                borderRadius: 6,
+                margin: 0,
+              }}
+            >
+              {JSON.stringify(dry?.payload || dry, null, 2).slice(0, 2000)}
+            </pre>
+          </div>
+        ),
+        okText: t('cluster.pushNodeSubmit') || 'Push',
+        width: isMobile ? '100%' : 520,
+        centered: true,
+        onOk: async () => {
+          await pushClusterNode(pushRemoteId, {
+            local_node_id: pushLocalId,
+            dry_run: false,
+            new_name: pushNewName.trim() || undefined,
+            new_port: pushNewPort.trim() || undefined,
+          });
+          message.success(t('cluster.pushNodeDone') || 'Pushed (created disabled on remote)');
+          setPushOpen(false);
+          if (remoteServerId === pushRemoteId) {
+            await loadRemoteNodes(pushRemoteId);
+          }
+        },
+      });
+    } catch (e: any) {
+      message.error(errMsg(e));
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
 
   const loadRemoteNodes = async (id: number) => {
     try {
@@ -254,31 +366,7 @@ const ClusterPage: React.FC = () => {
           >
             {t('cluster.syncNodes') || 'Sync'}
           </Button>
-          <Button
-            size="small"
-            icon={<SendOutlined />}
-            onClick={async () => {
-              const idStr = window.prompt(t('cluster.pushNodePrompt') || 'Local node ID to push (disabled on remote)?', '');
-              const localId = Number(idStr || 0);
-              if (!localId) return;
-              try {
-                const dry = await pushClusterNode(r.id, { local_node_id: localId, dry_run: true });
-                if (
-                  !window.confirm(
-                    (t('cluster.pushNodeConfirm') || 'Push this node to remote?') +
-                      '\n' +
-                      JSON.stringify(dry?.payload || dry, null, 2).slice(0, 800),
-                  )
-                ) {
-                  return;
-                }
-                await pushClusterNode(r.id, { local_node_id: localId, dry_run: false });
-                message.success(t('cluster.pushNodeDone') || 'Pushed (created disabled on remote)');
-              } catch (e: any) {
-                message.error(errMsg(e));
-              }
-            }}
-          >
+          <Button size="small" icon={<SendOutlined />} onClick={() => openPushModal(r)}>
             {t('cluster.pushNode') || 'Push'}
           </Button>
           <Button
@@ -592,6 +680,93 @@ const ClusterPage: React.FC = () => {
           ]}
         />
       </Modal>
+
+      <Modal
+        open={pushOpen}
+        title={
+          (t('cluster.pushNodeTitle') || 'Push local node') +
+          (pushRemoteName ? ` → ${pushRemoteName}` : '')
+        }
+        onCancel={() => setPushOpen(false)}
+        onOk={submitPush}
+        okText={t('cluster.pushNodeSubmit') || 'Push'}
+        confirmLoading={pushBusy}
+        width={isMobile ? '100%' : 520}
+        style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, paddingBottom: 0 } : undefined}
+        styles={isMobile ? { body: { maxHeight: '70vh', overflowY: 'auto' } } : undefined}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {t('cluster.pushNodeHint') ||
+            'Choose a local listener to clone onto the remote panel. The remote copy is created disabled so ports are not taken immediately.'}
+        </Typography.Paragraph>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('cluster.pushNodeSelect') || 'Local node'}</div>
+          <Select
+            showSearch
+            optionFilterProp="label"
+            loading={localNodesLoading}
+            placeholder={t('cluster.pushNodeSelectPlaceholder') || 'Select local node by name'}
+            style={{ width: '100%' }}
+            value={pushLocalId}
+            onChange={(v: number) => {
+              setPushLocalId(v);
+              const n = localNodes.find((x) => normalizeId(x) === v);
+              if (n && !pushNewName) setPushNewName(`${n.name}-remote`);
+              if (n && !pushNewPort) setPushNewPort(String(n.port || ''));
+              void runPushDryRun(v);
+            }}
+            options={localNodes.map((n) => ({
+              value: normalizeId(n),
+              label: `${n.name} · ${n.protocol || '?'} · :${n.port || '?'}${n.enabled ? '' : ' (off)'}`,
+            }))}
+            notFoundContent={
+              localNodesLoading
+                ? t('common.loading') || 'Loading…'
+                : t('cluster.pushNodeNoLocal') || 'No local nodes'
+            }
+          />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('cluster.pushNodeNewName') || 'Name on remote (optional)'}</div>
+          <Input
+            value={pushNewName}
+            onChange={(e) => setPushNewName(e.target.value)}
+            placeholder={t('cluster.pushNodeNewNamePh') || 'Defaults to <local-name>-remote'}
+            onBlur={() => pushLocalId && void runPushDryRun(pushLocalId)}
+          />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('cluster.pushNodeNewPort') || 'Port on remote (optional)'}</div>
+          <Input
+            value={pushNewPort}
+            onChange={(e) => setPushNewPort(e.target.value)}
+            placeholder={t('cluster.pushNodeNewPortPh') || 'Defaults to local port'}
+            onBlur={() => pushLocalId && void runPushDryRun(pushLocalId)}
+          />
+        </div>
+        {pushPreview ? (
+          <div>
+            <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('cluster.pushNodePreview') || 'Preview payload'}</div>
+            <pre
+              style={{
+                maxHeight: isMobile ? 160 : 240,
+                overflow: 'auto',
+                fontSize: 12,
+                background: 'rgba(0,0,0,0.04)',
+                padding: 8,
+                borderRadius: 6,
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {pushPreview}
+            </pre>
+          </div>
+        ) : null}
+      </Modal>
+
     </div>
   );
 };
