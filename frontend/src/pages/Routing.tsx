@@ -1,105 +1,516 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, InputNumber, Select, message, Popconfirm } from 'antd';
-import { PlusOutlined, DeleteOutlined, SaveOutlined } from '../icons';
-import { fetchGroups, saveGroups, fetchRules, saveRules, GroupEntry } from '../api/routing';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Card,
+  Table,
+  Button,
+  Space,
+  Modal,
+  Form,
+  Input,
+  Select,
+  InputNumber,
+  message,
+  Popconfirm,
+  Switch,
+  Typography,
+  Dropdown,
+  Tooltip,
+  Divider,
+} from 'antd';
+import {
+  ListPlus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  FolderPlus,
+  CircleCheck,
+  Play,
+  Layers,
+  Cloud,
+} from 'lucide-react';
+import {
+  fetchGroups,
+  saveGroups,
+  fetchRules,
+  saveRules,
+  injectWarpRouting,
+  type GroupEntry,
+} from '../api/routing';
+import { generateConfig, applyConfigYAML, fetchProxies } from '../api/config';
+import PageHeader from '../components/PageHeader';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
-import PageHeader from '../components/PageHeader';
+import {
+  RULE_TYPES,
+  type RuleRow,
+  emptyRule,
+  parseRulesText,
+  serializeRules,
+  validateRules,
+  applyTemplate,
+  newRuleKey,
+} from '../utils/routingRules';
+
+const errMsg = (e: any) => e?.response?.data?.error || e?.message || String(e);
 
 const RoutingPage: React.FC = () => {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [groups, setGroups] = useState<GroupEntry[]>([]);
-  const [rulesText, setRulesText] = useState('');
+  const [rules, setRules] = useState<RuleRow[]>([]);
+  const [proxyNames, setProxyNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [warpOpen, setWarpOpen] = useState(false);
+  const [warpBusy, setWarpBusy] = useState(false);
   const [form] = Form.useForm();
+  const [warpForm] = Form.useForm();
 
-  const load = async () => {
+  const targetOptions = useMemo(() => {
+    const set = new Set<string>(['DIRECT', 'REJECT', 'COMPATIBLE']);
+    groups.forEach((g) => g.name && set.add(g.name));
+    proxyNames.forEach((n) => n && set.add(n));
+    return Array.from(set).map((v) => ({ value: v, label: v }));
+  }, [groups, proxyNames]);
+
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [g, r] = await Promise.all([fetchGroups(), fetchRules()]);
-      setGroups(g || []);
-      setRulesText((r || []).join('\n'));
+      const [g, r, px] = await Promise.all([
+        fetchGroups(),
+        fetchRules(),
+        fetchProxies().catch(() => []),
+      ]);
+      setGroups(Array.isArray(g) ? g : []);
+      setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
+      setProxyNames(
+        (Array.isArray(px) ? px : [])
+          .map((p: any) => String(p?.name || '').trim())
+          .filter(Boolean),
+      );
     } catch (e: any) {
-      message.error(e.message || t('common.error'));
+      message.error(errMsg(e));
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const offerApply = () => {
+    Modal.confirm({
+      title: t('routing.applyPromptTitle') || 'Apply configuration?',
+      content:
+        t('routing.applyPromptBody') ||
+        'Rules and groups are saved to the panel database. Generate and apply so Mihomo reloads them now?',
+      okText: t('routing.applyNow') || 'Generate & apply',
+      cancelText: t('common.cancel') || 'Later',
+      centered: true,
+      width: isMobile ? '100%' : 440,
+      onOk: async () => {
+        setApplying(true);
+        try {
+          const res = await generateConfig();
+          await applyConfigYAML(res?.config || undefined);
+          message.success(t('routing.applyDone') || 'Configuration applied');
+        } catch (e: any) {
+          message.error(errMsg(e));
+          throw e;
+        } finally {
+          setApplying(false);
+        }
+      },
+    });
   };
 
-  useEffect(() => { load(); }, []);
-
   const onSaveRules = async () => {
-    const rules = rulesText.split('\n').map((s) => s.trim()).filter(Boolean);
+    const issues = validateRules(rules);
+    const hard = issues.filter((i) => !i.message.includes('recommended'));
+    if (hard.length) {
+      message.error(
+        (t('routing.ruleInvalid') || 'Invalid rules') +
+          ': #' +
+          (hard[0].index + 1) +
+          ' ' +
+          hard[0].message,
+      );
+      return;
+    }
+    if (issues.length) {
+      message.warning(t('routing.ruleWarnMatch') || 'Last rule should be MATCH (recommended)');
+    }
+    setSaving(true);
     try {
-      await saveRules(rules);
-      message.success(t('routing.rulesSaved'));
-      load();
+      const saved = await saveRules(serializeRules(rules));
+      setRules(parseRulesText((Array.isArray(saved) ? saved : serializeRules(rules)).join('\n')));
+      message.success(t('routing.rulesSaved') || 'Rules saved');
+      offerApply();
     } catch (e: any) {
-      message.error(e.message || t('common.error'));
+      message.error(errMsg(e));
+    } finally {
+      setSaving(false);
     }
   };
 
   const onAddGroup = async (values: any) => {
-    const proxies = String(values.proxies || '').split(',').map((s: string) => s.trim()).filter(Boolean);
-    const next = [...groups, { name: values.name, type: values.type || 'select', proxies, url: values.url, interval: values.interval }];
+    const proxies = Array.isArray(values.proxies)
+      ? values.proxies.map((s: string) => String(s).trim()).filter(Boolean)
+      : String(values.proxies || '')
+          .split(/[,，\s]+/)
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+    const next = [
+      ...groups,
+      {
+        name: values.name,
+        type: values.type || 'select',
+        proxies: proxies.length ? proxies : ['DIRECT'],
+        url: values.url,
+        interval: values.interval,
+      },
+    ];
     try {
-      await saveGroups(next);
-      message.success(t('routing.groupSaved'));
+      setGroups(await saveGroups(next));
+      message.success(t('routing.groupAdded') || 'Group added');
       setGroupOpen(false);
       form.resetFields();
-      load();
+      offerApply();
     } catch (e: any) {
-      message.error(e.message || t('common.error'));
+      message.error(errMsg(e));
     }
   };
 
   const onDeleteGroup = async (idx: number) => {
     const next = groups.filter((_, i) => i !== idx);
     try {
-      await saveGroups(next);
-      message.success(t('routing.groupDeleted'));
-      load();
+      setGroups(await saveGroups(next));
+      message.success(t('common.deleted') || 'Deleted');
+      offerApply();
     } catch (e: any) {
-      message.error(e.message || t('common.error'));
+      message.error(errMsg(e));
     }
   };
+
+  const updateRule = (index: number, patch: Partial<RuleRow>) => {
+    setRules((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch, raw: undefined } : r)));
+  };
+
+  const moveRule = (index: number, dir: -1 | 1) => {
+    setRules((prev) => {
+      const j = index + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      const tmp = next[index];
+      next[index] = next[j];
+      next[j] = tmp;
+      return next;
+    });
+  };
+
+  const removeRule = (index: number) => {
+    setRules((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+  };
+
+  const addRule = () => {
+    setRules((prev) => [...prev, emptyRule({ type: 'DOMAIN-SUFFIX', target: 'DIRECT' })]);
+  };
+
+  const onTemplate = (id: string) => {
+    const groupName = groups[0]?.name || 'PROXY';
+    setRules(applyTemplate(id, { groupName }));
+    message.success(t('routing.templateApplied') || 'Template applied — save to persist');
+  };
+
+  const onInjectWarp = async () => {
+    const values = await warpForm.validateFields().catch(() => null);
+    if (!values) return;
+    setWarpBusy(true);
+    try {
+      const res = await injectWarpRouting({
+        mode: values.mode || 'wireguard',
+        rule_mode: values.rule_mode || 'match',
+        name: values.name || undefined,
+      });
+      setRules(parseRulesText((res.rules || []).join('\n')));
+      setProxyNames((prev) => {
+        const n = res.name || 'WARP-OUT';
+        return prev.includes(n) ? prev : [...prev, n];
+      });
+      message.success(
+        (t('routing.warpInjected') || 'WARP outbound added') + (res.name ? `: ${res.name}` : ''),
+      );
+      setWarpOpen(false);
+      offerApply();
+    } catch (e: any) {
+      message.error(errMsg(e));
+    } finally {
+      setWarpBusy(false);
+    }
+  };
+
+  const templateMenu = {
+    items: [
+      { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
+      { key: 'cn_direct', label: t('routing.tplCnDirect') || 'GEOIP CN → DIRECT, else group' },
+      { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
+      { key: 'via_group', label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY' },
+    ],
+    onClick: ({ key }: { key: string }) => onTemplate(key),
+  };
+
+  const ruleCardExtra = (
+    <Space wrap size="small">
+      <Dropdown menu={templateMenu}>
+        <Button size="small" icon={<Layers size={16} />}>
+          {t('routing.templates') || 'Templates'}
+        </Button>
+      </Dropdown>
+      <Button size="small" icon={<Cloud size={16} />} onClick={() => { warpForm.resetFields(); setWarpOpen(true); }}>
+        {t('routing.warpInject') || 'WARP'}
+      </Button>
+      <Button size="small" icon={<ListPlus size={16} />} onClick={addRule}>
+        {t('routing.addRule') || 'Add rule'}
+      </Button>
+      <Button type="primary" size="small" icon={<CircleCheck size={16} />} loading={saving} onClick={onSaveRules}>
+        {t('common.save') || 'Save'}
+      </Button>
+      <Button
+        size="small"
+        icon={<Play size={16} />}
+        loading={applying}
+        onClick={() => offerApply()}
+      >
+        {t('routing.applyNow') || 'Apply'}
+      </Button>
+    </Space>
+  );
 
   return (
     <div>
       <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
-      <Card title={t('routing.groups')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setGroupOpen(true)}>{t('routing.addGroup')}</Button>} style={{ marginBottom: 16 }}>
-        <Table size={isMobile ? "small" : "middle"} loading={loading} rowKey={(_, i) => String(i)} dataSource={groups} columns={[
-          { title: t('common.name'), dataIndex: 'name' },
-          { title: t('common.type'), dataIndex: 'type' },
-          { title: t('routing.proxies'), dataIndex: 'proxies', render: (v: string[]) => (v || []).join(', ') },
-          { title: t('common.actions'), key: 'a', render: (_: any, __: any, idx: number) => (
-            <Popconfirm title={t('common.confirmDelete')} onConfirm={() => onDeleteGroup(idx)}>
-              <Button size="small" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
-          )},
-        ]} />
+      <Typography.Paragraph type="secondary" style={{ marginTop: -8, marginBottom: 12 }}>
+        {t('routing.pageHint') ||
+          'Rules and proxy-groups are stored in visual-config and merged when you generate/apply. Default is MATCH,DIRECT (server inbound friendly).'}
+      </Typography.Paragraph>
+
+      <Card
+        title={t('routing.groups')}
+        extra={
+          <Button type="primary" icon={<FolderPlus size={16} />} onClick={() => setGroupOpen(true)}>
+            {t('routing.addGroup')}
+          </Button>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <Table
+          size={isMobile ? 'small' : 'middle'}
+          loading={loading}
+          pagination={false}
+          scroll={isMobile ? { x: 480 } : undefined}
+          rowKey={(_, i) => String(i)}
+          dataSource={groups}
+          columns={[
+            { title: t('common.name'), dataIndex: 'name', ellipsis: true },
+            { title: t('common.type'), dataIndex: 'type', width: isMobile ? 90 : 120 },
+            {
+              title: t('routing.proxies'),
+              dataIndex: 'proxies',
+              ellipsis: true,
+              render: (v: string[]) => (v || []).join(', '),
+            },
+            {
+              title: t('common.actions'),
+              key: 'a',
+              width: 72,
+              render: (_: any, __: any, idx: number) => (
+                <Popconfirm title={t('common.confirmDelete')} onConfirm={() => onDeleteGroup(idx)}>
+                  <Button size="small" danger icon={<Trash2 size={16} />} />
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
       </Card>
-      <Card title={t('routing.rules')} extra={<Button type="primary" icon={<SaveOutlined />} onClick={onSaveRules}>{t('common.save')}</Button>}>
-        <Input.TextArea rows={12} value={rulesText} onChange={(e) => setRulesText(e.target.value)} placeholder={'GEOIP,CN,DIRECT\nMATCH,PROXY'} />
+
+      <Card title={t('routing.rules')} extra={isMobile ? undefined : ruleCardExtra}>
+        {isMobile ? <div style={{ marginBottom: 12 }}>{ruleCardExtra}</div> : null}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {rules.map((row, index) => (
+            <div
+              key={row.key || newRuleKey()}
+              style={{
+                border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: 8,
+                padding: isMobile ? 10 : 12,
+                background: 'var(--ant-color-bg-container, #fff)',
+              }}
+            >
+              {row.raw ? (
+                <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                  <Typography.Text type="warning">
+                    {t('routing.rawRule') || 'Advanced / unparsed rule (saved as-is)'}
+                  </Typography.Text>
+                  <Input.TextArea
+                    rows={2}
+                    value={row.raw}
+                    onChange={(e) => updateRule(index, { raw: e.target.value })}
+                  />
+                </Space>
+              ) : (
+                <Space direction={isMobile ? 'vertical' : 'horizontal'} wrap style={{ width: '100%' }} size={8}>
+                  <Select
+                    style={{ width: isMobile ? '100%' : 160 }}
+                    value={row.type}
+                    options={RULE_TYPES.map((x) => ({ value: x, label: x }))}
+                    onChange={(v) => updateRule(index, { type: v })}
+                  />
+                  {row.type !== 'MATCH' ? (
+                    <Input
+                      style={{ width: isMobile ? '100%' : 200, flex: 1 }}
+                      placeholder={
+                        row.type === 'GEOIP'
+                          ? 'CN'
+                          : row.type?.startsWith('IP-')
+                            ? '1.1.1.1/32'
+                            : 'example.com'
+                      }
+                      value={row.payload}
+                      onChange={(e) => updateRule(index, { payload: e.target.value })}
+                    />
+                  ) : null}
+                  <Select
+                    showSearch
+                    style={{ width: isMobile ? '100%' : 160 }}
+                    value={row.target}
+                    options={targetOptions}
+                    onChange={(v) => updateRule(index, { target: v })}
+                    placeholder="DIRECT"
+                  />
+                  {(row.type === 'IP-CIDR' || row.type === 'IP-CIDR6' || row.type === 'GEOIP') && (
+                    <Space>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        no-resolve
+                      </Typography.Text>
+                      <Switch
+                        size="small"
+                        checked={row.noResolve}
+                        onChange={(v) => updateRule(index, { noResolve: v })}
+                      />
+                    </Space>
+                  )}
+                </Space>
+              )}
+              <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  #{index + 1}
+                  {!row.raw ? ` · ${serializeRules([row])[0] || ''}` : ''}
+                </Typography.Text>
+                <Space size={4}>
+                  <Tooltip title={t('routing.moveUp') || 'Move up'}>
+                    <Button size="small" icon={<ArrowUp size={14} />} disabled={index === 0} onClick={() => moveRule(index, -1)} />
+                  </Tooltip>
+                  <Tooltip title={t('routing.moveDown') || 'Move down'}>
+                    <Button
+                      size="small"
+                      icon={<ArrowDown size={14} />}
+                      disabled={index === rules.length - 1}
+                      onClick={() => moveRule(index, 1)}
+                    />
+                  </Tooltip>
+                  <Button size="small" danger icon={<Trash2 size={14} />} disabled={rules.length <= 1} onClick={() => removeRule(index)} />
+                </Space>
+              </div>
+            </div>
+          ))}
+        </div>
         <div style={{ marginTop: 8, opacity: 0.65, fontSize: 12 }}>{t('routing.rulesHint')}</div>
       </Card>
-      <Modal open={groupOpen} title={t('routing.addGroup')} onCancel={() => setGroupOpen(false)} onOk={() => form.submit()} destroyOnClose width={isMobile ? '100%' : 520} style={isMobile ? { top: 8 } : undefined}>
+
+      <Modal
+        open={groupOpen}
+        title={t('routing.addGroup')}
+        onCancel={() => setGroupOpen(false)}
+        onOk={() => form.submit()}
+        destroyOnClose
+        width={isMobile ? '100%' : 520}
+        style={isMobile ? { top: 8 } : undefined}
+      >
         <Form form={form} layout="vertical" onFinish={onAddGroup} initialValues={{ type: 'select' }}>
-          <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
           <Form.Item name="type" label={t('common.type')}>
-            <Select options={[
-              { value: 'select', label: 'select' }, { value: 'url-test', label: 'url-test' },
-              { value: 'fallback', label: 'fallback' }, { value: 'load-balance', label: 'load-balance' },
-            ]} />
+            <Select
+              options={[
+                { value: 'select', label: 'select' },
+                { value: 'url-test', label: 'url-test' },
+                { value: 'fallback', label: 'fallback' },
+                { value: 'load-balance', label: 'load-balance' },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="proxies" label={t('routing.proxies')} tooltip={t('routing.proxiesHint')}>
-            <Input placeholder="DIRECT, Proxy1, Proxy2" />
+            <Select
+              mode="tags"
+              tokenSeparators={[',', ' ']}
+              placeholder="DIRECT, WARP-OUT, …"
+              options={targetOptions}
+            />
           </Form.Item>
-          <Form.Item name="url" label="URL (url-test)"><Input placeholder="http://www.gstatic.com/generate_204" /></Form.Item>
-          <Form.Item name="interval" label="Interval (s)"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="url" label="URL (url-test)">
+            <Input placeholder="http://www.gstatic.com/generate_204" />
+          </Form.Item>
+          <Form.Item name="interval" label="Interval (s)">
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        open={warpOpen}
+        title={t('routing.warpInjectTitle') || 'Inject Cloudflare WARP outbound'}
+        onCancel={() => setWarpOpen(false)}
+        onOk={onInjectWarp}
+        confirmLoading={warpBusy}
+        okText={t('routing.warpInject') || 'Register & inject'}
+        width={isMobile ? '100%' : 480}
+        style={isMobile ? { top: 8 } : undefined}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary">
+          {t('routing.warpInjectHint') ||
+            'Registers a WARP account, adds the outbound into visual-config proxies, and optionally adjusts rules. Then generate & apply to load into Mihomo.'}
+        </Typography.Paragraph>
+        <Form form={warpForm} layout="vertical" initialValues={{ mode: 'wireguard', rule_mode: 'match', name: 'WARP-OUT' }}>
+          <Form.Item name="mode" label={t('routing.warpMode') || 'Mode'}>
+            <Select
+              options={[
+                { value: 'wireguard', label: 'WireGuard' },
+                { value: 'masque', label: 'MASQUE' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="name" label={t('routing.warpName') || 'Outbound name'}>
+            <Input placeholder="WARP-OUT" />
+          </Form.Item>
+          <Form.Item name="rule_mode" label={t('routing.warpRuleMode') || 'Rule update'}>
+            <Select
+              options={[
+                { value: 'none', label: t('routing.warpRuleNone') || 'Do not change rules' },
+                { value: 'match', label: t('routing.warpRuleMatch') || 'Final MATCH → this outbound' },
+                { value: 'cn_direct', label: t('routing.warpRuleCn') || 'GEOIP CN DIRECT + MATCH outbound' },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+        <Divider style={{ margin: '8px 0' }} />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('routing.warpNote') || 'Requires outbound connectivity from the panel to Cloudflare.'}
+        </Typography.Text>
       </Modal>
     </div>
   );

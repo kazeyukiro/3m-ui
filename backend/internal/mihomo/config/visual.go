@@ -156,3 +156,99 @@ func SaveVisualConfig(db *gorm.DB, cfg VisualConfig) error {
 	}
 	return db.Create(&fragment).Error
 }
+
+// InjectWARPProxy merges a WARP outbound (from register YAML) into visual proxies.
+// ruleMode: ""|"none" — no rule change; "match" — append MATCH,<name> (before last MATCH if any);
+// "cn_direct" — ensure GEOIP,CN,DIRECT then MATCH,<name>.
+func InjectWARPProxy(db *gorm.DB, proxyYAML string, proxyName string, ruleMode string) (VisualConfig, error) {
+	cfg, err := GetVisualConfig(db)
+	if err != nil {
+		return cfg, err
+	}
+	var frag map[string]interface{}
+	if err := yaml.Unmarshal([]byte(proxyYAML), &frag); err != nil {
+		return cfg, fmt.Errorf("parse WARP yaml: %w", err)
+	}
+	// Accept either {proxies:[{...}]} or a single proxy map, or full config snippet.
+	var proxyMap map[string]interface{}
+	if list, ok := frag["proxies"].([]interface{}); ok && len(list) > 0 {
+		if m, ok := list[0].(map[string]interface{}); ok {
+			proxyMap = m
+		}
+	} else if frag["type"] != nil && frag["name"] != nil {
+		proxyMap = frag
+	}
+	if proxyMap == nil {
+		return cfg, fmt.Errorf("WARP yaml has no proxies entry")
+	}
+	name := proxyName
+	if name == "" {
+		if n, ok := proxyMap["name"].(string); ok && n != "" {
+			name = n
+		} else {
+			name = "WARP-OUT"
+		}
+	}
+	proxyMap["name"] = name
+	typ, _ := proxyMap["type"].(string)
+	server, _ := proxyMap["server"].(string)
+	port := proxyMap["port"]
+	opts := map[string]interface{}{}
+	for k, v := range proxyMap {
+		if k == "name" || k == "type" || k == "server" || k == "port" {
+			continue
+		}
+		opts[k] = v
+	}
+	entry := ProxyEntry{Name: name, Type: typ, Server: server, Port: port, Options: opts}
+	// Replace existing same name
+	replaced := false
+	for i, p := range cfg.Proxies {
+		if p.Name == name {
+			cfg.Proxies[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		cfg.Proxies = append(cfg.Proxies, entry)
+	}
+
+	ruleMode = strings.ToLower(strings.TrimSpace(ruleMode))
+	switch ruleMode {
+	case "", "none":
+		// leave rules
+	case "match":
+		cfg.Rules = appendRulePreferLastMatch(cfg.Rules, "MATCH,"+name)
+	case "cn_direct":
+		cfg.Rules = []string{"GEOIP,CN,DIRECT", "MATCH," + name}
+	default:
+		return cfg, fmt.Errorf("invalid rule_mode %q", ruleMode)
+	}
+	if err := SaveVisualConfig(db, cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}
+
+func appendRulePreferLastMatch(rules []string, matchRule string) []string {
+	out := make([]string, 0, len(rules)+1)
+	inserted := false
+	for _, r := range rules {
+		tr := strings.TrimSpace(r)
+		if strings.HasPrefix(strings.ToUpper(tr), "MATCH,") {
+			if !inserted {
+				out = append(out, matchRule)
+				inserted = true
+			}
+			continue // drop old MATCH lines; single final MATCH
+		}
+		if tr != "" {
+			out = append(out, tr)
+		}
+	}
+	if !inserted {
+		out = append(out, matchRule)
+	}
+	return out
+}
