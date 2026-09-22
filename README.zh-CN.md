@@ -27,6 +27,7 @@
 | **节点** | 协议注册表驱动的 Listener：VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC 等；REALITY、TLS 自签、一键批量证书、**流量倍率**、传输层字段校验 |
 | **用户** | 绑定节点、流量限额、**按节点分别计量**（计费 = 实际 × 节点倍率）、到期、IP/订阅拉取限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
 | **订阅** | UA 识别 Clash/Mihomo YAML、v2ray Base64（`?target=v2ray` 始终 Base64）、sing-box JSON；可选 `?target=`；HTML 订阅页；TUIC/HY2 分享链含客户端 TLS 参数 |
+| **路由** | 结构化规则、策略组、模板、WARP 注入；保存后生成并应用 |
 | **配置** | 生成 → 校验 → 应用；失败回滚上一份 `config.yaml` |
 | **运维** | 核心启停/更新、日志、仪表盘、在线连接、Geo、面板 SSL/ACME、WARP 一键、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
@@ -37,6 +38,7 @@
 ### 补充说明
 
 - [用户限制：IP · 订阅拉取](docs/users-limits.md)
+- [路由与策略组](docs/routing.md)
 - [按节点流量与倍率](docs/node-traffic.md)
 - [批量应用节点证书](docs/batch-certificate.md)
 - [订阅格式与 target](docs/subscription-formats.md)

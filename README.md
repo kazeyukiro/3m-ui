@@ -31,6 +31,7 @@
 | **用户** | 绑定节点、流量限额、**按节点分别计量**（计费 = 实际 × 节点倍率）、到期、IP/订阅拉取限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
 | **订阅** | UA 自动识别 Clash/Mihomo YAML、v2ray Base64（`?target=v2ray` 始终 Base64）、sing-box JSON；可选 `?target=`；HTML 订阅页；TUIC/HY2 分享链含 SNI/`allow_insecure` 等客户端参数 |
 | **配置** | 生成 → 校验 → 应用 分离；失败回滚上一份 `config.yaml` |
+| **路由** | 结构化规则（类型/目标/排序）、策略组、模板、WARP 注入出站；保存后需生成并应用 |
 | **运维** | 核心启停/更新、日志、仪表盘、在线连接、Geo、面板 SSL/ACME、WARP 一键、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、同步节点镜像、合并订阅；**按名称选择本机节点推送**到远程（默认禁用，可改名/端口） |
@@ -44,6 +45,7 @@
 - [批量应用节点证书](docs/batch-certificate.md)
 - [订阅格式与 target](docs/subscription-formats.md)
 - [多机节点 / 推送](docs/cluster.md)
+- [路由与策略组](docs/routing.md)
 
 前端：**React + Ant Design + Lucide Icons**（`frontend/`），构建后嵌入单一 Go 二进制。
 

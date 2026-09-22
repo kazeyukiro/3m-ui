@@ -1285,3 +1285,60 @@ components:
       bearerFormat: JWT
 security:
   - bearerAuth: []
+
+
+  /api/v1/config/rules:
+    get:
+      summary: List Mihomo routing rules (visual-config)
+      tags: [Config]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Array of rule line strings
+    put:
+      summary: Replace routing rules
+      tags: [Config]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { type: string }
+      responses:
+        "200":
+          description: Saved rules
+  /api/v1/config/groups:
+    get:
+      summary: List proxy-groups (visual-config)
+      tags: [Config]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Group list
+    put:
+      summary: Replace proxy-groups
+      tags: [Config]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Saved groups
+  /api/v1/config/routing/inject-warp:
+    post:
+      summary: Register WARP and merge outbound into visual-config
+      tags: [Config]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [wireguard, masque] }
+                rule_mode: { type: string, enum: [none, match, cn_direct] }
+                name: { type: string }
+      responses:
+        "200":
+          description: Updated visual rules and proxies
+

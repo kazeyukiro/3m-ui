@@ -28,6 +28,7 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | **Users** | Bind nodes, traffic/expiry, **per-node usage** (billed = raw × node multiplier), IP/sub-pull limits, start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
 | **Subscriptions** | UA routing for Clash/Mihomo YAML, v2ray Base64 (`?target=v2ray` always Base64), sing-box JSON; optional `?target=`; HTML info page; TUIC/HY2 share TLS params |
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
+| **Routing** | Structured Mihomo rules, proxy-groups, templates, WARP inject; save then generate & apply |
 | **Ops** | Core start/stop/update, logs, dashboard, online connections, Geo, panel SSL/ACME, WARP one-click, backup/restore |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; **push local nodes by name** (created disabled on remote) |
@@ -100,6 +101,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - [Batch node certificates](docs/batch-certificate.md)
 - [Subscription formats](docs/subscription-formats.md)
 - [Cluster / push nodes](docs/cluster.md)
+- [Routing & groups](docs/routing.md)
 
 - Go, Node.js, and the open-source community
 
