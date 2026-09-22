@@ -108,4 +108,3 @@ func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 		})
 	})
 }
-
