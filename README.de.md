@@ -68,7 +68,9 @@ Statische Binaries: [Releases](https://github.com/kazeyukiro/3m-ui/releases).
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — core engine and listener model
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — listener examples
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — panel UX inspiration
-- Gin, GORM, React, Ant Design, Lucide Icons, Zustand, golang-jwt/jwt
+- [Gin](https://github.com/gin-gonic/gin), [GORM](https://github.com/go-gorm/gorm), [React](https://github.com/facebook/react), [Ant Design](https://github.com/ant-design/ant-design)
+- [Lucide](https://github.com/lucide-icons/lucide) — icons (`lucide-react`)
+- [Zustand](https://github.com/pmndrs/zustand), [golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 - Go, Node.js, and the open-source community
 
 Mitwirkende: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)

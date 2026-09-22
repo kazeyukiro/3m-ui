@@ -68,7 +68,9 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 - [Mihomo](https://github.com/MetaCubeX/mihomo) — 核心引擎与 Listener 模型
 - [clashmeta-inbound](https://github.com/Tychristine/clashmeta-inbound/) — Listener 示例
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — 面板交互参考
-- Gin、GORM、React、Ant Design、Lucide Icons、Zustand、golang-jwt/jwt
+- [Gin](https://github.com/gin-gonic/gin) / [GORM](https://github.com/go-gorm/gorm) / [React](https://github.com/facebook/react) / [Ant Design](https://github.com/ant-design/ant-design)
+- [Lucide](https://github.com/lucide-icons/lucide) — 圖示（`lucide-react`）
+- [Zustand](https://github.com/pmndrs/zustand) / [golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 - Go、Node.js 与开源社区
 
 貢獻者: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contributors)
