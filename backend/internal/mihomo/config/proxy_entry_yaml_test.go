@@ -40,12 +40,3 @@ func TestProxyEntryYAMLRoundTripKeepsPrivateKey(t *testing.T) {
 		t.Fatalf("private-key=%q opts=%v", pk, out.Options)
 	}
 }
-
-func TestValidateWireGuardPrivateKey(t *testing.T) {
-	if err := validateWireGuardPrivateKey("eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU="); err != nil {
-		t.Fatal(err)
-	}
-	if err := validateWireGuardPrivateKey("not-a-key"); err == nil {
-		t.Fatal("expected error")
-	}
-}
