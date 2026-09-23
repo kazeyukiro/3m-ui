@@ -1,6 +1,9 @@
+<!-- server split removed: visual routing is client-subscription only -->
 # Routing & proxy-groups
 
-Panel page **Routing** edits the **client subscription** layout (proxy-groups + rules) stored in `visual-config`. Mihomo/Clash YAML subscriptions export these groups with your nodes injected into leaf selects. Server core still uses the same fragment when generating `config.yaml` (default remains inbound-friendly).
+Panel page **Routing** edits the **client subscription** layout only (`proxy-groups` + `rules` in `visual-config`). Mihomo/Clash YAML subscriptions export these groups with your nodes injected into leaf selects.
+
+**Server-side split is disabled:** the panel Mihomo process always uses `MATCH,DIRECT` (inbound panel). Visual rules/groups/proxies are **not** merged into the serving `config.yaml`.
 
 ## Defaults
 

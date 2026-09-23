@@ -106,7 +106,7 @@ const RoutingPage: React.FC = () => {
       title: t('routing.applyPromptTitle') || 'Apply configuration?',
       content:
         t('routing.applyPromptBody') ||
-        'Rules and groups are saved to the panel database. Generate and apply so Mihomo reloads them now?',
+        'Saved for client subscriptions. Generate & apply only refreshes the panel core (server stays MATCH,DIRECT — no server-side split). Update the subscription in your client to see new groups.',
       okText: t('routing.applyNow') || 'Generate & apply',
       cancelText: t('common.cancel') || 'Later',
       centered: true,
@@ -338,7 +338,7 @@ const RoutingPage: React.FC = () => {
       <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
       <Typography.Paragraph type="secondary" style={{ marginTop: -8, marginBottom: 12 }}>
         {t('routing.pageHint') ||
-          'Proxy-groups and rules are stored in visual-config and exported into Mihomo/Clash client subscriptions (nodes are filled into leaf groups). Generate & apply also updates the panel core config.'}
+          'Proxy-groups and rules are for **client** Mihomo/Clash subscriptions only (not server-side split). Save, then update the subscription in the client. Panel core always uses MATCH,DIRECT.'}
       </Typography.Paragraph>
 
       <Card
