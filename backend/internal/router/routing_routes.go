@@ -62,5 +62,4 @@ func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 		}
 		c.JSON(http.StatusOK, visual.Rules)
 	})
-	})
 }

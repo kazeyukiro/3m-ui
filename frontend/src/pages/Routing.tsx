@@ -278,6 +278,8 @@ const RoutingPage: React.FC = () => {
   const ruleCardExtra = (
     <Space wrap size="small">
       <Dropdown menu={templateMenu}>
+        <Button size="small">{t('routing.templates') || 'Templates'}</Button>
+      </Dropdown>
       <Button size="small" icon={<ListPlus size={16} />} onClick={addRule}>
         {t('routing.addRule') || 'Add rule'}
       </Button>
