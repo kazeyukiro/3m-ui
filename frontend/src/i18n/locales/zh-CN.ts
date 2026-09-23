@@ -733,7 +733,7 @@ export default {
     "tplCnDirect": "国内 GEOIP 直连，其余走策略组",
     "tplDirect": "仅 MATCH → DIRECT",
     "templates": "模板",
-    "templateApplied": "模板已填入 — 请点保存写入",
+    "templateApplied": "模板已应用：已覆盖并保存规则/策略组",
     "ruleWarnMatch": "建议最后一条为 MATCH",
     "ruleInvalid": "规则无效",
     "applyDone": "配置已应用",

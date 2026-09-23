@@ -137,7 +137,7 @@ export function validateRules(rows: RuleRow[]): RuleIssue[] {
 /** Result of a routing template (rules + recommended proxy-groups). */
 export type TemplateResult = {
   rules: RuleRow[];
-  /** When non-empty, replace or merge into panel groups (see Routing page). */
+  /** When non-empty, fully replace panel groups (template switch = overwrite). */
   groups?: Array<{
     name: string;
     type: string;
@@ -145,7 +145,7 @@ export type TemplateResult = {
     url?: string;
     interval?: number;
   }>;
-  /** If true, merge groups by name instead of wiping existing groups. */
+  /** @deprecated Templates always replace groups when `groups` is set. Kept for type compat. */
   mergeGroups?: boolean;
 };
 
@@ -180,7 +180,6 @@ export function applyTemplate(
           emptyRule({ type: 'MATCH', target: g }),
         ],
         groups: [select(g, leafOrDirect)],
-        mergeGroups: true,
       };
 
     case 'reject_ads':
@@ -197,7 +196,6 @@ export function applyTemplate(
       return {
         rules: [emptyRule({ type: 'MATCH', target: g })],
         groups: [select(g, leafOrDirect)],
-        mergeGroups: true,
       };
 
     // —— YiXuanZX/rules: region selects + 代理 / AI / TG ——
@@ -210,7 +208,6 @@ export function applyTemplate(
         select('TG', ['香港', '新加坡', '日本', '美国', '其他', 'DIRECT']),
       ];
       return {
-        mergeGroups: true,
         groups,
         rules: [
           emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
@@ -236,7 +233,6 @@ export function applyTemplate(
         select('风控安全', leafOrDirect),
       ];
       return {
-        mergeGroups: true,
         groups,
         rules: [
           emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
@@ -269,7 +265,6 @@ export function applyTemplate(
         select('漏网之鱼', ['默认代理', 'DIRECT', 'REJECT']),
       ];
       return {
-        mergeGroups: true,
         groups,
         rules: [
           emptyRule({ type: 'GEOSITE', payload: 'private', target: '直连' }),

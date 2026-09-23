@@ -220,32 +220,32 @@ const RoutingPage: React.FC = () => {
       groupName: groups.find((g) => g.name === 'PROXY')?.name || groups[0]?.name || 'PROXY',
       existingProxies: proxyNames,
     });
-    setRules(tpl.rules);
-    if (tpl.groups && tpl.groups.length) {
-      try {
-        let next: GroupEntry[] = tpl.groups.map((g) => ({
+    // Template switch always overwrites rules (never append).
+    const nextRules = tpl.rules;
+    setRules(nextRules);
+    try {
+      // Persist rules immediately so a refresh does not revive the previous template.
+      const savedRules = await saveRules(serializeRules(nextRules));
+      setRules(parseRulesText((Array.isArray(savedRules) ? savedRules : serializeRules(nextRules)).join('\n')));
+
+      // When the template ships groups, replace the whole group list (no merge / no leftovers).
+      if (tpl.groups && tpl.groups.length) {
+        const next: GroupEntry[] = tpl.groups.map((g) => ({
           name: g.name,
           type: g.type || 'select',
           proxies: g.proxies?.length ? g.proxies : ['DIRECT'],
           ...(g.url ? { url: g.url } : {}),
           ...(g.interval != null ? { interval: g.interval } : {}),
         }));
-        if (tpl.mergeGroups) {
-          const byName = new Map<string, GroupEntry>(groups.map((g) => [g.name, g]));
-          for (const g of next) {
-            byName.set(g.name, { ...(byName.get(g.name) || {}), ...g });
-          }
-          next = Array.from(byName.values());
-        }
         const saved = await saveGroups(next);
         setGroups(Array.isArray(saved) ? saved : next);
-      } catch (e: any) {
-        message.error(errMsg(e));
-        return;
       }
+    } catch (e: any) {
+      message.error(errMsg(e));
+      return;
     }
     message.success(
-      (t('routing.templateApplied') || 'Template applied — save to persist') +
+      (t('routing.templateApplied') || 'Template applied (replaced previous rules/groups)') +
         (id.startsWith('community-')
           ? ' · ' + (t('routing.tplCommunityHint') || 'Needs Geo files (Settings → update geodata)')
           : ''),

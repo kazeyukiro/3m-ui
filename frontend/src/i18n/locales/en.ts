@@ -733,7 +733,7 @@ export default {
     "tplCnDirect": "GEOIP CN → DIRECT, else first group",
     "tplDirect": "MATCH → DIRECT only",
     "templates": "Templates",
-    "templateApplied": "Template applied — click Save to persist",
+    "templateApplied": "Template applied — previous rules/groups replaced and saved",
     "ruleWarnMatch": "Last rule should be MATCH (recommended)",
     "ruleInvalid": "Invalid rules",
     "applyDone": "Configuration applied",
