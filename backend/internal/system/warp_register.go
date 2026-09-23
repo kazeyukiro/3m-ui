@@ -2,45 +2,65 @@ package system
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
+	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/curve25519"
 )
+
+// Cloudflare consumer registration API (same endpoint family as m-ui / 3x-ui / wgcf).
+const warpAPIBase = "https://api.cloudflareclient.com/v0a2158"
 
 // WARPRegisterResult is the material needed to build a Mihomo WARP outbound.
 type WARPRegisterResult struct {
 	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
-	Address    string `json:"address"`               // IPv4 address (no CIDR)
-	IPv6       string `json:"ipv6,omitempty"`        // IPv6 address (no CIDR)
-	Reserved   []int  `json:"reserved,omitempty"`    // 3-byte reserved (decoded from client_id)
-	YAML       string `json:"yaml"`                  // WireGuard outbound YAML
-	MasqueYAML string `json:"masque_yaml,omitempty"` // MASQUE outbound YAML (WARP default protocol)
+	PublicKey  string `json:"public_key"` // peer (server) public key
+	Address    string `json:"address"`
+	IPv6       string `json:"ipv6,omitempty"`
+	Reserved   []int  `json:"reserved,omitempty"`
+	Server     string `json:"server,omitempty"`
+	Port       int    `json:"port,omitempty"`
+	DeviceID   string `json:"device_id,omitempty"`
+	YAML       string `json:"yaml"`
+	MasqueYAML string `json:"masque_yaml,omitempty"`
 }
 
-type cfRegRequest struct {
-	Key          string `json:"key"`
-	InstallID    string `json:"install_id"`
-	FCMToken     string `json:"fcm_token"`
-	TOS          string `json:"tos"`
-	Model        string `json:"model"`
-	SerialNumber string `json:"serial_number"`
-	Locale       string `json:"locale"`
+type warpDevice struct {
+	ID      string           `json:"id"`
+	Token   string           `json:"token,omitempty"`
+	Name    string           `json:"name"`
+	Model   string           `json:"model"`
+	Enabled bool             `json:"enabled"`
+	Account warpAccountInfo  `json:"account"`
+	Config  warpTunnelConfig `json:"config"`
 }
 
-// cfConfig captures the part of Cloudflare's response that 3m-ui needs.
-// The WARP API historically returned the device object wrapped in
-// {"result": {...}}; current deployments return the device object at the
-// top level. RegisterWARP tolerates both shapes by decoding the device
-// object twice (once via Result, once via top-level fields).
-type cfConfig struct {
+type warpAccountInfo struct {
+	License     string `json:"license"`
+	AccountType string `json:"account_type"`
+	Role        string `json:"role"`
+	PremiumData uint64 `json:"premium_data"`
+	Quota       uint64 `json:"quota"`
+	Usage       uint64 `json:"usage"`
+}
+
+type warpTunnelConfig struct {
+	ClientID  string `json:"client_id"`
+	Interface struct {
+		Addresses struct {
+			V4 string `json:"v4"`
+			V6 string `json:"v6"`
+		} `json:"addresses"`
+	} `json:"interface"`
 	Peers []struct {
 		PublicKey string `json:"public_key"`
 		Endpoint  struct {
@@ -49,177 +69,200 @@ type cfConfig struct {
 			V6   string `json:"v6"`
 		} `json:"endpoint"`
 	} `json:"peers"`
-	Interface struct {
-		Addresses struct {
-			V4 string `json:"v4"`
-			V6 string `json:"v6"`
-		} `json:"addresses"`
-	} `json:"interface"`
-	ClientID string `json:"client_id"`
 }
 
-type cfRegResponse struct {
-	// Legacy shape: {"result": {"config": {...}, ...}}
-	Result struct {
-		ID      string   `json:"id"`
-		Type    string   `json:"type"`
-		Model   string   `json:"model"`
-		Config  cfConfig `json:"config"`
-		Token   string   `json:"token"`
-		Account struct {
-			AccountType string `json:"account_type"`
-		} `json:"account"`
-	} `json:"result"`
-	// Current shape: {"id":..., "config": {...}, ...}
-	ID      string   `json:"id"`
-	Type    string   `json:"type"`
-	Model   string   `json:"model"`
-	Config  cfConfig `json:"config"`
-	Token   string   `json:"token"`
-	Account struct {
-		AccountType string `json:"account_type"`
-	} `json:"account"`
+type warpHTTPClient struct {
+	baseURL    string
+	httpClient *http.Client
 }
 
-func genWireGuardKeyPair() (privB64, pubB64 string, err error) {
-	var priv [32]byte
-	if _, err = rand.Read(priv[:]); err != nil {
-		return "", "", err
+func defaultWarpClient() *warpHTTPClient {
+	return &warpHTTPClient{
+		baseURL: warpAPIBase,
+		httpClient: &http.Client{
+			Timeout: 20 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
-	// Clamp per RFC 7748 §5: priv[0] &= 248, priv[31] &= 127, priv[31] |= 64.
-	// Note: x/crypto's X25519 also clamps internally, but we still clamp here
-	// so the stored private key matches the wire-format expected by Mihomo
-	// and other WireGuard implementations.
-	priv[0] &= 248
-	priv[31] &= 127
-	priv[31] |= 64
-	// Use the modern X25519 API (RFC 7748). The legacy ScalarBaseMult API is
-	// deprecated in x/crypto and produced pubkeys that Cloudflare's WARP API
-	// silently rejected (HTTP 200 with empty config.interface.addresses),
-	// triggering "warp register: empty interface addresses".
-	pub, err := curve25519.X25519(priv[:], curve25519.Basepoint)
-	if err != nil {
-		return "", "", fmt.Errorf("curve25519 X25519: %w", err)
-	}
-	return base64.StdEncoding.EncodeToString(priv[:]), base64.StdEncoding.EncodeToString(pub), nil
 }
 
-// RegisterWARP performs a Cloudflare WARP device registration (wgcf-style) and
-// returns private key, assigned addresses, and a ready Mihomo YAML fragment.
-func RegisterWARP() (*WARPRegisterResult, error) {
-	priv, pub, err := genWireGuardKeyPair()
-	if err != nil {
-		return nil, err
+func (c *warpHTTPClient) request(ctx context.Context, method, path string, input, output any) error {
+	var body io.Reader
+	if input != nil {
+		data, err := json.Marshal(input)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(data)
 	}
-	body, _ := json.Marshal(cfRegRequest{
-		Key:          pub,
-		InstallID:    "",
-		FCMToken:     "",
-		TOS:          time.Now().UTC().Format(time.RFC3339),
-		Model:        "3m-ui",
-		SerialNumber: "",
-		Locale:       "en_US",
-	})
-	req, err := http.NewRequest(http.MethodPost, "https://api.cloudflareclient.com/v0a2158/reg", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("warp: build request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	req.Header.Set("User-Agent", "okhttp/3.12.1")
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("CF-Client-Version", "a-7.21-0721")
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("warp register request: %w", err)
+		return fmt.Errorf("warp: connect Cloudflare failed (check outbound network): %w", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("warp register HTTP %d: %s", resp.StatusCode, truncate(string(raw), 200))
+		return fmt.Errorf("warp: Cloudflare HTTP %d", resp.StatusCode)
 	}
-	var parsed cfRegResponse
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, fmt.Errorf("warp register decode: %w", err)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
+	if err != nil || len(data) > 1<<20 {
+		return fmt.Errorf("warp: response read failed or too large")
 	}
-	// Cloudflare WARP API responses come in two shapes depending on endpoint
-	// version / region: legacy {"result":{"config":{...}}} and current
-	// top-level {"config":{...}}. Prefer the legacy wrapper when present
-	// (non-empty Result.ID), otherwise fall back to top-level fields.
-	cfg := parsed.Result.Config
-	if parsed.Result.ID == "" {
-		cfg = parsed.Config
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return fmt.Errorf("warp: invalid response object")
 	}
-	v4 := cfg.Interface.Addresses.V4
-	v6 := cfg.Interface.Addresses.V6
-	if v4 == "" && v6 == "" {
-		return nil, fmt.Errorf("warp register: empty interface addresses (v4=%q v6=%q, raw: %s)",
-			v4, v6, truncate(string(raw), 800))
+	var envelope struct {
+		Success *bool             `json:"success"`
+		Errors  []json.RawMessage `json:"errors"`
+		Result  json.RawMessage   `json:"result"`
 	}
-	reserved := decodeWARPClientID(cfg.ClientID)
-	yaml, err := WARPTemplate(priv, v4, v6, reserved)
+	if err = json.Unmarshal(data, &envelope); err != nil {
+		return fmt.Errorf("warp: invalid JSON")
+	}
+	if envelope.Success != nil && !*envelope.Success || len(envelope.Errors) > 0 {
+		return fmt.Errorf("warp: Cloudflare rejected the request")
+	}
+	if len(envelope.Result) > 0 && string(envelope.Result) != "null" {
+		data = envelope.Result
+	}
+	if output != nil {
+		if err = json.Unmarshal(data, output); err != nil {
+			return fmt.Errorf("warp: decode device: %w", err)
+		}
+	}
+	return nil
+}
+
+func decodeWarpKey(value string) ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(value))
+	if err != nil || len(data) != 32 {
+		return nil, fmt.Errorf("WireGuard key must be 32-byte base64")
+	}
+	return data, nil
+}
+
+func warpAddress(value string, ipv4 bool) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	address, err := netip.ParseAddr(value)
+	if err != nil {
+		if prefix, prefixErr := netip.ParsePrefix(value); prefixErr == nil {
+			address = prefix.Addr()
+			err = nil
+		}
+	}
+	if err != nil || address.Is4() != ipv4 {
+		return "", fmt.Errorf("invalid tunnel address %q", value)
+	}
+	return address.String(), nil
+}
+
+func valueOr(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	return b
+}
+
+// RegisterWARP registers a Cloudflare WARP device (m-ui / 3x-ui style) and
+// returns a Mihomo WireGuard outbound YAML fragment.
+func RegisterWARP() (*WARPRegisterResult, error) {
+	return registerWARPWithClient(context.Background(), defaultWarpClient())
+}
+
+func registerWARPWithClient(ctx context.Context, client *warpHTTPClient) (*WARPRegisterResult, error) {
+	if client == nil {
+		client = defaultWarpClient()
+	}
+	key, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("warp: generate key: %w", err)
+	}
+	privB64 := base64.StdEncoding.EncodeToString(key.Bytes())
+	pubB64 := base64.StdEncoding.EncodeToString(key.PublicKey().Bytes())
+
+	input := map[string]any{
+		"key":   pubB64,
+		"tos":   time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+		"type":  "PC",
+		"model": "3m-ui",
+		"name":  "3m-ui",
+	}
+	var device warpDevice
+	if err = client.request(ctx, http.MethodPost, "/reg", input, &device); err != nil {
+		return nil, err
+	}
+	if device.ID == "" {
+		return nil, fmt.Errorf("warp: empty device id")
+	}
+	if _, err = decodeWarpKey(privB64); err != nil {
+		return nil, err
+	}
+
+	cfg := device.Config
+	if len(cfg.Peers) == 0 {
+		return nil, fmt.Errorf("warp: no WireGuard peer yet — retry registration")
+	}
+	peer := cfg.Peers[0]
+	if _, err = decodeWarpKey(peer.PublicKey); err != nil {
+		return nil, fmt.Errorf("warp: peer public-key invalid")
+	}
+	endpoint := valueOr(peer.Endpoint.Host, valueOr(peer.Endpoint.V4, peer.Endpoint.V6))
+	host, portText, err := net.SplitHostPort(endpoint)
+	port, portErr := strconv.Atoi(portText)
+	if err != nil || portErr != nil || port < 1 || port > 65535 || host == "" || strings.ContainsAny(host, "/\r\n \t") {
+		// Fallback: host-only endpoint + default WARP port
+		host = strings.TrimSpace(endpoint)
+		if host == "" || strings.ContainsAny(host, "/\r\n \t") {
+			return nil, fmt.Errorf("warp: invalid peer endpoint %q", endpoint)
+		}
+		port = 2408
+	}
+
+	reservedRaw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(cfg.ClientID))
+	if err != nil || len(reservedRaw) != 3 {
+		return nil, fmt.Errorf("warp: client_id must be 3-byte base64 (got %q)", cfg.ClientID)
+	}
+	reserved := []int{int(reservedRaw[0]), int(reservedRaw[1]), int(reservedRaw[2])}
+
+	v4, err := warpAddress(cfg.Interface.Addresses.V4, true)
 	if err != nil {
 		return nil, err
 	}
-	masqueYAML, err := WARPMasqueTemplate(priv, v4, v6, "")
+	v6, err := warpAddress(cfg.Interface.Addresses.V6, false)
 	if err != nil {
-		// Non-fatal: masque is a bonus; wireguard yaml already built.
-		// Log to stderr via fmt for now — production code should use log pkg.
-		masqueYAML = ""
+		return nil, err
 	}
+	if v4 == "" && v6 == "" {
+		return nil, fmt.Errorf("warp: empty interface addresses")
+	}
+
+	yamlStr, err := WARPTemplate(privB64, peer.PublicKey, host, port, v4, v6, reserved)
+	if err != nil {
+		return nil, err
+	}
+	masqueYAML, _ := WARPMasqueTemplate(privB64, v4, v6, "")
+
 	return &WARPRegisterResult{
-		PrivateKey: priv,
-		PublicKey:  pub,
+		PrivateKey: privB64,
+		PublicKey:  peer.PublicKey,
 		Address:    v4,
 		IPv6:       v6,
 		Reserved:   reserved,
-		YAML:       yaml,
+		Server:     host,
+		Port:       port,
+		DeviceID:   device.ID,
+		YAML:       yamlStr,
 		MasqueYAML: masqueYAML,
 	}, nil
-}
-
-// decodeWARPClientID converts Cloudflare's client_id field into the 3-byte
-// reserved list Mihomo expects. The client_id can be either:
-//   - a base64 string (e.g. "qVtt" → [171, 91, 109]) — most common
-//   - a numeric string (e.g. "21") — sometimes returned for certain accounts
-//   - a comma-separated list (e.g. "21,22,23") — legacy compat form
-//
-// Returns nil when the input is empty or cannot be decoded (reserved field
-// will be omitted from the YAML, which is acceptable for WARP+ accounts
-// that don't need the reserved hack).
-func decodeWARPClientID(cid string) []int {
-	cid = strings.TrimSpace(cid)
-	if cid == "" {
-		return nil
-	}
-	// Try base64 decode first (the common case).
-	if b, err := base64.StdEncoding.DecodeString(cid); err == nil && len(b) > 0 {
-		out := make([]int, 0, len(b))
-		for _, c := range b {
-			out = append(out, int(c))
-		}
-		return out
-	}
-	// Fallback: treat as comma-separated decimal list ("21" or "21,22,23").
-	var nums []int
-	for _, p := range strings.Split(cid, ",") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		var n int
-		if _, err := fmt.Sscanf(p, "%d", &n); err != nil {
-			return nil // not numeric either — give up, omit reserved
-		}
-		if n < 0 || n > 255 {
-			return nil
-		}
-		nums = append(nums, n)
-	}
-	return nums
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }

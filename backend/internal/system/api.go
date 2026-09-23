@@ -154,16 +154,19 @@ func (h *Handler) UpdateGeoFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"dir": dir, "files": result})
 }
 
-// WARP returns a Mihomo WireGuard fragment for Cloudflare WARP .
+// WARP builds a Mihomo WireGuard fragment from operator-supplied fields
+// (m-ui compatible schema). Prefer POST /templates/warp/register for one-click.
 func (h *Handler) WARP(c *gin.Context) {
 	var body struct {
 		PrivateKey string `json:"private_key"`
-		Address    string `json:"address"` // accepts "v4" or "v4,v6" or just "v6"
+		PublicKey  string `json:"public_key"` // peer public key
+		Server     string `json:"server"`
+		Port       int    `json:"port"`
+		Address    string `json:"address"`
 		IPv6       string `json:"ipv6"`
-		Reserved   string `json:"reserved"` // accepts "21,22,23" or base64 "qVtt"
+		Reserved   []int  `json:"reserved"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	// Split comma-joined Address into v4/v6 for the new WARPTemplate signature.
 	ipv4, ipv6 := body.Address, body.IPv6
 	if i := strings.IndexByte(ipv4, ','); i >= 0 {
 		if ipv6 == "" {
@@ -171,8 +174,19 @@ func (h *Handler) WARP(c *gin.Context) {
 		}
 		ipv4 = strings.TrimSpace(ipv4[:i])
 	}
-	reserved := decodeWARPClientID(body.Reserved)
-	yaml, err := WARPTemplate(body.PrivateKey, ipv4, ipv6, reserved)
+	pub := body.PublicKey
+	if pub == "" {
+		pub = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+	}
+	server := body.Server
+	if server == "" {
+		server = "engage.cloudflareclient.com"
+	}
+	port := body.Port
+	if port == 0 {
+		port = 2408
+	}
+	yaml, err := WARPTemplate(body.PrivateKey, pub, server, port, ipv4, ipv6, body.Reserved)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

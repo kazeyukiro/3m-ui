@@ -126,7 +126,7 @@ func WARPMasqueTemplate(privateKey, ipv4, ipv6, network string) (string, error) 
 		return "", err
 	}
 	header := "# Cloudflare WARP (MASQUE) outbound for Mihomo\n"
-	footer := "\n# Example rule (optional):\n# rules:\n#   - MATCH,WARP-Masque-OUT\n"
+	footer := "\n# rules:\n#   - MATCH,WARP-Masque-OUT\n"
 	return header + string(out) + footer, nil
 }
 
@@ -141,55 +141,59 @@ func ensureCIDR(s, suffix string) string {
 	return s + suffix
 }
 
-// WARPTemplate returns a Mihomo YAML fragment for Cloudflare WARP (WireGuard)
-// outbound — WARP helper. Operators paste private_key / addresses from
-// `warp-cli` or wgcf. Structured marshalling prevents injection through
-// operator-supplied strings.
-//
-// Per https://wiki.metacubex.one/en/config/proxies/wg/ the IPv4 and IPv6
-// addresses are emitted as separate fields (`ip` + `ipv6`), not a
-// comma-joined string. The reserved list is a []int of decoded bytes
-// (Cloudflare's client_id is base64-encoded).
-func WARPTemplate(privateKey, ipv4, ipv6 string, reserved []int) (string, error) {
+// WARPTemplate returns a Mihomo WireGuard outbound for Cloudflare WARP
+// (aligned with RomanovCaesar/m-ui warpOutbound).
+func WARPTemplate(privateKey, peerPublicKey, server string, port int, ipv4, ipv6 string, reserved []int) (string, error) {
 	privateKey = strings.TrimSpace(privateKey)
-	if privateKey != "" {
-		if !validateWARPField(privateKey) {
-			return "", fmt.Errorf("invalid private_key: must be base64 / wireguard-safe")
-		}
+	peerPublicKey = strings.TrimSpace(peerPublicKey)
+	server = strings.TrimSpace(server)
+	if privateKey == "" {
+		return "", fmt.Errorf("private_key required")
+	}
+	if !validateWARPField(privateKey) {
+		return "", fmt.Errorf("invalid private_key")
+	}
+	if peerPublicKey == "" {
+		return "", fmt.Errorf("peer public_key required")
+	}
+	if !validateWARPField(peerPublicKey) {
+		return "", fmt.Errorf("invalid peer public_key")
+	}
+	if server == "" {
+		server = "engage.cloudflareclient.com"
+	}
+	if port < 1 || port > 65535 {
+		port = 2408
 	}
 	ipv4 = strings.TrimSpace(ipv4)
 	ipv6 = strings.TrimSpace(ipv6)
 	if ipv4 == "" && ipv6 == "" {
-		ipv4 = "172.16.0.2" // WARP default IPv4 if API returned nothing
+		return "", fmt.Errorf("at least one of ipv4/ipv6 required")
 	}
 	if ipv4 != "" && !validateWARPField(ipv4) {
-		return "", fmt.Errorf("invalid IPv4 address: %q", ipv4)
+		return "", fmt.Errorf("invalid IPv4 %q", ipv4)
 	}
 	if ipv6 != "" && !validateWARPField(ipv6) {
-		return "", fmt.Errorf("invalid IPv6 address: %q", ipv6)
+		return "", fmt.Errorf("invalid IPv6 %q", ipv6)
 	}
-	key := privateKey
-	if key == "" {
-		key = "YOUR_WARP_PRIVATE_KEY"
-	}
-	// Build the proxy map directly (yaml.v3 marshals map keys alphabetically,
-	// which is acceptable for Mihomo's schema — order is not semantically
-	// significant for wireguard outbounds).
 	proxy := map[string]interface{}{
 		"name":        "WARP",
 		"type":        "wireguard",
-		"server":      "engage.cloudflareclient.com",
-		"port":        2408,
-		"ip":          ipv4,
-		"private-key": key,
-		"public-key":  "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+		"server":      server,
+		"port":        port,
+		"private-key": privateKey,
+		"public-key":  peerPublicKey,
 		"udp":         true,
-		"mtu":         1280,
+		"mtu":         1420,
+		"allowed-ips": []string{"0.0.0.0/0", "::/0"},
+	}
+	if ipv4 != "" {
+		proxy["ip"] = ipv4
 	}
 	if ipv6 != "" {
 		proxy["ipv6"] = ipv6
 	}
-	if len(reserved) > 0 {
+	if len(reserved) == 3 {
 		proxy["reserved"] = reserved
 	}
 	cfg := warpConfig{
@@ -202,7 +206,7 @@ func WARPTemplate(privateKey, ipv4, ipv6 string, reserved []int) (string, error)
 	if err != nil {
 		return "", err
 	}
-	header := "# Cloudflare WARP outbound for Mihomo (paste into config / routing)\n"
-	footer := "\n# Example rule (optional):\n# rules:\n#   - MATCH,WARP-OUT\n"
+	header := "# Cloudflare WARP (WireGuard) — m-ui compatible outbound for Mihomo\n"
+	footer := "\n# rules:\n#   - MATCH,WARP-OUT\n"
 	return header + string(out) + footer, nil
 }
