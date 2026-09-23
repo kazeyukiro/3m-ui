@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input,
   InputNumber, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
-import { IconAddNode, IconRefreshList, IconQr, IconDelete, IconEdit, IconCopy, IconBranch, IconHistory, IconSave, IconPower, IconDiff, IconMore, IconCert } from '../icons';
+import { IconAddNode,
+  IconQuickCreate, IconRefreshList, IconQr, IconDelete, IconEdit, IconCopy, IconBranch, IconHistory, IconSave, IconPower,
+  IconBan, IconDiff, IconMore, IconCert } from '../icons';
 import {
   fetchListeners, createListener, quickCreateListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
 } from '../api/nodes';
@@ -286,7 +288,7 @@ const columns = [
     <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
     {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
       description={<Space className="page-toolbar" wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
-    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<IconCert />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<IconRefreshList />}>{t('common.refresh')}</Button><Button type="primary" icon={<IconAddNode />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<IconAddNode />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<IconCert />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<IconBan />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<IconRefreshList />}>{t('common.refresh')}</Button><Button type="primary" icon={<IconQuickCreate />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<IconAddNode />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
             <Spin spinning={loading}>
               <div className="mobile-entity-list">
                 {filteredListeners.length === 0 && !loading ? (

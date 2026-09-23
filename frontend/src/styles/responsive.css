@@ -1195,3 +1195,28 @@ html.dark .app-header-bar,
   to { transform: rotate(360deg); }
 }
 
+
+
+/* Header: left brand, right actions flush-end, vertically centered */
+.app-header-bar.ant-layout-header {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  line-height: normal !important;
+}
+.app-header-bar .app-header-right {
+  margin-left: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+}
+.app-header-bar .app-header-action.ant-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.app-header-bar .app-header-action.ant-btn .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+}

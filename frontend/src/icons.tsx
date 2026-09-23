@@ -7,6 +7,14 @@ import React from 'react';
 import type { LucideProps } from 'lucide-react';
 import {
   LayoutDashboard,
+  Database,
+  Fingerprint,
+  ShieldCheck,
+  BookOpen,
+  Terminal,
+  Boxes,
+  Sparkles,
+  Route,
   Radio,
   Users,
   Share2,
@@ -129,16 +137,17 @@ export const IconNavListeners = wrap(Radio, 'IconNavListeners');
 export const IconNavUsers = wrap(Users, 'IconNavUsers');
 export const IconNavShare = wrap(Share2, 'IconNavShare');
 export const IconNavTraffic = wrap(Activity, 'IconNavTraffic');
-export const IconNavCluster = wrap(Network, 'IconNavCluster');
-export const IconNavRouting = wrap(Waypoints, 'IconNavRouting');
+export const IconNavCluster = wrap(Boxes, 'IconNavCluster');
+export const IconNavRouting = wrap(Route, 'IconNavRouting');
 export const IconNavCore = wrap(Cpu, 'IconNavCore');
-export const IconNavLogs = wrap(ScrollText, 'IconNavLogs');
+export const IconNavLogs = wrap(Terminal, 'IconNavLogs');
 export const IconNavConfig = wrap(SlidersHorizontal, 'IconNavConfig');
 export const IconNavSettings = wrap(Settings, 'IconNavSettings');
 export const IconNavLogout = wrap(LogOut, 'IconNavLogout');
 
 /* —— Actions — prefer these over generic Plus/Reload —— */
 export const IconAddNode = wrap(CirclePlus, 'IconAddNode');
+export const IconQuickCreate = wrap(Sparkles, 'IconQuickCreate');
 export const IconAddUser = wrap(UserPlus, 'IconAddUser');
 export const IconAddRemote = wrap(Server, 'IconAddRemote');
 export const IconAddGeneric = wrap(Plus, 'IconAddGeneric');
@@ -256,3 +265,14 @@ export const CloudSyncOutlined = IconSync;
 export const DesktopOutlined = IconDesktop;
 export const HddOutlined = IconDisk;
 export const LoginOutlined = IconLogin;
+
+export const IconSettingsPanel = wrap(LayoutGrid, 'IconSettingsPanel');
+export const IconSettingsAccess = wrap(Fingerprint, 'IconSettingsAccess');
+export const IconSettingsTelegram = wrap(Send, 'IconSettingsTelegram');
+export const IconSettingsSecurity = wrap(ShieldCheck, 'IconSettingsSecurity');
+export const IconSettingsSubPage = wrap(BookOpen, 'IconSettingsSubPage');
+export const IconSettingsSSL = wrap(BadgeCheck, 'IconSettingsSSL');
+export const IconSettingsProxy = wrap(Globe, 'IconSettingsProxy');
+export const IconSettingsTraffic = wrap(Timer, 'IconSettingsTraffic');
+export const IconSettingsAbout = wrap(Info, 'IconSettingsAbout');
+export const IconSettingsData = wrap(Database, 'IconSettingsData');

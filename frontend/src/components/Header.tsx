@@ -41,32 +41,61 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
     <Header
       className="app-header-bar"
       style={{
-        padding: isMobile ? '0 12px' : '0 24px',
+        padding: isMobile ? '0 10px' : '0 20px',
         background: 'transparent',
         display: 'flex',
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         gap: 8,
-        height: isMobile ? 48 : 64,
-        lineHeight: isMobile ? '48px' : '64px',
+        height: isMobile ? 48 : 56,
+        lineHeight: 'normal',
+        width: '100%',
+        boxSizing: 'border-box',
       }}
     >
-      {isMobile ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <img src="/logo.png" alt="" width={28} height={28} style={{ objectFit: 'contain', flexShrink: 0 }} />
-          <Text strong style={{ fontSize: 16 }}>
-            3M-UI
-          </Text>
-        </div>
-      ) : (
-        <Button
-          type="text"
-          icon={collapsed ? <IconMenuOpen /> : <IconMenuClose />}
-          onClick={() => setCollapsed(!collapsed)}
-        />
-      )}
+      {/* Left: brand / collapse */}
+      <div
+        className="app-header-left"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flex: '0 0 auto',
+          minWidth: 0,
+        }}
+      >
+        {isMobile ? (
+          <>
+            <img src="/logo.png" alt="" width={28} height={28} style={{ objectFit: 'contain', flexShrink: 0 }} />
+            <Text strong style={{ fontSize: 15, lineHeight: 1.2 }}>
+              3M-UI
+            </Text>
+          </>
+        ) : (
+          <Button
+            type="text"
+            icon={collapsed ? <IconMenuOpen /> : <IconMenuClose />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+          />
+        )}
+      </div>
 
-      <Space size={isMobile ? 4 : 'middle'} wrap={false}>
+      {/* Right: theme / lang / user — always flush end */}
+      <div
+        className="app-header-right"
+        style={{
+          marginLeft: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: isMobile ? 2 : 6,
+          flex: '0 1 auto',
+          minWidth: 0,
+          flexWrap: 'nowrap',
+        }}
+      >
         <Dropdown
           menu={{
             items: themeItems,
@@ -74,7 +103,12 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
             onClick: (e) => setMode(e.key as ThemeMode),
           }}
         >
-          <Button type="text" icon={<IconTheme />}>
+          <Button
+            type="text"
+            className="app-header-action"
+            icon={<IconTheme />}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, paddingInline: isMobile ? 8 : 10 }}
+          >
             {!isMobile && t('settings.theme')}
           </Button>
         </Dropdown>
@@ -85,14 +119,33 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
             onClick: (e) => setLocale(e.key as Locale),
           }}
         >
-          <Button type="text" icon={<IconGlobe />}>
+          <Button
+            type="text"
+            className="app-header-action"
+            icon={<IconGlobe />}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, paddingInline: isMobile ? 8 : 10 }}
+          >
             {!isMobile && (LOCALE_OPTIONS.find((o) => o.key === locale)?.label || locale)}
           </Button>
         </Dropdown>
-        <Tag icon={<IconUser />} title={displayName} style={{ marginInlineEnd: 0 }}>
+        <Tag
+          icon={<IconUser size={14} />}
+          style={{
+            margin: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            height: 28,
+            lineHeight: '28px',
+            maxWidth: isMobile ? 88 : 140,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {isMobile ? shortName : displayName}
         </Tag>
-      </Space>
+      </div>
     </Header>
   );
 };
