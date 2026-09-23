@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"fmt"
 	"strings"
 
 	mihomocfg "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
@@ -22,6 +23,13 @@ func clientSubscriptionDocument(proxies []map[string]interface{}, names []string
 	useCustom := visual != nil && hasClientRouting(visual)
 	var groups []interface{}
 	var rules []string
+
+	// Merge panel visual outbounds (e.g. WARP WireGuard) into the client document
+	// so inject-warp + MATCH,WARP-OUT works on phones/PCs. Server config still
+	// strips these (inbound-only).
+	if visual != nil && len(visual.Proxies) > 0 {
+		proxies, names = mergeVisualProxiesForClient(proxies, names, visual.Proxies)
+	}
 
 	if useCustom {
 		groups = adaptVisualGroupsForClient(visual.Groups, names)
@@ -103,6 +111,9 @@ func defaultClientGroups(names []string) []interface{} {
 }
 
 func hasClientRouting(v *mihomocfg.VisualConfig) bool {
+	if len(v.Proxies) > 0 {
+		return true
+	}
 	if len(v.Groups) > 0 {
 		return true
 	}
