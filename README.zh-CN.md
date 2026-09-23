@@ -100,6 +100,9 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 - [3x-ui](https://github.com/MHSanaei/3x-ui) / [s-ui](https://github.com/alireza0/s-ui) — 面板交互参考
 - [Gin](https://github.com/gin-gonic/gin) / [GORM](https://github.com/go-gorm/gorm) / [React](https://github.com/facebook/react) / [Ant Design](https://github.com/ant-design/ant-design)
 - [Lucide](https://github.com/lucide-icons/lucide) — 图标（`lucide-react`）
+- [AIsouler/MyClash](https://github.com/AIsouler/MyClash) — Mihomo 分流配置与精简规则思路参考
+- [echs-top/proxy](https://github.com/echs-top/proxy) — Mihomo 规则与策略组方案参考
+- [YiXuanZX/rules](https://github.com/YiXuanZX/rules) — 规则集与 mihomo 分流模板参考
 - [Zustand](https://github.com/pmndrs/zustand) / [golang-jwt/jwt](https://github.com/golang-jwt/jwt)
 - Go、Node.js 与开源社区
 

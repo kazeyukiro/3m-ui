@@ -201,6 +201,9 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 - [React](https://github.com/facebook/react) — 前端基础
 - [Ant Design](https://github.com/ant-design/ant-design) — UI 组件
 - [Lucide](https://github.com/lucide-icons/lucide) — 图标（`lucide-react`，经 `frontend/src/icons.tsx` 适配）
+- [AIsouler/MyClash](https://github.com/AIsouler/MyClash) — Mihomo 分流配置与精简规则思路参考
+- [echs-top/proxy](https://github.com/echs-top/proxy) — Mihomo 规则与策略组方案参考
+- [YiXuanZX/rules](https://github.com/YiXuanZX/rules) — 规则集与 mihomo 分流模板参考
 - [Zustand](https://github.com/pmndrs/zustand) — 前端状态管理
 - [golang-jwt/jwt](https://github.com/golang-jwt/jwt) — JWT
 - Go、Node.js 以及整个开源社区

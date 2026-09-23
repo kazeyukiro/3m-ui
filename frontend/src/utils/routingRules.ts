@@ -22,6 +22,7 @@ export const RULE_TYPES = [
   'DST-PORT',
   'SRC-PORT',
   'PROCESS-NAME',
+  'RULE-SET',
   'MATCH',
 ] as const;
 
@@ -133,6 +134,10 @@ export function validateRules(rows: RuleRow[]): RuleIssue[] {
   return issues;
 }
 
+/** Community rule templates (adapted for 3m-ui server visual-config).
+ * Inspired by public Mihomo rule projects — see README acknowledgements.
+ * Prefer GEOSITE/GEOIP so MetaCubeX geodata works without extra rule-providers.
+ */
 export function applyTemplate(
   id: string,
   opts: { groupName?: string },
@@ -143,7 +148,7 @@ export function applyTemplate(
       return [emptyRule({ type: 'MATCH', target: 'DIRECT' })];
     case 'cn_direct':
       return [
-        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
         emptyRule({ type: 'MATCH', target: g }),
       ];
     case 'reject_ads':
@@ -155,6 +160,40 @@ export function applyTemplate(
       ];
     case 'via_group':
       return [emptyRule({ type: 'MATCH', target: g })];
+    // —— YiXuanZX/rules inspired: CN direct + GFW/Telegram proxy ——
+    case 'community-yixuan':
+      return [
+        emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+        emptyRule({ type: 'GEOSITE', payload: 'telegram', target: g }),
+        emptyRule({ type: 'GEOSITE', payload: 'gfw', target: g }),
+        emptyRule({ type: 'MATCH', target: g }),
+      ];
+    // —— echs-top/proxy inspired: light ad reject + CN direct + proxy ——
+    case 'community-echs':
+      return [
+        emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
+        emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googleadservices.com', target: 'REJECT' }),
+        emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
+        emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+        emptyRule({ type: 'GEOSITE', payload: 'gfw', target: g }),
+        emptyRule({ type: 'MATCH', target: g }),
+      ];
+    // —— AIsouler/MyClash lite inspired: CN + Google/Telegram/AI/GFW ——
+    case 'community-aisouler':
+      return [
+        emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+        emptyRule({ type: 'GEOSITE', payload: 'google', target: g }),
+        emptyRule({ type: 'GEOSITE', payload: 'telegram', target: g }),
+        emptyRule({ type: 'GEOSITE', payload: 'openai', target: g }),
+        emptyRule({ type: 'GEOSITE', payload: 'gfw', target: g }),
+        emptyRule({ type: 'MATCH', target: g }),
+      ];
     default:
       return [emptyRule({ type: 'MATCH', target: 'DIRECT' })];
   }

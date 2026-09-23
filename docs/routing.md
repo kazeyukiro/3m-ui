@@ -75,3 +75,16 @@ Also related: `GET/POST /api/v1/config/proxies`, visual config under **Config**.
 
 - [Installation](installation.md) — frontend stack
 - [Cluster](cluster.md) — multi-panel (separate from Mihomo rules)
+
+
+## Community rule templates
+
+Routing → **Templates** includes adaptations of public Mihomo rule projects (for server visual-config; not a full client overwrite script):
+
+| Template | Upstream | Intent |
+|----------|----------|--------|
+| YiXuanZX/rules | [YiXuanZX/rules](https://github.com/YiXuanZX/rules) | Private/CN direct, Telegram + GFW → PROXY |
+| echs-top/proxy | [echs-top/proxy](https://github.com/echs-top/proxy) | Light ad reject, CN direct, GFW → PROXY |
+| AIsouler/MyClash | [AIsouler/MyClash](https://github.com/AIsouler/MyClash) | CN direct, Google/Telegram/OpenAI/GFW → PROXY |
+
+These use **GEOSITE/GEOIP** against MetaCubeX geodata (update under Settings → Geo). Full upstream configs with remote `rule-providers` remain optional for advanced custom YAML fragments.

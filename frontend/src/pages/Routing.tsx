@@ -219,10 +219,30 @@ const RoutingPage: React.FC = () => {
     setRules((prev) => [...prev, emptyRule({ type: 'DOMAIN-SUFFIX', target: 'DIRECT' })]);
   };
 
-  const onTemplate = (id: string) => {
-    const groupName = groups[0]?.name || 'PROXY';
+  const onTemplate = async (id: string) => {
+    const needsProxy = id.startsWith('community-') || id === 'cn_direct' || id === 'via_group';
+    let groupName = groups.find((g) => g.name === 'PROXY')?.name || groups[0]?.name || 'PROXY';
+    if (needsProxy && !groups.some((g) => g.name === groupName)) {
+      try {
+        const next = [
+          ...groups,
+          { name: 'PROXY', type: 'select', proxies: ['DIRECT'] },
+        ];
+        const saved = await saveGroups(next);
+        setGroups(Array.isArray(saved) ? saved : next);
+        groupName = 'PROXY';
+      } catch (e: any) {
+        message.error(errMsg(e));
+        return;
+      }
+    }
     setRules(applyTemplate(id, { groupName }));
-    message.success(t('routing.templateApplied') || 'Template applied — save to persist');
+    message.success(
+      (t('routing.templateApplied') || 'Template applied — save to persist') +
+        (id.startsWith('community-')
+          ? ' · ' + (t('routing.tplCommunityHint') || 'Needs Geo files (Settings → update geodata)')
+          : ''),
+    );
   };
 
   const onInjectWarp = async () => {
@@ -258,6 +278,19 @@ const RoutingPage: React.FC = () => {
       { key: 'cn_direct', label: t('routing.tplCnDirect') || 'GEOIP CN → DIRECT, else group' },
       { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
       { key: 'via_group', label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY' },
+      { type: 'divider' as const },
+      {
+        key: 'community-yixuan',
+        label: t('routing.tplYixuan') || 'Community: YiXuanZX/rules (CN + GFW)',
+      },
+      {
+        key: 'community-echs',
+        label: t('routing.tplEchs') || 'Community: echs-top/proxy (ads + CN)',
+      },
+      {
+        key: 'community-aisouler',
+        label: t('routing.tplAisouler') || 'Community: AIsouler/MyClash lite',
+      },
     ],
     onClick: ({ key }: { key: string }) => onTemplate(key),
   };
