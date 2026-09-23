@@ -68,7 +68,7 @@ client.interceptors.response.use(
             : '';
         return Promise.reject(
           new Error(
-            `Cannot reach the panel API at /api/v1${detail}. If this appeared while creating or deleting users/nodes, wait a few seconds and refresh — the change may already be saved while Mihomo was reloading. Also confirm 3m-ui is running (systemctl status 3m-ui) and the panel port is open.`,
+            `Cannot reach the panel API at /api/v1${detail}. If this appeared while creating/deleting nodes or users, or while generating/applying routing/config, wait a few seconds and refresh — the change may already be saved while Mihomo was reloading. Confirm: systemctl status 3m-ui, and that the panel port/HTTPS is reachable.`,
           ),
         );
       }
@@ -121,3 +121,36 @@ client.interceptors.response.use(
 );
 
 export default client;
+
+
+/** Transient network / empty-response errors (not HTTP 4xx/5xx bodies). */
+export function isTransientNetworkError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  if (isCanceledError(err)) return false;
+  const e = err as { code?: string; message?: string; response?: unknown };
+  if (e.response) return false;
+  if (e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT' || e.code === 'ERR_NETWORK') return true;
+  const msg = String(e.message || '');
+  return /Cannot reach the panel API|Network Error|ERR_EMPTY_RESPONSE|Failed to fetch|ECONNRESET|socket hang up|timed out|timeout/i.test(
+    msg,
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Retry GET/POST once or twice when the browser sees a dropped connection (e.g. during Mihomo reload). */
+export async function withNetworkRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 800): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+      if (!isTransientNetworkError(err) || i === attempts - 1) throw err;
+      await sleep(baseDelayMs * (i + 1));
+    }
+  }
+  throw last;
+}
