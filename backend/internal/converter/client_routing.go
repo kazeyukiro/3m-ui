@@ -330,3 +330,42 @@ func uniqueStrings(in []string) []string {
 	}
 	return out
 }
+
+func mergeVisualProxiesForClient(
+	proxies []map[string]interface{},
+	names []string,
+	visualProxies []mihomocfg.ProxyEntry,
+) ([]map[string]interface{}, []string) {
+	nameSet := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		nameSet[n] = struct{}{}
+	}
+	for _, vp := range visualProxies {
+		n := strings.TrimSpace(vp.Name)
+		if n == "" || strings.TrimSpace(vp.Type) == "" {
+			continue
+		}
+		base := n
+		i := 2
+		for {
+			if _, ok := nameSet[n]; !ok {
+				break
+			}
+			n = fmt.Sprintf("%s-%d", base, i)
+			i++
+		}
+		m := map[string]interface{}{
+			"name":   n,
+			"type":   vp.Type,
+			"server": vp.Server,
+			"port":   vp.Port,
+		}
+		for k, v := range vp.Options {
+			m[k] = v
+		}
+		proxies = append(proxies, m)
+		names = append(names, n)
+		nameSet[n] = struct{}{}
+	}
+	return proxies, names
+}
