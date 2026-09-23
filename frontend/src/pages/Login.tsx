@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Card, Form, Input, Button, Typography, message, Space, Dropdown, Steps, Alert, theme } from 'antd';
 import {
-  UserOutlined,
-  LockOutlined,
-  GlobalOutlined,
-  BgColorsOutlined,
-  SafetyOutlined,
-  ArrowLeftOutlined,
+  IconUser,
+  IconLock,
+  IconGlobe,
+  IconTheme,
+  IconShield,
+  IconBack,
 } from '../icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { login } from '../api/auth';
@@ -108,7 +108,7 @@ const Login: React.FC = () => {
               onClick: (e) => setMode(e.key as ThemeMode),
             }}
           >
-            <Button type="text" icon={<BgColorsOutlined />}>
+            <Button type="text" icon={<IconTheme />}>
               {t('settings.theme') || 'Theme'}
             </Button>
           </Dropdown>
@@ -119,7 +119,7 @@ const Login: React.FC = () => {
               onClick: (e) => setLocale(e.key as Locale),
             }}
           >
-            <Button type="text" icon={<GlobalOutlined />}>
+            <Button type="text" icon={<IconGlobe />}>
               {LOCALE_OPTIONS.find((o) => o.key === locale)?.label || locale}
             </Button>
           </Dropdown>
@@ -154,7 +154,7 @@ const Login: React.FC = () => {
             <Alert
               type="info"
               showIcon
-              icon={<SafetyOutlined />}
+              icon={<IconShield />}
               message={t('login.totpRequired', 'Enter authenticator code')}
               description={t(
                 'login.totpHint',
@@ -172,7 +172,7 @@ const Login: React.FC = () => {
             rules={[{ required: !totpNeeded, message: t('login.username') }]}
             hidden={totpNeeded}
           >
-            <Input prefix={<UserOutlined />} placeholder={t('login.username')} autoComplete="username" size="large" />
+            <Input prefix={<IconUser />} placeholder={t('login.username')} autoComplete="username" size="large" />
           </Form.Item>
           <Form.Item
             name="password"
@@ -181,7 +181,7 @@ const Login: React.FC = () => {
             hidden={totpNeeded}
           >
             <Input.Password
-              prefix={<LockOutlined />}
+              prefix={<IconLock />}
               placeholder={t('login.password')}
               autoComplete="current-password"
               size="large"
@@ -198,7 +198,7 @@ const Login: React.FC = () => {
             >
               <Input
                 ref={totpInputRef}
-                prefix={<SafetyOutlined />}
+                prefix={<IconShield />}
                 placeholder="123456"
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -217,7 +217,7 @@ const Login: React.FC = () => {
               {totpNeeded ? t('login.totpVerify', 'Verify') : t('login.button')}
             </Button>
             {totpNeeded && (
-              <Button type="link" block icon={<ArrowLeftOutlined />} onClick={backToPassword} disabled={loading}>
+              <Button type="link" block icon={<IconBack />} onClick={backToPassword} disabled={loading}>
                 {t('login.totpBack', 'Back to password')}
               </Button>
             )}

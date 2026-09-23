@@ -28,26 +28,26 @@ import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
 import { useThemeStore } from '../stores/themeStore';
 import {
-  LockOutlined,
-  GlobalOutlined,
-  BgColorsOutlined,
-  InfoCircleOutlined,
-  CloudDownloadOutlined,
-  CloudUploadOutlined,
-  ApiOutlined,
-  SettingOutlined,
-  SafetyCertificateOutlined,
-  BellOutlined,
-  LinkOutlined,
-  ClusterOutlined,
-  FileTextOutlined,
-  DashboardOutlined,
-  AppstoreOutlined,
-  SendOutlined,
-  SafetyOutlined,
-  ProfileOutlined,
-  CloudServerOutlined,
-  FieldTimeOutlined,
+  IconLock,
+  IconGlobe,
+  IconTheme,
+  IconInfo,
+  IconCloudDown,
+  IconCloudUp,
+  IconApi,
+  IconNavSettings,
+  IconCert,
+  IconBell,
+  IconLink,
+  IconNavCluster,
+  IconFile,
+  IconNavDashboard,
+  IconGrid,
+  IconSend,
+  IconShield,
+  IconNavLogs,
+  IconDisk,
+  IconTimer,
 } from '../icons';
 import {
   downloadBackup,
@@ -244,47 +244,47 @@ const Settings: React.FC = () => {
     () => [
       {
         key: 'panel',
-        icon: <AppstoreOutlined />,
+        icon: <IconGrid />,
         label: t('settings.navPanel') || '面板 / 外观',
       },
       {
         key: 'access',
-        icon: <GlobalOutlined />,
+        icon: <IconGlobe />,
         label: t('settings.navAccess') || '访问档案',
       },
       {
         key: 'telegram',
-        icon: <SendOutlined />,
+        icon: <IconSend />,
         label: t('settings.navTelegram') || 'Telegram',
       },
       {
         key: 'security',
-        icon: <SafetyOutlined />,
+        icon: <IconShield />,
         label: t('settings.navSecurity') || '安全与备份',
       },
       {
         key: 'subscription',
-        icon: <ProfileOutlined />,
+        icon: <IconNavLogs />,
         label: t('settings.navSubscription') || '订阅页',
       },
       {
         key: 'ssl',
-        icon: <SafetyCertificateOutlined />,
+        icon: <IconCert />,
         label: t('settings.navSSL') || '证书 / SSL',
       },
       {
         key: 'network',
-        icon: <CloudServerOutlined />,
+        icon: <IconDisk />,
         label: t('settings.navNetwork') || '反代与 Geo',
       },
       {
         key: 'traffic',
-        icon: <FieldTimeOutlined />,
+        icon: <IconTimer />,
         label: t('settings.navTraffic') || '流量重置',
       },
       {
         key: 'about',
-        icon: <InfoCircleOutlined />,
+        icon: <IconInfo />,
         label: t('settings.navAbout') || '关于',
       },
     ],
@@ -416,7 +416,7 @@ const Settings: React.FC = () => {
                 </Form>
               </Card>
 
-              <Card title={<><GlobalOutlined /> {t('settings.language')}</>}>
+              <Card title={<><IconGlobe /> {t('settings.language')}</>}>
                 <Select
                   value={locale}
                   style={{ width: 280 }}
@@ -427,7 +427,7 @@ const Settings: React.FC = () => {
                 />
               </Card>
 
-              <Card title={<><BgColorsOutlined /> {t('settings.theme')}</>}>
+              <Card title={<><IconTheme /> {t('settings.theme')}</>}>
                 <Space wrap>
                   <Button type={mode === 'light' ? 'primary' : 'default'} onClick={() => setMode('light')}>
                     {t('settings.light')}
@@ -658,7 +658,7 @@ const Settings: React.FC = () => {
 
           {section === 'security' && (
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <Card title={<><LockOutlined /> {t('settings.security')}</>}>
+              <Card title={<><IconLock /> {t('settings.security')}</>}>
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
                   <Button type="primary" onClick={() => navigate('/change-password')}>
                     {t('settings.changePassword')}
@@ -666,7 +666,7 @@ const Settings: React.FC = () => {
                   <div>
                     <Space direction="vertical" size="small" style={{ width: '100%' }}>
                       <Space wrap align="center">
-                        <SafetyOutlined />
+                        <IconShield />
                         <Typography.Text strong>{t('settings.totp', 'Two-factor (TOTP)')}</Typography.Text>
                         {totpEnabled ? (
                           <Tag color="success">{t('settings.totpOn', 'Enabled')}</Tag>
@@ -733,7 +733,7 @@ const Settings: React.FC = () => {
                       ) : (
                         <Button
                           type="primary"
-                          icon={<SafetyOutlined />}
+                          icon={<IconShield />}
                           onClick={async () => {
                             setTotpLoading(true);
                             try {
@@ -839,7 +839,7 @@ const Settings: React.FC = () => {
               <Card title={t('settings.backup') || 'Backup'}>
                 <Space wrap>
                   <Button
-                    icon={<CloudDownloadOutlined />}
+                    icon={<IconCloudDown />}
                     onClick={async () => {
                       try {
                         await downloadBackup();
@@ -870,7 +870,7 @@ const Settings: React.FC = () => {
                       return false;
                     }}
                   >
-                    <Button icon={<CloudUploadOutlined />}>{t('settings.restoreBackup') || 'Restore'}</Button>
+                    <Button icon={<IconCloudUp />}>{t('settings.restoreBackup') || 'Restore'}</Button>
                   </Upload>
                 </Space>
                 <div className="settings-local-backups" style={{ marginTop: 16 }}>
@@ -992,7 +992,7 @@ const Settings: React.FC = () => {
                   />
                 </div>
               </Card>
-              <Card title={<><ApiOutlined /> {t('settings.apiDocs') || 'API'}</>}>
+              <Card title={<><IconApi /> {t('settings.apiDocs') || 'API'}</>}>
                 <Button type="link" href={openApiUrl} target="_blank" rel="noreferrer">
                   {t('settings.openOpenAPI') || 'Open openapi.yaml'}
                 </Button>
@@ -1365,7 +1365,7 @@ const Settings: React.FC = () => {
           )}
 
           {section === 'about' && (
-            <Card title={<><InfoCircleOutlined /> {t('settings.about')}</>}>
+            <Card title={<><IconInfo /> {t('settings.about')}</>}>
               <AboutPanelVersion subtitle={t('app.title')} />
             </Card>
           )}

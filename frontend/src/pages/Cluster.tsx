@@ -3,17 +3,17 @@ import { fetchListeners, type Listener, normalizeId } from '../api/nodes';
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Tag, Typography, Select } from 'antd';
 import {
-  PlusOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  MedicineBoxOutlined,
-  CloudSyncOutlined,
-  SendOutlined,
-  DesktopOutlined,
-  TeamOutlined,
-  HddOutlined,
-  LoginOutlined,
-  ReloadOutlined,
+  IconAddRemote,
+  IconDeleteAlt,
+  IconEditAlt,
+  IconHealth,
+  IconSync,
+  IconSend,
+  IconDesktop,
+  IconNavUsers,
+  IconDisk,
+  IconLogin,
+  IconRefreshList,
 } from '../icons';
 import {
   fetchCluster,
@@ -318,7 +318,7 @@ const ClusterPage: React.FC = () => {
         <Space size={[4, 4]} wrap>
           <Button
             size="small"
-            icon={<MedicineBoxOutlined />}
+            icon={<IconHealth />}
             onClick={async () => {
               try {
                 await healthClusterNode(r.id);
@@ -331,12 +331,12 @@ const ClusterPage: React.FC = () => {
           >
             {t('cluster.health') || 'Health'}
           </Button>
-          <Button size="small" icon={<LoginOutlined />} onClick={() => openLogin(r.id)}>
+          <Button size="small" icon={<IconLogin />} onClick={() => openLogin(r.id)}>
             {t('cluster.login') || 'Login'}
           </Button>
           <Button
             size="small"
-            icon={<DesktopOutlined />}
+            icon={<IconDesktop />}
             onClick={async () => {
               try {
                 setCtrlId(r.id);
@@ -349,12 +349,12 @@ const ClusterPage: React.FC = () => {
           >
             {t('cluster.dashboard') || 'Dashboard'}
           </Button>
-          <Button size="small" icon={<HddOutlined />} onClick={() => loadRemoteNodes(r.id)}>
+          <Button size="small" icon={<IconDisk />} onClick={() => loadRemoteNodes(r.id)}>
             {t('cluster.remoteNodes') || 'Nodes'}
           </Button>
           <Button
             size="small"
-            icon={<CloudSyncOutlined />}
+            icon={<IconSync />}
             onClick={async () => {
               try {
                 await syncRemoteNodes(r.id);
@@ -366,12 +366,12 @@ const ClusterPage: React.FC = () => {
           >
             {t('cluster.syncNodes') || 'Sync'}
           </Button>
-          <Button size="small" icon={<SendOutlined />} onClick={() => openPushModal(r)}>
+          <Button size="small" icon={<IconSend />} onClick={() => openPushModal(r)}>
             {t('cluster.pushNode') || 'Push'}
           </Button>
           <Button
             size="small"
-            icon={<TeamOutlined />}
+            icon={<IconNavUsers />}
             onClick={async () => {
               try {
                 setCtrlId(r.id);
@@ -387,7 +387,7 @@ const ClusterPage: React.FC = () => {
           </Button>
           <Button
             size="small"
-            icon={<ReloadOutlined />}
+            icon={<IconRefreshList />}
             onClick={async () => {
               try {
                 await remoteRestartCore(r.id);
@@ -401,7 +401,7 @@ const ClusterPage: React.FC = () => {
           </Button>
           <Button
             size="small"
-            icon={<EditOutlined />}
+            icon={<IconEditAlt />}
             onClick={() => {
               setEditing(r);
               form.setFieldsValue({ ...r, api_token: undefined });
@@ -420,7 +420,7 @@ const ClusterPage: React.FC = () => {
               }
             }}
           >
-            <Button size="small" danger icon={<DeleteOutlined />} />
+            <Button size="small" danger icon={<IconDeleteAlt />} />
           </Popconfirm>
         </Space>
       ),
@@ -434,7 +434,7 @@ const ClusterPage: React.FC = () => {
         extra={
           <Space wrap>
             <Button
-              icon={<MedicineBoxOutlined />}
+              icon={<IconHealth />}
               onClick={async () => {
                 try {
                   setData(await healthAllCluster());
@@ -448,7 +448,7 @@ const ClusterPage: React.FC = () => {
             </Button>
             <Button
               type="primary"
-              icon={<PlusOutlined />}
+              icon={<IconAddRemote />}
               onClick={() => {
                 setEditing(null);
                 form.resetFields();
@@ -561,7 +561,7 @@ const ClusterPage: React.FC = () => {
             <Input placeholder="port" style={{ width: 90 }} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
+            <Button type="primary" htmlType="submit" icon={<IconAddRemote />}>
               {t('common.create') || 'Create'}
             </Button>
           </Form.Item>

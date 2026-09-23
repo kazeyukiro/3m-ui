@@ -1,18 +1,18 @@
 import React from 'react';
 import { Layout, Menu } from 'antd';
 import {
-  DashboardOutlined,
-  DeploymentUnitOutlined,
-  TeamOutlined,
-  ShareAltOutlined,
-  FundProjectionScreenOutlined,
-  CloudServerOutlined,
-  ForkOutlined,
-  RocketOutlined,
-  ProfileOutlined,
-  ControlOutlined,
-  ToolOutlined,
-  LogoutOutlined,
+  IconNavDashboard,
+  IconNavListeners,
+  IconNavUsers,
+  IconNavShare,
+  IconNavTraffic,
+  IconNavCluster,
+  IconNavRouting,
+  IconNavCore,
+  IconNavLogs,
+  IconNavConfig,
+  IconNavSettings,
+  IconNavLogout,
 } from '../icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -28,17 +28,17 @@ export function useSidebarMenuItems(onNavigate?: () => void) {
   const { t } = useI18n();
 
   const items = [
-    { key: '/', icon: <DashboardOutlined />, label: t('nav.dashboard') },
-    { key: '/listeners', icon: <DeploymentUnitOutlined />, label: t('nav.listeners') },
-    { key: '/users', icon: <TeamOutlined />, label: t('nav.users') },
-    { key: '/share', icon: <ShareAltOutlined />, label: t('nav.share') },
-    { key: '/traffic', icon: <FundProjectionScreenOutlined />, label: t('nav.traffic') },
-    { key: '/cluster', icon: <CloudServerOutlined />, label: t('nav.cluster') },
-    { key: '/routing', icon: <ForkOutlined />, label: t('nav.routing') },
-    { key: '/core', icon: <RocketOutlined />, label: t('nav.core') },
-    { key: '/logs', icon: <ProfileOutlined />, label: t('nav.logs') },
-    { key: '/config', icon: <ControlOutlined />, label: t('nav.config') },
-    { key: '/settings', icon: <ToolOutlined />, label: t('nav.settings') },
+    { key: '/', icon: <IconNavDashboard />, label: t('nav.dashboard') },
+    { key: '/listeners', icon: <IconNavListeners />, label: t('nav.listeners') },
+    { key: '/users', icon: <IconNavUsers />, label: t('nav.users') },
+    { key: '/share', icon: <IconNavShare />, label: t('nav.share') },
+    { key: '/traffic', icon: <IconNavTraffic />, label: t('nav.traffic') },
+    { key: '/cluster', icon: <IconNavCluster />, label: t('nav.cluster') },
+    { key: '/routing', icon: <IconNavRouting />, label: t('nav.routing') },
+    { key: '/core', icon: <IconNavCore />, label: t('nav.core') },
+    { key: '/logs', icon: <IconNavLogs />, label: t('nav.logs') },
+    { key: '/config', icon: <IconNavConfig />, label: t('nav.config') },
+    { key: '/settings', icon: <IconNavSettings />, label: t('nav.settings') },
   ];
 
   const onMenuClick = ({ key }: { key: string }) => {
@@ -71,7 +71,7 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
         {!collapsed && <span>3M-UI</span>}
       </div>
       <Menu mode="inline" selectedKeys={selectedKeys} items={items} onClick={onMenuClick} style={{ flex: 1, borderInlineEnd: 'none' }} />
-      <Menu mode="inline" selectable={false} items={[{ key: 'logout', icon: <LogoutOutlined />, label: t('nav.logout'), onClick: onLogout }]} style={{ borderInlineEnd: 'none', borderTop: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))' }} />
+      <Menu mode="inline" selectable={false} items={[{ key: 'logout', icon: <IconNavLogout />, label: t('nav.logout'), onClick: onLogout }]} style={{ borderInlineEnd: 'none', borderTop: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))' }} />
     </div>
   );
 };

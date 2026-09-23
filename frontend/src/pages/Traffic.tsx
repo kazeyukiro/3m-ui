@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Tag, Space, Statistic, Row, Col, message, Button } from 'antd';
-import { ReloadOutlined } from '../icons';
+import { IconRefreshList } from '../icons';
 import { fetchTrafficStatus, fetchTrafficUsers, fetchConnections, UserTraffic, ConnectionView, TrafficStatus } from '../api/traffic';
 import { useI18n } from '../i18n';
 import PageHeader from '../components/PageHeader';
@@ -100,7 +100,7 @@ const TrafficPage: React.FC = () => {
     <div>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
         <PageHeader title={t('traffic.title')} subtitle={t('traffic.subtitle')} />
-        <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>
+        <Button icon={<IconRefreshList />} onClick={load} loading={loading}>
           {t('common.refresh')}
         </Button>
       </Space>

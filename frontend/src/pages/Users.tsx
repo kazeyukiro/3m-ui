@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, ClearOutlined, ShareAltOutlined, CopyOutlined, MoreOutlined, FundOutlined } from '../icons';
+import { IconAddUser, IconDelete, IconEdit, IconLink, ClearOutlined, IconExternal, CopyOutlined, IconMore, IconChart } from '../icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
@@ -343,21 +343,21 @@ const Users: React.FC = () => {
       fixed: 'right' as const,
       render: (_: any, record: ProxyUser) => (
         <Space wrap size={4}>
-          <Button size="small" icon={<LinkOutlined />} onClick={() => openBind(record)}>
+          <Button size="small" icon={<IconLink />} onClick={() => openBind(record)}>
             {t('users.bind')}
           </Button>
           <Tooltip title={t('users.shareTitle') || 'Subscription'}>
-            <Button size="small" icon={<ShareAltOutlined />} onClick={() => openShare(record)} />
+            <Button size="small" icon={<IconExternal />} onClick={() => openShare(record)} />
           </Tooltip>
           <Tooltip title={t('users.resetTraffic')}>
             <Popconfirm title={t('users.resetTrafficConfirm')} onConfirm={() => onResetTraffic(record.id)}>
               <Button size="small" icon={<ClearOutlined />} />
             </Popconfirm>
           </Tooltip>
-          <Button size="small" icon={<FundOutlined />} onClick={() => openNodeTraffic(record)} title={t('users.nodeTraffic', 'Node traffic')} aria-label={t('users.nodeTraffic', 'Node traffic')} />
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
+          <Button size="small" icon={<IconChart />} onClick={() => openNodeTraffic(record)} title={t('users.nodeTraffic', 'Node traffic')} aria-label={t('users.nodeTraffic', 'Node traffic')} />
+          <Button size="small" icon={<IconEdit />} onClick={() => openEdit(record)} />
           <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
-            <Button size="small" icon={<DeleteOutlined />} danger />
+            <Button size="small" icon={<IconDelete />} danger />
           </Popconfirm>
         </Space>
       ),
@@ -381,7 +381,7 @@ const Users: React.FC = () => {
               <>
                 <Button
                   type="primary"
-                  icon={<PlusOutlined />}
+                  icon={<IconAddUser />}
                   block
                   onClick={() => {
                     setEditing(null);
@@ -497,7 +497,7 @@ const Users: React.FC = () => {
               onConfirm={() => onBatch('delete')}
               disabled={!selectedRowKeys.length}
             >
-              <Button danger disabled={!selectedRowKeys.length} icon={<DeleteOutlined />}>
+              <Button danger disabled={!selectedRowKeys.length} icon={<IconDelete />}>
                 {t('users.batchDelete') || 'Delete selected'}
               </Button>
             </Popconfirm>
@@ -505,13 +505,13 @@ const Users: React.FC = () => {
               title={t('users.deleteDepletedConfirm') || 'Delete all expired / over-quota users?'}
               onConfirm={onDeleteDepleted}
             >
-              <Button danger icon={<DeleteOutlined />}>
+              <Button danger icon={<IconDelete />}>
                 {t('users.deleteDepleted') || 'Delete depleted'}
               </Button>
             </Popconfirm>
             <Button
               type="primary"
-              icon={<PlusOutlined />}
+              icon={<IconAddUser />}
               onClick={() => {
                 setEditing(null);
                 form.resetFields();
@@ -621,7 +621,7 @@ const Users: React.FC = () => {
                           items: [
                             {
                               key: 'edit',
-                              icon: <EditOutlined />,
+                              icon: <IconEdit />,
                               label: t('common.edit'),
                               onClick: () => {
                                 setEditing(record);
@@ -649,13 +649,13 @@ const Users: React.FC = () => {
                             },
                             {
                               key: 'nodeTraffic',
-                              icon: <FundOutlined />,
+                              icon: <IconChart />,
                               label: t('users.nodeTraffic', 'Node traffic'),
                               onClick: () => openNodeTraffic(record),
                             },
                             {
                               key: 'nodes',
-                              icon: <LinkOutlined />,
+                              icon: <IconLink />,
                               label: t('users.bindNodes') || 'Bind nodes',
                               onClick: () => openBind(record),
                             },
@@ -668,7 +668,7 @@ const Users: React.FC = () => {
                             { type: 'divider' as const },
                             {
                               key: 'del',
-                              icon: <DeleteOutlined />,
+                              icon: <IconDelete />,
                               danger: true,
                               label: t('common.delete'),
                               onClick: () => {
@@ -682,7 +682,7 @@ const Users: React.FC = () => {
                         }}
                         trigger={['click']}
                       >
-                        <Button type="text" icon={<MoreOutlined />} aria-label="actions" />
+                        <Button type="text" icon={<IconMore />} aria-label="actions" />
                       </Dropdown>
                     </div>
                   </div>

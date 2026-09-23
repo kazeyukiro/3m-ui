@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert, Button, Card, Collapse, Empty, Input, Select, Space, Spin, Tabs, Tag, Typography, message,
 } from 'antd';
-import { CopyOutlined, QrcodeOutlined, ReloadOutlined, LinkOutlined } from '../icons';
+import { IconCopyAlt, IconQr, IconRotateToken, IconExternal, IconRefreshList } from '../icons';
 import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
@@ -38,7 +38,7 @@ const CopyField: React.FC<{ label: string; value: string; qr?: boolean }> = ({ l
           <Button
             type="text"
             size="small"
-            icon={<CopyOutlined />}
+            icon={<IconCopyAlt />}
             onClick={async () => {
               const ok = await copyText(value);
               if (ok) message.success(t('common.copied') || 'Copied');
@@ -165,7 +165,7 @@ const SharePage: React.FC = () => {
           <CopyField label={t('users.subV2ray') || 'V2Ray / Base64'} value={withTarget(shareUrl, 'v2ray')} />
           <CopyField label={t('users.subSingbox') || 'Sing-box JSON'} value={withTarget(shareUrl, 'singbox')} />
           <CopyField label={t('share.subHtml') || 'Subscription info page (HTML)'} value={`${shareUrl}${shareUrl.includes('?') ? '&' : '?'}html=1`} />
-          <Button icon={<ReloadOutlined />} onClick={onRotate} loading={subLoading}>
+          <Button icon={<IconRotateToken />} onClick={onRotate} loading={subLoading}>
             {t('users.rotateSub') || 'Rotate subscription token'}
           </Button>
         </>
@@ -207,7 +207,7 @@ const SharePage: React.FC = () => {
                   <CopyField key={i} label={`${t('share.uri') || 'URI'} #${i + 1}`} value={uri} qr={i === 0} />
                 ))}
                 {!uriMap[n.id]?.loading && !uriMap[n.id]?.uris?.length && !uriMap[n.id]?.error && (
-                  <Button size="small" icon={<LinkOutlined />} onClick={() => loadNodeURIs(n.id)}>
+                  <Button size="small" icon={<IconExternal />} onClick={() => loadNodeURIs(n.id)}>
                     {t('share.loadUri') || 'Load URI'}
                   </Button>
                 )}
@@ -262,7 +262,7 @@ const SharePage: React.FC = () => {
               {selected.enabled ? (t('common.enabled') || 'enabled') : (t('common.disabled') || 'disabled')}
             </Tag>
           )}
-          <Button icon={<ReloadOutlined />} onClick={() => userId && loadShare(userId)}>
+          <Button icon={<IconRefreshList />} onClick={() => userId && loadShare(userId)}>
             {t('common.refresh') || 'Refresh'}
           </Button>
         </Space>

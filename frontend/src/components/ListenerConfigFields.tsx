@@ -3,7 +3,7 @@ import { message,
   Form, Input, InputNumber, Select, Switch, Divider, Alert, Space, Typography, Button, Card, Radio,
 } from 'antd';
 import { generateMaterial } from '../api/listeners';
-import { MinusCircleOutlined, PlusOutlined } from '../icons';
+import { IconRemoveField, IconAddField } from '../icons';
 import { useI18n } from '../i18n';
 import RealityTargetFields from './RealityTargetFields';
 
@@ -1439,10 +1439,10 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
                     <Form.Item {...field} name={[field.name, 'password']} rules={[{ required: true }]}>
                       <Input.Password placeholder={t('common.password')} />
                     </Form.Item>
-                    <MinusCircleOutlined onClick={() => remove(field.name)} />
+                    <IconRemoveField onClick={() => remove(field.name)} />
                   </Space>
                 ))}
-                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                <Button type="dashed" onClick={() => add()} block icon={<IconAddField />}>
                   {t('listeners.addUser')}
                 </Button>
               </>
@@ -1505,10 +1505,10 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
                     <Form.Item {...field} name={[field.name, 'password']} rules={[{ required: true }]}>
                       <Input.Password placeholder={t('common.password')} />
                     </Form.Item>
-                    <MinusCircleOutlined onClick={() => remove(field.name)} />
+                    <IconRemoveField onClick={() => remove(field.name)} />
                   </Space>
                 ))}
-                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                <Button type="dashed" onClick={() => add()} block icon={<IconAddField />}>
                   {t('listeners.addUser')}
                 </Button>
               </>

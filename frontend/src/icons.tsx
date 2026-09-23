@@ -1,48 +1,48 @@
 /**
- * Panel icons — Lucide under the hood, Ant Design–style *Outlined names for drop-in replacement.
- * Import from `../icons` or `../../icons` instead of `@ant-design/icons`.
+ * Panel icons — Lucide under the hood.
+ * Prefer semantic exports (IconNav*, IconAction*) so the same glyph is not reused
+ * across unrelated UI slots. Legacy *Outlined names remain for gradual migration.
  */
 import React from 'react';
 import type { LucideProps } from 'lucide-react';
 import {
-  Plus,
-  RefreshCw,
-  Trash2,
-  Pencil,
-  Globe,
-  Palette,
-  Users,
-  Link2,
-  Share2,
-  Copy,
   LayoutDashboard,
-  FileText,
+  Radio,
+  Users,
+  Share2,
+  Activity,
+  Network,
+  Waypoints,
+  Cpu,
+  ScrollText,
+  SlidersHorizontal,
+  Settings,
+  LogOut,
+  CirclePlus,
+  UserPlus,
   Server,
-  User,
-  Lock,
-  Shield,
-  PlayCircle,
-  Square,
+  Plus,
+  Trash2,
+  SquarePen,
+  PenLine,
+  RefreshCw,
+  RotateCw,
   RotateCcw,
-  Download,
-  Send,
-  Eraser,
-  MoreHorizontal,
+  Copy,
+  ClipboardCopy,
+  Link2,
+  ExternalLink,
   QrCode,
   Save,
   BadgeCheck,
   LayoutGrid,
-  Boxes,
   MonitorPlay,
   GitFork,
   Rocket,
-  SlidersHorizontal,
   Wrench,
-  LogOut,
   ArrowLeft,
   Undo2,
   HeartPulse,
-  RefreshCcw,
   Monitor,
   HardDrive,
   LogIn,
@@ -56,17 +56,31 @@ import {
   CloudDownload,
   CloudUpload,
   Cable,
-  Settings,
   Bell,
-  Network,
   Timer,
   PanelLeftClose,
   PanelLeftOpen,
-  MinusCircle,
+  CircleMinus,
+  Eraser,
+  PlayCircle,
+  Square,
+  Download,
+  Send,
+  MoreHorizontal,
+  FileText as LucideFileText,
+  Shield,
+  User,
+  Lock,
+  Globe,
+  Palette,
+  Crosshair,
+  KeyRound,
+  ListRestart,
+  Ban,
+  CircleX,
 } from 'lucide-react';
 
 type IconProps = LucideProps & {
-  /** Ant Design icons often pass style.fontSize — map to Lucide `size`. */
   style?: React.CSSProperties & { fontSize?: number | string };
   className?: string;
   twoToneColor?: string;
@@ -75,14 +89,18 @@ type IconProps = LucideProps & {
 };
 
 function wrap(Icon: React.ComponentType<LucideProps>, displayName: string) {
-  const Comp = React.forwardRef<SVGSVGElement, IconProps>(function LucideAntIcon(
+  const Comp = React.forwardRef<SVGSVGElement, IconProps>(function LucideIcon(
     { style, className, spin, rotate, size, ...rest },
     ref,
   ) {
     const fontSize = style?.fontSize;
     const resolvedSize =
       size ??
-      (typeof fontSize === 'number' ? fontSize : typeof fontSize === 'string' && fontSize.endsWith('px') ? parseFloat(fontSize) : 16);
+      (typeof fontSize === 'number'
+        ? fontSize
+        : typeof fontSize === 'string' && fontSize.endsWith('px')
+          ? parseFloat(fontSize)
+          : 16);
     const mergedStyle: React.CSSProperties = {
       ...style,
       ...(spin ? { animation: 'spin 1s linear infinite' } : null),
@@ -105,62 +123,136 @@ function wrap(Icon: React.ComponentType<LucideProps>, displayName: string) {
   return Comp;
 }
 
-export const PlusOutlined = wrap(Plus, 'PlusOutlined');
-export const ReloadOutlined = wrap(RefreshCw, 'ReloadOutlined');
-export const DeleteOutlined = wrap(Trash2, 'DeleteOutlined');
-export const EditOutlined = wrap(Pencil, 'EditOutlined');
-export const GlobalOutlined = wrap(Globe, 'GlobalOutlined');
-export const BgColorsOutlined = wrap(Palette, 'BgColorsOutlined');
-export const TeamOutlined = wrap(Users, 'TeamOutlined');
-export const LinkOutlined = wrap(Link2, 'LinkOutlined');
-export const ShareAltOutlined = wrap(Share2, 'ShareAltOutlined');
-export const CopyOutlined = wrap(Copy, 'CopyOutlined');
-export const DashboardOutlined = wrap(LayoutDashboard, 'DashboardOutlined');
-export const ProfileOutlined = wrap(FileText, 'ProfileOutlined');
-export const CloudServerOutlined = wrap(Server, 'CloudServerOutlined');
-export const UserOutlined = wrap(User, 'UserOutlined');
-export const LockOutlined = wrap(Lock, 'LockOutlined');
-export const SafetyOutlined = wrap(Shield, 'SafetyOutlined');
-export const PlayCircleOutlined = wrap(PlayCircle, 'PlayCircleOutlined');
-export const StopOutlined = wrap(Square, 'StopOutlined');
-export const RedoOutlined = wrap(RotateCcw, 'RedoOutlined');
-export const DownloadOutlined = wrap(Download, 'DownloadOutlined');
-export const SendOutlined = wrap(Send, 'SendOutlined');
-export const ClearOutlined = wrap(Eraser, 'ClearOutlined');
-export const MoreOutlined = wrap(MoreHorizontal, 'MoreOutlined');
-export const QrcodeOutlined = wrap(QrCode, 'QrcodeOutlined');
-export const FileTextOutlined = wrap(FileText, 'FileTextOutlined');
-export const SaveOutlined = wrap(Save, 'SaveOutlined');
-export const SafetyCertificateOutlined = wrap(BadgeCheck, 'SafetyCertificateOutlined');
-export const AppstoreOutlined = wrap(LayoutGrid, 'AppstoreOutlined');
-export const DeploymentUnitOutlined = wrap(Boxes, 'DeploymentUnitOutlined');
-export const FundProjectionScreenOutlined = wrap(MonitorPlay, 'FundProjectionScreenOutlined');
-export const ForkOutlined = wrap(GitFork, 'ForkOutlined');
-export const RocketOutlined = wrap(Rocket, 'RocketOutlined');
-export const ControlOutlined = wrap(SlidersHorizontal, 'ControlOutlined');
-export const ToolOutlined = wrap(Wrench, 'ToolOutlined');
-export const LogoutOutlined = wrap(LogOut, 'LogoutOutlined');
-export const ArrowLeftOutlined = wrap(ArrowLeft, 'ArrowLeftOutlined');
-export const RollbackOutlined = wrap(Undo2, 'RollbackOutlined');
-export const MedicineBoxOutlined = wrap(HeartPulse, 'MedicineBoxOutlined');
-export const CloudSyncOutlined = wrap(RefreshCcw, 'CloudSyncOutlined');
-export const DesktopOutlined = wrap(Monitor, 'DesktopOutlined');
-export const HddOutlined = wrap(HardDrive, 'HddOutlined');
-export const LoginOutlined = wrap(LogIn, 'LoginOutlined');
-export const FundOutlined = wrap(LineChart, 'FundOutlined');
-export const CheckOutlined = wrap(Check, 'CheckOutlined');
-export const BranchesOutlined = wrap(GitBranch, 'BranchesOutlined');
-export const HistoryOutlined = wrap(History, 'HistoryOutlined');
-export const PoweroffOutlined = wrap(Power, 'PoweroffOutlined');
-export const DiffOutlined = wrap(FileDiff, 'DiffOutlined');
-export const InfoCircleOutlined = wrap(Info, 'InfoCircleOutlined');
-export const CloudDownloadOutlined = wrap(CloudDownload, 'CloudDownloadOutlined');
-export const CloudUploadOutlined = wrap(CloudUpload, 'CloudUploadOutlined');
-export const ApiOutlined = wrap(Cable, 'ApiOutlined');
-export const SettingOutlined = wrap(Settings, 'SettingOutlined');
-export const BellOutlined = wrap(Bell, 'BellOutlined');
-export const ClusterOutlined = wrap(Network, 'ClusterOutlined');
-export const FieldTimeOutlined = wrap(Timer, 'FieldTimeOutlined');
-export const MenuFoldOutlined = wrap(PanelLeftClose, 'MenuFoldOutlined');
-export const MenuUnfoldOutlined = wrap(PanelLeftOpen, 'MenuUnfoldOutlined');
-export const MinusCircleOutlined = wrap(MinusCircle, 'MinusCircleOutlined');
+/* —— Navigation (sidebar / mobile) — unique glyphs —— */
+export const IconNavDashboard = wrap(LayoutDashboard, 'IconNavDashboard');
+export const IconNavListeners = wrap(Radio, 'IconNavListeners');
+export const IconNavUsers = wrap(Users, 'IconNavUsers');
+export const IconNavShare = wrap(Share2, 'IconNavShare');
+export const IconNavTraffic = wrap(Activity, 'IconNavTraffic');
+export const IconNavCluster = wrap(Network, 'IconNavCluster');
+export const IconNavRouting = wrap(Waypoints, 'IconNavRouting');
+export const IconNavCore = wrap(Cpu, 'IconNavCore');
+export const IconNavLogs = wrap(ScrollText, 'IconNavLogs');
+export const IconNavConfig = wrap(SlidersHorizontal, 'IconNavConfig');
+export const IconNavSettings = wrap(Settings, 'IconNavSettings');
+export const IconNavLogout = wrap(LogOut, 'IconNavLogout');
+
+/* —— Actions — prefer these over generic Plus/Reload —— */
+export const IconAddNode = wrap(CirclePlus, 'IconAddNode');
+export const IconAddUser = wrap(UserPlus, 'IconAddUser');
+export const IconAddRemote = wrap(Server, 'IconAddRemote');
+export const IconAddGeneric = wrap(Plus, 'IconAddGeneric');
+export const IconAddField = wrap(CirclePlus, 'IconAddField');
+export const IconRemoveField = wrap(CircleMinus, 'IconRemoveField');
+export const IconDelete = wrap(Trash2, 'IconDelete');
+export const IconDeleteAlt = wrap(CircleX, 'IconDeleteAlt');
+export const IconEdit = wrap(SquarePen, 'IconEdit');
+export const IconEditAlt = wrap(PenLine, 'IconEditAlt');
+export const IconRefreshList = wrap(RefreshCw, 'IconRefreshList');
+export const IconReloadCore = wrap(RotateCw, 'IconReloadCore');
+export const IconRotateToken = wrap(KeyRound, 'IconRotateToken');
+export const IconRestart = wrap(RotateCcw, 'IconRestart');
+export const IconCopy = wrap(Copy, 'IconCopy');
+export const IconCopyAlt = wrap(ClipboardCopy, 'IconCopyAlt');
+export const IconLink = wrap(Link2, 'IconLink');
+export const IconExternal = wrap(ExternalLink, 'IconExternal');
+export const IconQr = wrap(QrCode, 'IconQr');
+export const IconSave = wrap(Save, 'IconSave');
+export const IconCheck = wrap(Check, 'IconCheck');
+export const IconPlay = wrap(PlayCircle, 'IconPlay');
+export const IconStop = wrap(Square, 'IconStop');
+export const IconDownload = wrap(Download, 'IconDownload');
+export const IconSend = wrap(Send, 'IconSend');
+export const IconMore = wrap(MoreHorizontal, 'IconMore');
+export const IconClear = wrap(Eraser, 'IconClear');
+export const IconBan = wrap(Ban, 'IconBan');
+export const IconHealth = wrap(HeartPulse, 'IconHealth');
+export const IconSync = wrap(ListRestart, 'IconSync');
+export const IconLogin = wrap(LogIn, 'IconLogin');
+export const IconDesktop = wrap(Monitor, 'IconDesktop');
+export const IconDisk = wrap(HardDrive, 'IconDisk');
+export const IconCert = wrap(BadgeCheck, 'IconCert');
+export const IconShield = wrap(Shield, 'IconShield');
+export const IconUser = wrap(User, 'IconUser');
+export const IconLock = wrap(Lock, 'IconLock');
+export const IconGlobe = wrap(Globe, 'IconGlobe');
+export const IconTheme = wrap(Palette, 'IconTheme');
+export const IconMenuOpen = wrap(PanelLeftOpen, 'IconMenuOpen');
+export const IconMenuClose = wrap(PanelLeftClose, 'IconMenuClose');
+export const IconBack = wrap(ArrowLeft, 'IconBack');
+export const IconUndo = wrap(Undo2, 'IconUndo');
+export const IconPower = wrap(Power, 'IconPower');
+export const IconHistory = wrap(History, 'IconHistory');
+export const IconBranch = wrap(GitBranch, 'IconBranch');
+export const IconDiff = wrap(FileDiff, 'IconDiff');
+export const IconInfo = wrap(Info, 'IconInfo');
+export const IconCloudDown = wrap(CloudDownload, 'IconCloudDown');
+export const IconCloudUp = wrap(CloudUpload, 'IconCloudUp');
+export const IconApi = wrap(Cable, 'IconApi');
+export const IconBell = wrap(Bell, 'IconBell');
+export const IconTimer = wrap(Timer, 'IconTimer');
+export const IconFile = wrap(LucideFileText, 'IconFile');
+export const IconChart = wrap(LineChart, 'IconChart');
+export const IconGrid = wrap(LayoutGrid, 'IconGrid');
+export const IconTarget = wrap(Crosshair, 'IconTarget');
+
+/* —— Legacy *Outlined aliases (diversified glyphs, not one shared Plus/Reload) —— */
+export const DashboardOutlined = IconNavDashboard;
+export const DeploymentUnitOutlined = IconNavListeners;
+export const TeamOutlined = IconNavUsers;
+export const ShareAltOutlined = IconNavShare;
+export const FundProjectionScreenOutlined = IconNavTraffic;
+export const CloudServerOutlined = IconNavCluster;
+export const ForkOutlined = IconNavRouting;
+export const RocketOutlined = IconNavCore;
+export const ProfileOutlined = IconNavLogs;
+export const ControlOutlined = IconNavConfig;
+export const ToolOutlined = IconNavSettings;
+export const LogoutOutlined = IconNavLogout;
+export const SettingOutlined = IconNavSettings;
+export const AppstoreOutlined = IconGrid;
+export const ClusterOutlined = IconNavCluster;
+export const PlusOutlined = IconAddGeneric;
+export const MinusCircleOutlined = IconRemoveField;
+export const DeleteOutlined = IconDelete;
+export const EditOutlined = IconEdit;
+export const ReloadOutlined = IconRefreshList;
+export const RedoOutlined = IconRestart;
+export const CopyOutlined = IconCopy;
+export const LinkOutlined = IconLink;
+export const QrcodeOutlined = IconQr;
+export const SaveOutlined = IconSave;
+export const CheckOutlined = IconCheck;
+export const PlayCircleOutlined = IconPlay;
+export const StopOutlined = IconStop;
+export const DownloadOutlined = IconDownload;
+export const SendOutlined = IconSend;
+export const MoreOutlined = IconMore;
+export const ClearOutlined = IconClear;
+export const SafetyOutlined = IconShield;
+export const SafetyCertificateOutlined = IconCert;
+export const UserOutlined = IconUser;
+export const LockOutlined = IconLock;
+export const GlobalOutlined = IconGlobe;
+export const BgColorsOutlined = IconTheme;
+export const MenuFoldOutlined = IconMenuClose;
+export const MenuUnfoldOutlined = IconMenuOpen;
+export const ArrowLeftOutlined = IconBack;
+export const RollbackOutlined = IconUndo;
+export const PoweroffOutlined = IconPower;
+export const HistoryOutlined = IconHistory;
+export const BranchesOutlined = IconBranch;
+export const DiffOutlined = IconDiff;
+export const InfoCircleOutlined = IconInfo;
+export const CloudDownloadOutlined = IconCloudDown;
+export const CloudUploadOutlined = IconCloudUp;
+export const ApiOutlined = IconApi;
+export const BellOutlined = IconBell;
+export const FieldTimeOutlined = IconTimer;
+export const FileTextOutlined = IconFile;
+export const FundOutlined = IconChart;
+export const MedicineBoxOutlined = IconHealth;
+export const CloudSyncOutlined = IconSync;
+export const DesktopOutlined = IconDesktop;
+export const HddOutlined = IconDisk;
+export const LoginOutlined = IconLogin;

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input,
   InputNumber, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
-import { PlusOutlined, ReloadOutlined, QrcodeOutlined, DeleteOutlined, EditOutlined, CopyOutlined, BranchesOutlined, HistoryOutlined, SaveOutlined, PoweroffOutlined, DiffOutlined, MoreOutlined, SafetyCertificateOutlined } from '../icons';
+import { IconAddNode, IconRefreshList, IconQr, IconDelete, IconEdit, IconCopy, IconBranch, IconHistory, IconSave, IconPower, IconDiff, IconMore, IconCert } from '../icons';
 import {
   fetchListeners, createListener, quickCreateListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
 } from '../api/nodes';
@@ -274,19 +274,19 @@ const columns = [
     { title: runtimeText.title, key: 'runtime', width: 170, render: (_: unknown, record: Listener) => <div>
       <ListenerRuntimeTag enabled={record.enabled} status={statuses[record.id]} checking={testing.includes(record.id)} onClick={() => showRuntime(record)} />
     </div> },
-    { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 220, render: (_: any, record: Listener) => <Space size={4} wrap><Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<QrcodeOutlined />} onClick={() => showURIs(normalizeId(record))} /></Tooltip><Tooltip title={t('listeners.clone')}><Button size="small" icon={<BranchesOutlined />} onClick={() => openClone(record)} /></Tooltip><Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<SaveOutlined />} onClick={() => openSaveTemplate(record)} /></Tooltip><Tooltip title={t('listeners.versions')}><Button size="small" icon={<HistoryOutlined />} onClick={() => openVersions(record)} /></Tooltip><Tooltip title={t('common.refresh')}><Button size="small" icon={<ReloadOutlined />} onClick={() => onReload(normalizeId(record))} /></Tooltip><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} /><Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<DeleteOutlined />} danger /></Popconfirm></Space> },
+    { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 220, render: (_: any, record: Listener) => <Space size={4} wrap><Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<IconQr />} onClick={() => showURIs(normalizeId(record))} /></Tooltip><Tooltip title={t('listeners.clone')}><Button size="small" icon={<IconBranch />} onClick={() => openClone(record)} /></Tooltip><Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<IconSave />} onClick={() => openSaveTemplate(record)} /></Tooltip><Tooltip title={t('listeners.versions')}><Button size="small" icon={<IconHistory />} onClick={() => openVersions(record)} /></Tooltip><Tooltip title={t('common.refresh')}><Button size="small" icon={<IconRefreshList />} onClick={() => onReload(normalizeId(record))} /></Tooltip><Button size="small" icon={<IconEdit />} onClick={() => openEdit(record)} /><Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<IconDelete />} danger /></Popconfirm></Space> },
   ];
   const templateColumns = [
     { title: t('listeners.templateName'), dataIndex: 'name', key: 'name' },
     { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', render: (p: string) => <Tag>{p}</Tag> },
     { title: t('listeners.createdAt'), dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
-    { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space> },
+    { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<IconDelete />} /></Popconfirm></Space> },
   ];
   return <div>
     <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
     {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
       description={<Space className="page-toolbar" wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
-    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<SafetyCertificateOutlined />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<PoweroffOutlined />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<ReloadOutlined />}>{t('common.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<PlusOutlined />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<IconCert />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<IconRefreshList />}>{t('common.refresh')}</Button><Button type="primary" icon={<IconAddNode />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<IconAddNode />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
             <Spin spinning={loading}>
               <div className="mobile-entity-list">
                 {filteredListeners.length === 0 && !loading ? (
@@ -320,15 +320,15 @@ const columns = [
                         <Dropdown
                           menu={{
                             items: [
-                              { key: 'runtime', icon: <ReloadOutlined />, label: runtimeText.check, onClick: () => showRuntime(record, false) },
-                              { key: 'uri', icon: <QrcodeOutlined />, label: t('listeners.copyURI'), onClick: () => showURIs(id) },
-                              { key: 'clone', icon: <BranchesOutlined />, label: t('listeners.clone'), onClick: () => openClone(record) },
-                              { key: 'tpl', icon: <SaveOutlined />, label: t('listeners.saveTemplate'), onClick: () => openSaveTemplate(record) },
-                              { key: 'ver', icon: <HistoryOutlined />, label: t('listeners.versions'), onClick: () => openVersions(record) },
-                              { key: 'reload', icon: <ReloadOutlined />, label: t('common.refresh'), onClick: () => onReload(id) },
-                              { key: 'edit', icon: <EditOutlined />, label: t('common.edit'), onClick: () => openEdit(record) },
+                              { key: 'runtime', icon: <IconRefreshList />, label: runtimeText.check, onClick: () => showRuntime(record, false) },
+                              { key: 'uri', icon: <IconQr />, label: t('listeners.copyURI'), onClick: () => showURIs(id) },
+                              { key: 'clone', icon: <IconBranch />, label: t('listeners.clone'), onClick: () => openClone(record) },
+                              { key: 'tpl', icon: <IconSave />, label: t('listeners.saveTemplate'), onClick: () => openSaveTemplate(record) },
+                              { key: 'ver', icon: <IconHistory />, label: t('listeners.versions'), onClick: () => openVersions(record) },
+                              { key: 'reload', icon: <IconRefreshList />, label: t('common.refresh'), onClick: () => onReload(id) },
+                              { key: 'edit', icon: <IconEdit />, label: t('common.edit'), onClick: () => openEdit(record) },
                               { type: 'divider' },
-                              { key: 'del', icon: <DeleteOutlined />, label: t('common.delete'), danger: true, onClick: () => {
+                              { key: 'del', icon: <IconDelete />, label: t('common.delete'), danger: true, onClick: () => {
                                 Modal.confirm({
                                   title: t('listeners.deleteConfirm'),
                                   onOk: () => onDelete(id),
@@ -338,7 +338,7 @@ const columns = [
                           }}
                           trigger={['click']}
                         >
-                          <Button type="text" icon={<MoreOutlined />} aria-label="actions" />
+                          <Button type="text" icon={<IconMore />} aria-label="actions" />
                         </Dropdown>
                       </div>
                     </div>
@@ -348,7 +348,7 @@ const columns = [
             </Spin>
           ) : (
             <Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: isMobile ? 720 : 880 }} size={isMobile ? "small" : "middle"} />
-          )}</Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<ReloadOutlined />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} size={isMobile ? "small" : "middle"} /></Card> }]} />
+          )}</Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<IconRefreshList />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} size={isMobile ? "small" : "middle"} /></Card> }]} />
     <ListenerRuntimeDrawer listener={runtimeListener ? data.find(l => l.id === runtimeListener.id) || runtimeListener : null} status={runtimeListener ? details[runtimeListener.id] || statuses[runtimeListener.id] : undefined} checking={!!runtimeListener && testing.includes(runtimeListener.id)} onClose={() => setRuntimeListener(null)} onCheck={() => { if (runtimeListener) void test(runtimeListener.id).catch(() => {}); }} />
     <Modal open={quickModal} title={t('listeners.quickCreate', 'Quick create')} onCancel={() => setQuickModal(false)} onOk={doQuickCreate} confirmLoading={quickSubmitting} okText={t('common.create', 'Create')} destroyOnClose width={isMobile ? '100%' : 480} style={isMobile ? { top: 12 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
       <p style={{ marginBottom: 12, opacity: 0.75, fontSize: 13 }}>{t('listeners.quickCreateHint', 'Select protocol and name only. Port, credentials and REALITY/TLS are generated automatically.')}</p>
@@ -387,7 +387,7 @@ const columns = [
     <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
     <Modal open={templateModal} title={t('listeners.saveTemplate')} onCancel={() => setTemplateModal(false)} onOk={() => templateForm.submit()}><Form form={templateForm} layout="vertical" onFinish={saveTemplate}><Form.Item name="name" label={t('listeners.templateName')} rules={[{ required: true }]}><Input /></Form.Item><Descriptions column={1} size="small"><Descriptions.Item label={t('listeners.protocol')}>{templateSource?.protocol}</Descriptions.Item></Descriptions></Form></Modal>
     <Modal open={instantiateModal} title={t('listeners.instantiate')} onCancel={() => setInstantiateModal(false)} onOk={() => instantiateForm.submit()}><Form form={instantiateForm} layout="vertical" onFinish={doInstantiate}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
-    <Modal open={versionsModal} title={`${t('listeners.versions')} — ${versionListener?.name || ''}`} onCancel={() => setVersionsModal(false)} footer={null} width={800}><Table dataSource={versions} rowKey="id" pagination={false} size={isMobile ? "small" : "middle"} columns={[{ title: t('listeners.version'), dataIndex: 'version', width: 100 }, { title: t('listeners.reason'), dataIndex: 'reason', render: (v: string) => v || '-' }, { title: t('listeners.createdAt'), dataIndex: 'created_at', render: (v: string) => new Date(v).toLocaleString() }, { title: t('common.actions'), render: (_: any, v: ListenerVersion) => <Space><Button size="small" icon={<DiffOutlined />} onClick={() => showDiff(v.version)}>{t('listeners.diff')}</Button><Popconfirm title={t('listeners.rollbackConfirm')} onConfirm={() => doRollback(v.version)}><Button size="small" type="primary">{t('listeners.rollback')}</Button></Popconfirm></Space> }]} /></Modal>
+    <Modal open={versionsModal} title={`${t('listeners.versions')} — ${versionListener?.name || ''}`} onCancel={() => setVersionsModal(false)} footer={null} width={800}><Table dataSource={versions} rowKey="id" pagination={false} size={isMobile ? "small" : "middle"} columns={[{ title: t('listeners.version'), dataIndex: 'version', width: 100 }, { title: t('listeners.reason'), dataIndex: 'reason', render: (v: string) => v || '-' }, { title: t('listeners.createdAt'), dataIndex: 'created_at', render: (v: string) => new Date(v).toLocaleString() }, { title: t('common.actions'), render: (_: any, v: ListenerVersion) => <Space><Button size="small" icon={<IconDiff />} onClick={() => showDiff(v.version)}>{t('listeners.diff')}</Button><Popconfirm title={t('listeners.rollbackConfirm')} onConfirm={() => doRollback(v.version)}><Button size="small" type="primary">{t('listeners.rollback')}</Button></Popconfirm></Space> }]} /></Modal>
     <Modal open={diffModal} title={t('listeners.diff')} onCancel={() => setDiffModal(false)} footer={null} width={900}><pre style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{diffText || t('common.empty')}</pre></Modal>
     <Modal open={uriModal} title={t('listeners.urisTitle')} onCancel={() => setUriModal(false)} footer={null} width={isMobile ? '100%' : 560} style={isMobile ? { top: 8 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
       <Space direction="vertical" style={{ width: '100%' }}>
@@ -396,7 +396,7 @@ const columns = [
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space style={{ width: '100%' }}>
                 <Input value={uri} readOnly />
-                <Button icon={<CopyOutlined />} onClick={async () => { const ok = await copyText(uri); if (ok) message.success(t('common.copied') || t('common.copy')); else message.error(t('common.copyFailed') || 'Copy failed'); }} />
+                <Button icon={<IconCopy />} onClick={async () => { const ok = await copyText(uri); if (ok) message.success(t('common.copied') || t('common.copy')); else message.error(t('common.copyFailed') || 'Copy failed'); }} />
               </Space>
               <div style={{ textAlign: 'center' }}>
                 <QRCode value={uri} size={160} />

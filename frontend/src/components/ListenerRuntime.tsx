@@ -1,5 +1,5 @@
 import { Alert, Button, Descriptions, Drawer, Space, Table, Tag, Typography } from 'antd';
-import { ReloadOutlined } from '../icons';
+import { IconRefreshList } from '../icons';
 import type { ListenerRuntime } from '../api/listenerRuntime';
 import type { Listener } from '../api/nodes';
 import { listenerAvailability, listenerDiagnosticReason } from '../utils/listenerAvailability';
@@ -29,7 +29,7 @@ export function ListenerRuntimeDrawer({ listener, status, checking, onClose, onC
   const stepNames = ['client_config', 'client_start', 'proxy_request'] as const;
   const stepStates = { passed: text.passed, failed: text.failedStep, unknown: text.unknownStep };
   return <Drawer open={!!listener} title={`${text.details} — ${listener?.name || ''}`} onClose={onClose} size="default"
-    extra={<Button icon={<ReloadOutlined />} loading={checking} disabled={!listener?.enabled} onClick={onCheck}>{text.check}</Button>}>
+    extra={<Button icon={<IconRefreshList />} loading={checking} disabled={!listener?.enabled} onClick={onCheck}>{text.check}</Button>}>
     {listener && <Space orientation="vertical" size="large" style={{ width: '100%' }}>
       <ListenerRuntimeTag enabled={listener.enabled} status={status} checking={checking} />
       {unavailable && <Alert type="error" showIcon title={status?.state === 'not_listening' ? text.nodeNotStarted : text.connectionFailed}

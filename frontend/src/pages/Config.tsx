@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, DownloadOutlined, CheckOutlined, FileTextOutlined } from '../icons';
+import { IconAddGeneric, IconDelete, IconEdit, IconDownload, IconCheck, IconFile } from '../icons';
 import {
   fetchProxies, createProxy, updateProxy, deleteProxy,
   fetchConfigYAML, generateConfig, validateConfigYAML, applyConfigYAML, rollbackConfig,
@@ -142,7 +142,7 @@ const ConfigPage: React.FC = () => {
         <Space>
           <Button
             size="small"
-            icon={<EditOutlined />}
+            icon={<IconEdit />}
             onClick={() => {
               setEditingIndex(index);
               form.setFieldsValue(proxies[index]);
@@ -150,7 +150,7 @@ const ConfigPage: React.FC = () => {
             }}
           />
           <Popconfirm title={t('common.confirm')} onConfirm={() => onDelete(index)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
+            <Button size="small" danger icon={<IconDelete />} />
           </Popconfirm>
         </Space>
       ),
@@ -183,7 +183,7 @@ const ConfigPage: React.FC = () => {
             extra={
               <Button
                 type="primary"
-                icon={<PlusOutlined />}
+                icon={<IconAddGeneric />}
                 onClick={() => {
                   setEditingIndex(null);
                   form.resetFields();
@@ -199,10 +199,10 @@ const ConfigPage: React.FC = () => {
           <Card style={{ marginTop: 16 }} title={t('config.yamlPreview') || 'YAML preview'} loading={yamlLoading}>
             {yamlEditor}
             <Space style={{ marginTop: 12 }} wrap>
-              <Button type="default" icon={<FileTextOutlined />} loading={yamlLoading} onClick={handleGenerate}>
+              <Button type="default" icon={<IconFile />} loading={yamlLoading} onClick={handleGenerate}>
                 {t('config.generate') || 'Generate'}
               </Button>
-              <Button icon={<CheckOutlined />} onClick={handleValidate}>
+              <Button icon={<IconCheck />} onClick={handleValidate}>
                 {t('config.validate') || 'Validate'}
               </Button>
               <Button type="primary" loading={yamlLoading} onClick={handleApply}>
@@ -212,7 +212,7 @@ const ConfigPage: React.FC = () => {
                 {t('config.rollback') || 'Rollback'}
               </Button>
               <Button
-                icon={<DownloadOutlined />}
+                icon={<IconDownload />}
                 onClick={() => {
                   const blob = new Blob([yaml], { type: 'text/yaml' });
                   const url = URL.createObjectURL(blob);
@@ -231,10 +231,10 @@ const ConfigPage: React.FC = () => {
         <TabPane tab={t('config.yaml') || 'YAML'} key="yaml">
           <Card loading={yamlLoading}>{yamlEditor}</Card>
           <Space style={{ marginTop: 12 }} wrap>
-            <Button type="default" icon={<FileTextOutlined />} loading={yamlLoading} onClick={handleGenerate}>
+            <Button type="default" icon={<IconFile />} loading={yamlLoading} onClick={handleGenerate}>
               {t('config.generate') || 'Generate'}
             </Button>
-            <Button icon={<CheckOutlined />} onClick={handleValidate}>
+            <Button icon={<IconCheck />} onClick={handleValidate}>
               {t('config.validate') || 'Validate'}
             </Button>
             <Button type="primary" loading={yamlLoading} onClick={handleApply}>
@@ -244,7 +244,7 @@ const ConfigPage: React.FC = () => {
               {t('config.rollback') || 'Rollback'}
             </Button>
             <Button
-              icon={<DownloadOutlined />}
+              icon={<IconDownload />}
               onClick={() => {
                 const blob = new Blob([yaml], { type: 'text/yaml' });
                 const url = URL.createObjectURL(blob);

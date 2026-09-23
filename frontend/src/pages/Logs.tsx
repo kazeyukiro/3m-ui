@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, List, Tag, Button, Space, Empty, Spin, message, theme } from 'antd';
-import { ReloadOutlined, ClearOutlined } from '../icons';
+import { IconRefreshList, IconClear } from '../icons';
 import dayjs from 'dayjs';
 import client from '../api/client';
 import { useI18n } from '../i18n';
@@ -32,8 +32,8 @@ const Logs: React.FC = () => {
     <div>
       <PageHeader title={t('logs.title')} subtitle={t('logs.subtitle')} />
       <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ReloadOutlined />} onClick={load}>{t('common.refresh')}</Button>
-        <Button icon={<ClearOutlined />} onClick={() => setLogs([])}>{t('logs.clear')}</Button>
+        <Button icon={<IconRefreshList />} onClick={load}>{t('common.refresh')}</Button>
+        <Button icon={<IconClear />} onClick={() => setLogs([])}>{t('logs.clear')}</Button>
         <Button type={autoRefresh ? 'primary' : 'default'} onClick={() => setAutoRefresh(!autoRefresh)}>{t('logs.autoRefresh')}: {autoRefresh ? t('common.enabled') : t('common.disabled')}</Button>
       </Space>
       <Card size={isMobile ? "small" : "default"}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, message, theme } from 'antd';
-import { PlayCircleOutlined, StopOutlined, RedoOutlined } from '../icons';
+import { IconPlay, IconStop, IconRestart } from '../icons';
 import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
 import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';
@@ -287,13 +287,13 @@ const Dashboard: React.FC = () => {
                 ) : null}
               </div>
               <Space wrap size={8}>
-                <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => act('start')} loading={busy} disabled={coreRunning}>
+                <Button type="primary" icon={<IconPlay />} onClick={() => act('start')} loading={busy} disabled={coreRunning}>
                   {t('dashboard.start')}
                 </Button>
-                <Button icon={<StopOutlined />} danger onClick={() => act('stop')} loading={busy} disabled={!coreRunning}>
+                <Button icon={<IconStop />} danger onClick={() => act('stop')} loading={busy} disabled={!coreRunning}>
                   {t('dashboard.stop')}
                 </Button>
-                <Button icon={<RedoOutlined />} onClick={() => act('restart')} loading={busy}>
+                <Button icon={<IconRestart />} onClick={() => act('restart')} loading={busy}>
                   {t('dashboard.restart')}
                 </Button>
               </Space>

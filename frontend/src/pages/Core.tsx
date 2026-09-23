@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, Button, Card, Descriptions, Modal, Select, Space, Spin, Steps, Typography, message } from 'antd';
-import { PlayCircleOutlined, StopOutlined, RedoOutlined, DownloadOutlined, RollbackOutlined } from '../icons';
+import { IconPlay, IconStop, IconReloadCore, IconCloudDown, RollbackOutlined } from '../icons';
 import { coreAPI, type CoreStatus, type CoreRelease, type CoreUpdateStatus } from '../api/core';
 import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';
@@ -93,9 +93,9 @@ export default function Core() {
                 <Descriptions.Item label={t('core.updates.previous')}>{update?.previous_version || t('core.updates.noPrevious')}</Descriptions.Item>
               </Descriptions>
               <Space wrap>
-                <Button icon={<PlayCircleOutlined />} disabled={busy || !!error} onClick={() => action('start', 'started')}>{t('core.start')}</Button>
-                <Button icon={<StopOutlined />} danger disabled={busy || !!error} onClick={() => action('stop', 'stopped')}>{t('core.stop')}</Button>
-                <Button icon={<RedoOutlined />} disabled={busy || !!error} onClick={() => action('restart', 'restarted')}>{t('core.restart')}</Button>
+                <Button icon={<IconPlay />} disabled={busy || !!error} onClick={() => action('start', 'started')}>{t('core.start')}</Button>
+                <Button icon={<IconStop />} danger disabled={busy || !!error} onClick={() => action('stop', 'stopped')}>{t('core.stop')}</Button>
+                <Button icon={<IconReloadCore />} disabled={busy || !!error} onClick={() => action('restart', 'restarted')}>{t('core.restart')}</Button>
               </Space>
             </Space>
           </Card>
@@ -106,7 +106,7 @@ export default function Core() {
               <Space wrap style={{ width: '100%' }}>
                 <Button onClick={checkReleases} loading={checking} disabled={busy || !update?.supported || !!error}>{t('core.updates.check')}</Button>
                 <Select aria-label={t('core.updates.select')} placeholder={t('core.updates.select')} value={selected} onChange={setSelected} style={{ width: isMobile ? 260 : 320, maxWidth: '100%' }} disabled={busy || !releases.length} options={[true, false].map(pre => ({ label: t(pre ? 'core.updates.pre' : 'core.updates.stable'), options: releases.filter(item => item.prerelease === pre).map(item => ({ value: item.version, label: `${item.version}${item.prerelease ? ` · ${t('core.updates.pre')}` : ''}${item.version === latestStable ? ` · ${t('core.updates.latest')}` : ''}${item.version === status?.version ? ` · ${t('core.updates.current')}` : ''}` })) })).filter(group => group.options.length > 0)} />
-                <Button type="primary" icon={<DownloadOutlined />} disabled={busy || !update?.supported || !selected || selected === status?.version || !!error} onClick={() => setConfirmation('install')}>{t('core.updates.install')}</Button>
+                <Button type="primary" icon={<IconCloudDown />} disabled={busy || !update?.supported || !selected || selected === status?.version || !!error} onClick={() => setConfirmation('install')}>{t('core.updates.install')}</Button>
                 <Button icon={<RollbackOutlined />} disabled={busy || !update?.supported || !update?.previous_version || !!error} onClick={() => setConfirmation('rollback')}>{t('core.updates.rollback')}</Button>
               </Space>
               {release && <Typography.Link href={release.url} target="_blank" rel="noopener noreferrer">{t('core.updates.releaseNotes')} · {release.version}</Typography.Link>}

@@ -1,11 +1,11 @@
 import React from 'react';
 import { Layout, Button, Space, Tag, Dropdown, Typography } from 'antd';
 import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  UserOutlined,
-  GlobalOutlined,
-  BgColorsOutlined,
+  IconMenuClose,
+  IconMenuOpen,
+  IconUser,
+  IconGlobe,
+  IconTheme,
 } from '../icons';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore, ThemeMode } from '../stores/themeStore';
@@ -61,7 +61,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
       ) : (
         <Button
           type="text"
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          icon={collapsed ? <IconMenuOpen /> : <IconMenuClose />}
           onClick={() => setCollapsed(!collapsed)}
         />
       )}
@@ -74,7 +74,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
             onClick: (e) => setMode(e.key as ThemeMode),
           }}
         >
-          <Button type="text" icon={<BgColorsOutlined />}>
+          <Button type="text" icon={<IconTheme />}>
             {!isMobile && t('settings.theme')}
           </Button>
         </Dropdown>
@@ -85,11 +85,11 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
             onClick: (e) => setLocale(e.key as Locale),
           }}
         >
-          <Button type="text" icon={<GlobalOutlined />}>
+          <Button type="text" icon={<IconGlobe />}>
             {!isMobile && (LOCALE_OPTIONS.find((o) => o.key === locale)?.label || locale)}
           </Button>
         </Dropdown>
-        <Tag icon={<UserOutlined />} title={displayName} style={{ marginInlineEnd: 0 }}>
+        <Tag icon={<IconUser />} title={displayName} style={{ marginInlineEnd: 0 }}>
           {isMobile ? shortName : displayName}
         </Tag>
       </Space>
