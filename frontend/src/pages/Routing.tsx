@@ -220,23 +220,34 @@ const RoutingPage: React.FC = () => {
   };
 
   const onTemplate = async (id: string) => {
-    const needsProxy = id.startsWith('community-') || id === 'cn_direct' || id === 'via_group';
-    let groupName = groups.find((g) => g.name === 'PROXY')?.name || groups[0]?.name || 'PROXY';
-    if (needsProxy && !groups.some((g) => g.name === groupName)) {
+    const tpl = applyTemplate(id, {
+      groupName: groups.find((g) => g.name === 'PROXY')?.name || groups[0]?.name || 'PROXY',
+      existingProxies: proxyNames,
+    });
+    setRules(tpl.rules);
+    if (tpl.groups && tpl.groups.length) {
       try {
-        const next = [
-          ...groups,
-          { name: 'PROXY', type: 'select', proxies: ['DIRECT'] },
-        ];
+        let next: GroupEntry[] = tpl.groups.map((g) => ({
+          name: g.name,
+          type: g.type || 'select',
+          proxies: g.proxies?.length ? g.proxies : ['DIRECT'],
+          ...(g.url ? { url: g.url } : {}),
+          ...(g.interval != null ? { interval: g.interval } : {}),
+        }));
+        if (tpl.mergeGroups) {
+          const byName = new Map<string, GroupEntry>(groups.map((g) => [g.name, g]));
+          for (const g of next) {
+            byName.set(g.name, { ...(byName.get(g.name) || {}), ...g });
+          }
+          next = Array.from(byName.values());
+        }
         const saved = await saveGroups(next);
         setGroups(Array.isArray(saved) ? saved : next);
-        groupName = 'PROXY';
       } catch (e: any) {
         message.error(errMsg(e));
         return;
       }
     }
-    setRules(applyTemplate(id, { groupName }));
     message.success(
       (t('routing.templateApplied') || 'Template applied — save to persist') +
         (id.startsWith('community-')

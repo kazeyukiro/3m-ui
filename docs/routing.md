@@ -83,8 +83,10 @@ Routing → **Templates** includes adaptations of public Mihomo rule projects (f
 
 | Template | Upstream | Intent |
 |----------|----------|--------|
-| YiXuanZX/rules | [YiXuanZX/rules](https://github.com/YiXuanZX/rules) | Private/CN direct, Telegram + GFW → PROXY |
-| echs-top/proxy | [echs-top/proxy](https://github.com/echs-top/proxy) | Light ad reject, CN direct, GFW → PROXY |
-| AIsouler/MyClash | [AIsouler/MyClash](https://github.com/AIsouler/MyClash) | CN direct, Google/Telegram/OpenAI/GFW → PROXY |
+| YiXuanZX/rules | [YiXuanZX/rules](https://github.com/YiXuanZX/rules) | Groups: 香港/新加坡/日本/美国/其他 + **代理 / AI / TG**. Rules: CN direct, OpenAI→AI, Telegram→TG, GFW→代理 |
+| echs-top/proxy | [echs-top/proxy](https://github.com/echs-top/proxy) | Groups: **代理连接 / TELEGRAM / 国外AI / GOOGLE / 海外媒体 / …**. Ads REJECT + CN direct + category rules |
+| AIsouler/MyClash | [AIsouler/MyClash](https://github.com/AIsouler/MyClash) | Groups: **直连 / AdBlock / Google / AI / Telegram / Steam / 默认代理 / 漏网之鱼**. Lite GEOSITE map |
 
-These use **GEOSITE/GEOIP** against MetaCubeX geodata (update under Settings → Geo). Full upstream configs with remote `rule-providers` remain optional for advanced custom YAML fragments.
+Applying a community template **writes matching proxy-groups** (merged by name) and rules. Leaf members use existing visual outbounds if any, else `DIRECT` — put real nodes/WARP into the region or policy groups afterward.
+
+These use **GEOSITE/GEOIP** against MetaCubeX geodata (Settings → Geo). Full upstream `rule-providers` / region filters remain optional via custom YAML fragments.

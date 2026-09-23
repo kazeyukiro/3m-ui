@@ -134,67 +134,160 @@ export function validateRules(rows: RuleRow[]): RuleIssue[] {
   return issues;
 }
 
-/** Community rule templates (adapted for 3m-ui server visual-config).
- * Inspired by public Mihomo rule projects — see README acknowledgements.
+/** Result of a routing template (rules + recommended proxy-groups). */
+export type TemplateResult = {
+  rules: RuleRow[];
+  /** When non-empty, replace or merge into panel groups (see Routing page). */
+  groups?: Array<{
+    name: string;
+    type: string;
+    proxies: string[];
+    url?: string;
+    interval?: number;
+  }>;
+  /** If true, merge groups by name instead of wiping existing groups. */
+  mergeGroups?: boolean;
+};
+
+/**
+ * Community rule templates adapted for 3m-ui server visual-config.
+ * Inspired by public Mihomo rule projects — include matching proxy-groups, not only rules.
  * Prefer GEOSITE/GEOIP so MetaCubeX geodata works without extra rule-providers.
  */
 export function applyTemplate(
   id: string,
-  opts: { groupName?: string },
-): RuleRow[] {
+  opts: { groupName?: string; existingProxies?: string[] } = {},
+): TemplateResult {
   const g = (opts.groupName || 'PROXY').trim() || 'PROXY';
+  const leaves = (opts.existingProxies || []).filter(Boolean);
+  // Default leaf list for select groups when no outbound proxies exist yet
+  const leafOrDirect = leaves.length ? leaves : ['DIRECT'];
+
+  const select = (name: string, proxies: string[]) => ({
+    name,
+    type: 'select',
+    proxies: proxies.length ? proxies : ['DIRECT'],
+  });
+
   switch (id) {
     case 'direct_only':
-      return [emptyRule({ type: 'MATCH', target: 'DIRECT' })];
+      return { rules: [emptyRule({ type: 'MATCH', target: 'DIRECT' })] };
+
     case 'cn_direct':
-      return [
-        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
-        emptyRule({ type: 'MATCH', target: g }),
-      ];
+      return {
+        rules: [
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'MATCH', target: g }),
+        ],
+        groups: [select(g, leafOrDirect)],
+        mergeGroups: true,
+      };
+
     case 'reject_ads':
-      return [
-        emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
-        emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googlesyndication.com', target: 'REJECT' }),
-        emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
-        emptyRule({ type: 'MATCH', target: 'DIRECT' }),
-      ];
+      return {
+        rules: [
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googlesyndication.com', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
+          emptyRule({ type: 'MATCH', target: 'DIRECT' }),
+        ],
+      };
+
     case 'via_group':
-      return [emptyRule({ type: 'MATCH', target: g })];
-    // —— YiXuanZX/rules inspired: CN direct + GFW/Telegram proxy ——
-    case 'community-yixuan':
-      return [
-        emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
-        emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
-        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
-        emptyRule({ type: 'GEOSITE', payload: 'telegram', target: g }),
-        emptyRule({ type: 'GEOSITE', payload: 'gfw', target: g }),
-        emptyRule({ type: 'MATCH', target: g }),
+      return {
+        rules: [emptyRule({ type: 'MATCH', target: g })],
+        groups: [select(g, leafOrDirect)],
+        mergeGroups: true,
+      };
+
+    // —— YiXuanZX/rules: region selects + 代理 / AI / TG ——
+    case 'community-yixuan': {
+      const regions = ['香港', '新加坡', '日本', '美国', '其他'];
+      const groups = [
+        ...regions.map((n) => select(n, leafOrDirect)),
+        select('代理', [...regions, 'DIRECT']),
+        select('AI', ['美国', '新加坡', '香港', '日本', '其他', 'DIRECT']),
+        select('TG', ['香港', '新加坡', '日本', '美国', '其他', 'DIRECT']),
       ];
-    // —— echs-top/proxy inspired: light ad reject + CN direct + proxy ——
-    case 'community-echs':
-      return [
-        emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
-        emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googleadservices.com', target: 'REJECT' }),
-        emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
-        emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
-        emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
-        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
-        emptyRule({ type: 'GEOSITE', payload: 'gfw', target: g }),
-        emptyRule({ type: 'MATCH', target: g }),
+      return {
+        mergeGroups: true,
+        groups,
+        rules: [
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'GEOSITE', payload: 'openai', target: 'AI' }),
+          emptyRule({ type: 'GEOSITE', payload: 'telegram', target: 'TG' }),
+          emptyRule({ type: 'GEOSITE', payload: 'gfw', target: '代理' }),
+          emptyRule({ type: 'MATCH', target: '代理' }),
+        ],
+      };
+    }
+
+    // —— echs-top/proxy: ads + CN + policy groups ——
+    case 'community-echs': {
+      const groups = [
+        select('代理连接', leafOrDirect),
+        select('TELEGRAM', leafOrDirect),
+        select('国外AI', leafOrDirect),
+        select('GOOGLE', leafOrDirect),
+        select('海外媒体', leafOrDirect),
+        select('下载相关', leafOrDirect),
+        select('风控安全', leafOrDirect),
       ];
-    // —— AIsouler/MyClash lite inspired: CN + Google/Telegram/AI/GFW ——
-    case 'community-aisouler':
-      return [
-        emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
-        emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
-        emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
-        emptyRule({ type: 'GEOSITE', payload: 'google', target: g }),
-        emptyRule({ type: 'GEOSITE', payload: 'telegram', target: g }),
-        emptyRule({ type: 'GEOSITE', payload: 'openai', target: g }),
-        emptyRule({ type: 'GEOSITE', payload: 'gfw', target: g }),
-        emptyRule({ type: 'MATCH', target: g }),
+      return {
+        mergeGroups: true,
+        groups,
+        rules: [
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googleadservices.com', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'GEOSITE', payload: 'telegram', target: 'TELEGRAM' }),
+          emptyRule({ type: 'GEOSITE', payload: 'openai', target: '国外AI' }),
+          emptyRule({ type: 'GEOSITE', payload: 'google', target: 'GOOGLE' }),
+          emptyRule({ type: 'GEOSITE', payload: 'youtube', target: '海外媒体' }),
+          emptyRule({ type: 'GEOSITE', payload: 'netflix', target: '海外媒体' }),
+          emptyRule({ type: 'GEOSITE', payload: 'gfw', target: '代理连接' }),
+          emptyRule({ type: 'MATCH', target: '代理连接' }),
+        ],
+      };
+    }
+
+    // —— AIsouler/MyClash lite: 直连 / AdBlock / Google / AI / Telegram / Steam / 默认代理 / 漏网之鱼 ——
+    case 'community-aisouler': {
+      const groups = [
+        select('直连', ['DIRECT']),
+        select('AdBlock', ['REJECT', 'DIRECT']),
+        select('Google', leafOrDirect),
+        select('AI', leafOrDirect),
+        select('Telegram', leafOrDirect),
+        select('Steam', leafOrDirect),
+        select('默认代理', leafOrDirect),
+        select('漏网之鱼', ['默认代理', 'DIRECT', 'REJECT']),
       ];
+      return {
+        mergeGroups: true,
+        groups,
+        rules: [
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: '直连' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: '直连' }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: '直连', noResolve: true }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'AdBlock' }),
+          emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'AdBlock' }),
+          emptyRule({ type: 'GEOSITE', payload: 'google', target: 'Google' }),
+          emptyRule({ type: 'GEOSITE', payload: 'openai', target: 'AI' }),
+          emptyRule({ type: 'GEOSITE', payload: 'telegram', target: 'Telegram' }),
+          emptyRule({ type: 'GEOSITE', payload: 'steam', target: 'Steam' }),
+          emptyRule({ type: 'GEOSITE', payload: 'gfw', target: '默认代理' }),
+          emptyRule({ type: 'MATCH', target: '漏网之鱼' }),
+        ],
+      };
+    }
+
     default:
-      return [emptyRule({ type: 'MATCH', target: 'DIRECT' })];
+      return { rules: [emptyRule({ type: 'MATCH', target: 'DIRECT' })] };
   }
 }
