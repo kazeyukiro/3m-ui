@@ -100,7 +100,7 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 			names = append(names, name)
 		}
 	}
-	return yaml.Marshal(clientSubscriptionDocument(proxies, names))
+	return yaml.Marshal(clientSubscriptionDocument(proxies, names, nil))
 }
 
 func listenerToProxies(l models.Listener, server string, credentials []user.Credential) ([]map[string]interface{}, error) {

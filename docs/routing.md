@@ -1,6 +1,6 @@
 # Routing & proxy-groups
 
-Panel page **Routing** edits Mihomo **outbound** policy stored in the `visual-config` fragment (not inbound Listeners).
+Panel page **Routing** edits the **client subscription** layout (proxy-groups + rules) stored in `visual-config`. Mihomo/Clash YAML subscriptions export these groups with your nodes injected into leaf selects. Server core still uses the same fragment when generating `config.yaml` (default remains inbound-friendly).
 
 ## Defaults
 

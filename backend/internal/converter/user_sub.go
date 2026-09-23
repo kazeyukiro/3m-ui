@@ -7,6 +7,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	mihomocfg "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/security"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
@@ -145,7 +146,11 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 		}
 		return nil, fmt.Errorf("no exportable proxies for user")
 	}
-	return yaml.Marshal(clientSubscriptionDocument(allProxies, names))
+	var visual *mihomocfg.VisualConfig
+	if v, err := mihomocfg.GetVisualConfig(db); err == nil {
+		visual = &v
+	}
+	return yaml.Marshal(clientSubscriptionDocument(allProxies, names, visual))
 }
 
 // URIGenerator builds share links for a listener + credentials (injected to avoid import cycles).

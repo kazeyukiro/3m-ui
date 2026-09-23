@@ -338,7 +338,7 @@ const RoutingPage: React.FC = () => {
       <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
       <Typography.Paragraph type="secondary" style={{ marginTop: -8, marginBottom: 12 }}>
         {t('routing.pageHint') ||
-          'Rules and proxy-groups are stored in visual-config and merged when you generate/apply. Default is MATCH,DIRECT (server inbound friendly).'}
+          'Proxy-groups and rules are stored in visual-config and exported into Mihomo/Clash client subscriptions (nodes are filled into leaf groups). Generate & apply also updates the panel core config.'}
       </Typography.Paragraph>
 
       <Card
