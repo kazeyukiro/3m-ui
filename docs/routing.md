@@ -93,3 +93,13 @@ Routing → **Templates** includes adaptations of public Mihomo rule projects (f
 Applying a community template **writes matching proxy-groups** (merged by name) and rules. Leaf members use existing visual outbounds if any, else `DIRECT` — put real nodes/WARP into the region or policy groups afterward.
 
 These use **GEOSITE/GEOIP** against MetaCubeX geodata (Settings → Geo). Full upstream `rule-providers` / region filters remain optional via custom YAML fragments.
+
+
+## Server WARP exit (user → node → WARP IP)
+
+1. Routing page → **Inject WARP** (optional rule: all MATCH WARP, or CN DIRECT + MATCH WARP).
+2. **Save** then **Generate & apply**.
+3. Panel Mihomo loads the WireGuard outbound and sets `MATCH,<WARP name>` (community templates stay client-only).
+4. User traffic through listeners exits with a Cloudflare WARP IP.
+
+Remove WARP proxies from visual-config (or clear routing proxies) and re-apply to return to `MATCH,DIRECT`.

@@ -49,8 +49,9 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		// Listeners are owned by the panel DB; fragments must not inject them
 		// or Mihomo will report duplicate listener names after merge.
 		delete(fragMap, "listeners")
-		// visual-config holds **client subscription** routing only. Never push
-		// rules / proxy-groups / proxies into the serving Mihomo process.
+		// visual-config primarily holds **client subscription** routing.
+		// Community rules/groups stay off the server; WARP-style exit proxies
+		// are re-applied below via applyServerExitFromVisual.
 		if fragment.Name == visualConfigName || fragment.Type == "visual" {
 			delete(fragMap, "rules")
 			delete(fragMap, "proxy-groups")
@@ -60,9 +61,12 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 			merged[k] = v
 		}
 	}
-	// Server is inbound-only: force direct exit, ignore any leftover split rules.
-	merged["rules"] = []interface{}{"MATCH,DIRECT"}
+	// Default: inbound panel exits DIRECT. If visual-config has a WARP (or
+	// similar) outbound, use it so user traffic via listeners exits with that IP.
 	merged["proxy-groups"] = []interface{}{}
+	if err := applyServerExitFromVisual(ce.db, merged); err != nil {
+		return "", err
+	}
 	var listeners []models.Listener
 	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
 		return "", fmt.Errorf("load enabled listeners: %w", err)
