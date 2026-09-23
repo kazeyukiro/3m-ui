@@ -33,7 +33,6 @@ import {
   saveGroups,
   fetchRules,
   saveRules,
-  injectWarpRouting,
   type GroupEntry,
 } from '../api/routing';
 import { generateConfig, applyConfigYAML, fetchProxies } from '../api/config';
@@ -63,10 +62,7 @@ const RoutingPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
-  const [warpOpen, setWarpOpen] = useState(false);
-  const [warpBusy, setWarpBusy] = useState(false);
   const [form] = Form.useForm();
-  const [warpForm] = Form.useForm();
 
   const targetOptions = useMemo(() => {
     const set = new Set<string>(['DIRECT', 'REJECT', 'COMPATIBLE']);
@@ -256,33 +252,6 @@ const RoutingPage: React.FC = () => {
     );
   };
 
-  const onInjectWarp = async () => {
-    const values = await warpForm.validateFields().catch(() => null);
-    if (!values) return;
-    setWarpBusy(true);
-    try {
-      const res = await injectWarpRouting({
-        mode: values.mode || 'wireguard',
-        rule_mode: values.rule_mode || 'match',
-        name: values.name || undefined,
-      });
-      setRules(parseRulesText((res.rules || []).join('\n')));
-      setProxyNames((prev) => {
-        const n = res.name || 'WARP-OUT';
-        return prev.includes(n) ? prev : [...prev, n];
-      });
-      message.success(
-        (t('routing.warpInjected') || 'WARP outbound added') + (res.name ? `: ${res.name}` : ''),
-      );
-      setWarpOpen(false);
-      offerApply();
-    } catch (e: any) {
-      message.error(errMsg(e));
-    } finally {
-      setWarpBusy(false);
-    }
-  };
-
   const templateMenu = {
     items: [
       { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
@@ -309,13 +278,6 @@ const RoutingPage: React.FC = () => {
   const ruleCardExtra = (
     <Space wrap size="small">
       <Dropdown menu={templateMenu}>
-        <Button size="small" icon={<Layers size={16} />}>
-          {t('routing.templates') || 'Templates'}
-        </Button>
-      </Dropdown>
-      <Button size="small" icon={<Cloud size={16} />} onClick={() => { warpForm.resetFields(); setWarpOpen(true); }}>
-        {t('routing.warpInject') || 'WARP'}
-      </Button>
       <Button size="small" icon={<ListPlus size={16} />} onClick={addRule}>
         {t('routing.addRule') || 'Add rule'}
       </Button>
@@ -501,7 +463,7 @@ const RoutingPage: React.FC = () => {
             <Select
               mode="tags"
               tokenSeparators={[',', ' ']}
-              placeholder="DIRECT, WARP-OUT, …"
+              placeholder="DIRECT, PROXY, …"
               options={targetOptions}
             />
           </Form.Item>
@@ -512,49 +474,6 @@ const RoutingPage: React.FC = () => {
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        open={warpOpen}
-        title={t('routing.warpInjectTitle') || 'Inject Cloudflare WARP outbound'}
-        onCancel={() => setWarpOpen(false)}
-        onOk={onInjectWarp}
-        confirmLoading={warpBusy}
-        okText={t('routing.warpInject') || 'Register & inject'}
-        width={isMobile ? '100%' : 480}
-        style={isMobile ? { top: 8 } : undefined}
-        destroyOnClose
-      >
-        <Typography.Paragraph type="secondary">
-          {t('routing.warpInjectHint') ||
-            'Registers a WARP account, adds the outbound into visual-config proxies, and optionally adjusts rules. Then generate & apply to load into Mihomo.'}
-        </Typography.Paragraph>
-        <Form form={warpForm} layout="vertical" initialValues={{ mode: 'wireguard', rule_mode: 'match', name: 'WARP-OUT' }}>
-          <Form.Item name="mode" label={t('routing.warpMode') || 'Mode'}>
-            <Select
-              options={[
-                { value: 'wireguard', label: 'WireGuard' },
-                { value: 'masque', label: 'MASQUE' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="name" label={t('routing.warpName') || 'Outbound name'}>
-            <Input placeholder="WARP-OUT" />
-          </Form.Item>
-          <Form.Item name="rule_mode" label={t('routing.warpRuleMode') || 'Rule update'}>
-            <Select
-              options={[
-                { value: 'none', label: t('routing.warpRuleNone') || 'Do not change rules' },
-                { value: 'match', label: t('routing.warpRuleMatch') || 'Final MATCH → this outbound' },
-                { value: 'cn_direct', label: t('routing.warpRuleCn') || 'GEOIP CN DIRECT + MATCH outbound' },
-              ]}
-            />
-          </Form.Item>
-        </Form>
-        <Divider style={{ margin: '8px 0' }} />
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t('routing.warpNote') || 'Requires outbound connectivity from the panel to Cloudflare.'}
-        </Typography.Text>
       </Modal>
     </div>
   );

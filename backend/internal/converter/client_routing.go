@@ -24,9 +24,8 @@ func clientSubscriptionDocument(proxies []map[string]interface{}, names []string
 	var groups []interface{}
 	var rules []string
 
-	// Merge panel visual outbounds (e.g. WARP WireGuard) into the client document
-	// so inject-warp + MATCH,WARP-OUT works on phones/PCs. Server config still
-	// strips these (inbound-only).
+	// Merge panel visual outbounds (e.g. visual outbounds) into the client document
+	// so optional visual outbounds for client YAML. Server strips visual proxies.
 	if visual != nil && len(visual.Proxies) > 0 {
 		proxies, names = mergeVisualProxiesForClient(proxies, names, visual.Proxies)
 	}
@@ -171,7 +170,7 @@ func adaptVisualGroupsForClient(src []mihomocfg.GroupEntry, names []string) []in
 				members = append(members, m)
 				continue
 			}
-			// Drop server-only outbounds (e.g. WARP-OUT) not present in this sub.
+			// Drop outbounds not present in this subscription.
 		}
 		if shouldInjectSubscriptionNodes(name, members, groupNameSet) && len(names) > 0 {
 			injected := make([]string, 0, len(names)+len(members))
@@ -258,7 +257,7 @@ func filterClientRules(rules []string, groupNames map[string]struct{}, proxyName
 			target = strings.TrimSpace(parts[targetIdx])
 		}
 		if _, ok := valid[target]; !ok {
-			// Server-only outbound (e.g. WARP) — fall back to PROXY group or DIRECT.
+			// Unknown outbound — fall back to PROXY group or DIRECT.
 			if _, has := valid["PROXY"]; has {
 				parts[targetIdx] = "PROXY"
 			} else if _, has := valid["代理"]; has {

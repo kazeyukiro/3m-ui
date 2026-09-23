@@ -6,7 +6,6 @@
 
 > Languages / 语言: [README](./README.md) · [English](./README.en.md) · **简体中文** · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
-
 **Mihomo 服务端 Web 管理面板**
 
 > **稳定版优先：** 默认安装和更新只使用正式 Release。预发布需主动选择。完整安装包及 Docker 镜像包含固定版本 Mihomo；详见 [安装文档](https://3m-ui.top/docs/install.html)。
@@ -27,9 +26,7 @@
 | **节点** | 协议注册表驱动的 Listener：VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC 等；REALITY、TLS 自签、一键批量证书、**流量倍率**、传输层字段校验 |
 | **用户** | 绑定节点、流量限额、**按节点分别计量**（计费 = 实际 × 节点倍率）、到期、IP/订阅拉取限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
 | **订阅** | UA 识别 Clash/Mihomo YAML、v2ray Base64（`?target=v2ray` 始终 Base64）、sing-box JSON；可选 `?target=`；HTML 订阅页；TUIC/HY2 分享链含客户端 TLS 参数 |
-| **路由** | 结构化规则、策略组、模板、WARP 注入；保存后生成并应用 |
 | **配置** | 生成 → 校验 → 应用；失败回滚上一份 `config.yaml` |
-| **运维** | 核心启停/更新、日志、仪表盘、在线连接、Geo、面板 SSL/ACME、WARP 一键、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、节点镜像同步、合并订阅；按名称选择本机节点推送到远程（默认禁用） |
 
@@ -77,7 +74,6 @@ curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/docs/ai-insta
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
 ```
-
 
 ---
 

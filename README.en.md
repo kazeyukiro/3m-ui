@@ -6,7 +6,6 @@
 
 > Languages / 语言: [README](./README.md) · **English** · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
-
 **Mihomo server web management panel**
 
 > **Stable first:** install and update use formal releases by default. Pre-releases require an explicit choice. Full bundles and Docker images ship a pinned Mihomo core — see [installation docs](https://3m-ui.top/docs/install.html).
@@ -28,8 +27,6 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | **Users** | Bind nodes, traffic/expiry, **per-node usage** (billed = raw × node multiplier), IP/sub-pull limits, start-on-first-use, cycle renew/reset, groups/tags, external sub merge, batch ops, subscription tokens |
 | **Subscriptions** | UA routing for Clash/Mihomo YAML, v2ray Base64 (`?target=v2ray` always Base64), sing-box JSON; optional `?target=`; HTML info page; TUIC/HY2 share TLS params |
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **Routing** | Structured Mihomo rules, proxy-groups, templates, WARP inject; save then generate & apply |
-| **Ops** | Core start/stop/update, logs, dashboard, online connections, Geo, panel SSL/ACME, WARP one-click, backup/restore |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; **push local nodes by name** (created disabled on remote) |
 
@@ -51,7 +48,6 @@ sudo 3m-ui update
 Default panel: `http://SERVER_IP:8080/` — user `admin`, one-time random password printed at install (**change on first login**).
 
 ---
-
 
 ### Install with an AI assistant prompt
 

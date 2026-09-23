@@ -62,10 +62,6 @@ export const restoreDatabase = (file: File) => {
 
 export const openApiUrl = '/api/v1/openapi.yaml';
 
-export const registerWarp = () =>
-  client.post<{ private_key: string; public_key: string; address: string; reserved?: string; yaml: string }>(
-    '/system/templates/warp/register',
-  ).then((r) => r.data);
 
 
 export interface LocalBackupItem {

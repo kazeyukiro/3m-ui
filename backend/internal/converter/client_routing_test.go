@@ -73,10 +73,10 @@ func TestClientSubscriptionUsesVisualGroups(t *testing.T) {
 func TestClientSubscriptionIncludesVisualProxy(t *testing.T) {
 	v := &mihomocfg.VisualConfig{
 		Proxies: []mihomocfg.ProxyEntry{
-			{Name: "WARP-OUT", Type: "wireguard", Server: "engage.cloudflareclient.com", Port: 2408,
+			{Name: "EXTRA-OUT", Type: "ss", Server: "example.com", Port: 2408,
 				Options: map[string]interface{}{"private-key": "x", "public-key": "y"}},
 		},
-		Rules: []string{"MATCH,WARP-OUT"},
+		Rules: []string{"MATCH,EXTRA-OUT"},
 	}
 	doc := clientSubscriptionDocument(
 		[]map[string]interface{}{{"name": "node-a", "type": "vless"}},
@@ -88,7 +88,7 @@ func TestClientSubscriptionIncludesVisualProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(raw)
-	for _, want := range []string{"WARP-OUT", "wireguard", "MATCH,WARP-OUT", "node-a"} {
+	for _, want := range []string{"EXTRA-OUT", "ss", "MATCH,EXTRA-OUT", "node-a"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("missing %q in:\n%s", want, s)
 		}

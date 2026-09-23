@@ -76,10 +76,6 @@ type SectionKey =
 
 const Settings: React.FC = () => {
   const [section, setSection] = useState<SectionKey>('panel');
-  const [warpMode, setWarpMode] = useState<'wireguard' | 'masque'>('wireguard');
-  const [warpYamlOpen, setWarpYamlOpen] = useState(false);
-  const [warpYaml, setWarpYaml] = useState('');
-  const [warpYamlTitle, setWarpYamlTitle] = useState('');
   const [panelServer, setPanelServer] = useState<{
     port?: number;
     listen?: string;
@@ -1253,88 +1249,6 @@ const Settings: React.FC = () => {
                   {t('settings.updateGeofiles') || 'Update geo files'}
                 </Button>
               </Card>
-              <Card title={t('settings.warp', 'Cloudflare WARP')} style={{ marginTop: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                  <Text type="secondary">{t('settings.warpHint', 'One-click register a WARP WireGuard config (YAML for Mihomo outbound).')}</Text>
-                  <Segmented
-                    value={warpMode}
-                    onChange={(v) => setWarpMode(v as 'wireguard' | 'masque')}
-                    options={[
-                      { label: t('settings.warpWireguard', 'WireGuard'), value: 'wireguard' },
-                      { label: t('settings.warpMasque', 'MASQUE'), value: 'masque' },
-                    ]}
-                  />
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const res = await client.post(`/system/templates/warp/register?mode=${warpMode}`);
-                        const yaml =
-                          (typeof res.data?.yaml === 'string' && res.data.yaml) ||
-                          (typeof res.data?.masque_yaml === 'string' && res.data.masque_yaml) ||
-                          '';
-                        if (!yaml.trim()) {
-                          message.error(t('settings.warpEmpty', 'WARP registration returned empty YAML'));
-                          return;
-                        }
-                        try {
-                          await copyText(yaml);
-                          message.success(t('settings.warpDone', 'WARP registered — YAML copied'));
-                        } catch {
-                          message.success(t('settings.warpDoneNoCopy', 'WARP registered (copy failed — select text in the dialog)'));
-                        }
-                        setWarpYamlTitle(
-                          warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
-                        );
-                        setWarpYaml(yaml);
-                        setWarpYamlOpen(true);
-                      } catch (e: any) {
-                        message.error(e?.response?.data?.error || e.message || t('common.error'));
-                      }
-                    }}
-                  >
-                    {t('settings.warpRegister', 'Register WARP')} ({warpMode === 'masque' ? 'MASQUE' : 'WireGuard'})
-                  </Button>
-                </Space>
-              </Card>
-
-              <Modal
-                open={warpYamlOpen}
-                title={warpYamlTitle}
-                width={Math.min(720, typeof window !== 'undefined' ? window.innerWidth - 32 : 720)}
-                onCancel={() => setWarpYamlOpen(false)}
-                onOk={() => setWarpYamlOpen(false)}
-                okText={t('common.close', 'Close')}
-                cancelButtonProps={{ style: { display: 'none' } }}
-                destroyOnHidden
-                styles={{
-                  // antd v6: use container (not content)
-                  container: { background: token.colorBgElevated },
-                  header: { background: token.colorBgElevated, color: token.colorText },
-                  body: { background: token.colorBgElevated },
-                  footer: { background: token.colorBgElevated },
-                }}
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    padding: 12,
-                    maxHeight: 420,
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontFamily:
-                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                    fontSize: 12,
-                    lineHeight: 1.45,
-                    background: token.colorBgContainer,
-                    color: token.colorText,
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                    borderRadius: token.borderRadiusLG ?? token.borderRadius,
-                  }}
-                >
-                  {warpYaml}
-                </pre>
-              </Modal>
 
             </Space>
           )}

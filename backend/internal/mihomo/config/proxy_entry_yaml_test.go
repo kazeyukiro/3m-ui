@@ -9,9 +9,9 @@ import (
 
 func TestProxyEntryYAMLRoundTripKeepsPrivateKey(t *testing.T) {
 	in := ProxyEntry{
-		Name:   "WARP-OUT",
+		Name:   "WG-OUT",
 		Type:   "wireguard",
-		Server: "engage.cloudflareclient.com",
+		Server: "example.com",
 		Port:   2408,
 		Options: map[string]interface{}{
 			"private-key": "eCtXsJZ27+4PbhDkHnB923tkUn2Gj59wZw5wFA75MnU=",

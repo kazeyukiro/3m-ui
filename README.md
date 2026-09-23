@@ -6,9 +6,7 @@
 
 > Languages / 语言: **README** · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
-
 **Mihomo 服务端 Web 管理面板**
-
 
 > **稳定版优先：** 默认安装和更新只使用正式 Release。预发布需要主动选择。完整安装包及 Docker 镜像包含固定版本的 Mihomo；详见 [安装、升级与恢复](docs/installation.md)。
 
@@ -31,12 +29,9 @@
 | **用户** | 绑定节点、流量限额、**按节点分别计量**（计费 = 实际 × 节点倍率）、到期、IP/订阅拉取限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
 | **订阅** | UA 自动识别 Clash/Mihomo YAML、v2ray Base64（`?target=v2ray` 始终 Base64）、sing-box JSON；可选 `?target=`；HTML 订阅页；TUIC/HY2 分享链含 SNI/`allow_insecure` 等客户端参数 |
 | **配置** | 生成 → 校验 → 应用 分离；失败回滚上一份 `config.yaml` |
-| **路由** | 结构化规则（类型/目标/排序）、策略组、模板、WARP 注入出站；保存后需生成并应用 |
-| **运维** | 核心启停/更新、日志、仪表盘、在线连接、Geo、面板 SSL/ACME、WARP 一键、备份恢复 |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、同步节点镜像、合并订阅；**按名称选择本机节点推送**到远程（默认禁用，可改名/端口） |
 | **安全** | JWT、首登改密、TOTP 两步验证、web_path 路径前缀、凭据加密、CORS |
-
 
 ### 补充说明（用户限制 / 证书 / 订阅）
 
@@ -155,7 +150,6 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 自定义面板端口：`3m-ui config port <port>` 或编辑配置后重启服务。
 新建节点默认随机填写 10000～60000 的监听端口（轻量抽样并避开已加载节点端口；支持倒序范围），可手动修改或点击「随机端口」。
 
-
 ---
 
 ## 架构示意
@@ -187,7 +181,6 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 仅更新二进制时，证书会尽量从磁盘 hydrate；若目录丢失会重新自签，客户端需重新拉取订阅。
 
 ---
-
 
 ## 致谢
 
@@ -229,7 +222,6 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 第三方组件见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)。
 
 ---
-
 
 ---
 
