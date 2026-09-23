@@ -79,6 +79,43 @@ func (p ProxyEntry) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
+// MarshalYAML flattens Options so Mihomo sees private-key / public-key at the
+// proxy root (yaml:",inline" on map is unreliable across round-trips).
+func (p ProxyEntry) MarshalYAML() (interface{}, error) {
+	out := map[string]interface{}{
+		"name":   p.Name,
+		"type":   p.Type,
+		"server": p.Server,
+		"port":   p.Port,
+	}
+	for k, v := range p.Options {
+		out[k] = v
+	}
+	return out, nil
+}
+
+// UnmarshalYAML loads a flat proxy map into Name/Type/Server/Port + Options.
+func (p *ProxyEntry) UnmarshalYAML(value *yaml.Node) error {
+	var raw map[string]interface{}
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	p.Name, _ = raw["name"].(string)
+	p.Type, _ = raw["type"].(string)
+	p.Server, _ = raw["server"].(string)
+	p.Port = raw["port"]
+	delete(raw, "name")
+	delete(raw, "type")
+	delete(raw, "server")
+	delete(raw, "port")
+	if len(raw) > 0 {
+		p.Options = raw
+	} else {
+		p.Options = nil
+	}
+	return nil
+}
+
 type GroupEntry struct {
 	Name     string   `json:"name" yaml:"name"`
 	Type     string   `json:"type" yaml:"type"`
@@ -191,6 +228,13 @@ func InjectWARPProxy(db *gorm.DB, proxyYAML string, proxyName string, ruleMode s
 	}
 	proxyMap["name"] = name
 	typ, _ := proxyMap["type"].(string)
+	typ = strings.ToLower(strings.TrimSpace(typ))
+	if typ == "" || typ == "masque" {
+		// Server exit + client sub both use WireGuard schema for Cloudflare WARP.
+		// MASQUE private-key is not interchangeable with WG; force wireguard.
+		typ = "wireguard"
+		proxyMap["type"] = "wireguard"
+	}
 	server, _ := proxyMap["server"].(string)
 	port := proxyMap["port"]
 	opts := map[string]interface{}{}
@@ -199,6 +243,12 @@ func InjectWARPProxy(db *gorm.DB, proxyYAML string, proxyName string, ruleMode s
 			continue
 		}
 		opts[k] = v
+	}
+	if _, ok := opts["private-key"]; !ok {
+		return cfg, fmt.Errorf("WARP yaml missing private-key")
+	}
+	if _, ok := opts["allowed-ips"]; !ok {
+		opts["allowed-ips"] = []string{"0.0.0.0/0", "::/0"}
 	}
 	entry := ProxyEntry{Name: name, Type: typ, Server: server, Port: port, Options: opts}
 	// Replace existing same name
