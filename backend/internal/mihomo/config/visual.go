@@ -193,4 +193,3 @@ func SaveVisualConfig(db *gorm.DB, cfg VisualConfig) error {
 	}
 	return db.Create(&fragment).Error
 }
-
