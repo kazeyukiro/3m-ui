@@ -900,9 +900,6 @@ const Users: React.FC = () => {
         />
       </Modal>
 
-    </div>
-  );
-
       <Modal
         open={quickModal}
         title={t('users.quickCreate', 'Quick create')}
@@ -1008,6 +1005,10 @@ const Users: React.FC = () => {
           </Space>
         )}
       </Modal>
+
+    </div>
+  );
+
 
 };
 
