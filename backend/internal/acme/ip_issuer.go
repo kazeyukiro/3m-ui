@@ -8,12 +8,11 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -22,14 +21,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-jose/go-jose/v4"
-	xacme "golang.org/x/crypto/acme"
+	"github.com/mholt/acmez/v3"
+	zacme "github.com/mholt/acmez/v3/acme"
 )
 
 const (
 	ipCertProfile = "shortlived"
 	ipRenewBefore = 48 * time.Hour
 	ipRenewTick   = 12 * time.Hour
+	leDirectory   = "https://acme-v02.api.letsencrypt.org/directory"
 )
 
 // IsIPHost reports whether host is a bare IPv4/IPv6 address (optional brackets).
@@ -139,9 +139,6 @@ func (iss *ipIssuer) keyPath() string {
 func (iss *ipIssuer) accountKeyPath() string {
 	return filepath.Join(iss.cacheDir, "ip-account.key")
 }
-func (iss *ipIssuer) accountURIPath() string {
-	return filepath.Join(iss.cacheDir, "ip-account.uri")
-}
 
 func leafNotAfter(cert *tls.Certificate) time.Time {
 	if cert == nil || len(cert.Certificate) == 0 {
@@ -211,7 +208,7 @@ func (iss *ipIssuer) startTempChallengeListeners() (cleanup func()) {
 		closers = append(closers, ln443)
 		tlsCfg := &tls.Config{
 			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{xacme.ALPNProto},
+			NextProtos: []string{acmez.ACMETLS1Protocol},
 			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				c := iss.alpnChallengeCert()
 				if c == nil {
@@ -239,11 +236,35 @@ func (iss *ipIssuer) startTempChallengeListeners() (cleanup func()) {
 	return cleanup
 }
 
-func pickChallenge(az *xacme.Authorization, typ string) *xacme.Challenge {
-	for i := range az.Challenges {
-		if az.Challenges[i].Type == typ {
-			return az.Challenges[i]
+// ipChallengeSolver implements acmez.Solver for HTTP-01 and TLS-ALPN-01.
+type ipChallengeSolver struct {
+	iss *ipIssuer
+}
+
+func (s *ipChallengeSolver) Present(_ context.Context, chal zacme.Challenge) error {
+	switch chal.Type {
+	case zacme.ChallengeTypeHTTP01:
+		s.iss.http01.Present(chal.Token, chal.KeyAuthorization)
+		log.Printf("panel SSL: presenting HTTP-01 for %s", s.iss.ip)
+	case zacme.ChallengeTypeTLSALPN01:
+		cert, err := acmez.TLSALPN01ChallengeCert(chal)
+		if err != nil {
+			return fmt.Errorf("TLS-ALPN-01 challenge cert: %w", err)
 		}
+		s.iss.setALPNCert(cert)
+		log.Printf("panel SSL: presenting TLS-ALPN-01 for %s", s.iss.ip)
+	default:
+		return fmt.Errorf("unsupported challenge type %q", chal.Type)
+	}
+	return nil
+}
+
+func (s *ipChallengeSolver) CleanUp(_ context.Context, chal zacme.Challenge) error {
+	switch chal.Type {
+	case zacme.ChallengeTypeHTTP01:
+		s.iss.http01.CleanUp(chal.Token)
+	case zacme.ChallengeTypeTLSALPN01:
+		s.iss.setALPNCert(nil)
 	}
 	return nil
 }
@@ -265,150 +286,67 @@ func (iss *ipIssuer) obtainLocked() error {
 	if err != nil {
 		return err
 	}
-	client := &xacme.Client{Key: accountKey, DirectoryURL: xacme.LetsEncryptURL}
-	dir, err := client.Discover(ctx)
-	if err != nil {
-		return fmt.Errorf("ACME discover: %w", err)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	low := &zacme.Client{
+		Directory: leDirectory,
+		Logger:    logger,
 	}
+	client := acmez.Client{
+		Client: low,
+		ChallengeSolvers: map[string]acmez.Solver{
+			zacme.ChallengeTypeHTTP01:    &ipChallengeSolver{iss: iss},
+			zacme.ChallengeTypeTLSALPN01: &ipChallengeSolver{iss: iss},
+		},
+	}
+
 	var contact []string
 	if iss.email != "" {
 		contact = []string{"mailto:" + iss.email}
 	}
-	acct, err := client.Register(ctx, &xacme.Account{Contact: contact}, xacme.AcceptTOS)
+	account := zacme.Account{
+		Contact:              contact,
+		TermsOfServiceAgreed: true,
+		PrivateKey:           accountKey,
+	}
+	account, err = low.NewAccount(ctx, account)
 	if err != nil {
-		acct, err = client.GetReg(ctx, "")
+		// Existing account with same key — try lookup.
+		account, err = low.GetAccount(ctx, account)
 		if err != nil {
-			return fmt.Errorf("ACME register: %w", err)
+			return fmt.Errorf("ACME account: %w", err)
 		}
-	}
-	kid := ""
-	if acct != nil {
-		kid = acct.URI
-	}
-	if kid != "" {
-		_ = os.WriteFile(iss.accountURIPath(), []byte(kid), 0o600)
-	} else if b, e := os.ReadFile(iss.accountURIPath()); e == nil {
-		kid = strings.TrimSpace(string(b))
-	}
-	if kid == "" {
-		return fmt.Errorf("ACME account KID missing")
-	}
-
-	order, err := createOrderWithProfile(ctx, client, dir, accountKey, kid, iss.ip, ipCertProfile)
-	if err != nil {
-		return err
-	}
-
-	for _, zurl := range order.AuthzURLs {
-		az, err := client.GetAuthorization(ctx, zurl)
-		if err != nil {
-			return err
-		}
-		if az.Status == xacme.StatusValid {
-			continue
-		}
-		httpChal := pickChallenge(az, "http-01")
-		alpnChal := pickChallenge(az, "tls-alpn-01")
-		if httpChal == nil && alpnChal == nil {
-			return fmt.Errorf("no http-01 or tls-alpn-01 challenge offered for IP %s", iss.ip)
-		}
-
-		var lastErr error
-		if httpChal != nil {
-			lastErr = iss.solveHTTP01(ctx, client, az, httpChal)
-			if lastErr == nil {
-				continue
-			}
-			log.Printf("panel SSL: HTTP-01 failed for %s: %v; trying TLS-ALPN-01", iss.ip, lastErr)
-		}
-
-		if alpnChal == nil {
-			if lastErr != nil {
-				return lastErr
-			}
-			return fmt.Errorf("no usable ACME challenge (open TCP :80 for HTTP-01 and/or :443 for TLS-ALPN-01)")
-		}
-
-		az2, err := client.GetAuthorization(ctx, zurl)
-		if err != nil {
-			return err
-		}
-		if az2.Status == xacme.StatusValid {
-			continue
-		}
-		if az2.Status == xacme.StatusInvalid {
-			order2, err := createOrderWithProfile(ctx, client, dir, accountKey, kid, iss.ip, ipCertProfile)
-			if err != nil {
-				return fmt.Errorf("HTTP-01 failed (%v); new order for TLS-ALPN-01: %w", lastErr, err)
-			}
-			order = order2
-			ok := false
-			for _, z2 := range order.AuthzURLs {
-				az3, err := client.GetAuthorization(ctx, z2)
-				if err != nil {
-					return err
-				}
-				if az3.Status == xacme.StatusValid {
-					ok = true
-					break
-				}
-				alpn := pickChallenge(az3, "tls-alpn-01")
-				if alpn == nil {
-					return fmt.Errorf("HTTP-01 failed (%v); no tls-alpn-01 on retry order", lastErr)
-				}
-				if err := iss.solveTLSALPN01(ctx, client, az3, alpn); err != nil {
-					return fmt.Errorf("HTTP-01 failed (%v); TLS-ALPN-01 failed: %w", lastErr, err)
-				}
-				ok = true
-			}
-			if !ok {
-				return fmt.Errorf("HTTP-01 failed (%v); TLS-ALPN-01 retry incomplete", lastErr)
-			}
-			continue
-		}
-
-		alpn := pickChallenge(az2, "tls-alpn-01")
-		if alpn == nil {
-			alpn = alpnChal
-		}
-		if err := iss.solveTLSALPN01(ctx, client, az2, alpn); err != nil {
-			if lastErr != nil {
-				return fmt.Errorf("HTTP-01 failed (%v); TLS-ALPN-01 failed: %w", lastErr, err)
-			}
-			return fmt.Errorf("TLS-ALPN-01 failed: %w", err)
-		}
-	}
-
-	order, err = client.WaitOrder(ctx, order.URI)
-	if err != nil {
-		return fmt.Errorf("wait order: %w", err)
 	}
 
 	certKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
-	ip := net.ParseIP(iss.ip)
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-		Subject:     pkix.Name{CommonName: iss.ip},
-		IPAddresses: []net.IP{ip},
-	}, certKey)
+	// NewCSR puts IPs only in SAN IPAddresses (no Common Name) — required by LE.
+	csr, err := acmez.NewCSR(certKey, []string{iss.ip})
+	if err != nil {
+		return fmt.Errorf("CSR: %w", err)
+	}
+	params, err := acmez.OrderParametersFromCSR(account, csr)
+	if err != nil {
+		return fmt.Errorf("order params: %w", err)
+	}
+	params.Profile = ipCertProfile
+
+	certs, err := client.ObtainCertificate(ctx, params)
 	if err != nil {
 		return err
 	}
-	der, _, err := client.CreateOrderCert(ctx, order.FinalizeURL, csrDER, true)
-	if err != nil {
-		return fmt.Errorf("finalize order: %w", err)
+	if len(certs) == 0 || len(certs[0].ChainPEM) == 0 {
+		return fmt.Errorf("ACME returned empty certificate chain")
 	}
-	var certPEM []byte
-	for _, c := range der {
-		certPEM = append(certPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c})...)
-	}
+
 	keyDER, err := x509.MarshalECPrivateKey(certKey)
 	if err != nil {
 		return err
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	certPEM := certs[0].ChainPEM
 	if err := os.WriteFile(iss.certPath(), certPEM, 0o600); err != nil {
 		return err
 	}
@@ -422,140 +360,9 @@ func (iss *ipIssuer) obtainLocked() error {
 	iss.mu.Lock()
 	iss.cert = &tlsCert
 	iss.mu.Unlock()
-	log.Printf("panel SSL: obtained Let's Encrypt IP cert for %s (profile=%s, expires %s)",
+	log.Printf("panel SSL: obtained Let's Encrypt IP cert for %s (profile=%s via acmez, expires %s)",
 		iss.ip, ipCertProfile, leafNotAfter(&tlsCert).Format(time.RFC3339))
 	return nil
-}
-
-func (iss *ipIssuer) solveHTTP01(ctx context.Context, client *xacme.Client, az *xacme.Authorization, chal *xacme.Challenge) error {
-	resp, err := client.HTTP01ChallengeResponse(chal.Token)
-	if err != nil {
-		return err
-	}
-	iss.http01.Present(chal.Token, resp)
-	defer iss.http01.CleanUp(chal.Token)
-	if _, err := client.Accept(ctx, chal); err != nil {
-		return fmt.Errorf("accept http-01: %w", err)
-	}
-	if _, err := client.WaitAuthorization(ctx, az.URI); err != nil {
-		return fmt.Errorf("wait authorization (http-01): %w", err)
-	}
-	log.Printf("panel SSL: HTTP-01 OK for %s", iss.ip)
-	return nil
-}
-
-func (iss *ipIssuer) solveTLSALPN01(ctx context.Context, client *xacme.Client, az *xacme.Authorization, chal *xacme.Challenge) error {
-	cert, err := client.TLSALPN01ChallengeCert(chal.Token, iss.ip)
-	if err != nil {
-		return fmt.Errorf("build tls-alpn-01 cert: %w", err)
-	}
-	iss.setALPNCert(&cert)
-	defer iss.setALPNCert(nil)
-	if _, err := client.Accept(ctx, chal); err != nil {
-		return fmt.Errorf("accept tls-alpn-01: %w", err)
-	}
-	if _, err := client.WaitAuthorization(ctx, az.URI); err != nil {
-		return fmt.Errorf("wait authorization (tls-alpn-01): %w", err)
-	}
-	log.Printf("panel SSL: TLS-ALPN-01 OK for %s", iss.ip)
-	return nil
-}
-
-func createOrderWithProfile(ctx context.Context, client *xacme.Client, dir xacme.Directory, key crypto.Signer, kid, ip, profile string) (*xacme.Order, error) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"identifiers": []map[string]string{{"type": "ip", "value": ip}},
-		"profile":     profile,
-	})
-	if err != nil {
-		return nil, err
-	}
-	nonce, err := fetchNonce(ctx, client, dir.NonceURL)
-	if err != nil {
-		return nil, err
-	}
-	jws, err := signACME(key, kid, dir.OrderURL, nonce, payload)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, dir.OrderURL, strings.NewReader(jws))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/jose+json")
-	req.Header.Set("User-Agent", "3m-ui-ip-acme/1")
-	hc := client.HTTPClient
-	if hc == nil {
-		hc = http.DefaultClient
-	}
-	res, err := hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-	if res.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("newOrder HTTP %d: %s", res.StatusCode, truncate(string(body), 500))
-	}
-	var wire struct {
-		Status         string   `json:"status"`
-		Authorizations []string `json:"authorizations"`
-		Finalize       string   `json:"finalize"`
-	}
-	if err := json.Unmarshal(body, &wire); err != nil {
-		return nil, err
-	}
-	return &xacme.Order{
-		URI:         res.Header.Get("Location"),
-		Status:      wire.Status,
-		AuthzURLs:   wire.Authorizations,
-		FinalizeURL: wire.Finalize,
-	}, nil
-}
-
-func fetchNonce(ctx context.Context, client *xacme.Client, nonceURL string) (string, error) {
-	hc := client.HTTPClient
-	if hc == nil {
-		hc = http.DefaultClient
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, nonceURL, nil)
-	if err != nil {
-		return "", err
-	}
-	res, err := hc.Do(req)
-	if err != nil {
-		return "", err
-	}
-	res.Body.Close()
-	n := res.Header.Get("Replay-Nonce")
-	if n == "" {
-		return "", fmt.Errorf("missing Replay-Nonce from %s", nonceURL)
-	}
-	return n, nil
-}
-
-func signACME(key crypto.Signer, kid, url, nonce string, payload []byte) (string, error) {
-	opts := &jose.SignerOptions{EmbedJWK: false}
-	opts.ExtraHeaders = map[jose.HeaderKey]interface{}{
-		"nonce": nonce,
-		"url":   url,
-		"kid":   kid,
-	}
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.ES256, Key: key}, opts)
-	if err != nil {
-		return "", err
-	}
-	obj, err := signer.Sign(payload)
-	if err != nil {
-		return "", err
-	}
-	return obj.FullSerialize(), nil
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }
 
 func (iss *ipIssuer) loadOrCreateAccountKey() (crypto.Signer, error) {

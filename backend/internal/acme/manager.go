@@ -307,7 +307,7 @@ func Status(db *gorm.DB) map[string]interface{} {
 		"has_cache":   hasCache,
 		"cert_path":   filepath.Join(s.CacheDir, s.Domain),
 		"ip_profile":  ipCertProfile,
-		"ip_note":     "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Validation: HTTP-01 (:80) or TLS-ALPN-01 (:443).",
+		"ip_note":     "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
 	}
 }
 
