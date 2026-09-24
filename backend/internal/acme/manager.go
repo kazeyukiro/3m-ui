@@ -130,6 +130,7 @@ type Manager struct {
 	mu       sync.Mutex
 	settings Settings
 	manager  *autocert.Manager
+	ipIssuer *ipIssuer
 }
 
 func NewManager(s Settings) (*Manager, error) {
@@ -153,11 +154,24 @@ func (m *Manager) configure() error {
 		}
 		return nil
 	}
+	if m.ipIssuer != nil {
+		m.ipIssuer.close()
+		m.ipIssuer = nil
+	}
+	m.manager = nil
 	if s.Domain == "" {
-		return fmt.Errorf("panel SSL: domain is required for Let's Encrypt")
+		return fmt.Errorf("panel SSL: domain or public IP is required for Let's Encrypt")
 	}
 	if err := os.MkdirAll(s.CacheDir, 0o700); err != nil {
 		return fmt.Errorf("panel SSL: create cache dir: %w", err)
+	}
+	if IsIPHost(s.Domain) {
+		iss, err := newIPIssuer(s.Domain, s.Email, s.CacheDir)
+		if err != nil {
+			return err
+		}
+		m.ipIssuer = iss
+		return nil
 	}
 	hostPolicy := autocert.HostWhitelist(s.Domain)
 	m.manager = &autocert.Manager{
@@ -190,18 +204,45 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 			MinVersion:   tls.VersionTLS12,
 		}, nil
 	}
+	if m.ipIssuer != nil {
+		cert := m.ipIssuer.certificate()
+		if cert == nil {
+			return nil, fmt.Errorf("panel SSL: IP certificate not ready for %s", s.Domain)
+		}
+		return &tls.Config{
+			Certificates: []tls.Certificate{*cert},
+			MinVersion:   tls.VersionTLS12,
+			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+				c := m.ipIssuer.certificate()
+				if c == nil {
+					return nil, fmt.Errorf("panel SSL: IP certificate missing")
+				}
+				return c, nil
+			},
+		}, nil
+	}
 	if m.manager == nil {
 		if err := m.configure(); err != nil {
 			return nil, err
+		}
+		if m.ipIssuer != nil {
+			cert := m.ipIssuer.certificate()
+			if cert == nil {
+				return nil, fmt.Errorf("panel SSL: IP certificate not ready")
+			}
+			return &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}, nil
 		}
 	}
 	return m.manager.TLSConfig(), nil
 }
 
-// HTTPHandler returns the ACME HTTP-01 challenge handler (nil if not using autocert).
+// HTTPHandler returns the ACME HTTP-01 challenge handler.
 func (m *Manager) HTTPHandler(fallback http.Handler) http.Handler {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.ipIssuer != nil {
+		return m.ipIssuer.httpHandler(fallback)
+	}
 	if m.manager == nil {
 		return fallback
 	}
@@ -244,8 +285,11 @@ func Status(db *gorm.DB) map[string]interface{} {
 		"listen_http": s.ListenHTTP,
 		"listen_tls":  s.ListenTLS,
 		"mode":        modeLabel(s, manual),
+		"is_ip":       IsIPHost(s.Domain),
 		"has_cache":   hasCache,
 		"cert_path":   filepath.Join(s.CacheDir, s.Domain),
+		"ip_profile":  ipCertProfile,
+		"ip_note":     "IP certs use Let's Encrypt shortlived (~6 days); panel auto-renews when <48h remain. Port 80 must be reachable.",
 	}
 }
 
@@ -255,6 +299,9 @@ func modeLabel(s Settings, manual bool) string {
 	}
 	if manual {
 		return "manual"
+	}
+	if IsIPHost(s.Domain) {
+		return "letsencrypt-ip"
 	}
 	return "letsencrypt"
 }
@@ -266,6 +313,11 @@ func LogHint(s Settings) {
 	}
 	if s.CertFile != "" {
 		log.Printf("panel SSL: manual cert %s (listen %s)", s.CertFile, s.ListenTLS)
+		return
+	}
+	if IsIPHost(s.Domain) {
+		log.Printf("panel SSL: Let's Encrypt IP (shortlived) for %s (HTTP %s → TLS %s, cache %s)",
+			s.Domain, s.ListenHTTP, s.ListenTLS, s.CacheDir)
 		return
 	}
 	log.Printf("panel SSL: Let's Encrypt for %s (HTTP %s → TLS %s, cache %s)",

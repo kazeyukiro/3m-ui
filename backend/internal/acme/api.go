@@ -51,7 +51,7 @@ func (h *Handler) Put(c *gin.Context) {
 	}
 	if in.Enabled {
 		if in.CertFile == "" && in.Domain == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "domain is required when Let's Encrypt is enabled (or provide cert_file + key_file)"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "domain or public IP is required when Let's Encrypt is enabled (or provide cert_file + key_file)"})
 			return
 		}
 		if (in.CertFile == "") != (in.KeyFile == "") {

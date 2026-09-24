@@ -828,7 +828,7 @@ export default {
     "trafficWarnPct": "流量告警阈值 (%)",
     "expiryWarnHours": "到期提前提醒 (小时)",
     "panelSSL": "面板 SSL（ACME）",
-    "panelSSLHint": "通过 Let’s Encrypt（autocert）或手动证书为面板启用 HTTPS。保存后需重启面板生效。",
+    "panelSSLHint": "为面板启用 HTTPS。域名用常规 Let’s Encrypt；公网 IP 用短效 IP 证书（约 6 天、自动续）。也可填证书路径。保存后需重启面板。",
     "sslSaved": "SSL 设置已保存 — 请重启面板生效",
     "acmeCacheDir": "ACME 缓存目录",
     "manualCert": "手动证书文件（可选）",
@@ -893,7 +893,9 @@ export default {
     "warpMasque": "MASQUE",
     "warpDone": "WARP 已注册，YAML 已复制到剪贴板",
     "warpDoneNoCopy": "WARP 已注册。若无法复制，请在弹窗中手动选择文本。",
-    "warpEmpty": "未返回 WARP 配置。"
+    "warpEmpty": "未返回 WARP 配置。",
+    "domainOrIP": "域名或公网 IP",
+    "domainOrIPExtra": "填域名走常规 LE；填公网 IP 走 shortlived 约 6 天并自动续期。需放行 80 端口。"
   },
   "share": {
     "title": "分享 / 订阅",

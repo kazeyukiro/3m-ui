@@ -54,7 +54,7 @@ sudo env THREE_M_UI_CHANNEL=pre sh -c 'curl -fsSL https://raw.githubusercontent.
 
 ### HTTPS 与对外访问
 
-首次登录改密后，在「系统设置」配置面板 HTTPS：可以申请域名证书，也可以使用已有证书。已有 Nginx / Caddy 的用户可设置面板只监听 `127.0.0.1`，由反向代理提供 HTTPS。域名不是安装前置要求；HTTP 端口本身不代表已启用 HTTPS。
+首次登录改密后，在「系统设置」配置面板 HTTPS：可以申请域名证书，也可以使用已有证书。 **公网 IP** 也可申请 Let’s Encrypt 短效证书（约 6 天、面板自动续期，需 80 端口可达）。已有 Nginx / Caddy 的用户可设置面板只监听 `127.0.0.1`，由反向代理提供 HTTPS。域名不是安装前置要求；HTTP 端口本身不代表已启用 HTTPS。
 
 配置证书时，将自管证书放在 `/etc/3m-ui/` 或 `/var/lib/3m-ui/`，以便与数据库、密钥一起备份。域名解析、HTTP-01 验证所需端口、防火墙与云安全组需要与所选择的访问方式匹配。
 

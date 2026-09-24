@@ -1122,8 +1122,8 @@ const Settings: React.FC = () => {
                   <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked">
                     <Switch />
                   </Form.Item>
-                  <Form.Item name="domain" label={t('settings.domain')}>
-                    <Input placeholder="panel.example.com" />
+                  <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname or IPv4/IPv6. IP uses Let\'s Encrypt shortlived profile (~6 days).'}>
+                    <Input placeholder="panel.example.com or 203.0.113.10" />
                   </Form.Item>
                   <Form.Item name="email" label={t('settings.email')}>
                     <Input />
