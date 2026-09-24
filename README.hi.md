@@ -28,7 +28,7 @@
 | **उपयोगकर्ता** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **सब्सक्रिप्शन** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **कॉन्फ़िग** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **ऑप्स** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
+| **ऑप्स** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore, Cloudflare WARP register (YAML) |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **क्लस्टर** | Register remote panels, health checks, node mirror sync, merged subscriptions |
 

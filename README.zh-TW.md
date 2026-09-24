@@ -28,7 +28,7 @@
 | **使用者** | 綁定節點、流量限額、到期、IP 限制、批次操作、訂閱 Token |
 | **訂閱** | UA 識別 Clash/Mihomo YAML、v2ray Base64、sing-box JSON；可選 `?target=`；HTML 訂閱頁 |
 | **設定** | 產生 → 校驗 → 套用；失敗回滾上一份 `config.yaml` |
-| **維運** | 核心啟停/更新、日誌、儀表板、Geo、面板 SSL/ACME、備份還原 |
+| **維運** | 核心啟停/更新、日誌、儀表板、Geo、面板 SSL/ACME、備份還原、Cloudflare WARP 一鍵註冊（YAML） |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多機** | 登記遠端面板、健康檢查、節點鏡像同步、合併訂閱 |
 

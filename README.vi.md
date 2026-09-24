@@ -28,7 +28,7 @@ Nhẹ, tự lưu trữ. Quản lý listener, người dùng, subscription và tr
 | **Người dùng** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **Subscription** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Cấu hình** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **Vận hành** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
+| **Vận hành** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore, Cloudflare WARP register (YAML) |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cụm** | Register remote panels, health checks, node mirror sync, merged subscriptions |
 

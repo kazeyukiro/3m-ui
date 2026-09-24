@@ -29,6 +29,7 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; **push local nodes by name** (created disabled on remote) |
+| **Ops** | Core lifecycle, Geo, panel SSL/ACME, backup, **Cloudflare WARP** one-click register (WireGuard/MASQUE YAML) |
 
 ---
 
@@ -100,7 +101,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - [Batch node certificates](docs/batch-certificate.md)
 - [Subscription formats](docs/subscription-formats.md)
 - [Cluster / push nodes](docs/cluster.md)
-- [Routing & groups](docs/routing.md)
+- [Routing & groups](docs/routing.md) · [Cloudflare WARP](docs/warp.md)
 
 - Go, Node.js, and the open-source community
 

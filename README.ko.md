@@ -28,7 +28,7 @@
 | **사용자** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **구독** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **설정** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **운영** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
+| **운영** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore, Cloudflare WARP register (YAML) |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **클러스터** | Register remote panels, health checks, node mirror sync, merged subscriptions |
 

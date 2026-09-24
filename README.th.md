@@ -28,7 +28,7 @@
 | **ผู้ใช้** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **สับสไครบ์** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **คอนฟิก** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **ดูแลระบบ** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
+| **ดูแลระบบ** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore, Cloudflare WARP register (YAML) |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **คลัสเตอร์** | Register remote panels, health checks, node mirror sync, merged subscriptions |
 

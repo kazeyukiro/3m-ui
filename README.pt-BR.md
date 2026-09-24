@@ -28,7 +28,7 @@ Leve e auto-hospedado. Gerencie listeners, usuários, assinaturas e status do [M
 | **Usuários** | Bind nodes, traffic limits, expiry, IP limits, batch ops, subscription tokens |
 | **Assinaturas** | UA routing for Clash/Mihomo YAML, v2ray Base64, sing-box JSON; optional `?target=`; HTML info page |
 | **Configuração** | Generate → validate → apply; rollback previous `config.yaml` on failure |
-| **Operações** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore |
+| **Operações** | Core start/stop/update, logs, dashboard metrics, Geo files, panel SSL/ACME, backup/restore, Cloudflare WARP register (YAML) |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; push local nodes by name (disabled on remote) |
 
