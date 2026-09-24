@@ -878,7 +878,15 @@ export default {
     "cleanupBackups": "清理備份",
     "backupCleaned": "已清理備份",
     "backupSize": "大小",
-    "backupTime": "時間"
+    "backupTime": "時間",
+    "warp": "Cloudflare WARP",
+    "warpHint": "一键注册 WARP WireGuard 配置（Mihomo 出站 YAML）。需要面板能访问 Cloudflare。",
+    "warpRegister": "注册 WARP",
+    "warpWireguard": "WireGuard",
+    "warpMasque": "MASQUE",
+    "warpDone": "WARP 已注册，YAML 已复制到剪贴板",
+    "warpDoneNoCopy": "WARP 已注册。若无法复制，请在弹窗中手动选择文本。",
+    "warpEmpty": "未返回 WARP 配置。"
   },
   "share": {
     "title": "分享 / 訂閱",

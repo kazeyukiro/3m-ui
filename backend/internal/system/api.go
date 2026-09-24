@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,11 +39,67 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/templates/reverse-proxy", h.ReverseProxy)
 	rg.POST("/templates/acme", h.ACME)
 	rg.POST("/geofiles/update", h.UpdateGeoFiles)
+	rg.POST("/templates/warp", h.WARP)
+	rg.POST("/templates/warp/register", h.WARPRegister)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
 	stats := h.svc.GetStatus()
 	c.JSON(http.StatusOK, stats)
+}
+
+// WARP returns a Mihomo WireGuard fragment for Cloudflare WARP (v1.3.6).
+func (h *Handler) WARP(c *gin.Context) {
+	var body struct {
+		PrivateKey string `json:"private_key"`
+		Address    string `json:"address"`
+		IPv6       string `json:"ipv6"`
+		Reserved   string `json:"reserved"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	ipv4, ipv6 := body.Address, body.IPv6
+	if i := strings.IndexByte(ipv4, ','); i >= 0 {
+		if ipv6 == "" {
+			ipv6 = strings.TrimSpace(ipv4[i+1:])
+		}
+		ipv4 = strings.TrimSpace(ipv4[:i])
+	}
+	reserved := decodeWARPClientID(body.Reserved)
+	yaml, err := WARPTemplate(body.PrivateKey, ipv4, ipv6, reserved)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"yaml": yaml})
+}
+
+func (h *Handler) WARPRegister(c *gin.Context) {
+	res, err := RegisterWARP()
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	mode := strings.TrimSpace(c.Query("mode"))
+	switch mode {
+	case "", "wireguard":
+		c.JSON(http.StatusOK, gin.H{
+			"yaml":        res.YAML,
+			"masque_yaml": res.MasqueYAML,
+			"address":     res.Address,
+			"ipv6":        res.IPv6,
+			"reserved":    res.Reserved,
+		})
+	case "masque":
+		c.JSON(http.StatusOK, gin.H{
+			"yaml":    res.MasqueYAML,
+			"address": res.Address,
+			"ipv6":    res.IPv6,
+		})
+	case "both":
+		c.JSON(http.StatusOK, res)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mode %q: must be wireguard, masque, or both", mode)})
+	}
 }
 
 func (h *Handler) ExportBackup(c *gin.Context) {

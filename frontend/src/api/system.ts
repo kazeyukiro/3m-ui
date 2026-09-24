@@ -82,3 +82,8 @@ export const cleanupLocalBackups = (body: { keep?: number; older_than_days?: num
     '/system/backups/cleanup',
     body,
   ).then((r) => r.data);
+
+export const registerWarp = (mode: 'wireguard' | 'masque' | 'both' = 'wireguard') =>
+  client.post<{ yaml?: string; masque_yaml?: string; address?: string; ipv6?: string; reserved?: number[] }>(
+    `/system/templates/warp/register?mode=${mode}`,
+  ).then((r) => r.data);

@@ -878,7 +878,15 @@ export default {
     "cleanupBackups": "Cleanup backups",
     "backupCleaned": "Backups cleaned",
     "backupSize": "Size",
-    "backupTime": "Time"
+    "backupTime": "Time",
+    "warp": "Cloudflare WARP",
+    "warpHint": "One-click register a WARP WireGuard config (YAML fragment for Mihomo outbound). Requires outbound HTTPS to Cloudflare.",
+    "warpRegister": "Register WARP",
+    "warpWireguard": "WireGuard",
+    "warpMasque": "MASQUE",
+    "warpDone": "WARP registered — YAML copied to clipboard",
+    "warpDoneNoCopy": "WARP registered. Copy the YAML manually if clipboard is unavailable.",
+    "warpEmpty": "No WARP configuration returned."
   },
   "share": {
     "title": "शेयर",
