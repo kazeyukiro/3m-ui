@@ -1220,3 +1220,114 @@ html.dark .app-header-bar,
   display: inline-flex;
   align-items: center;
 }
+
+/* —— Density / usability pass (mobile + desktop) —— */
+@media (max-width: 767px) {
+  .app-page-content.app-page-content-mobile,
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  .page-header {
+    margin-bottom: 8px !important;
+  }
+  .ant-card-head {
+    padding: 8px 10px !important;
+    min-height: 40px !important;
+  }
+  .ant-card-body {
+    padding: 10px !important;
+  }
+  .ant-card + .ant-card {
+    margin-top: 10px !important;
+  }
+  .mobile-entity-list {
+    gap: 8px !important;
+  }
+  .mobile-entity-card {
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  .mobile-entity-title {
+    font-size: 14px !important;
+  }
+  .mobile-entity-meta {
+    margin-top: 6px !important;
+    gap: 4px !important;
+  }
+  .mobile-entity-rows {
+    margin-top: 6px !important;
+    gap: 2px !important;
+    font-size: 12px !important;
+  }
+  .mobile-entity-card .ant-btn {
+    min-height: 36px !important;
+  }
+  /* Toolbar: search + primary full width; secondary 2-col */
+  .page-toolbar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .page-toolbar .ant-input-search,
+  .page-toolbar > span.ant-input-affix-wrapper,
+  .page-toolbar .ant-input-group-wrapper {
+    grid-column: 1 / -1;
+    width: 100% !important;
+  }
+  .page-toolbar > .ant-btn-primary {
+    grid-column: 1 / -1;
+  }
+  .page-toolbar .ant-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 6px 8px !important;
+  }
+  .ant-form-item {
+    margin-bottom: 10px !important;
+  }
+  .ant-modal-body {
+    padding: 12px !important;
+  }
+  .ant-space-vertical {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-page-content {
+    padding-block: 4px;
+  }
+  .ant-table-thead > tr > th {
+    padding: 10px 12px !important;
+  }
+  .ant-table-tbody > tr > td {
+    padding: 9px 12px !important;
+  }
+  .page-toolbar {
+    gap: 8px;
+  }
+  .page-toolbar .ant-btn {
+    height: 32px;
+    padding-inline: 12px;
+  }
+  .ant-card-extra .ant-btn {
+    height: 32px;
+  }
+  .ant-card-head {
+    min-height: 48px;
+  }
+  .ant-card-body {
+    padding: 16px 20px;
+  }
+  /* Prefer denser tables on wide screens without feeling cramped */
+  .ant-table.ant-table-small .ant-table-thead > tr > th,
+  .ant-table.ant-table-small .ant-table-tbody > tr > td {
+    padding: 8px 10px !important;
+  }
+}

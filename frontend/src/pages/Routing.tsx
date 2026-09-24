@@ -300,7 +300,7 @@ const RoutingPage: React.FC = () => {
   return (
     <div>
       <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
-      <Typography.Paragraph type="secondary" style={{ marginTop: -8, marginBottom: 12 }}>
+      <Typography.Paragraph type="secondary" style={{ marginTop: -4, marginBottom: isMobile ? 8 : 12, fontSize: isMobile ? 12 : undefined }}>
         {t('routing.pageHint') ||
           'Proxy-groups and rules are for **client** Mihomo/Clash subscriptions only (not server-side split). Save, then update the subscription in the client. Panel core always uses MATCH,DIRECT.'}
       </Typography.Paragraph>

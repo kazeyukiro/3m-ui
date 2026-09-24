@@ -41,7 +41,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               ? {
                   // No full-height white panel — page bg shows through; cards sit tight under the title
                   margin: 0,
-                  padding: '8px 10px 12px',
+                  padding: '6px 8px 10px',
                   background: 'transparent',
                   borderRadius: 0,
                   boxShadow: 'none',
@@ -53,8 +53,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   alignSelf: 'stretch',
                 }
               : {
-                  margin: 24,
-                  padding: 24,
+                  margin: 16,
+                  padding: 20,
                   background: colorBgContainer,
                   borderRadius: borderRadiusLG,
                   overflow: 'auto',

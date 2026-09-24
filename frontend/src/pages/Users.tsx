@@ -406,6 +406,7 @@ const Users: React.FC = () => {
     <div>
       <PageHeader title={t('users.title')} subtitle={t('users.subtitle', 'Manage accounts, traffic limits, node bindings and subscriptions.')} />
       <Card
+        styles={{ body: { padding: isMobile ? 10 : undefined } }}
         extra={
           <Space className="page-toolbar" wrap style={{ width: isMobile ? '100%' : undefined }}>
             <Input.Search
@@ -735,7 +736,7 @@ const Users: React.FC = () => {
         ) : (
           <Table
             scroll={{ x: 960 }}
-            size="middle"
+            size="small"
             dataSource={filtered}
             columns={columns}
             rowKey="id"
@@ -941,7 +942,7 @@ const Users: React.FC = () => {
         width={isMobile ? '100%' : 520}
       >
         {credInfo && (
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
             <div>
               <Typography.Text type="secondary">{t('users.username')}</Typography.Text>
               <Input
