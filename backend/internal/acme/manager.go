@@ -212,7 +212,16 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 		return &tls.Config{
 			Certificates: []tls.Certificate{*cert},
 			MinVersion:   tls.VersionTLS12,
-			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			NextProtos:   []string{"h2", "http/1.1", "acme-tls/1"},
+			GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				for _, p := range hello.SupportedProtos {
+					if p == "acme-tls/1" {
+						if c := m.ipIssuer.alpnChallengeCert(); c != nil {
+							return c, nil
+						}
+						return nil, fmt.Errorf("panel SSL: no TLS-ALPN-01 challenge cert")
+					}
+				}
 				c := m.ipIssuer.certificate()
 				if c == nil {
 					return nil, fmt.Errorf("panel SSL: IP certificate missing")
@@ -247,6 +256,15 @@ func (m *Manager) HTTPHandler(fallback http.Handler) http.Handler {
 		return fallback
 	}
 	return m.manager.HTTPHandler(fallback)
+}
+
+// MarkChallengeBound tells the IP issuer permanent :80/:443 answer ACME challenges.
+func (m *Manager) MarkChallengeBound() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.ipIssuer != nil {
+		m.ipIssuer.MarkChallengeBound()
+	}
 }
 
 func (m *Manager) Settings() Settings {
@@ -289,7 +307,7 @@ func Status(db *gorm.DB) map[string]interface{} {
 		"has_cache":   hasCache,
 		"cert_path":   filepath.Join(s.CacheDir, s.Domain),
 		"ip_profile":  ipCertProfile,
-		"ip_note":     "IP certs use Let's Encrypt shortlived (~6 days); panel auto-renews when <48h remain. Port 80 must be reachable.",
+		"ip_note":     "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Validation: HTTP-01 (:80) or TLS-ALPN-01 (:443).",
 	}
 }
 
@@ -316,7 +334,7 @@ func LogHint(s Settings) {
 		return
 	}
 	if IsIPHost(s.Domain) {
-		log.Printf("panel SSL: Let's Encrypt IP (shortlived) for %s (HTTP %s → TLS %s, cache %s)",
+		log.Printf("panel SSL: Let's Encrypt IP (shortlived) for %s (HTTP-01 %s / TLS-ALPN-01 %s, cache %s)",
 			s.Domain, s.ListenHTTP, s.ListenTLS, s.CacheDir)
 		return
 	}

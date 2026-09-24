@@ -180,6 +180,7 @@ func serveWithSSL(handler http.Handler, s acme.Settings, fallbackPort int) error
 			log.Printf("panel HTTP listener: %v", err)
 		}
 	}()
+	mgr.MarkChallengeBound()
 	log.Printf("3m-ui HTTPS listening on %s", tlsAddr)
 	if s.CertFile != "" && s.KeyFile != "" {
 		return srv.ListenAndServeTLS(s.CertFile, s.KeyFile)

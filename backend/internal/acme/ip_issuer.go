@@ -84,8 +84,12 @@ type ipIssuer struct {
 	email    string
 	cacheDir string
 	http01   *memoryHTTP01
+	chalMu   sync.RWMutex
+	alpnCert *tls.Certificate
 	cert     *tls.Certificate
 	stop     chan struct{}
+	// challengeBound is set when permanent panel listeners answer ACME challenges.
+	challengeBound bool
 }
 
 func newIPIssuer(ip, email, cacheDir string) (*ipIssuer, error) {
@@ -113,6 +117,13 @@ func newIPIssuer(ip, email, cacheDir string) (*ipIssuer, error) {
 	}
 	go iss.renewLoop()
 	return iss, nil
+}
+
+// MarkChallengeBound indicates permanent HTTP/TLS listeners are up.
+func (iss *ipIssuer) MarkChallengeBound() {
+	iss.mu.Lock()
+	defer iss.mu.Unlock()
+	iss.challengeBound = true
 }
 
 func sanitizeIPFilename(ip string) string {
@@ -155,14 +166,100 @@ func (iss *ipIssuer) loadFromDisk() (*tls.Certificate, error) {
 }
 
 func (iss *ipIssuer) obtain() error {
-	iss.mu.Lock()
-	defer iss.mu.Unlock()
 	return iss.obtainLocked()
+}
+
+func (iss *ipIssuer) alpnChallengeCert() *tls.Certificate {
+	iss.chalMu.RLock()
+	defer iss.chalMu.RUnlock()
+	return iss.alpnCert
+}
+
+func (iss *ipIssuer) setALPNCert(c *tls.Certificate) {
+	iss.chalMu.Lock()
+	iss.alpnCert = c
+	iss.chalMu.Unlock()
+}
+
+func (iss *ipIssuer) startTempChallengeListeners() (cleanup func()) {
+	var closers []io.Closer
+	cleanup = func() {
+		for i := len(closers) - 1; i >= 0; i-- {
+			_ = closers[i].Close()
+		}
+	}
+
+	ln80, err := net.Listen("tcp", ":80")
+	if err != nil {
+		log.Printf("panel SSL: temp HTTP-01 :80 unavailable (%v); will try TLS-ALPN-01 if needed", err)
+	} else {
+		closers = append(closers, ln80)
+		srv := &http.Server{
+			Handler: iss.httpHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, "ACME challenge only", http.StatusNotFound)
+			})),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		go func() { _ = srv.Serve(ln80) }()
+		log.Printf("panel SSL: temp ACME HTTP-01 listening on :80")
+	}
+
+	ln443, err := net.Listen("tcp", ":443")
+	if err != nil {
+		log.Printf("panel SSL: temp TLS-ALPN-01 :443 unavailable (%v)", err)
+	} else {
+		closers = append(closers, ln443)
+		tlsCfg := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{xacme.ALPNProto},
+			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+				c := iss.alpnChallengeCert()
+				if c == nil {
+					return nil, fmt.Errorf("no TLS-ALPN-01 challenge cert ready")
+				}
+				return c, nil
+			},
+		}
+		go func() {
+			for {
+				conn, err := ln443.Accept()
+				if err != nil {
+					return
+				}
+				go func(c net.Conn) {
+					defer c.Close()
+					tlsConn := tls.Server(c, tlsCfg)
+					_ = tlsConn.Handshake()
+					_ = tlsConn.Close()
+				}(conn)
+			}
+		}()
+		log.Printf("panel SSL: temp ACME TLS-ALPN-01 listening on :443")
+	}
+	return cleanup
+}
+
+func pickChallenge(az *xacme.Authorization, typ string) *xacme.Challenge {
+	for i := range az.Challenges {
+		if az.Challenges[i].Type == typ {
+			return az.Challenges[i]
+		}
+	}
+	return nil
 }
 
 func (iss *ipIssuer) obtainLocked() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
+	iss.mu.Lock()
+	bound := iss.challengeBound
+	iss.mu.Unlock()
+	if !bound {
+		cleanup := iss.startTempChallengeListeners()
+		defer cleanup()
+		time.Sleep(200 * time.Millisecond)
+	}
 
 	accountKey, err := iss.loadOrCreateAccountKey()
 	if err != nil {
@@ -210,27 +307,75 @@ func (iss *ipIssuer) obtainLocked() error {
 		if az.Status == xacme.StatusValid {
 			continue
 		}
-		var chal *xacme.Challenge
-		for i := range az.Challenges {
-			if az.Challenges[i].Type == "http-01" {
-				chal = az.Challenges[i]
-				break
+		httpChal := pickChallenge(az, "http-01")
+		alpnChal := pickChallenge(az, "tls-alpn-01")
+		if httpChal == nil && alpnChal == nil {
+			return fmt.Errorf("no http-01 or tls-alpn-01 challenge offered for IP %s", iss.ip)
+		}
+
+		var lastErr error
+		if httpChal != nil {
+			lastErr = iss.solveHTTP01(ctx, client, az, httpChal)
+			if lastErr == nil {
+				continue
 			}
+			log.Printf("panel SSL: HTTP-01 failed for %s: %v; trying TLS-ALPN-01", iss.ip, lastErr)
 		}
-		if chal == nil {
-			return fmt.Errorf("no http-01 challenge (open TCP :80 to the internet for ACME)")
+
+		if alpnChal == nil {
+			if lastErr != nil {
+				return lastErr
+			}
+			return fmt.Errorf("no usable ACME challenge (open TCP :80 for HTTP-01 and/or :443 for TLS-ALPN-01)")
 		}
-		resp, err := client.HTTP01ChallengeResponse(chal.Token)
+
+		az2, err := client.GetAuthorization(ctx, zurl)
 		if err != nil {
 			return err
 		}
-		iss.http01.Present(chal.Token, resp)
-		defer iss.http01.CleanUp(chal.Token)
-		if _, err := client.Accept(ctx, chal); err != nil {
-			return fmt.Errorf("accept challenge: %w", err)
+		if az2.Status == xacme.StatusValid {
+			continue
 		}
-		if _, err := client.WaitAuthorization(ctx, az.URI); err != nil {
-			return fmt.Errorf("wait authorization: %w", err)
+		if az2.Status == xacme.StatusInvalid {
+			order2, err := createOrderWithProfile(ctx, client, dir, accountKey, kid, iss.ip, ipCertProfile)
+			if err != nil {
+				return fmt.Errorf("HTTP-01 failed (%v); new order for TLS-ALPN-01: %w", lastErr, err)
+			}
+			order = order2
+			ok := false
+			for _, z2 := range order.AuthzURLs {
+				az3, err := client.GetAuthorization(ctx, z2)
+				if err != nil {
+					return err
+				}
+				if az3.Status == xacme.StatusValid {
+					ok = true
+					break
+				}
+				alpn := pickChallenge(az3, "tls-alpn-01")
+				if alpn == nil {
+					return fmt.Errorf("HTTP-01 failed (%v); no tls-alpn-01 on retry order", lastErr)
+				}
+				if err := iss.solveTLSALPN01(ctx, client, az3, alpn); err != nil {
+					return fmt.Errorf("HTTP-01 failed (%v); TLS-ALPN-01 failed: %w", lastErr, err)
+				}
+				ok = true
+			}
+			if !ok {
+				return fmt.Errorf("HTTP-01 failed (%v); TLS-ALPN-01 retry incomplete", lastErr)
+			}
+			continue
+		}
+
+		alpn := pickChallenge(az2, "tls-alpn-01")
+		if alpn == nil {
+			alpn = alpnChal
+		}
+		if err := iss.solveTLSALPN01(ctx, client, az2, alpn); err != nil {
+			if lastErr != nil {
+				return fmt.Errorf("HTTP-01 failed (%v); TLS-ALPN-01 failed: %w", lastErr, err)
+			}
+			return fmt.Errorf("TLS-ALPN-01 failed: %w", err)
 		}
 	}
 
@@ -274,9 +419,45 @@ func (iss *ipIssuer) obtainLocked() error {
 	if err != nil {
 		return err
 	}
+	iss.mu.Lock()
 	iss.cert = &tlsCert
+	iss.mu.Unlock()
 	log.Printf("panel SSL: obtained Let's Encrypt IP cert for %s (profile=%s, expires %s)",
 		iss.ip, ipCertProfile, leafNotAfter(&tlsCert).Format(time.RFC3339))
+	return nil
+}
+
+func (iss *ipIssuer) solveHTTP01(ctx context.Context, client *xacme.Client, az *xacme.Authorization, chal *xacme.Challenge) error {
+	resp, err := client.HTTP01ChallengeResponse(chal.Token)
+	if err != nil {
+		return err
+	}
+	iss.http01.Present(chal.Token, resp)
+	defer iss.http01.CleanUp(chal.Token)
+	if _, err := client.Accept(ctx, chal); err != nil {
+		return fmt.Errorf("accept http-01: %w", err)
+	}
+	if _, err := client.WaitAuthorization(ctx, az.URI); err != nil {
+		return fmt.Errorf("wait authorization (http-01): %w", err)
+	}
+	log.Printf("panel SSL: HTTP-01 OK for %s", iss.ip)
+	return nil
+}
+
+func (iss *ipIssuer) solveTLSALPN01(ctx context.Context, client *xacme.Client, az *xacme.Authorization, chal *xacme.Challenge) error {
+	cert, err := client.TLSALPN01ChallengeCert(chal.Token, iss.ip)
+	if err != nil {
+		return fmt.Errorf("build tls-alpn-01 cert: %w", err)
+	}
+	iss.setALPNCert(&cert)
+	defer iss.setALPNCert(nil)
+	if _, err := client.Accept(ctx, chal); err != nil {
+		return fmt.Errorf("accept tls-alpn-01: %w", err)
+	}
+	if _, err := client.WaitAuthorization(ctx, az.URI); err != nil {
+		return fmt.Errorf("wait authorization (tls-alpn-01): %w", err)
+	}
+	log.Printf("panel SSL: TLS-ALPN-01 OK for %s", iss.ip)
 	return nil
 }
 
@@ -416,8 +597,9 @@ func (iss *ipIssuer) renewLoop() {
 
 func (iss *ipIssuer) maybeRenew() {
 	iss.mu.Lock()
-	defer iss.mu.Unlock()
-	if iss.cert != nil && time.Until(leafNotAfter(iss.cert)) > ipRenewBefore {
+	need := iss.cert == nil || time.Until(leafNotAfter(iss.cert)) <= ipRenewBefore
+	iss.mu.Unlock()
+	if !need {
 		return
 	}
 	log.Printf("panel SSL: renewing IP cert for %s", iss.ip)

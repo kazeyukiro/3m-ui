@@ -828,7 +828,7 @@ export default {
     "trafficWarnPct": "Traffic warn %",
     "expiryWarnHours": "Expiry warn (hours)",
     "panelSSL": "Panel SSL (ACME)",
-    "panelSSLHint": "Enable HTTPS for the panel. Domain → Let’s Encrypt; public IP → shortlived IP cert (~6 days). Or cert/key file paths. Restart after save.",
+    "panelSSLHint": "Enable HTTPS for the panel. Domain → Let’s Encrypt; public IP → shortlived IP cert (~6 days, HTTP-01 or TLS-ALPN-01). Or cert/key paths. Restart after save.",
     "sslSaved": "SSL settings saved — restart panel to apply",
     "acmeCacheDir": "ACME cache dir",
     "manualCert": "Manual cert file (optional)",
@@ -895,7 +895,7 @@ export default {
     "warpDoneNoCopy": "WARP registered. Copy the YAML manually if clipboard is unavailable.",
     "warpEmpty": "No WARP configuration returned.",
     "domainOrIP": "Domain or public IP",
-    "domainOrIPExtra": "Hostname for standard LE, or public IPv4/IPv6 for shortlived IP certs (~6 days, auto-renew). Port 80 must be reachable."
+    "domainOrIPExtra": "Hostname for standard LE, or public IPv4/IPv6 for shortlived IP certs (~6 days, auto-renew). Port 80 (HTTP-01) or 443 (TLS-ALPN-01) must be reachable."
   },
   "share": {
     "title": "Share / Subscription",
