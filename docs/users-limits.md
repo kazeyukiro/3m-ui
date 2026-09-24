@@ -30,3 +30,13 @@ HTML subscription pages and client downloads both count.
 ## Related
 
 - [Per-node traffic & multiplier](node-traffic.md)
+
+## Quick create (one-click)
+
+Panel **Users → Quick create** (or `POST /api/v1/users/quick`):
+
+- Username optional (`u` + random if empty)
+- Password and UUID auto-generated; returned **once** in the response / UI dialog
+- Optional **bind all local nodes**
+
+Full form create remains `POST /api/v1/users`. OpenAPI: `GET /api/v1/openapi.yaml`.

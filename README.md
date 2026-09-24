@@ -26,7 +26,7 @@
 | 类别 | 能力 |
 |------|------|
 | **节点** | 协议注册表驱动的 Listener：VLESS / VMess / Trojan / Shadowsocks / Hysteria2 / TUIC / AnyTLS / Snell / ShadowQUIC 等；Reality、TLS 自签、一键批量证书、**流量倍率**、传输层字段互斥校验 |
-| **用户** | 绑定节点、流量限额、**按节点分别计量**（计费 = 实际 × 节点倍率）、到期、IP/订阅拉取限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
+| **用户** | **一键创建**（随机用户名/密码/UUID，可选绑定全部节点）、绑定节点、流量限额、**按节点分别计量**（计费 = 实际 × 节点倍率）、到期、IP/订阅拉取限制、首次使用起算、周期续期/重置、分组标签、外部订阅合并、批量操作、订阅 Token |
 | **订阅** | UA 自动识别 Clash/Mihomo YAML、v2ray Base64（`?target=v2ray` 始终 Base64）、sing-box JSON；可选 `?target=`；HTML 订阅页；TUIC/HY2 分享链含 SNI/`allow_insecure` 等客户端参数 |
 | **配置** | 生成 → 校验 → 应用 分离；失败回滚上一份 `config.yaml` |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |

@@ -22,7 +22,7 @@ info:
 
     Proxy users support group/tags, per-user traffic reset cycle (`traffic_reset_days`)
     and post-expiry renew (`expire_renew_days`). Export all share links via
-    `GET /users/export-links`.
+    `GET /users/export-links`. One-click user: `POST /users/quick` (auto credentials; optional bind-all listeners).
 servers:
   - url: /api/v1
 tags:
@@ -188,6 +188,47 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProxyUser" }
+
+
+  /users/quick:
+    post:
+      tags: [users]
+      summary: One-click create proxy user
+      description: |
+        Generates username when omitted (`u` + random hex), password, UUID, and sub_token.
+        Optional `bind_all_listeners` attaches every local listener after create.
+        Response includes plaintext `password` and `uuid` **once** (list/get APIs never return them).
+        Panel UI: Users → Quick create.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Optional; empty or omitted → auto-generated
+                bind_all_listeners:
+                  type: boolean
+                  description: Bind all local listeners to the new user
+                remark:
+                  type: string
+            example:
+              bind_all_listeners: true
+      responses:
+        "201":
+          description: Created user plus one-time secrets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, password, uuid]
+                properties:
+                  user: { $ref: "#/components/schemas/ProxyUser" }
+                  password: { type: string, description: Plaintext password (show once) }
+                  uuid: { type: string, description: Full UUID (show once) }
+        "400":
+          description: Validation or bind failure
 
   /users/{id}:
     parameters:
@@ -1273,7 +1314,7 @@ components:
     ProxyUserWrite:
       type: object
       properties:
-        username: { type: string }
+        username: { type: string, description: "Required for POST /users; omit and use POST /users/quick for auto name" }
         password: { type: string, description: Empty = auto-generate on create }
         uuid: { type: string, description: Empty = auto-generate }
         traffic_limit: { type: integer, format: int64 }
