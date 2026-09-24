@@ -737,7 +737,7 @@ export default {
     "tplEchs": "Community: echs-top/proxy (ads + CN)",
     "tplYixuan": "Community: YiXuanZX/rules (CN + GFW)",
     "tplAds": "Sample ad domains → REJECT",
-    "tplCnDirect": "GEOIP CN → DIRECT, else first group",
+    "tplCnDirect": "GEOSITE/GEOIP CN+private → DIRECT, else first group",
     "tplDirect": "MATCH → DIRECT only",
     "templates": "Templates",
     "templateApplied": "Template applied — previous rules/groups replaced and saved",

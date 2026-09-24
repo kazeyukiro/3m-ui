@@ -174,8 +174,12 @@ export function applyTemplate(
       return { rules: [emptyRule({ type: 'MATCH', target: 'DIRECT' })] };
 
     case 'cn_direct':
+      // Domestic (CN) direct via GEOSITE + GEOIP; everything else → policy group.
       return {
         rules: [
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOIP', payload: 'private', target: 'DIRECT', noResolve: true }),
           emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
           emptyRule({ type: 'MATCH', target: g }),
         ],

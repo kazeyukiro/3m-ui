@@ -737,7 +737,7 @@ export default {
     "tplEchs": "社区：echs-top/proxy（广告拦截 + 国内）",
     "tplYixuan": "社区：YiXuanZX/rules（国内直连 + GFW）",
     "tplAds": "示例广告域名 → REJECT",
-    "tplCnDirect": "国内 GEOIP 直连，其余走策略组",
+    "tplCnDirect": "国内 GEOSITE/GEOIP 直连，其余走策略组",
     "tplDirect": "仅 MATCH → DIRECT",
     "templates": "模板",
     "templateApplied": "模板已应用：已覆盖并保存规则/策略组",

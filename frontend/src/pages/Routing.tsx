@@ -255,7 +255,7 @@ const RoutingPage: React.FC = () => {
   const templateMenu = {
     items: [
       { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
-      { key: 'cn_direct', label: t('routing.tplCnDirect') || 'GEOIP CN → DIRECT, else group' },
+      { key: 'cn_direct', label: t('routing.tplCnDirect') || 'GEOSITE/GEOIP CN → DIRECT, else group' },
       { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
       { key: 'via_group', label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY' },
       { type: 'divider' as const },
