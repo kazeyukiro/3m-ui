@@ -24,6 +24,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.List)
 	rg.POST("", h.Create)
+	rg.POST("/quick", h.QuickCreate)
 	// Static path must be registered before /:id to avoid being captured as id.
 	rg.POST("/del-depleted", h.DeleteDepleted)
 	rg.POST("/batch", h.Batch)
@@ -126,6 +127,17 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, ToSafeUser(u))
+}
+
+func (h *Handler) QuickCreate(c *gin.Context) {
+	var in QuickCreateInput
+	_ = c.ShouldBindJSON(&in)
+	res, err := h.svc.QuickCreate(in)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, res)
 }
 
 func (h *Handler) Get(c *gin.Context) {

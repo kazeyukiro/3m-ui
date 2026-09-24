@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
-  InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin,
+  InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin, Typography,
 } from 'antd';
-import { IconAddUser, IconDelete, IconEdit, IconLink, ClearOutlined, IconExternal, CopyOutlined, IconMore, IconChart } from '../icons';
+import { IconAddUser, IconDelete, IconEdit, IconLink, ClearOutlined, IconExternal, CopyOutlined, IconMore, IconChart, IconQuickCreate } from '../icons';
 import dayjs from 'dayjs';
 import {
-  fetchUsers, createUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
+  fetchUsers, createUser, quickCreateUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
   fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
   fetchUserNodeTraffic, type UserNodeTrafficItem,
 } from '../api/users';
@@ -26,6 +26,11 @@ const Users: React.FC = () => {
   const [data, setData] = useState<ProxyUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [quickModal, setQuickModal] = useState(false);
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
+  const [quickForm] = Form.useForm();
+  const [credModal, setCredModal] = useState(false);
+  const [credInfo, setCredInfo] = useState<{ username: string; password: string; uuid: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [nodeTrafficOpen, setNodeTrafficOpen] = useState(false);
@@ -79,6 +84,39 @@ const Users: React.FC = () => {
       (u.tags || '').toLowerCase().includes(q)
     );
   }, [data, keyword]);
+
+
+  const openQuick = () => {
+    quickForm.resetFields();
+    quickForm.setFieldsValue({ bind_all_listeners: true, username: '' });
+    setQuickModal(true);
+  };
+
+  const doQuickCreate = async () => {
+    setQuickSubmitting(true);
+    try {
+      const values = await quickForm.validateFields();
+      const res = await quickCreateUser({
+        username: (values.username || '').trim() || undefined,
+        bind_all_listeners: !!values.bind_all_listeners,
+        remark: (values.remark || '').trim() || undefined,
+      });
+      setQuickModal(false);
+      setCredInfo({
+        username: res.user?.username || values.username || '',
+        password: res.password,
+        uuid: res.uuid,
+      });
+      setCredModal(true);
+      message.success(t('users.quickCreated', 'User created'));
+      await load();
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      message.error(e?.response?.data?.error || e.message || t('common.error'));
+    } finally {
+      setQuickSubmitting(false);
+    }
+  };
 
   const onSubmit = async (values: any) => {
     if (submittingRef.current) return;
@@ -379,8 +417,10 @@ const Users: React.FC = () => {
             />
             {isMobile ? (
               <>
+                <Button type="primary" icon={<IconQuickCreate />} block onClick={openQuick}>
+                  {t('users.quickCreate', 'Quick create')}
+                </Button>
                 <Button
-                  type="primary"
                   icon={<IconAddUser />}
                   block
                   onClick={() => {
@@ -509,8 +549,10 @@ const Users: React.FC = () => {
                 {t('users.deleteDepleted') || 'Delete depleted'}
               </Button>
             </Popconfirm>
+            <Button type="primary" icon={<IconQuickCreate />} onClick={openQuick}>
+              {t('users.quickCreate', 'Quick create')}
+            </Button>
             <Button
-              type="primary"
               icon={<IconAddUser />}
               onClick={() => {
                 setEditing(null);
@@ -860,6 +902,113 @@ const Users: React.FC = () => {
 
     </div>
   );
+
+      <Modal
+        open={quickModal}
+        title={t('users.quickCreate', 'Quick create')}
+        onCancel={() => setQuickModal(false)}
+        onOk={doQuickCreate}
+        confirmLoading={quickSubmitting}
+        okText={t('common.create', 'Create')}
+        destroyOnClose
+        width={isMobile ? '100%' : 480}
+        style={isMobile ? { top: 12 } : undefined}
+      >
+        <p style={{ marginBottom: 12, opacity: 0.75, fontSize: 13 }}>
+          {t(
+            'users.quickCreateHint',
+            'Leave username empty to auto-generate. Password and UUID are generated; copy them from the next dialog (shown only once).',
+          )}
+        </p>
+        <Form form={quickForm} layout="vertical" requiredMark={false}>
+          <Form.Item name="username" label={t('users.username')}>
+            <Input placeholder={t('users.quickNamePlaceholder', 'Auto if empty')} allowClear />
+          </Form.Item>
+          <Form.Item name="remark" label={t('users.remark')}>
+            <Input allowClear />
+          </Form.Item>
+          <Form.Item name="bind_all_listeners" label={t('users.bindAllNodes', 'Bind all nodes')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={credModal}
+        title={t('users.quickCredTitle', 'Credentials (save now)')}
+        onCancel={() => setCredModal(false)}
+        onOk={() => setCredModal(false)}
+        okText={t('common.close', 'Close')}
+        cancelButtonProps={{ style: { display: 'none' } }}
+        destroyOnClose
+        width={isMobile ? '100%' : 520}
+      >
+        {credInfo && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <div>
+              <Typography.Text type="secondary">{t('users.username')}</Typography.Text>
+              <Input
+                readOnly
+                value={credInfo.username}
+                addonAfter={
+                  <CopyOutlined
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(credInfo.username);
+                        message.success(t('common.copied', 'Copied'));
+                      } catch {
+                        message.error(t('common.error'));
+                      }
+                    }}
+                  />
+                }
+              />
+            </div>
+            <div>
+              <Typography.Text type="secondary">{t('users.password')}</Typography.Text>
+              <Input.Password
+                readOnly
+                value={credInfo.password}
+                addonAfter={
+                  <CopyOutlined
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(credInfo.password);
+                        message.success(t('common.copied', 'Copied'));
+                      } catch {
+                        message.error(t('common.error'));
+                      }
+                    }}
+                  />
+                }
+              />
+            </div>
+            <div>
+              <Typography.Text type="secondary">UUID</Typography.Text>
+              <Input
+                readOnly
+                value={credInfo.uuid}
+                addonAfter={
+                  <CopyOutlined
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(credInfo.uuid);
+                        message.success(t('common.copied', 'Copied'));
+                      } catch {
+                        message.error(t('common.error'));
+                      }
+                    }}
+                  />
+                }
+              />
+            </div>
+            <Typography.Text type="warning">
+              {t('users.quickCredWarn', 'Password is not shown again in the list. Copy it now.')}
+            </Typography.Text>
+          </Space>
+        )}
+      </Modal>
+
 };
 
 export default Users;

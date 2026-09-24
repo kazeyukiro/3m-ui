@@ -629,7 +629,14 @@ export default {
     "rawUsed": "实际用量",
     "billedUsed": "计费用量",
     "upload": "上行",
-    "download": "下行"
+    "download": "下行",
+    "quickCreate": "一键创建",
+    "quickCreateHint": "用户名可留空自动生成。密码与 UUID 会自动生成，请在下一弹窗中复制（只显示一次）。",
+    "quickNamePlaceholder": "留空自动生成",
+    "quickCreated": "用户已创建",
+    "quickCredTitle": "凭据（请立即保存）",
+    "quickCredWarn": "列表里不会再显示明文密码，请现在复制。",
+    "bindAllNodes": "绑定全部节点"
   },
   "traffic": {
     "title": "流量监控",

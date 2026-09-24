@@ -44,6 +44,19 @@ export interface BoundNode {
 }
 
 export const fetchUsers = () => client.get<ProxyUser[]>('/users').then((r) => r.data);
+export const quickCreateUser = (body: {
+  username?: string;
+  bind_all_listeners?: boolean;
+  remark?: string;
+} = {}) =>
+  client
+    .post<{
+      user: ProxyUser;
+      password: string;
+      uuid: string;
+    }>('/users/quick', body)
+    .then((r) => r.data);
+
 export const createUser = (payload: Record<string, unknown>) =>
   client.post<ProxyUser>('/users', payload).then((r) => r.data);
 export const updateUser = (id: number, payload: Record<string, unknown>) =>

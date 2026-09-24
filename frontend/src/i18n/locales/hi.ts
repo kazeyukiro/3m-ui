@@ -629,7 +629,14 @@ export default {
     "rawUsed": "Raw",
     "billedUsed": "Billed",
     "upload": "Upload",
-    "download": "Download"
+    "download": "Download",
+    "quickCreate": "Quick create",
+    "quickCreateHint": "Leave username empty to auto-generate. Password and UUID are generated; copy them from the next dialog (shown only once).",
+    "quickNamePlaceholder": "Auto if empty",
+    "quickCreated": "User created",
+    "quickCredTitle": "Credentials (save now)",
+    "quickCredWarn": "Password is not shown again in the list. Copy it now.",
+    "bindAllNodes": "Bind all nodes"
   },
   "traffic": {
     "title": "ट्रैफ़िक",
