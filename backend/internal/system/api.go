@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -135,22 +136,37 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	if err := RestoreDatabase(h.dbPath, h.mihomoCfg, f); err != nil {
+	result, err := RestoreDatabase(h.dbPath, h.mihomoCfg, f)
+	if err != nil {
 		log.Printf("system restore-database failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	// The running panel still holds the old (now-unlinked) SQLite inode via
-	// GORM; we cannot cleanly close/reopen it in-place. The operator MUST
-	// restart the panel or every subsequent write goes to a stale file and
-	// is lost on next start. Log loudly so this is visible in journalctl.
-	log.Printf("[WARNING] Database restored from backup. The panel MUST be restarted (systemctl restart 3m-ui) for changes to take effect. Further writes will be lost.")
-	c.JSON(http.StatusOK, gin.H{
+	log.Printf("[WARNING] Database restored from backup. Panel will exit now so systemd restarts it with the new DB. mihomo_config_skipped=%v", result.MihomoSkipped)
+
+	resp := gin.H{
 		"status":           "ok",
 		"restart_required": true,
-		"message":          "Database restored. *** RESTART REQUIRED *** The running panel still holds the old SQLite handle; run `systemctl restart 3m-ui` (or restart the panel process) now, otherwise all further DB writes will be lost.",
+		"message":          "Database restored. The panel is exiting now so systemd (Restart=always) brings it back with the new DB. The browser will auto-reload when the panel is back.",
 		"path":             filepath.Base(h.dbPath),
-	})
+		"mihomo_config":    "",
+	}
+	if result.MihomoConfigPath != "" {
+		resp["mihomo_config"] = result.MihomoConfigPath
+	} else if result.MihomoSkipped {
+		resp["mihomo_config"] = "skipped (panel has no mihomo.config path)"
+	}
+
+	// Flush the response, then exit so systemd's Restart=always reboots the
+	// panel with the freshly-restored DB. Without this, the running GORM
+	// pool keeps writing to the old (now-unlinked) SQLite inode and every
+	// write is silently lost.
+	c.JSON(http.StatusOK, resp)
+	go func() {
+		time.Sleep(500 * time.Millisecond) // let gin flush
+		log.Printf("[WARNING] Panel exiting for post-restore restart.")
+		os.Exit(0)
+	}()
 }
 
 func (h *Handler) ReverseProxy(c *gin.Context) {

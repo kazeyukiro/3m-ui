@@ -132,22 +132,22 @@ func cleanupLocalBackups(dir string, keep, olderThanDays int) (deleted []string,
 		cutoff = time.Now().UTC().Add(-time.Duration(olderThanDays) * 24 * time.Hour)
 	}
 	for i, b := range list {
-		remove := false
-		if keep > 0 && i >= keep {
-			remove = true
-		}
-		if olderThanDays > 0 && b.ModTime.Before(cutoff) {
-			remove = true
-		}
-		// When both rules set: delete if EITHER says remove (keep newest N AND age).
-		// Actually better: keep means "always keep newest N"; age deletes older ones among the rest.
-		// Simpler semantics matching user need:
-		// - keep=3: delete everything after the 3 newest
-		// - older_than_days=7: delete any older than 7 days
-		// - both: delete if index>=keep OR older than days (but never delete if within keep? )
-		// User space: "keep last 3" is the main need.
+		// Semantics (always protect the newest `keep` entries):
+		//   - keep > 0 only:        delete entries with index >= keep
+		//   - older_than_days > 0 only: delete entries older than cutoff
+		//   - both:                 delete entries that are BOTH (index >= keep)
+		//                            AND (older than cutoff). This guarantees
+		//                            the newest `keep` entries survive even if
+		//                            they're all older than `older_than_days`,
+		//                            so the operator never loses every backup
+		//                            by setting an aggressive age threshold.
+		var remove bool
 		if keep > 0 && olderThanDays > 0 {
-			remove = i >= keep || b.ModTime.Before(cutoff)
+			remove = i >= keep && b.ModTime.Before(cutoff)
+		} else if keep > 0 {
+			remove = i >= keep
+		} else if olderThanDays > 0 {
+			remove = b.ModTime.Before(cutoff)
 		}
 		if !remove {
 			kept++

@@ -217,16 +217,35 @@ func (s *Scheduler) buildReportMessage(settings Settings) string {
 	return b.String()
 }
 
+// telegramBackupMaxBytes is the Telegram Bot API hard limit for sendDocument
+// (50 MB). Uploads above this size fail with HTTP 413 and the scheduled backup
+// silently stops working — so we cap here and send a text notice instead.
+const telegramBackupMaxBytes = 50 * 1024 * 1024
+
 // sendBackup zips the SQLite DB + Mihomo config into memory and sends the
 // resulting archive as a document to every admin chat. Silently no-ops when
 // neither path is configured (cannot build a meaningful archive).
+//
+// If the resulting zip exceeds the Telegram 50 MB document limit, the backup
+// is NOT sent and a text notice is sent instead ("DB too large to attach: N
+// MB; download via the web UI"). Without this guard the Bot API returns HTTP
+// 413 forever and the operator gets no notification.
 func (s *Scheduler) sendBackup(client *Client) {
 	if s.dbPath == "" && s.mihomoCfg == "" {
+		log.Printf("telegram: attach_backup is enabled but neither db_path nor mihomo_config is set; skipping backup attachment")
 		return
 	}
 	var buf bytes.Buffer
 	if err := system.WriteZip(&buf, system.BackupPaths{DatabasePath: s.dbPath, MihomoConfig: s.mihomoCfg}); err != nil {
 		log.Printf("telegram: scheduler backup zip: %v", err)
+		return
+	}
+	if buf.Len() > telegramBackupMaxBytes {
+		notice := fmt.Sprintf("⚠️ Scheduled backup skipped: zip is %d MB, exceeds Telegram's 50 MB sendDocument limit. Download via Settings → Backup in the web UI instead.", buf.Len()/1024/1024)
+		log.Printf("telegram: %s", notice)
+		if err := client.SendText(notice); err != nil {
+			log.Printf("telegram: send-too-large notice: %v", err)
+		}
 		return
 	}
 	name := fmt.Sprintf("3m-ui-backup-%s.zip", time.Now().UTC().Format("20060102-150405"))

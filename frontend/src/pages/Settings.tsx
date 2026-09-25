@@ -853,16 +853,47 @@ const Settings: React.FC = () => {
                     showUploadList={false}
                     beforeUpload={async (file) => {
                       try {
-                        await restoreDatabase(file);
-                        message.success(t('settings.restoreDone') || 'Restored — restart panel');
+                        const res = await restoreDatabase(file);
+                        // Backend now os.Exit(0)s 500ms after responding so
+                        // systemd's Restart=always brings the panel back with
+                        // the freshly-restored DB. We poll /api/v1/health and
+                        // reload the page automatically when it's back.
+                        message.success(t('settings.restoreDone') || 'Restored — panel is restarting');
+                        const mihomoNote = res?.data?.mihomo_config
+                          ? `\nMihomo config: ${res.data.mihomo_config}`
+                          : '';
                         Modal.warning({
-                          title: t('settings.restoreRestart') || 'Restart required',
-                          content:
-                            t('settings.restoreRestartHint') ||
-                            'Database restored. Restart 3m-ui service now or writes may be lost.',
+                          title: t('settings.restoreRestart') || 'Restarting panel…',
+                          content: (
+                            <div>
+                              <p>{t('settings.restoreRestartHint') ||
+                                'Database restored. The panel is restarting now (systemd Restart=always). This page will auto-reload when it is back.'}</p>
+                              {mihomoNote && <p style={{ fontSize: 12, opacity: 0.7 }}>{mihomoNote}</p>}
+                              <p style={{ fontSize: 12, opacity: 0.7 }}>
+                                {t('settings.restoreAutoReload', 'Auto-reloading in 5s…') ||
+                                  'Auto-reloading in 5s…'}
+                              </p>
+                            </div>
+                          ),
                         });
+                        // Poll /api/v1/health; reload when panel is back (or after 30s).
+                        const startedAt = Date.now();
+                        const poll = window.setInterval(() => {
+                          fetch('/api/v1/health', { cache: 'no-store' })
+                            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+                            .then(() => {
+                              window.clearInterval(poll);
+                              window.location.reload();
+                            })
+                            .catch(() => {
+                              if (Date.now() - startedAt > 30000) {
+                                window.clearInterval(poll);
+                                message.warning(t('settings.restoreTimeout', 'Panel did not come back in 30s; please refresh manually.'));
+                              }
+                            });
+                        }, 2000);
                       } catch (e: any) {
-                        message.error(e.message || t('common.error'));
+                        message.error(e?.response?.data?.error || e.message || t('common.error'));
                       }
                       return false;
                     }}

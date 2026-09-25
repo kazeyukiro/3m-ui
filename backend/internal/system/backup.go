@@ -69,35 +69,54 @@ func WriteZip(w io.Writer, paths BackupPaths) error {
 	return err
 }
 
+// RestoreResult carries forward what was actually written so the API layer
+// can surface warnings to the operator (e.g. mihomo config silently dropped
+// when the panel has no mihomo.config path configured).
+type RestoreResult struct {
+	DatabasePath     string // absolute path of the restored SQLite file
+	MihomoConfigPath string // non-empty if mihomo config was restored
+	MihomoSkipped    bool   // true if zip contained mihomo-config.yaml but mihomoCfgPath was empty
+}
+
 // RestoreDatabase replaces the live SQLite file with the provided content.
 // The content may be:
 //   - A raw SQLite database file (e.g. 3m-ui.db)
 //   - A zip archive exported by ExportBackup (containing 3m-ui.db + mihomo-config.yaml)
 //
-// Callers should stop the panel or accept that a process restart may be required.
-func RestoreDatabase(dbPath, mihomoCfgPath string, r io.Reader) error {
+// The caller MUST restart the panel process after this returns — the running
+// GORM connection pool still holds the old (now-unlinked) SQLite inode, and
+// every subsequent write goes to that orphaned inode (silently lost on next
+// restart). See api.go RestoreDatabase handler which triggers an os.Exit.
+//
+// Side effects:
+//   - Validates the SQLite magic header ("SQLite format 3\0") before rename
+//     so a corrupt or non-DB upload fails loudly instead of breaking the boot.
+//   - Removes any stale -journal / -wal / -shm siblings of the DB so SQLite
+//     doesn't roll back the just-restored file to a stale transaction state.
+func RestoreDatabase(dbPath, mihomoCfgPath string, r io.Reader) (RestoreResult, error) {
+	result := RestoreResult{DatabasePath: dbPath}
 	if dbPath == "" {
-		return fmt.Errorf("database path is empty")
+		return result, fmt.Errorf("database path is empty")
 	}
 	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return result, err
 	}
 
 	// Read the uploaded content into memory to detect format.
 	// We already enforce a 128 MiB upload limit in the API handler.
 	raw, err := io.ReadAll(io.LimitReader(r, 128<<20))
 	if err != nil {
-		return fmt.Errorf("read upload: %w", err)
+		return result, fmt.Errorf("read upload: %w", err)
 	}
 
-	// Check if it's a zip file (PK magic).
+	// Check if it's a zip file (PK magic).
 	var dbContent, mihomoCfg []byte
 	if len(raw) >= 4 && raw[0] == 0x50 && raw[1] == 0x4B && raw[2] == 0x03 && raw[3] == 0x04 {
 		// Zip archive — extract 3m-ui.db from it.
 		dbContent, mihomoCfg, err = extractDBFromZip(raw)
 		if err != nil {
-			return fmt.Errorf("extract from zip: %w", err)
+			return result, fmt.Errorf("extract from zip: %w", err)
 		}
 	} else {
 		// Raw SQLite database file.
@@ -105,7 +124,15 @@ func RestoreDatabase(dbPath, mihomoCfgPath string, r io.Reader) error {
 	}
 
 	if len(dbContent) == 0 {
-		return fmt.Errorf("backup file is empty or does not contain a database")
+		return result, fmt.Errorf("backup file is empty or does not contain a database")
+	}
+
+	// Validate the SQLite magic header. SQLite files always start with the
+	// 16-byte string "SQLite format 3\0". Rejecting non-DB uploads here
+	// prevents the panel from boot-looping on a corrupt restore.
+	const sqliteMagic = "SQLite format 3\x00"
+	if len(dbContent) < len(sqliteMagic) || string(dbContent[:len(sqliteMagic)]) != sqliteMagic {
+		return result, fmt.Errorf("not a valid SQLite database: missing magic header")
 	}
 
 	tmp := dbPath + ".restore-tmp"
@@ -114,23 +141,38 @@ func RestoreDatabase(dbPath, mihomoCfgPath string, r io.Reader) error {
 	// discarded — the only failure mode is "not found", which is expected).
 	defer os.Remove(tmp)
 	if err := os.WriteFile(tmp, dbContent, 0o600); err != nil {
-		return err
+		return result, err
 	}
 	if err := os.Rename(tmp, dbPath); err != nil {
-		return err
+		return result, err
+	}
+
+	// Remove stale SQLite auxiliary files so they don't roll back the
+	// just-restored DB. SQLite recreates these on next open as needed.
+	// Errors are ignored — "not exist" is the common case.
+	for _, suffix := range []string{"-journal", "-wal", "-shm"} {
+		_ = os.Remove(dbPath + suffix)
 	}
 
 	// Restore mihomo-config.yaml if the zip contained it and the path is set.
-	if len(mihomoCfg) > 0 && mihomoCfgPath != "" {
-		cfgDir := filepath.Dir(mihomoCfgPath)
-		_ = os.MkdirAll(cfgDir, 0o750)
-		cfgTmp := mihomoCfgPath + ".restore-tmp"
-		defer os.Remove(cfgTmp)
-		if err := os.WriteFile(cfgTmp, mihomoCfg, 0o600); err == nil {
-			_ = os.Rename(cfgTmp, mihomoCfgPath)
+	if len(mihomoCfg) > 0 {
+		if mihomoCfgPath == "" {
+			result.MihomoSkipped = true
+		} else {
+			cfgDir := filepath.Dir(mihomoCfgPath)
+			_ = os.MkdirAll(cfgDir, 0o750)
+			cfgTmp := mihomoCfgPath + ".restore-tmp"
+			defer os.Remove(cfgTmp)
+			if err := os.WriteFile(cfgTmp, mihomoCfg, 0o600); err != nil {
+				return result, fmt.Errorf("write mihomo config: %w", err)
+			}
+			if err := os.Rename(cfgTmp, mihomoCfgPath); err != nil {
+				return result, fmt.Errorf("rename mihomo config: %w", err)
+			}
+			result.MihomoConfigPath = mihomoCfgPath
 		}
 	}
-	return nil
+	return result, nil
 }
 
 // extractDBFromZip reads a zip archive and returns the contents of
