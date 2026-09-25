@@ -139,6 +139,35 @@ service_is_active() {
   esac
 }
 
+reset_config() {
+  # --help / -h should NOT stop/restart the panel — it's a read-only help
+  # invocation. Detect it and pass through directly.
+  for a in "$@"; do
+    case "$a" in
+      --help|-h)
+        (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" reset-config "$@")
+        return $?
+        ;;
+    esac
+  done
+
+  # reset-config modifies config.yaml + DB rows the running panel may have
+  # cached. The Go binary refuses to run reset-config while the panel is up
+  # (it might race writes), so stop the service first, run reset, then restart.
+  say "Stopping 3m-ui service (reset-config requires the panel to be stopped)..."
+  service_action stop >/dev/null 2>&1 || true
+  # Pass through all flags (--panel / --access / --public / --all / --yes / -y)
+  # to the Go binary's reset-config subcommand.
+  (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" reset-config "$@")
+  rc=$?
+  say ""
+  say "Restarting 3m-ui service..."
+  service_action start || true
+  if [ $rc -ne 0 ]; then
+    err "reset-config failed (exit $rc). Check the message above; the panel was restarted with the old config."
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: 3m-ui <command>
@@ -155,12 +184,22 @@ Commands:
   backup       Stop service, snapshot data/config/binaries, resume service
   restore      Restore a complete snapshot: restore /path/snapshot.tar.gz
   reset-admin  Generate and display a new random administrator password
+  reset-config Reset panel config via SSH rescue (see below)
   healthcheck  Probe the actual configured HTTP/HTTPS panel
   help         Show this help
 
 Config sub-commands:
   3m-ui config show              Display current config.yaml
   3m-ui config port <1-65535>    Change panel port and restart
+
+Reset-config sub-commands (SSH rescue when web UI is unreachable):
+  3m-ui reset-config                              Reset panel listen/SSL (default scope)
+  3m-ui reset-config --panel                      Clear server.listen + disable SSL
+  3m-ui reset-config --access                     Clear listener public_host/SNI/ALPN
+  3m-ui reset-config --public                     Clear server.public_url
+  3m-ui reset-config --all                        Apply all three scopes
+  3m-ui reset-config --panel --yes                Skip y/N prompt (scripted rescue)
+  3m-ui reset-config --help                       Show full reset-config help
 
 Run '3m-ui' without arguments to open the interactive management menu.
 EOF
@@ -181,6 +220,7 @@ main() {
     backup) shift; "$BASE/install.sh" --backup "$@" ;;
     restore) shift; "$BASE/install.sh" --restore "$@" ;;
     init|reset-admin|healthcheck) (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd") ;;
+    reset-config) shift; reset_config "$@" ;;
     help|-h|--help) usage ;;
     '')
       if [ -x /usr/local/bin/3m-ui ] && [ "$(readlink -f /usr/local/bin/3m-ui 2>/dev/null || true)" = "$APP_BIN" ]; then

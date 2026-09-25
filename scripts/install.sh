@@ -483,6 +483,7 @@ main(){
   STOPPED=0
   say "3m-ui $TAG is ready ($REPO, channel $CHANNEL)."
   say 'New installations print a one-time administrator password above. Use 3m-ui reset-admin if it is lost.'
+  say 'If you ever lock yourself out of the web UI (wrong port / SSL / listen address), SSH in and run: 3m-ui reset-config --panel --yes'
   say "Configuration: $CONFIG_FILE"
   say "Management: 3m-ui   Backup: $SNAPSHOT"
 }
