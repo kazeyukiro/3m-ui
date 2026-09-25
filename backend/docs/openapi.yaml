@@ -960,6 +960,108 @@ paths:
       responses:
         "200":
           description: Restored (restart required)
+  /system/restart:
+    post:
+      tags: [system]
+      summary: Restart the panel process (systemd Restart=always brings it back)
+      description: |
+        Triggers a graceful panel restart. The handler responds 200 first,
+        then calls `os.Exit(0)` after a 500ms delay so systemd's
+        `Restart=always` brings the panel back with the same config.
+        The web UI polls `/api/v1/health` and auto-reloads when the panel
+        is back (typically 2-3 seconds).
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Panel is restarting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  message:
+                    type: string
+                    example: Panel is restarting now. This page will auto-reload when it is back.
+
+  /system/update-info:
+    get:
+      tags: [system]
+      summary: Check for the latest 3m-ui release on GitHub
+      description: |
+        Queries the GitHub releases API for the latest version and compares
+        it to the running `buildinfo.Version`. Returns whether an update is
+        available. If GitHub is unreachable (firewall, GFW), returns an
+        `error` field with a fallback hint.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Update information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_version:
+                    type: string
+                    example: v1.3.0
+                  latest_version:
+                    type: string
+                    example: v1.4.0
+                  update_available:
+                    type: boolean
+                    example: true
+                  release_url:
+                    type: string
+                    example: https://github.com/kazeyukiro/3m-ui/releases/tag/v1.4.0
+                  release_notes:
+                    type: string
+                    description: GitHub release body (markdown)
+                  error:
+                    type: string
+                    description: Present when GitHub API is unreachable
+
+  /system/update:
+    post:
+      tags: [system]
+      summary: Trigger update.sh in the background to update the panel
+      description: |
+        Runs the `update.sh` script in the background. The script downloads
+        the latest release, stops the panel, replaces binaries + scripts,
+        and restarts the panel via systemd. The handler responds immediately
+        (the update takes 30-60 seconds). The web UI polls `/api/v1/health`
+        with a 120-second timeout and auto-reloads when the panel is back.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Update started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  message:
+                    type: string
+                    example: Update started. The panel will restart automatically when the update completes.
+        "503":
+          description: update.sh not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "update.sh not found at /usr/local/lib/3m-ui/update.sh. Update via SSH: 3m-ui update"
+
   /system/ssl:
     get:
       tags: [system]
