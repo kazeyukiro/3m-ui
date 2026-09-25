@@ -371,8 +371,8 @@ func (s *Service) BatchApplyCertificate(in ApplyCertificateInput) (*ApplyCertifi
 // sanitizeIPFilename converts an IP address to a filesystem-safe name.
 // Mirrors the logic in acme/ip_issuer.go:sanitizeIPFilename.
 func sanitizeIPFilename(ip string) string {
-	ip = strings.ReplaceAll(ip, ":", "-")
-	ip = strings.ReplaceAll(ip, ".", "-")
+	ip = strings.ReplaceAll(ip, ":", "_")
+	ip = strings.ReplaceAll(ip, ".", "_")
 	return ip
 }
 
