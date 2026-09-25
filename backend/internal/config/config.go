@@ -321,3 +321,86 @@ func GetSubscriptionURL(cfg *Config, req *http.Request, token string, target str
 	}
 	return fmt.Sprintf("%s%s/%s?target=%s", base, subBase, pathToken, url.QueryEscape(strings.ToLower(strings.TrimSpace(target))))
 }
+
+// ClearListenInFile removes the server.listen key from the YAML config so
+// the panel rebinds to ":port" (dual-stack) on next boot. Used by the
+// `reset-config` CLI subcommand for SSH rescue scenarios where an operator
+// accidentally bound the panel to 127.0.0.1 or an unreachable address.
+//
+// Unlike UpdateServerFile (which skips empty listen), this function deletes
+// the key entirely — YAML serializes the absence as "no listen field",
+// which the panel loader interprets as the default ":port".
+func ClearListenInFile(path string) error {
+	if path == "" {
+		path = ConfigPath()
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	var root map[string]interface{}
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+	server, _ := root["server"].(map[string]interface{})
+	if server == nil {
+		return nil // nothing to clear
+	}
+	if _, ok := server["listen"]; !ok {
+		return nil // already absent
+	}
+	delete(server, "listen")
+	root["server"] = server
+	out, err := yaml.Marshal(root)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, out, 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// ClearPublicURLInFile removes the server.public_url key from the YAML
+// config. Used by `reset-config --public` to drop a stale subscription
+// host without touching other panel settings.
+func ClearPublicURLInFile(path string) error {
+	if path == "" {
+		path = ConfigPath()
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	var root map[string]interface{}
+	if err := yaml.Unmarshal(raw, &root); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+	server, _ := root["server"].(map[string]interface{})
+	if server == nil {
+		return nil
+	}
+	if _, ok := server["public_url"]; !ok {
+		return nil
+	}
+	delete(server, "public_url")
+	root["server"] = server
+	out, err := yaml.Marshal(root)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, out, 0o600); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}

@@ -33,7 +33,7 @@ func main() {
 				log.Fatalf("set config path: %v", err)
 			}
 			i++
-		case "reset-admin", "init", "healthcheck", "storage-paths":
+		case "reset-admin", "init", "healthcheck", "storage-paths", "reset-config":
 			cmd = args[i]
 		default:
 			if cmd == "" && !hasPrefixDash(args[i]) {
@@ -73,6 +73,32 @@ func main() {
 
 	if cmd == "reset-admin" {
 		if err := runResetAdmin(configPath); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if cmd == "reset-config" {
+		// reset-config accepts its own flags (--panel / --access / --public
+		// / --all / --yes). Pass every arg AFTER the subcommand name so the
+		// handler can parse them itself.
+		var rest []string
+		skip := false
+		for _, a := range args {
+			if skip {
+				skip = false
+				continue
+			}
+			if a == "reset-config" {
+				skip = false
+				continue // drop the subcommand name itself
+			}
+			if a == "--config" || a == "-c" {
+				skip = true // skip the path value (already captured above)
+				continue
+			}
+			rest = append(rest, a)
+		}
+		if err := runResetConfig(configPath, rest); err != nil {
 			log.Fatal(err)
 		}
 		return
