@@ -18,6 +18,16 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (config.timeout == null) {
     config.timeout = method === 'get' || method === 'head' ? 45000 : 120000;
   }
+  // FormData uploads (e.g. restoreDatabase) MUST let the browser set the
+  // multipart Content-Type with its boundary. The client-level default
+  // 'application/json' header would otherwise clobber it, and gin returns
+  // 'request Content-Type isn't multipart/form-data'.
+  if (config.data instanceof FormData) {
+    if (config.headers) {
+      delete config.headers['Content-Type'];
+      delete (config.headers as Record<string, unknown>).contentType;
+    }
+  }
   return config;
 });
 
