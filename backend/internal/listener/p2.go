@@ -408,7 +408,39 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 				}
 			}
 			if certFile == "" || keyFile == "" {
-				return "", "", fmt.Errorf("panel SSL uses ACME (no manual cert_file/key_file). For domain ACME, paste the certificate PEM below or use /etc/letsencrypt/live/<domain>/ paths. For IP certs, the ACME cache PEM should have been found at %s — check if the IP cert has been issued", st.CacheDir)
+				// Try autocert DirCache: the file <cacheDir>/<domain>
+				// contains a PEM block with PRIVATE KEY + CERTIFICATE
+				// concatenated (autocert cacheGet format). Read it
+				// and split into separate cert/key PEM.
+				if st.CacheDir != "" && st.Domain != "" {
+					autocertCachePath := filepath.Join(st.CacheDir, st.Domain)
+					if data, e := os.ReadFile(autocertCachePath); e == nil {
+						pemStr := string(data)
+						if strings.Contains(pemStr, "PRIVATE KEY") && strings.Contains(pemStr, "CERTIFICATE") {
+							// Extract private key block
+							keyStart := strings.Index(pemStr, "-----BEGIN")
+							keyEndMarker := "-----END"
+							keyEndIdx := strings.Index(pemStr, keyEndMarker)
+							if keyEndIdx > keyStart {
+								// Find the newline after END
+								restAfterEnd := pemStr[keyEndIdx:]
+								newlineAfterEnd := strings.Index(restAfterEnd, "\n")
+								if newlineAfterEnd > 0 {
+									keyPEM = strings.TrimSpace(pemStr[keyStart : keyEndIdx+newlineAfterEnd])
+								}
+							}
+							// Extract certificate block(s)
+							certStart := strings.Index(pemStr, "-----BEGIN CERTIFICATE-----")
+							if certStart > 0 {
+								certPEM = strings.TrimSpace(pemStr[certStart:])
+							}
+							if certPEM != "" && keyPEM != "" {
+								return certPEM, keyPEM, nil
+							}
+						}
+					}
+				}
+				return "", "", fmt.Errorf("panel SSL uses ACME with domain %q. The autocert cache PEM was not found at %s/%s — the cert may not have been issued yet, or the panel was restarted before the first TLS handshake. Visit the panel over HTTPS once to trigger cert issuance, then retry. Alternatively, paste the certificate PEM below or use /etc/letsencrypt/live/<domain>/ paths.", st.Domain, st.CacheDir, st.Domain)
 			}
 		}
 	}
