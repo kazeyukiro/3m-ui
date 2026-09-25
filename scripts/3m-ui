@@ -56,12 +56,13 @@ run_script() {
 
 run_app() {
     cmd="$1"
+    shift
     if [ ! -x "$APP_BIN" ]; then
         err "未找到程序: $APP_BIN"
         return 1
     fi
     mkdir -p "$DATA_DIR"
-    (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd")
+    (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd" "$@")
 }
 
 init_system() {
@@ -400,6 +401,57 @@ reset_admin() {
     run_app reset-admin || return 1
 }
 
+reset_config() {
+    if [ ! -x "$APP_BIN" ]; then
+        err "未找到程序: $APP_BIN"
+        return 1
+    fi
+    say '=== SSH 救援 / SSH Rescue ==='
+    say '当面板配置错误（端口/SSL/监听地址）导致 Web 无法访问时，'
+    say '可通过此菜单重置为安全默认值，重启后面板以 HTTP 模式启动。'
+    say ''
+    say '重置范围 / Scope:'
+    say '  1) 仅面板 (listen + SSL)      — 最常用，仅 Web 打不开时'
+    say '  2) 面板 + 订阅地址              — 同时清除 public_url'
+    say '  3) 面板 + 订阅 + 节点公网地址   — 全量重置（含 access_profile）'
+    say '  0) 返回 / Cancel'
+    printf '选择 [0-3]: '
+    IFS= read -r scope || return 0
+    case "$scope" in
+        1) flags='--panel --yes' ;;
+        2) flags='--panel --public --yes' ;;
+        3) flags='--all --yes' ;;
+        *) say '已取消。'; return 0 ;;
+    esac
+    say ''
+    say "将以 ${flags} 重置。该操作会停止面板、修改 config.yaml + DB，然后重启面板。"
+    say '不会删除用户 / 节点 / 流量记录 / 凭证。'
+    if ! confirm '确认继续?' n; then
+        say '已取消。'
+        return 0
+    fi
+    say ''
+    say '停止 3m-ui 服务...'
+    service_action stop >/dev/null 2>&1 || true
+    if ! run_app reset-config $flags; then
+        err '✗ reset-config 失败，请查看上方错误。面板将以旧配置重启。'
+        service_action start || true
+        return 1
+    fi
+    say ''
+    say '重启 3m-ui 服务...'
+    service_action start || true
+    sleep 1
+    if service_is_active; then
+        say '✓ 重置完成。请用 HTTP（不是 HTTPS）访问面板:'
+        port=$(yaml_get '  port:' 2>/dev/null || echo "8080")
+        say "  http://<server-ip>:${port}/"
+        say '在 Web UI 重新应用 SSL / 域名 / 订阅地址设置。'
+    else
+        err '✗ 面板启动失败，请检查: 3m-ui logs'
+    fi
+}
+
 # --- BBR ---------------------------------------------------------------------
 
 bbr_status() {
@@ -587,13 +639,14 @@ menu() {
         printf '%s\n' ' 13. 设置 public_url | Public URL'
         printf '%s\n' ' 14. 路径/订阅端口 | web_path sub_path sub_port'
         printf '%s\n' ' 15. 重置管理员密码 | Reset admin'
-        printf '%s\n' ' 16. 健康检查 | Healthcheck'
-        printf '%s\n' ' 17. BBR | BBR menu'
-        printf '%s\n' ' 18. 更新 Geo | Update Geo'
-        printf '%s\n' ' 19. 防火墙放行提示 | Firewall'
-        printf '%s\n' ' 20. SSL 证书助手 | SSL cert helper'
-        printf '%s\n' ' 21. 备份 | Backup'
-        printf '%s\n' ' 22. 更新本管理脚本 | Update this script'
+        printf '%s\n' ' 16. SSH 救援重置面板配置 | Reset-config (SSH rescue)'
+        printf '%s\n' ' 17. 健康检查 | Healthcheck'
+        printf '%s\n' ' 18. BBR | BBR menu'
+        printf '%s\n' ' 19. 更新 Geo | Update Geo'
+        printf '%s\n' ' 20. 防火墙放行提示 | Firewall'
+        printf '%s\n' ' 21. SSL 证书助手 | SSL cert helper'
+        printf '%s\n' ' 22. 备份 | Backup'
+        printf '%s\n' ' 23. 更新本管理脚本 | Update this script'
         printf '%s\n' '  a. 卸载 | Uninstall'
         printf '%s\n' '  0. 退出 | Exit'
         printf '\n请选择 / Select: '
@@ -626,13 +679,14 @@ menu() {
             13) set_public_url || true; pause ;;
             14) set_panel_paths || true; pause ;;
             15) reset_admin || true; pause ;;
-            16) run_app healthcheck || true; pause ;;
-            17) bbr_menu || true; pause ;;
-            18) update_geo || true; pause ;;
-            19) open_firewall || true; pause ;;
-            20) ssl_cert_menu || true; pause ;;
-            21) run_script "$INSTALLER" --backup || true; pause ;;
-            22) update_self || true; pause ;;
+            16) reset_config || true; pause ;;
+            17) run_app healthcheck || true; pause ;;
+            18) bbr_menu || true; pause ;;
+            19) update_geo || true; pause ;;
+            20) open_firewall || true; pause ;;
+            21) ssl_cert_menu || true; pause ;;
+            22) run_script "$INSTALLER" --backup || true; pause ;;
+            23) update_self || true; pause ;;
             a|A) run_script "$UNINSTALLER" || true; pause ;;
             0) exit 0 ;;
             *) say '无效选择，请重新输入。' ;;
@@ -704,6 +758,29 @@ main() {
         backup) shift; run_script "$INSTALLER" --backup "$@" ;;
         restore) shift; run_script "$INSTALLER" --restore "$@" ;;
         init|reset-admin|healthcheck) run_app "$cmd" ;;
+        reset-config)
+            # reset-config needs the service stopped before the Go binary
+            # runs (it writes config.yaml + DB rows the running panel caches).
+            # --help / -h short-circuits — no stop/restart needed.
+            shift # drop 'reset-config' so $@ holds the flags
+            help_only=0
+            for a in "$@"; do
+                case "$a" in --help|-h) help_only=1 ;; esac
+            done
+            if [ "$help_only" = 1 ]; then
+                run_app reset-config "$@"
+            else
+                say '停止 3m-ui 服务...'
+                service_action stop >/dev/null 2>&1 || true
+                if ! run_app reset-config "$@"; then
+                    err '✗ reset-config 失败，请查看上方错误。'
+                    service_action start || true
+                    exit 1
+                fi
+                say '重启 3m-ui 服务...'
+                service_action start || true
+            fi
+            ;;
         update|upgrade)
             shift
             run_script "$UPDATER" "$@"
@@ -723,8 +800,12 @@ main() {
             printf '%s\n' '服务: status | start | restart | stop | enable | disable | logs | version | channel'
             printf '%s\n' '配置: config show | config port <端口>'
             printf '%s\n' '安装: update [vX.Y.Z|pre] | channel stable|pre [--update] | install | uninstall [--purge]'
-            printf '%s\n' '数据: backup | restore <snapshot.tar.gz> | reset-admin | healthcheck'
+            printf '%s\n' '数据: backup | restore <snapshot.tar.gz> | reset-admin | reset-config | healthcheck'
             printf '%s\n' '其他: menu | help'
+            printf '%s\n' ''
+            printf '%s\n' 'SSH 救援 / SSH rescue:'
+            printf '%s\n' '  3m-ui reset-config --panel --yes   # 重置 listen/SSL，重启后 HTTP 访问'
+            printf '%s\n' '  3m-ui reset-config --all --yes      # 全量重置（含 public_url + access_profile）'
             printf '%s\n' ''
             printf '%s\n' '不带参数时进入交互式菜单。'
             ;;
