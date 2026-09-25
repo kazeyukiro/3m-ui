@@ -157,7 +157,19 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 	result, err := RestoreDatabase(h.dbPath, h.mihomoCfg, f)
 	if err != nil {
 		log.Printf("system restore-database failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Distinguish client errors (bad upload / not SQLite / corrupt zip)
+		// from server errors (disk full / permission denied). Client errors
+		// return 400 so the operator knows to fix the file, not the server.
+		errMsg := err.Error()
+		status := http.StatusInternalServerError
+		if strings.Contains(errMsg, "not a valid SQLite database") ||
+			strings.Contains(errMsg, "does not contain a database") ||
+			strings.Contains(errMsg, "extract from zip") ||
+			strings.Contains(errMsg, "empty or does not contain") ||
+			strings.Contains(errMsg, "database path is empty") {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": errMsg})
 		return
 	}
 	log.Printf("[WARNING] Database restored from backup. Panel will exit now so systemd restarts it with the new DB. mihomo_config_skipped=%v", result.MihomoSkipped)
