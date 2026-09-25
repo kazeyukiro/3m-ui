@@ -368,6 +368,14 @@ func (s *Service) BatchApplyCertificate(in ApplyCertificateInput) (*ApplyCertifi
 	return out, nil
 }
 
+// sanitizeIPFilename converts an IP address to a filesystem-safe name.
+// Mirrors the logic in acme/ip_issuer.go:sanitizeIPFilename.
+func sanitizeIPFilename(ip string) string {
+	ip = strings.ReplaceAll(ip, ":", "-")
+	ip = strings.ReplaceAll(ip, ".", "-")
+	return ip
+}
+
 func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyPEM string, err error) {
 	certPEM = strings.TrimSpace(in.Certificate)
 	keyPEM = strings.TrimSpace(in.PrivateKey)
@@ -382,7 +390,26 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 		certFile = strings.TrimSpace(st.CertFile)
 		keyFile = strings.TrimSpace(st.KeyFile)
 		if certFile == "" || keyFile == "" {
-			return "", "", fmt.Errorf("panel SSL has no manual cert_file/key_file; paste PEM or set panel SSL files first")
+			// Panel is using ACME (autocert or IP cert), not manual PEM files.
+			// Try to read the IP certificate PEM files from the ACME cache dir.
+			// IP certs are stored as <cacheDir>/ip-<sanitized-ip>-cert.pem
+			// and <cacheDir>/ip-<sanitized-ip>-key.pem (standard PEM format).
+			// Domain ACME (autocert.DirCache) stores certs in Go binary format
+			// (not PEM), so we can't extract PEM from there — fall through to
+			// the "paste PEM" error below.
+			if st.CacheDir != "" && st.Domain != "" {
+				ipCert := filepath.Join(st.CacheDir, "ip-"+sanitizeIPFilename(st.Domain)+"-cert.pem")
+				ipKey := filepath.Join(st.CacheDir, "ip-"+sanitizeIPFilename(st.Domain)+"-key.pem")
+				if _, e := os.Stat(ipCert); e == nil {
+					if _, e2 := os.Stat(ipKey); e2 == nil {
+						certFile = ipCert
+						keyFile = ipKey
+					}
+				}
+			}
+			if certFile == "" || keyFile == "" {
+				return "", "", fmt.Errorf("panel SSL uses ACME (no manual cert_file/key_file). For domain ACME, paste the certificate PEM below or use /etc/letsencrypt/live/<domain>/ paths. For IP certs, the ACME cache PEM should have been found at %s — check if the IP cert has been issued", st.CacheDir)
+			}
 		}
 	}
 
