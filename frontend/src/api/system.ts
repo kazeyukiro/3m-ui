@@ -90,7 +90,11 @@ export const registerWarp = (mode: 'wireguard' | 'masque' | 'both' = 'wireguard'
 
 export interface UpdateInfo {
   current_version: string;
-  latest_version: string;
+  current_channel: string;   // 'stable' | 'pre'
+  target_channel: string;    // the channel you're NOT on (for switch prompt)
+  latest_version: string;    // latest version in target_channel
+  latest_stable: string;     // latest stable release tag
+  latest_pre: string;         // latest pre release tag
   update_available: boolean;
   release_url?: string;
   release_notes?: string;
@@ -103,5 +107,5 @@ export const restartPanel = () =>
 export const checkUpdate = () =>
   client.get<UpdateInfo>('/system/update-info').then((r) => r.data);
 
-export const runUpdate = () =>
-  client.post('/system/update').then((r) => r.data);
+export const runUpdate = (channel?: 'stable' | 'pre') =>
+  client.post('/system/update', channel ? { channel } : undefined).then((r) => r.data);

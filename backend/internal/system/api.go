@@ -127,70 +127,165 @@ func (h *Handler) RestartPanel(c *gin.Context) {
 
 // UpdateInfo checks GitHub for the latest release and compares it to the
 // running version. Returns current_version, latest_version, update_available.
+// UpdateInfo checks GitHub for the latest release (stable and pre) and
+// compares it to the running version. Returns current_version,
+// current_channel, latest_stable, latest_pre, and update_available flags
+// for both channels so the UI can offer switching between stable and pre.
 func (h *Handler) UpdateInfo(c *gin.Context) {
 	current := buildinfo.Version
 	if current == "" || current == "dev" {
 		current = "dev"
 	}
 
-	// Query GitHub releases API with a short timeout.
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET",
-		"https://api.github.com/repos/kazeyukiro/3m-ui/releases/latest", nil)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"current_version":  current,
-			"latest_version":   "",
-			"update_available": false,
-			"error":            "cannot reach GitHub API: " + err.Error(),
-		})
-		return
+	// Detect current channel: read the CHANNEL file alongside the binary.
+	binPath, _ := os.Executable()
+	baseDir := filepath.Dir(binPath)
+	channelFile := filepath.Join(baseDir, "CHANNEL")
+	currentChannel := "stable"
+	if data, err := os.ReadFile(channelFile); err == nil {
+		ch := strings.TrimSpace(string(data))
+		if ch == "pre" || ch == "prerelease" {
+			currentChannel = "pre"
+		}
 	}
-	defer resp.Body.Close()
-	var release struct {
+	// If current version is "pre" or starts with a pre tag, detect from version too.
+	if current == "pre" || strings.Contains(current, "-rc") || strings.Contains(current, "-pre") {
+		currentChannel = "pre"
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	// Query BOTH the stable latest release AND the pre tag simultaneously.
+	type releaseInfo struct {
 		TagName string `json:"tag_name"`
 		Name    string `json:"name"`
 		HTMLURL string `json:"html_url"`
 		Body    string `json:"body"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"current_version":  current,
-			"latest_version":   "",
-			"update_available": false,
-			"error":            "failed to parse GitHub response",
-		})
-		return
+	fetchRelease := func(url string) (*releaseInfo, error) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
+		var r releaseInfo
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+			return nil, err
+		}
+		return &r, nil
 	}
 
-	latest := strings.TrimSpace(release.TagName)
+	stableCh := make(chan *releaseInfo, 1)
+	preCh := make(chan *releaseInfo, 1)
+	stableErrCh := make(chan error, 1)
+	preErrCh := make(chan error, 1)
+
+	go func() {
+		r, err := fetchRelease("https://api.github.com/repos/kazeyukiro/3m-ui/releases/latest")
+		if err != nil {
+			stableErrCh <- err
+			return
+		}
+		stableCh <- r
+	}()
+	go func() {
+		r, err := fetchRelease("https://api.github.com/repos/kazeyukiro/3m-ui/releases/tags/pre")
+		if err != nil {
+			preErrCh <- err
+			return
+		}
+		preCh <- r
+	}()
+
+	var stable, pre *releaseInfo
+	var stableErr, preErr error
+	for i := 0; i < 2; i++ {
+		select {
+		case r := <-stableCh:
+			stable = r
+		case e := <-stableErrCh:
+			stableErr = e
+		case r := <-preCh:
+			pre = r
+		case e := <-preErrCh:
+			preErr = e
+		case <-ctx.Done():
+			stableErr = fmt.Errorf("timeout")
+			preErr = fmt.Errorf("timeout")
+			break
+		}
+	}
+
+	// Determine the "target" channel — the one the user is NOT currently on.
+	// latest_version + update_available reflect the target channel so the
+	// UI can show "switch to pre" or "switch to stable" appropriately.
+	targetChannel := "pre"
+	if currentChannel == "pre" {
+		targetChannel = "stable"
+	}
+
+	var latestTag, latestNotes, latestURL string
+	if targetChannel == "stable" && stable != nil {
+		latestTag = stable.TagName
+		latestNotes = stable.Body
+		latestURL = stable.HTMLURL
+	} else if targetChannel == "pre" && pre != nil {
+		latestTag = pre.TagName
+		latestNotes = pre.Body
+		latestURL = pre.HTMLURL
+	}
+
 	updateAvailable := false
-	if current != "dev" && latest != "" {
-		// Normalize: both should be like "v1.3.0"
+	if current != "dev" && latestTag != "" {
 		cur := strings.TrimPrefix(current, "v")
-		lat := strings.TrimPrefix(latest, "v")
+		lat := strings.TrimPrefix(latestTag, "v")
 		updateAvailable = cur != lat
+	}
+
+	// Also include the other channel's version for display.
+	var stableTag, preTag string
+	if stable != nil {
+		stableTag = stable.TagName
+	}
+	if pre != nil {
+		preTag = pre.TagName
+	}
+
+	errMsg := ""
+	if stableErr != nil && preErr != nil {
+		errMsg = "cannot reach GitHub API (both stable and pre queries failed)"
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"current_version":  current,
-		"latest_version":   latest,
+		"current_channel":  currentChannel,
+		"target_channel":   targetChannel,
+		"latest_version":   latestTag,
+		"latest_stable":    stableTag,
+		"latest_pre":       preTag,
 		"update_available": updateAvailable,
-		"release_url":      release.HTMLURL,
-		"release_notes":    release.Body,
+		"release_url":      latestURL,
+		"release_notes":    latestNotes,
+		"error":            errMsg,
 	})
 }
 
-// RunUpdate triggers the update.sh script in the background. The handler
-// responds immediately (the update takes 30-60s and would block the HTTP
-// connection otherwise). The panel will be restarted by the update process
-// itself — the frontend should poll /api/v1/health after ~60s.
 func (h *Handler) RunUpdate(c *gin.Context) {
-	// Find the update.sh script. It lives alongside the binary in
-	// /usr/local/lib/3m-ui/update.sh (installed by install.sh).
+	var body struct {
+		Channel string `json:"channel"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	channel := strings.TrimSpace(body.Channel)
+	if channel != "stable" && channel != "pre" {
+		channel = ""
+	}
+
 	binPath, _ := os.Executable()
 	baseDir := filepath.Dir(binPath)
 	updateScript := filepath.Join(baseDir, "update.sh")
@@ -202,16 +297,21 @@ func (h *Handler) RunUpdate(c *gin.Context) {
 		return
 	}
 
-	// Run the update script in the background. It will:
-	// 1. Download the latest release
-	// 2. Stop the panel
-	// 3. Replace binaries + scripts
-	// 4. Start the panel (systemd Restart=always)
-	// The panel process itself doesn't need to exit — update.sh handles that.
-	cmd := exec.Command(updateScript)
-	cmd.Stdout = nil // discard output (logged by systemd)
+	// Build the command. update.sh accepts a positional argument for the
+	// version tag. "pre" selects the pre channel; no arg = latest stable.
+	args := []string{}
+	env := append(os.Environ(), "THREE_M_UI_UPDATE_SILENT=1")
+	if channel == "pre" {
+		args = append(args, "pre")
+		env = append(env, "THREE_M_UI_CHANNEL=pre")
+	} else if channel == "stable" {
+		env = append(env, "THREE_M_UI_CHANNEL=stable")
+	}
+
+	cmd := exec.Command(updateScript, args...)
+	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.Env = append(os.Environ(), "THREE_M_UI_UPDATE_SILENT=1")
+	cmd.Env = env
 	if err := cmd.Start(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to start update: " + err.Error(),
@@ -219,10 +319,17 @@ func (h *Handler) RunUpdate(c *gin.Context) {
 		return
 	}
 
-	// Don't wait — the script will kill this process as part of the update.
+	msg := "Update started. The panel will restart automatically when the update completes. This page will auto-reload."
+	if channel == "pre" {
+		msg = "Switching to pre-release channel. The panel will download the latest pre build and restart."
+	} else if channel == "stable" {
+		msg = "Switching to stable channel. The panel will download the latest stable release and restart."
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
-		"message": "Update started. The panel will restart automatically when the update completes. This page will auto-reload.",
+		"channel": channel,
+		"message": msg,
 	})
 }
 

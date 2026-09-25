@@ -1501,7 +1501,7 @@ function SystemOpsCard() {
       onOk: async () => {
         setUpdateLoading(true);
         try {
-          await runUpdate();
+          await runUpdate(updateInfo?.target_channel === 'pre' ? 'pre' : 'stable');
           message.success(t('settings.updating') || 'Update started. Panel will restart automatically.');
           // Poll health and reload after update (longer timeout — update takes ~60s)
           const startedAt = Date.now();
@@ -1566,35 +1566,100 @@ function SystemOpsCard() {
           </Text>
 
           {updateInfo && (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Space size={4}>
-                <Text type="secondary">{t('settings.currentVersion') || 'Current'}:</Text>
-                <Tag color={updateInfo.current_version === 'dev' ? 'orange' : 'blue'}>
-                  {updateInfo.current_version}
-                </Tag>
-              </Space>
-              <Space size={4}>
-                <Text type="secondary">{t('settings.latestVersion') || 'Latest'}:</Text>
-                {updateInfo.latest_version ? (
-                  <Tag color={updateInfo.update_available ? 'green' : 'default'}>
-                    {updateInfo.latest_version}
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Space size={4}>
+                  <Text type="secondary">{t('settings.currentVersion') || 'Current'}:</Text>
+                  <Tag color={updateInfo.current_version === 'dev' ? 'orange' : 'blue'}>
+                    {updateInfo.current_version}
                   </Tag>
-                ) : (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {updateInfo.error || t('settings.unknown') || 'unknown'}
+                  {updateInfo.current_channel && (
+                    <Tag color={updateInfo.current_channel === 'pre' ? 'purple' : 'cyan'} style={{ marginLeft: 4 }}>
+                      {updateInfo.current_channel === 'pre' ? (t('settings.preRelease') || 'Pre-release') : (t('settings.stable') || 'Stable')}
+                    </Tag>
+                  )}
+                </Space>
+              </div>
+
+              {/* Channel switcher */}
+              {updateInfo.latest_stable || updateInfo.latest_pre ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {t('settings.channelSwitch') || 'Channel'}:
                   </Text>
-                )}
-              </Space>
-              {updateInfo.update_available ? (
-                <Tag color="success" style={{ marginLeft: 'auto' }}>
-                  {t('settings.updateAvailable') || 'Update available'}
-                </Tag>
-              ) : updateInfo.latest_version ? (
-                <Tag color="default" style={{ marginLeft: 'auto' }}>
-                  {t('settings.upToDate') || 'Up to date'}
-                </Tag>
+                  <Segmented
+                    value={updateInfo.target_channel || 'pre'}
+                    onChange={(v) => {
+                      setUpdateInfo({ ...updateInfo, target_channel: v as string });
+                      // Recompute latest_version + update_available for new target
+                      const newLatest = v === 'stable' ? updateInfo.latest_stable : updateInfo.latest_pre;
+                      const cur = updateInfo.current_version?.replace(/^v/, '') || '';
+                      const lat = newLatest?.replace(/^v/, '') || '';
+                      setUpdateInfo({
+                        ...updateInfo,
+                        target_channel: v as string,
+                        latest_version: newLatest || '',
+                        update_available: cur !== lat && cur !== 'dev' && lat !== '',
+                      });
+                    }}
+                    options={[
+                      {
+                        label: (
+                          <span>
+                            {t('settings.stable') || 'Stable'}
+                            {updateInfo.latest_stable ? (
+                              <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+                                {updateInfo.latest_stable}
+                              </Text>
+                            ) : null}
+                          </span>
+                        ),
+                        value: 'stable',
+                      },
+                      {
+                        label: (
+                          <span>
+                            {t('settings.preRelease') || 'Pre-release'}
+                            {updateInfo.latest_pre ? (
+                              <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+                                {updateInfo.latest_pre}
+                              </Text>
+                            ) : null}
+                          </span>
+                        ),
+                        value: 'pre',
+                      },
+                    ]}
+                    size={isMobile ? 'middle' : 'small'}
+                  />
+                </div>
               ) : null}
-            </div>
+
+              {/* Target version display */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Space size={4}>
+                  <Text type="secondary">{t('settings.latestVersion') || 'Latest'}:</Text>
+                  {updateInfo.latest_version ? (
+                    <Tag color={updateInfo.update_available ? 'green' : 'default'}>
+                      {updateInfo.latest_version}
+                    </Tag>
+                  ) : (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {updateInfo.error || t('settings.unknown') || 'unknown'}
+                    </Text>
+                  )}
+                </Space>
+                {updateInfo.update_available ? (
+                  <Tag color="success" style={{ marginLeft: 'auto' }}>
+                    {t('settings.updateAvailable') || 'Update available'}
+                  </Tag>
+                ) : updateInfo.latest_version ? (
+                  <Tag color="default" style={{ marginLeft: 'auto' }}>
+                    {t('settings.upToDate') || 'Up to date'}
+                  </Tag>
+                ) : null}
+              </div>
+            </Space>
           )}
 
           {updateInfo?.release_notes && (
@@ -1622,6 +1687,9 @@ function SystemOpsCard() {
               loading={updateLoading}
               disabled={!updateInfo?.update_available}
               onClick={doUpdate}
+              title={updateInfo?.target_channel === 'pre'
+                ? (t('settings.switchToPre') || 'Switch to pre-release channel')
+                : (t('settings.switchToStable') || 'Switch to stable channel')}
               block={isMobile}
             >
               {t('settings.updateNow') || 'Update now'}
