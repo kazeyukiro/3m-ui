@@ -87,3 +87,21 @@ export const registerWarp = (mode: 'wireguard' | 'masque' | 'both' = 'wireguard'
   client.post<{ yaml?: string; masque_yaml?: string; address?: string; ipv6?: string; reserved?: number[] }>(
     `/system/templates/warp/register?mode=${mode}`,
   ).then((r) => r.data);
+
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  release_url?: string;
+  release_notes?: string;
+  error?: string;
+}
+
+export const restartPanel = () =>
+  client.post('/system/restart').then((r) => r.data);
+
+export const checkUpdate = () =>
+  client.get<UpdateInfo>('/system/update-info').then((r) => r.data);
+
+export const runUpdate = () =>
+  client.post('/system/update').then((r) => r.data);

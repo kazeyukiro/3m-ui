@@ -1,15 +1,19 @@
 package system
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kazeyukiro/3m-ui/backend/internal/buildinfo"
 )
 
 const maxRestoreDatabaseBytes = 128 << 20
@@ -42,6 +46,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/geofiles/update", h.UpdateGeoFiles)
 	rg.POST("/templates/warp", h.WARP)
 	rg.POST("/templates/warp/register", h.WARPRegister)
+	rg.POST("/restart", h.RestartPanel)
+	rg.GET("/update-info", h.UpdateInfo)
+	rg.POST("/update", h.RunUpdate)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
@@ -101,6 +108,122 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mode %q: must be wireguard, masque, or both", mode)})
 	}
+}
+
+// RestartPanel triggers a graceful panel restart. The handler responds 200
+// first, then os.Exit(0) after a short delay so systemd's Restart=always
+// brings the panel back. This is the same pattern used by RestoreDatabase.
+func (h *Handler) RestartPanel(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "Panel is restarting now. This page will auto-reload when it is back.",
+	})
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		log.Printf("[INFO] Panel restart requested via web UI. Exiting.")
+		os.Exit(0)
+	}()
+}
+
+// UpdateInfo checks GitHub for the latest release and compares it to the
+// running version. Returns current_version, latest_version, update_available.
+func (h *Handler) UpdateInfo(c *gin.Context) {
+	current := buildinfo.Version
+	if current == "" || current == "dev" {
+		current = "dev"
+	}
+
+	// Query GitHub releases API with a short timeout.
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET",
+		"https://api.github.com/repos/kazeyukiro/3m-ui/releases/latest", nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"current_version":  current,
+			"latest_version":   "",
+			"update_available": false,
+			"error":            "cannot reach GitHub API: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+	var release struct {
+		TagName string `json:"tag_name"`
+		Name    string `json:"name"`
+		HTMLURL string `json:"html_url"`
+		Body    string `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"current_version":  current,
+			"latest_version":   "",
+			"update_available": false,
+			"error":            "failed to parse GitHub response",
+		})
+		return
+	}
+
+	latest := strings.TrimSpace(release.TagName)
+	updateAvailable := false
+	if current != "dev" && latest != "" {
+		// Normalize: both should be like "v1.3.0"
+		cur := strings.TrimPrefix(current, "v")
+		lat := strings.TrimPrefix(latest, "v")
+		updateAvailable = cur != lat
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"current_version":  current,
+		"latest_version":   latest,
+		"update_available": updateAvailable,
+		"release_url":      release.HTMLURL,
+		"release_notes":    release.Body,
+	})
+}
+
+// RunUpdate triggers the update.sh script in the background. The handler
+// responds immediately (the update takes 30-60s and would block the HTTP
+// connection otherwise). The panel will be restarted by the update process
+// itself — the frontend should poll /api/v1/health after ~60s.
+func (h *Handler) RunUpdate(c *gin.Context) {
+	// Find the update.sh script. It lives alongside the binary in
+	// /usr/local/lib/3m-ui/update.sh (installed by install.sh).
+	binPath, _ := os.Executable()
+	baseDir := filepath.Dir(binPath)
+	updateScript := filepath.Join(baseDir, "update.sh")
+
+	if _, err := os.Stat(updateScript); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "update.sh not found at " + updateScript + ". Update via SSH: 3m-ui update",
+		})
+		return
+	}
+
+	// Run the update script in the background. It will:
+	// 1. Download the latest release
+	// 2. Stop the panel
+	// 3. Replace binaries + scripts
+	// 4. Start the panel (systemd Restart=always)
+	// The panel process itself doesn't need to exit — update.sh handles that.
+	cmd := exec.Command(updateScript)
+	cmd.Stdout = nil // discard output (logged by systemd)
+	cmd.Stderr = nil
+	cmd.Env = append(os.Environ(), "THREE_M_UI_UPDATE_SILENT=1")
+	if err := cmd.Start(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to start update: " + err.Error(),
+		})
+		return
+	}
+
+	// Don't wait — the script will kill this process as part of the update.
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "Update started. The panel will restart automatically when the update completes. This page will auto-reload.",
+	})
 }
 
 func (h *Handler) ExportBackup(c *gin.Context) {

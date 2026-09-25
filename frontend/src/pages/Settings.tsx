@@ -19,6 +19,7 @@ import {
   Alert,
   Layout,
   Menu,
+  Tooltip,
   theme,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -38,6 +39,7 @@ import {
   IconSettingsProxy,
   IconSettingsTraffic,
   IconSettingsAbout,
+  IconSettingsOps,
   IconCloudDown,
   IconCloudUp,
   IconTheme,
@@ -45,6 +47,8 @@ import {
   IconShield,
   IconApi,
   IconInfo,
+  IconRestart,
+  IconUpdate,
 } from '../icons';;;
 import {
   downloadBackup,
@@ -53,7 +57,11 @@ import {
   listLocalBackups,
   deleteLocalBackup,
   cleanupLocalBackups,
+  restartPanel,
+  checkUpdate,
+  runUpdate,
   type LocalBackupItem,
+  type UpdateInfo,
 } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
@@ -72,6 +80,7 @@ type SectionKey =
   | 'ssl'
   | 'network'
   | 'traffic'
+  | 'ops'
   | 'about';
 
 const Settings: React.FC = () => {
@@ -280,6 +289,11 @@ const Settings: React.FC = () => {
         label: t('settings.navTraffic') || '流量重置',
       },
       {
+        key: 'ops',
+        icon: <IconSettingsOps />,
+        label: t('settings.navOps') || '系统操作',
+      },
+      {
         key: 'about',
         icon: <IconSettingsAbout />,
         label: t('settings.navAbout') || '关于',
@@ -460,16 +474,16 @@ const Settings: React.FC = () => {
                   }
                 }}
               >
-                <Form.Item name="public_host" label={t('settings.publicHost')}>
+                <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.publicHostHint') || 'Public hostname/IP clients connect to (e.g. cdn.example.com). Defaults to bind address if empty.'}>
                   <Input placeholder="example.com" />
                 </Form.Item>
-                <Form.Item name="public_port" label={t('settings.publicPort')}>
+                <Form.Item name="public_port" label={t('settings.publicPort')} tooltip={t('settings.publicPortHint') || 'Public port clients connect to (e.g. 443 for CDN). Defaults to panel port if empty.'}>
                   <Input placeholder="443" />
                 </Form.Item>
-                <Form.Item name="sni" label={t('listeners.sni')}>
+                <Form.Item name="sni" label={t('listeners.sni')} tooltip={t('settings.accessSniHint') || 'SNI sent by client during TLS handshake. Must match the certificate. Leave empty to use public_host.'}>
                   <Input placeholder="www.example.com" />
                 </Form.Item>
-                <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')}>
+                <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} tooltip={t('settings.clientFingerprintHint') || 'uTLS fingerprint for client TLS hello. "chrome" is recommended for stealth.'}>
                   <Select
                     options={[
                       { value: 'chrome', label: 'chrome' },
@@ -533,7 +547,7 @@ const Settings: React.FC = () => {
                 <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked">
                   <Switch />
                 </Form.Item>
-                <Form.Item name="bot_token" label={t('settings.botToken')}>
+                <Form.Item name="bot_token" label={t('settings.botToken')} tooltip={t('settings.botTokenHint') || 'Get from @BotFather. Format: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz'}>
                   <Input.Password />
                 </Form.Item>
                 <Form.Item name="chat_ids" label={t('settings.chatIds')} tooltip={t('settings.chatIdsHint')}>
@@ -545,7 +559,7 @@ const Settings: React.FC = () => {
                 <Form.Item name="notify_on_cpu" label={t('settings.notifyCPU') || 'Notify on high CPU'} valuePropName="checked">
                   <Switch />
                 </Form.Item>
-                <Form.Item name="cpu_warn_pct" label={t('settings.cpuWarnPct') || 'CPU warn %'} initialValue={0}>
+                <Form.Item name="cpu_warn_pct" label={t('settings.cpuWarnPct') || 'CPU warn %'} tooltip={t('settings.cpuWarnPctHint') || '0 = disabled. Alert when panel CPU usage exceeds this percentage.'} initialValue={0}>
                   <InputNumber min={0} max={100} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked">
@@ -563,10 +577,10 @@ const Settings: React.FC = () => {
                 <Form.Item name="notify_on_traffic" label={t('settings.notifyTraffic') || 'Traffic threshold warning'} valuePropName="checked">
                   <Switch />
                 </Form.Item>
-                <Form.Item name="traffic_warn_pct" label={t('settings.trafficWarnPct') || 'Traffic warn %'}>
+                <Form.Item name="traffic_warn_pct" label={t('settings.trafficWarnPct') || 'Traffic warn %'} tooltip={t('settings.trafficWarnPctHint') || '0 = disabled. Alert when user traffic exceeds this percentage of their quota.'}>
                   <InputNumber min={1} max={100} style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item name="expiry_warn_hours" label={t('settings.expiryWarnHours') || 'Expiry warn (hours)'}>
+                <Form.Item name="expiry_warn_hours" label={t('settings.expiryWarnHours') || 'Expiry warn (hours)'} tooltip={t('settings.expiryWarnHoursHint') || 'Hours before user expiry to send a warning notification.'}>
                   <InputNumber min={1} max={720} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name="enabled_events" label={t('settings.tgEvents') || 'Enabled events'}>
@@ -611,10 +625,10 @@ const Settings: React.FC = () => {
                 <Form.Item name="schedule" label={t('settings.tgSchedule') || 'Report schedule'} tooltip={t('settings.tgScheduleHint')}>
                   <Input placeholder="0 9 * * * / @daily" />
                 </Form.Item>
-                <Form.Item name="proxy_url" label={t('settings.tgProxy') || 'Proxy URL'}>
+                <Form.Item name="proxy_url" label={t('settings.tgProxy') || 'Proxy URL'} tooltip={t('settings.tgProxyHint') || 'SOCKS5/HTTP proxy for Telegram API if GitHub/Telegram is blocked. e.g. socks5://127.0.0.1:1080'}>
                   <Input placeholder="socks5://127.0.0.1:1080" />
                 </Form.Item>
-                <Form.Item name="api_server" label={t('settings.tgApiServer') || 'Telegram API server'}>
+                <Form.Item name="api_server" label={t('settings.tgApiServer') || 'Telegram API server'} tooltip={t('settings.tgApiServerHint') || 'Custom Telegram API server (for Bot API instances). Leave empty for default api.telegram.org'}>
                   <Input placeholder="https://api.telegram.org" />
                 </Form.Item>
                 <Form.Item name="attach_backup" label={t('settings.tgAttachBackup') || 'Attach DB backup in report'} valuePropName="checked">
@@ -1066,10 +1080,10 @@ const Settings: React.FC = () => {
                 >
                   <Input placeholder="/var/lib/3m-ui/sub-theme" />
                 </Form.Item>
-                <Form.Item name="title" label={t('settings.subTitle') || 'Page title'}>
+                <Form.Item name="title" label={t('settings.subTitle') || 'Page title'} tooltip={t('settings.subTitleHint') || 'Title shown on the user subscription info page.'}>
                   <Input />
                 </Form.Item>
-                <Form.Item name="support_url" label={t('settings.subSupportUrl') || 'Support URL'}>
+                <Form.Item name="support_url" label={t('settings.subSupportUrl') || 'Support URL'} tooltip={t('settings.subSupportUrlHint') || 'Optional link shown on the subscription page (e.g. Telegram support link).'}>
                   <Input />
                 </Form.Item>
                 <Form.Item name="announce" label={t('settings.subAnnounce') || 'Announce'}>
@@ -1392,6 +1406,10 @@ const Settings: React.FC = () => {
             </Card>
           )}
 
+          {section === 'ops' && (
+            <SystemOpsCard />
+          )}
+
           {section === 'about' && (
             <Card title={<><IconInfo /> {t('settings.about')}</>}>
               <AboutPanelVersion subtitle={t('app.title')} />
@@ -1403,6 +1421,228 @@ const Settings: React.FC = () => {
   );
 };
 
+
+function SystemOpsCard() {
+  const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const [restartLoading, setRestartLoading] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  const doCheckUpdate = async () => {
+    setChecking(true);
+    try {
+      const info = await checkUpdate();
+      setUpdateInfo(info);
+    } catch (e: any) {
+      message.error(e?.message || t('common.error'));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    doCheckUpdate();
+  }, []);
+
+  const doRestart = () => {
+    Modal.confirm({
+      title: t('settings.restartConfirmTitle') || 'Restart panel?',
+      content: t('settings.restartConfirmHint') || 'The panel will exit and systemd will restart it. You will be briefly disconnected.',
+      okText: t('settings.restartNow') || 'Restart now',
+      okType: 'danger',
+      cancelText: t('common.cancel') || 'Cancel',
+      onOk: async () => {
+        setRestartLoading(true);
+        try {
+          await restartPanel();
+          message.success(t('settings.restarting') || 'Restarting…');
+          // Poll health and reload
+          const startedAt = Date.now();
+          const poll = window.setInterval(() => {
+            fetch('/api/v1/health', { cache: 'no-store' })
+              .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+              .then(() => {
+                window.clearInterval(poll);
+                window.location.reload();
+              })
+              .catch(() => {
+                if (Date.now() - startedAt > 30000) {
+                  window.clearInterval(poll);
+                  message.warning(t('settings.restoreTimeout') || 'Panel did not come back in 30s; please refresh manually.');
+                }
+              });
+          }, 2000);
+        } catch (e: any) {
+          message.error(e?.message || t('common.error'));
+          setRestartLoading(false);
+        }
+      },
+    });
+  };
+
+  const doUpdate = () => {
+    Modal.confirm({
+      title: t('settings.updateConfirmTitle') || 'Update panel?',
+      content: (
+        <div>
+          <p>{t('settings.updateConfirmHint') || 'This will download the latest release and restart the panel. The process takes 30-60 seconds.'}</p>
+          {updateInfo?.latest_version && (
+            <p style={{ fontSize: 12, opacity: 0.7 }}>
+              {t('settings.currentVersion') || 'Current'}: {updateInfo.current_version} → {t('settings.latestVersion') || 'Latest'}: {updateInfo.latest_version}
+            </p>
+          )}
+        </div>
+      ),
+      okText: t('settings.updateNow') || 'Update now',
+      okType: 'primary',
+      cancelText: t('common.cancel') || 'Cancel',
+      onOk: async () => {
+        setUpdateLoading(true);
+        try {
+          await runUpdate();
+          message.success(t('settings.updating') || 'Update started. Panel will restart automatically.');
+          // Poll health and reload after update (longer timeout — update takes ~60s)
+          const startedAt = Date.now();
+          const poll = window.setInterval(() => {
+            fetch('/api/v1/health', { cache: 'no-store' })
+              .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+              .then(() => {
+                window.clearInterval(poll);
+                window.location.reload();
+              })
+              .catch(() => {
+                if (Date.now() - startedAt > 120000) {
+                  window.clearInterval(poll);
+                  message.warning(t('settings.updateTimeout') || 'Update is taking longer than 2 minutes. Check SSH: 3m-ui logs');
+                }
+              });
+          }, 3000);
+        } catch (e: any) {
+          message.error(e?.message || t('common.error'));
+          setUpdateLoading(false);
+        }
+      },
+    });
+  };
+
+  const cardStyle: React.CSSProperties = {
+    marginBottom: 16,
+  };
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+      {/* Restart panel */}
+      <Card
+        title={<><IconRestart /> {t('settings.restartPanel') || 'Restart panel'}</>}
+        style={cardStyle}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Text type="secondary" style={{ display: 'block' }}>
+            {t('settings.restartPanelHint') || 'Restart the 3m-ui panel process. systemd will automatically bring it back. Use this after config changes that require a restart, or if the panel is acting up.'}
+          </Text>
+          <Button
+            type="default"
+            danger
+            icon={<IconRestart />}
+            loading={restartLoading}
+            onClick={doRestart}
+            block={isMobile}
+          >
+            {t('settings.restartNow') || 'Restart now'}
+          </Button>
+        </Space>
+      </Card>
+
+      {/* Check / run update */}
+      <Card
+        title={<><IconUpdate /> {t('settings.panelUpdate') || 'Panel update'}</>}
+        style={cardStyle}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Text type="secondary" style={{ display: 'block' }}>
+            {t('settings.updateHint') || 'Check for the latest 3m-ui release and update with one click. The panel will download the latest binary, replace itself, and restart automatically.'}
+          </Text>
+
+          {updateInfo && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Space size={4}>
+                <Text type="secondary">{t('settings.currentVersion') || 'Current'}:</Text>
+                <Tag color={updateInfo.current_version === 'dev' ? 'orange' : 'blue'}>
+                  {updateInfo.current_version}
+                </Tag>
+              </Space>
+              <Space size={4}>
+                <Text type="secondary">{t('settings.latestVersion') || 'Latest'}:</Text>
+                {updateInfo.latest_version ? (
+                  <Tag color={updateInfo.update_available ? 'green' : 'default'}>
+                    {updateInfo.latest_version}
+                  </Tag>
+                ) : (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {updateInfo.error || t('settings.unknown') || 'unknown'}
+                  </Text>
+                )}
+              </Space>
+              {updateInfo.update_available ? (
+                <Tag color="success" style={{ marginLeft: 'auto' }}>
+                  {t('settings.updateAvailable') || 'Update available'}
+                </Tag>
+              ) : updateInfo.latest_version ? (
+                <Tag color="default" style={{ marginLeft: 'auto' }}>
+                  {t('settings.upToDate') || 'Up to date'}
+                </Tag>
+              ) : null}
+            </div>
+          )}
+
+          {updateInfo?.release_notes && (
+            <details style={{ fontSize: 12, opacity: 0.8 }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--ant-color-text-secondary)' }}>
+                {t('settings.releaseNotes') || 'Release notes'}
+              </summary>
+              <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto', marginTop: 8, padding: 8, borderRadius: 6, background: 'var(--ant-color-fill-quaternary, rgba(0,0,0,0.02))' }}>
+                {updateInfo.release_notes.slice(0, 2000)}
+              </pre>
+            </details>
+          )}
+
+          <Space wrap>
+            <Button
+              icon={<IconUpdate />}
+              loading={checking}
+              onClick={doCheckUpdate}
+            >
+              {t('settings.checkUpdate') || 'Check for updates'}
+            </Button>
+            <Button
+              type="primary"
+              icon={<IconUpdate />}
+              loading={updateLoading}
+              disabled={!updateInfo?.update_available}
+              onClick={doUpdate}
+              block={isMobile}
+            >
+              {t('settings.updateNow') || 'Update now'}
+            </Button>
+          </Space>
+
+          {!updateInfo?.update_available && updateInfo?.latest_version && (
+            <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+              {t('settings.upToDateHint') || 'You are running the latest version. Check again later or update via SSH: 3m-ui update'}
+            </Text>
+          )}
+          {updateInfo?.error && (
+            <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+              {t('settings.updateCheckFailed') || 'Cannot check for updates (GitHub API unreachable). Update via SSH: 3m-ui update'}
+            </Text>
+          )}
+        </Space>
+      </Card>
+    </Space>
+  );
+}
 
 function AboutPanelVersion({ subtitle }: { subtitle: string }) {
   const [info, setInfo] = useState<{ version?: string; git_commit?: string; build_time?: string }>({});

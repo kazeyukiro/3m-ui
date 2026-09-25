@@ -275,4 +275,6 @@ export const IconSettingsSSL = wrap(BadgeCheck, 'IconSettingsSSL');
 export const IconSettingsProxy = wrap(Globe, 'IconSettingsProxy');
 export const IconSettingsTraffic = wrap(Timer, 'IconSettingsTraffic');
 export const IconSettingsAbout = wrap(Info, 'IconSettingsAbout');
+export const IconSettingsOps = wrap(Wrench, 'IconSettingsOps');
+export const IconUpdate = wrap(CloudDownload, 'IconUpdate');
 export const IconSettingsData = wrap(Database, 'IconSettingsData');
