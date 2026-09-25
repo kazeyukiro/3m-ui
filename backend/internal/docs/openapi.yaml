@@ -1080,17 +1080,25 @@ paths:
   /system/update-info:
     get:
       tags: [system]
-      summary: Check for the latest 3m-ui release on GitHub
+      summary: Check for latest stable and pre-release versions on GitHub
       description: |
-        Queries the GitHub releases API for the latest version and compares
-        it to the running `buildinfo.Version`. Returns whether an update is
-        available. If GitHub is unreachable (firewall, GFW), returns an
-        `error` field with a fallback hint.
+        Queries the GitHub releases API for BOTH the latest stable release
+        (`/releases/latest`) and the pre-release tag (`/releases/tags/pre`)
+        simultaneously. Returns the current panel version + channel, the
+        latest version for each channel, and whether an update is available
+        for the target (opposite) channel — so the UI can offer switching
+        between stable and pre-release.
+
+        Channel detection reads the `CHANNEL` file alongside the binary
+        (written by `install.sh`). Falls back to checking the version
+        string for `-rc` or `-pre` suffixes.
+
+        Pre-release URL: https://github.com/kazeyukiro/3m-ui/releases/tag/pre
       security:
         - BearerAuth: []
       responses:
         "200":
-          description: Update information
+          description: Update information (both channels)
           content:
             application/json:
               schema:
@@ -1099,18 +1107,38 @@ paths:
                   current_version:
                     type: string
                     example: v1.3.0
+                  current_channel:
+                    type: string
+                    enum: [stable, pre]
+                    example: stable
+                    description: Detected from CHANNEL file or version suffix
+                  target_channel:
+                    type: string
+                    enum: [stable, pre]
+                    example: pre
+                    description: The channel you are NOT currently on (for switch prompt)
                   latest_version:
                     type: string
-                    example: v1.4.0
+                    example: pre
+                    description: Latest version in the target channel
+                  latest_stable:
+                    type: string
+                    example: v1.3.0
+                    description: Latest stable release tag from GitHub /releases/latest
+                  latest_pre:
+                    type: string
+                    example: pre
+                    description: Latest pre-release tag from GitHub /releases/tags/pre
                   update_available:
                     type: boolean
                     example: true
+                    description: Whether the target channel has a newer version
                   release_url:
                     type: string
-                    example: https://github.com/kazeyukiro/3m-ui/releases/tag/v1.4.0
+                    example: https://github.com/kazeyukiro/3m-ui/releases/tag/pre
                   release_notes:
                     type: string
-                    description: GitHub release body (markdown)
+                    description: GitHub release body for the target channel (markdown)
                   error:
                     type: string
                     description: Present when GitHub API is unreachable
