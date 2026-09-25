@@ -121,9 +121,27 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 	// FormFile otherwise permits arbitrarily large multipart requests to be
 	// written to disk, turning an authenticated endpoint into a storage DoS.
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRestoreDatabaseBytes)
+	// gin's default MultipartMemory is 32 MiB — files larger than that spill to
+	// os.TempDir(). Bump it to match the request body cap so a 100 MiB backup
+	// stays in memory (avoiding the disk-spill failure mode where TempDir is
+	// not writable or full). 128 MiB peak RAM is acceptable for an admin-only
+	// restore endpoint that already requires authentication.
+	_ = c.Request.ParseMultipartForm(maxRestoreDatabaseBytes)
 	file, err := c.FormFile("database")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart field database is required and must be <= 128 MiB"})
+		// Surface the actual underlying error so the operator can distinguish
+		// "no file selected" / "body too large" / "multipart parse error".
+		// Pre-fix this returned a generic message that masked the real cause.
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "request body too large") {
+			errMsg = "upload exceeds 128 MiB limit"
+		} else if strings.Contains(errMsg, "missing boundary") {
+			errMsg = "invalid upload (missing multipart boundary); refresh the page and retry"
+		} else if strings.Contains(errMsg, "EOF") {
+			errMsg = "upload was empty or interrupted"
+		}
+		log.Printf("system restore-database: FormFile error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		return
 	}
 	if file.Size > maxRestoreDatabaseBytes {
