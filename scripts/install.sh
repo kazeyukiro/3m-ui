@@ -69,6 +69,35 @@ for arg in "$@"; do
   esac
 done
 
+# If this update was started as a child of 3m-ui.service (e.g. panel web UI),
+# systemd will kill the whole cgroup on "systemctl stop 3m-ui" — including us —
+# before we reach "systemctl start". Re-exec outside that cgroup first.
+escape_panel_cgroup_for_update(){
+  [ "$OPERATION" = update ] || return 0
+  [ "${THREE_M_UI_UPDATE_ESCAPED:-0}" = 1 ] && return 0
+  if [ ! -r /proc/self/cgroup ] || ! grep -qE '3m-ui\.service' /proc/self/cgroup 2>/dev/null; then
+    return 0
+  fi
+  export THREE_M_UI_UPDATE_ESCAPED=1
+  say 'Update is running inside 3m-ui.service cgroup; re-scheduling outside it so stop cannot kill the updater.'
+  if command_exists systemd-run && [ -d /run/systemd/system ]; then
+    unit="3m-ui-update-$(date +%s)-$$"
+    # --no-block: return immediately; the oneshot unit continues after panel stops.
+    if systemd-run --no-block --collect --unit="$unit"         --description="3m-ui self-update"         --setenv=THREE_M_UI_UPDATE_ESCAPED=1         --setenv=THREE_M_UI_UPDATE_SILENT="${THREE_M_UI_UPDATE_SILENT:-}"         --setenv=THREE_M_UI_CHANNEL="${THREE_M_UI_CHANNEL:-}"         --setenv=THREE_M_UI_REPO="${THREE_M_UI_REPO:-}"         --setenv=THREE_M_UI_ROOT="${THREE_M_UI_ROOT:-}"         --setenv=THREE_M_UI_DATA_DIR="${THREE_M_UI_DATA_DIR:-}"         --setenv=THREE_M_UI_VERIFY_COSIGN="${THREE_M_UI_VERIFY_COSIGN:-}"         --setenv=PATH="$PATH"         "$0" "$@"; then
+      say "Scheduled systemd unit: $unit"
+      exit 0
+    fi
+    say 'systemd-run failed; falling back to setsid.' >&2
+  fi
+  if command_exists setsid; then
+    # setsid alone does not leave the systemd cgroup, but helps non-systemd hosts.
+    setsid -f env THREE_M_UI_UPDATE_ESCAPED=1 "$0" "$@" >/dev/null 2>&1 ||       setsid env THREE_M_UI_UPDATE_ESCAPED=1 "$0" "$@" >/dev/null 2>&1 &
+    exit 0
+  fi
+  say 'Warning: could not escape service cgroup; update may be killed when the panel stops.' >&2
+}
+escape_panel_cgroup_for_update "$@"
+
 init_system(){
   if [ -d "$ROOT/run/systemd/system" ] && command_exists systemctl; then echo systemd
   elif command_exists rc-service; then echo openrc

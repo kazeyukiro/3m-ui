@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -276,6 +277,52 @@ func (h *Handler) UpdateInfo(c *gin.Context) {
 	})
 }
 
+// startDetachedUpdate launches update.sh outside the panel service cgroup so
+// "systemctl stop 3m-ui" does not kill the updater before it can start again.
+func startDetachedUpdate(updateScript string, args []string, env []string) error {
+	if _, err := exec.LookPath("systemd-run"); err == nil {
+		unit := fmt.Sprintf("3m-ui-update-%d", time.Now().UnixNano())
+		sr := []string{
+			"--no-block",
+			"--collect",
+			"--unit=" + unit,
+			"--description=3m-ui panel self-update",
+		}
+		for _, e := range env {
+			if e == "" {
+				continue
+			}
+			// Only pass through relevant vars (avoid huge Environ() blow-up of secrets if any).
+			if strings.HasPrefix(e, "THREE_M_UI_") || strings.HasPrefix(e, "PATH=") ||
+				strings.HasPrefix(e, "HOME=") || strings.HasPrefix(e, "LANG=") {
+				sr = append(sr, "--setenv="+e)
+			}
+		}
+		sr = append(sr, updateScript)
+		sr = append(sr, args...)
+		out, err := exec.Command("systemd-run", sr...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("systemd-run: %w (%s)", err, strings.TrimSpace(string(out)))
+		}
+		log.Printf("system update: scheduled via systemd-run unit %s", unit)
+		return nil
+	}
+
+	cmd := exec.Command(updateScript, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Env = env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	// Detach so the panel process exiting does not wait on / reap in a way that
+	// confuses the child on non-systemd hosts.
+	_ = cmd.Process.Release()
+	log.Printf("system update: started via setsid (no systemd-run)")
+	return nil
+}
+
 func (h *Handler) RunUpdate(c *gin.Context) {
 	var body struct {
 		Channel string `json:"channel"`
@@ -308,18 +355,18 @@ func (h *Handler) RunUpdate(c *gin.Context) {
 		env = append(env, "THREE_M_UI_CHANNEL=stable")
 	}
 
-	cmd := exec.Command(updateScript, args...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Env = env
-	if err := cmd.Start(); err != nil {
+	// Must not remain in the 3m-ui.service cgroup: install.sh stops the service,
+	// and systemd would kill this updater mid-flight. Prefer a transient systemd
+	// unit; fall back to setsid + process release.
+	env = append(env, "THREE_M_UI_UPDATE_ESCAPED=1")
+	if err := startDetachedUpdate(updateScript, args, env); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to start update: " + err.Error(),
 		})
 		return
 	}
 
-	msg := "Update started. The panel will restart automatically when the update completes. This page will auto-reload."
+	msg := "Update started outside the panel process. The service will stop, upgrade, then start again automatically. This page will auto-reload."
 	if channel == "pre" {
 		msg = "Switching to pre-release channel. The panel will download the latest pre build and restart."
 	} else if channel == "stable" {
