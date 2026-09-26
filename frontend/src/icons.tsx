@@ -1,13 +1,12 @@
 /**
  * Panel icons — Lucide under the hood.
  * Prefer semantic exports (IconNav*, IconAction*) so the same glyph is not reused
- * across unrelated UI slots. Legacy *Outlined names remain for gradual migration.
+ * across unrelated UI slots. Unused action/legacy aliases are omitted; add new Icon* only when a page needs them.
  */
 import React from 'react';
 import type { LucideProps } from 'lucide-react';
 import {
   LayoutDashboard,
-  Database,
   Fingerprint,
   ShieldCheck,
   BookOpen,
@@ -50,7 +49,6 @@ import {
   ArrowLeft,
   ChevronUp,
   ChevronDown,
-  Undo2,
   HeartPulse,
   Monitor,
   HardDrive,
@@ -68,8 +66,6 @@ import {
   CloudUpload,
   PackagePlus,
   Cable,
-  Bell,
-  Timer,
   Gauge,
   PanelLeftClose,
   PanelLeftOpen,
@@ -89,7 +85,6 @@ import {
   Lock,
   Globe,
   Palette,
-  Crosshair,
   KeyRound,
   ListRestart,
   Ban,
@@ -197,7 +192,6 @@ export const IconTheme = wrap(Palette, 'IconTheme');
 export const IconMenuOpen = wrap(PanelLeftOpen, 'IconMenuOpen');
 export const IconMenuClose = wrap(PanelLeftClose, 'IconMenuClose');
 export const IconBack = wrap(ArrowLeft, 'IconBack');
-export const IconUndo = wrap(Undo2, 'IconUndo');
 export const IconPower = wrap(Power, 'IconPower');
 export const IconHistory = wrap(History, 'IconHistory');
 export const IconBranch = wrap(GitBranch, 'IconBranch');
@@ -206,73 +200,9 @@ export const IconInfo = wrap(Info, 'IconInfo');
 export const IconCloudDown = wrap(CloudDownload, 'IconCloudDown');
 export const IconCloudUp = wrap(CloudUpload, 'IconCloudUp');
 export const IconApi = wrap(Cable, 'IconApi');
-export const IconBell = wrap(Bell, 'IconBell');
-export const IconTimer = wrap(Timer, 'IconTimer');
 export const IconFile = wrap(LucideFileText, 'IconFile');
 export const IconChart = wrap(LineChart, 'IconChart');
 export const IconGrid = wrap(LayoutGrid, 'IconGrid');
-export const IconTarget = wrap(Crosshair, 'IconTarget');
-
-/* —— Legacy *Outlined aliases (diversified glyphs, not one shared Plus/Reload) —— */
-export const DashboardOutlined = IconNavDashboard;
-export const DeploymentUnitOutlined = IconNavListeners;
-export const TeamOutlined = IconNavUsers;
-export const ShareAltOutlined = IconNavShare;
-export const FundProjectionScreenOutlined = IconNavTraffic;
-export const CloudServerOutlined = IconNavCluster;
-export const ForkOutlined = IconNavRouting;
-export const RocketOutlined = IconNavCore;
-export const ProfileOutlined = IconNavLogs;
-export const ControlOutlined = IconNavConfig;
-export const ToolOutlined = IconNavSettings;
-export const LogoutOutlined = IconNavLogout;
-export const SettingOutlined = IconNavSettings;
-export const AppstoreOutlined = IconGrid;
-export const ClusterOutlined = IconNavCluster;
-export const PlusOutlined = IconAddGeneric;
-export const MinusCircleOutlined = IconRemoveField;
-export const DeleteOutlined = IconDelete;
-export const EditOutlined = IconEdit;
-export const ReloadOutlined = IconRefreshList;
-export const RedoOutlined = IconRestart;
-export const CopyOutlined = IconCopy;
-export const LinkOutlined = IconLink;
-export const QrcodeOutlined = IconQr;
-export const SaveOutlined = IconSave;
-export const CheckOutlined = IconCheck;
-export const PlayCircleOutlined = IconPlay;
-export const StopOutlined = IconStop;
-export const DownloadOutlined = IconDownload;
-export const SendOutlined = IconSend;
-export const MoreOutlined = IconMore;
-export const ClearOutlined = IconClear;
-export const SafetyOutlined = IconShield;
-export const SafetyCertificateOutlined = IconCert;
-export const UserOutlined = IconUser;
-export const LockOutlined = IconLock;
-export const GlobalOutlined = IconGlobe;
-export const BgColorsOutlined = IconTheme;
-export const MenuFoldOutlined = IconMenuClose;
-export const MenuUnfoldOutlined = IconMenuOpen;
-export const ArrowLeftOutlined = IconBack;
-export const RollbackOutlined = IconUndo;
-export const PoweroffOutlined = IconPower;
-export const HistoryOutlined = IconHistory;
-export const BranchesOutlined = IconBranch;
-export const DiffOutlined = IconDiff;
-export const InfoCircleOutlined = IconInfo;
-export const CloudDownloadOutlined = IconCloudDown;
-export const CloudUploadOutlined = IconCloudUp;
-export const ApiOutlined = IconApi;
-export const BellOutlined = IconBell;
-export const FieldTimeOutlined = IconTimer;
-export const FileTextOutlined = IconFile;
-export const FundOutlined = IconChart;
-export const MedicineBoxOutlined = IconHealth;
-export const CloudSyncOutlined = IconSync;
-export const DesktopOutlined = IconDesktop;
-export const HddOutlined = IconDisk;
-export const LoginOutlined = IconLogin;
 
 
 /* —— Routing page —— unique vs generic add/play/check —— */
@@ -294,4 +224,3 @@ export const IconSettingsTraffic = wrap(Gauge, 'IconSettingsTraffic');
 export const IconSettingsAbout = wrap(CircleHelp, 'IconSettingsAbout');
 export const IconSettingsOps = wrap(Wrench, 'IconSettingsOps');
 export const IconUpdate = wrap(PackagePlus, 'IconUpdate');
-export const IconSettingsData = wrap(Database, 'IconSettingsData');
