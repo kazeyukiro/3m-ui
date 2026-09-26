@@ -47,6 +47,7 @@ import {
   Wrench,
   FolderKanban,
   ArrowLeft,
+  Undo2,
   ChevronUp,
   ChevronDown,
   HeartPulse,
@@ -192,6 +193,7 @@ export const IconTheme = wrap(Palette, 'IconTheme');
 export const IconMenuOpen = wrap(PanelLeftOpen, 'IconMenuOpen');
 export const IconMenuClose = wrap(PanelLeftClose, 'IconMenuClose');
 export const IconBack = wrap(ArrowLeft, 'IconBack');
+export const IconUndo = wrap(Undo2, 'IconUndo');
 export const IconPower = wrap(Power, 'IconPower');
 export const IconHistory = wrap(History, 'IconHistory');
 export const IconBranch = wrap(GitBranch, 'IconBranch');

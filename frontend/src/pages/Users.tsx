@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
   InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin, Typography,
 } from 'antd';
-import { IconAddUser, IconDelete, IconEdit, IconLink, ClearOutlined, IconExternal, CopyOutlined, IconMore, IconChart, IconQuickCreate } from '../icons';
+import { IconAddUser, IconDelete, IconEdit, IconLink, IconClear, IconExternal, IconCopy, IconMore, IconChart, IconQuickCreate } from '../icons';
 import dayjs from 'dayjs';
 import {
   fetchUsers, createUser, quickCreateUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
@@ -389,7 +389,7 @@ const Users: React.FC = () => {
           </Tooltip>
           <Tooltip title={t('users.resetTraffic')}>
             <Popconfirm title={t('users.resetTrafficConfirm')} onConfirm={() => onResetTraffic(record.id)}>
-              <Button size="small" icon={<ClearOutlined />} />
+              <Button size="small" icon={<IconClear />} />
             </Popconfirm>
           </Tooltip>
           <Button size="small" icon={<IconChart />} onClick={() => openNodeTraffic(record)} title={t('users.nodeTraffic', 'Node traffic')} aria-label={t('users.nodeTraffic', 'Node traffic')} />
@@ -704,7 +704,7 @@ const Users: React.FC = () => {
                             },
                             {
                               key: 'reset',
-                              icon: <ClearOutlined />,
+                              icon: <IconClear />,
                               label: t('users.resetTraffic') || 'Reset traffic',
                               onClick: () => onResetTraffic(record.id),
                             },
@@ -949,7 +949,7 @@ const Users: React.FC = () => {
                 readOnly
                 value={credInfo.username}
                 addonAfter={
-                  <CopyOutlined
+                  <IconCopy
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(credInfo.username);
@@ -968,7 +968,7 @@ const Users: React.FC = () => {
                 readOnly
                 value={credInfo.password}
                 addonAfter={
-                  <CopyOutlined
+                  <IconCopy
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(credInfo.password);
@@ -987,7 +987,7 @@ const Users: React.FC = () => {
                 readOnly
                 value={credInfo.uuid}
                 addonAfter={
-                  <CopyOutlined
+                  <IconCopy
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(credInfo.uuid);
