@@ -11,6 +11,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/bootstrap"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database"
+	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 )
 
 // main accepts both the installer-provided THREE_M_UI_CONFIG environment
@@ -45,6 +46,14 @@ func main() {
 	}
 	if configPath == "" {
 		configPath = config.ConfigPath()
+	}
+	// Bound this process' heap before any real work. Small NAT/VPS boxes have
+	// 128-512MB, no swap and often a tmpfs /tmp, so an unbounded heap takes the
+	// whole box down rather than just the panel. This acts in-process only: the
+	// Mihomo core inherits nothing, because its working set is nothing like the
+	// panel's. An explicit GOMEMLIMIT/GOGC is always respected.
+	if budget := system.ApplyRuntimeMemoryLimit(); budget.Applied {
+		log.Printf("Small-memory mode: Go heap soft limit %d bytes, GOGC %d", budget.Heap, budget.GC)
 	}
 	if cmd == "init" {
 		initialized, err := bootstrap.Initialize(configPath)

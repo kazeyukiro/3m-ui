@@ -60,6 +60,13 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 			merged[k] = v
 		}
 	}
+	// Config fragments are operator-authored YAML and can carry
+	// geodata-loader: standard. On a small box that single line undoes the
+	// low-memory tuning, so pin it after the merge. This is the only key we
+	// ever override post-merge, and only when low-memory mode is active.
+	if CoreLowMemory() {
+		merged["geodata-loader"] = geodataLoaderMemConservative
+	}
 	// Inbound panel: always DIRECT exit (no server-side split).
 	merged["rules"] = []interface{}{"MATCH,DIRECT"}
 	merged["proxy-groups"] = []interface{}{}
