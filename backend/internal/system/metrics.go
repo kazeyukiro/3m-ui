@@ -3,6 +3,8 @@ package system
 import (
 	"math"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,6 +100,118 @@ func sampleDisk() DiskInfo {
 	}
 }
 
+// cgroup memory accounting paths (v2 first, v1 fallback).
+const (
+	cgroupV2Usage = "/sys/fs/cgroup/memory.current"
+	cgroupV2Max   = "/sys/fs/cgroup/memory.max"
+	cgroupV1Usage = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
+	cgroupV1Max   = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+)
+
+// readUintFile reads a single unsigned integer from path. Returns false when
+// the file is missing, unreadable, holds "max" (cgroup v2 unlimited), or does
+// not parse as a number.
+func readUintFile(path string) (uint64, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	s := strings.TrimSpace(string(data))
+	if s == "" || strings.EqualFold(s, "max") {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// readCgroupMemory returns (used, total) from the process's own cgroup. Both
+// are 0 when cgroup accounting is unavailable (bare metal, or cgroups not
+// mounted), in which case the caller falls back to /proc/meminfo.
+//
+// v1 reports an absurdly large limit when unset (PAGE_COUNTER_MAX), so a limit
+// larger than the host's total RAM is treated as "no limit".
+func readCgroupMemory() (used, total float64) {
+	if u, ok := readUintFile(cgroupV2Usage); ok {
+		used = float64(u)
+	}
+	if m, ok := readUintFile(cgroupV2Max); ok && m > 0 {
+		total = float64(m)
+	}
+	if used == 0 || total == 0 {
+		if u, ok := readUintFile(cgroupV1Usage); ok && used == 0 {
+			used = float64(u)
+		}
+		if m, ok := readUintFile(cgroupV1Max); ok && m > 0 && total == 0 {
+			total = float64(m)
+		}
+	}
+	return used, total
+}
+
+// sampleMemory returns host memory usage.
+//
+// Inside a container or under a systemd MemoryMax, /proc/meminfo (which
+// mem.VirtualMemory reads) describes the *host*, not the cgroup the panel
+// actually lives in. That mismatch is what made the dashboard read a smaller
+// "system memory used" than the sum of the per-process RSS shown right next to
+// it. Preferring cgroup accounting keeps both cards on the same basis:
+// cgroup usage already contains every process' RSS plus page cache, so the sum
+// of the processes can never exceed it.
+//
+// Falls back to /proc/meminfo on hosts without cgroup accounting, where
+// UsedPercent (rather than a raw used/total division) matches what operators
+// see in free(1) / top(1).
+func sampleMemory() MemoryInfo {
+	cgroupUsed, cgroupTotal := readCgroupMemory()
+
+	vMem, err := mem.VirtualMemory()
+	if err != nil || vMem == nil {
+		// No /proc/meminfo at all — cgroup is the only source available.
+		if cgroupTotal > 0 && cgroupUsed > 0 {
+			return MemoryInfo{
+				Used:    cgroupUsed,
+				Total:   cgroupTotal,
+				Percent: clampPercent(cgroupUsed / cgroupTotal * 100),
+			}
+		}
+		return MemoryInfo{}
+	}
+
+	hostTotal := float64(vMem.Total)
+	// cgroup v1 reports PAGE_COUNTER_MAX (~ 2^63/2^64) or a value larger than
+	// physical RAM when no limit is set; neither is a real cap.
+	if cgroupTotal > 0 && hostTotal > 0 && cgroupTotal > hostTotal {
+		cgroupTotal = 0
+	}
+
+	if cgroupUsed > 0 && cgroupTotal > 0 {
+		return MemoryInfo{
+			Used:    cgroupUsed,
+			Total:   cgroupTotal,
+			Percent: clampPercent(cgroupUsed / cgroupTotal * 100),
+		}
+	}
+
+	// No usable cgroup accounting: report host figures.
+	used := float64(vMem.Used)
+	total := hostTotal
+	percent := vMem.UsedPercent
+	// Only substitute used/total when gopsutil handed back a nonsensical value;
+	// UsedPercent normally already discounts buffers/cache the way operators
+	// expect, so it must not be overwritten unconditionally.
+	if total > 0 && (percent <= 0 || percent > 100) {
+		percent = used / total * 100
+	}
+	return MemoryInfo{
+		Used:    used,
+		Total:   total,
+		Percent: clampPercent(percent),
+	}
+}
+
 // statsTTL bounds how often a fresh sample is taken. Measuring CPU blocks for
 // 200ms, so with the dashboard polling every second a sample-per-request would
 // spend a fifth of a core on measurement alone - and it would multiply with
@@ -134,22 +248,7 @@ func GetSystemStats() *SystemStats {
 // **bytes** so the frontend can format them uniformly with formatBytes.
 func sampleSystemStats() *SystemStats {
 	cpuPercent := sampleCPU()
-
-	var memoryInfo MemoryInfo
-	if vMem, err := mem.VirtualMemory(); err == nil && vMem != nil {
-		// Prefer explicit used/total; UsedPercent on Linux already accounts for
-		// buffers/cache the way operators usually expect.
-		percent := vMem.UsedPercent
-		if vMem.Total > 0 {
-			percent = float64(vMem.Used) / float64(vMem.Total) * 100
-		}
-		memoryInfo = MemoryInfo{
-			Used:    float64(vMem.Used),
-			Total:   float64(vMem.Total),
-			Percent: clampPercent(percent),
-		}
-	}
-
+	memoryInfo := sampleMemory()
 	diskInfo := sampleDisk()
 
 	var networkInfo NetworkInfo

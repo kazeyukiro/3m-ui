@@ -23,6 +23,17 @@ var (
 	}{}
 )
 
+// memoryTotalForPercent returns the memory total the dashboard displays for
+// system memory, so per-process percentages are expressed against the same
+// denominator. GetSystemStats is TTL-cached, so this costs nothing extra on a
+// dashboard poll that already samples system memory.
+func memoryTotalForPercent() float64 {
+	if stats := GetSystemStats(); stats != nil {
+		return stats.Memory.Total
+	}
+	return 0
+}
+
 // SampleProcessUsage returns CPU/memory for pid. CPU uses gopsutil's delta
 // sampler (first call after a gap may be ~0); recent values are cached briefly.
 func SampleProcessUsage(pid int) ProcessUsage {
@@ -37,7 +48,14 @@ func SampleProcessUsage(pid int) ProcessUsage {
 	if mi, err := p.MemoryInfo(); err == nil && mi != nil {
 		out.MemoryUsed = float64(mi.RSS)
 	}
-	if mp, err := p.MemoryPercent(); err == nil {
+	// Percentage against the same total the dashboard shows for system memory
+	// (cgroup limit inside a container, host RAM otherwise). gopsutil's
+	// MemoryPercent divides by its own total, which diverges from the system
+	// card whenever cgroup accounting is in play — the two cards then disagree
+	// about what 100% means.
+	if total := memoryTotalForPercent(); total > 0 && out.MemoryUsed > 0 {
+		out.MemoryPercent = clampPercent(out.MemoryUsed / total * 100)
+	} else if mp, err := p.MemoryPercent(); err == nil {
 		out.MemoryPercent = clampPercent(float64(mp))
 	}
 	// Non-blocking percent since last sample for this PID.
