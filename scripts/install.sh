@@ -46,6 +46,9 @@ Environment:
   THREE_M_UI_VERIFY_COSIGN=1      Require release provenance verification
   PANEL_PORT=8080                 Initial panel port (existing config is kept)
   THREE_M_UI_MIHOMO_BINARY=PATH   Explicit external core for a new installation
+  THREE_M_UI_GOMEMLIMIT=96MiB     Panel heap cap; auto-tuned below 512MB RAM
+  THREE_M_UI_GOGC=50              Panel GC target; auto-tuned below 512MB RAM
+  THREE_M_UI_CORE_LOW_MEMORY=0|1  Small-RAM core tuning (auto 1 below 512MB)
 
 A version selects that release for this operation; 'pre' selects the pre channel.
 Updates stop the service only after downloads pass checksum validation, keep a
@@ -167,12 +170,26 @@ compute_mem_tuning() {
     *) PANEL_MEMORYMAX="infinity" ;;
   esac
   # Export immediately so ALL subprocesses (download, extract, init,
-  # healthcheck, service start) inherit the limits.
+  # healthcheck, service start) inherit the limits. Note this only reaches Go
+  # processes: curl, tar and gzip ignore it, which is why the download workflow
+  # below is shaped to avoid holding anything in memory in the first place.
   if [ "$PANEL_GOMEMLIMIT" != "off" ]; then
     export GOMEMLIMIT="$PANEL_GOMEMLIMIT"
     export GOGC="$PANEL_GOGC"
   fi
-  say "Memory tuning: GOMEMLIMIT=$PANEL_GOMEMLIMIT GOGC=$PANEL_GOGC MemoryMax=$PANEL_MEMORYMAX (RAM: ${TOTAL_MB}MB)"
+  # Core-side tuning is separate from the panel's own heap: it switches the
+  # Mihomo geodata loader to the memory-conservative one, which does not lean
+  # on resident GEO data the way the standard loader does. Never exported —
+  # only written into the service unit, so it cannot leak into this script's
+  # own Go subprocesses, which want the tighter tier above.
+  if [ -n "${THREE_M_UI_CORE_LOW_MEMORY:-}" ]; then
+    PANEL_CORE_LOW_MEMORY="$THREE_M_UI_CORE_LOW_MEMORY"
+  elif [ "$TOTAL_MB" -le 512 ]; then
+    PANEL_CORE_LOW_MEMORY=1
+  else
+    PANEL_CORE_LOW_MEMORY=0
+  fi
+  say "Memory tuning: GOMEMLIMIT=$PANEL_GOMEMLIMIT GOGC=$PANEL_GOGC MemoryMax=$PANEL_MEMORYMAX core low-memory=$PANEL_CORE_LOW_MEMORY (RAM: ${TOTAL_MB}MB)"
 }
 compute_mem_tuning
 
@@ -192,6 +209,66 @@ file_sha256(){
   if command_exists sha256sum; then sha256sum "$1" | awk '{print $1}'
   elif command_exists shasum; then shasum -a 256 "$1" | awk '{print $1}'
   else openssl dgst -sha256 "$1" | awk '{print $NF}'; fi
+}
+# Same three implementations, reading the stream instead of a path so a file can
+# be hashed while it is still being written.
+file_sha256_stream(){
+  if command_exists sha256sum; then sha256sum | awk '{print $1}'
+  elif command_exists shasum; then shasum -a 256 | awk '{print $1}'
+  else openssl dgst -sha256 | awk '{print $NF}'; fi
+}
+# Scratch space for downloads, extraction and the update snapshot.
+#
+# /tmp is deliberately avoided when we can do better. On many small hosts /tmp is
+# a tmpfs, and this machine has no swap, so every byte written there is pinned in
+# RAM and cannot be reclaimed or written out. A single install would otherwise
+# hold the downloaded bundle, the extracted release *and* a copy of the data
+# directory in memory at the same time — well past the total RAM of the boxes
+# this installer targets. DATA_DIR is on real storage, so use it, and fall back
+# to mktemp only if that fails.
+create_workdir(){
+  candidate="$DATA_DIR/.tmp/3m-ui-work-$$"
+  if mkdir -p "$candidate" 2>/dev/null && [ -w "$candidate" ]; then
+    WORK="$candidate"
+    return 0
+  fi
+  WORK="$(mktemp -d)" || err 'Cannot create a working directory.'
+}
+# Size the asset advertises, in bytes; 0 when the server does not say. HEAD only —
+# no body is fetched, so this costs nothing on metered NAT links.
+remote_bytes(){
+  curl -fLsSI --retry 2 --retry-delay 1 --connect-timeout 10 --max-time 60 "$1" 2>/dev/null |
+    awk 'tolower($1)=="content-length:"{ gsub(/[^0-9]/,"",$2); if ($2 != "") v=$2 } END{ print v+0 }'
+}
+# Refuse to begin when the scratch area cannot hold what the operation needs.
+# Discovering this halfway through is much worse: the old service is already
+# stopped by then. An unreadable df reading means unknown, not zero, so we do
+# not block installs on hosts df cannot report on.
+require_scratch(){
+  need_kb="$1"
+  avail_kb="$(df -Pk "$WORK" 2>/dev/null | awk 'NR==2{print $4}')"
+  case "$avail_kb" in ''|*[!0-9]*) return 0;; esac
+  [ "$avail_kb" -ge "$need_kb" ] ||
+    err "Not enough scratch space in $WORK: need about ${need_kb}KB, only ${avail_kb}KB free. Choose a THREE_M_UI_DATA_DIR on a disk with room, or free disk space."
+}
+# Need room for: the compressed asset, everything it expands to, and the files
+# we then copy out of it. Tripling the download covers tar blowups comfortably.
+reserve_for_asset(){
+  bytes="$(remote_bytes "$1")"
+  [ "$bytes" -gt 0 ] || return 0
+  require_scratch $(( bytes * 3 / 1024 + 1024 ))
+}
+# Single-pass download: the bytes are written to disk and hashed on the way
+# through, so nothing has to re-read the file afterwards. Verification still
+# completes before anything is extracted — a corrupt or truncated download only
+# ever shows up as a checksum mismatch. Prints the computed sum.
+download_hashed(){ # url dest
+  st="$WORK/.download-status"
+  rm -f "$st"
+  sum="$({ curl -fLsS --retry 3 --retry-delay 1 --connect-timeout 10 --max-time 300 "$1" ||
+             printf '%s' "$?" > "$st"; } | tee "$2" | file_sha256_stream)"
+  if [ -s "$st" ]; then err "Download failed (curl exit $(cat "$st")): $1"; fi
+  printf '%s\n' "$sum"
 }
 source_settings(){
   [ -n "$REPO" ] || { [ ! -s "$BASE/REPOSITORY" ] || REPO="$(cat "$BASE/REPOSITORY")"; }
@@ -214,10 +291,19 @@ source_settings(){
   case "$TAG" in *[!a-zA-Z0-9._+-]*) err 'Invalid release tag.';; esac
   RELEASE_URL="https://github.com/$REPO/releases/download/$TAG"
 }
+expected_sha256(){
+  awk -v a="$1" '{ n=$2; sub(/^\*/,"",n); sub(/^\.\//,"",n); if(n==a) {print $1; exit} }' "$WORK/SHA256SUMS"
+}
 verify_asset(){
-  expected="$(awk -v a="$1" '{ n=$2; sub(/^\*/,"",n); sub(/^\.\//,"",n); if(n==a) {print $1; exit} }' "$WORK/SHA256SUMS")"
+  verify_sum "$1" "$(file_sha256 "$2")"
+}
+# Compare a sum that was already computed — used by download_hashed, which
+# hashed the stream on its way to disk and has no reason to read it again.
+verify_sum(){
+  expected="$(expected_sha256 "$1")"
   [ -n "$expected" ] || err "$1 is missing from SHA256SUMS."
-  actual="$(file_sha256 "$2")"
+  actual="$2"
+  [ -n "$actual" ] || err "$1 downloaded no verifiable content."
   [ "$actual" = "$expected" ] || err "Checksum mismatch for $1."
   say "Checksum OK: $1"
 }
@@ -244,8 +330,8 @@ prepare_release(){
     case "$cpu" in amd64|arm64) :;; *) err "Complete bundles are available for amd64/arm64; use --no-mihomo for $cpu.";; esac
     asset="3m-ui-bundle-linux-$cpu.tar.gz"
     say "Downloading $REPO $TAG ($asset)..."
-    download "$RELEASE_URL/$asset" "$WORK/bundle.tar.gz"
-    verify_asset "$asset" "$WORK/bundle.tar.gz"
+    reserve_for_asset "$RELEASE_URL/$asset"
+    verify_sum "$asset" "$(download_hashed "$RELEASE_URL/$asset" "$WORK/bundle.tar.gz")"
     # Bundles contain only these flat, regular files. Reject unexpected names/links.
     tar -tzf "$WORK/bundle.tar.gz" > "$WORK/members"
     while IFS= read -r member; do
@@ -259,8 +345,9 @@ prepare_release(){
     [ "$(cat "$WORK/release/REPOSITORY")" = "$REPO" ] || err 'Bundle repository does not match the selected release source.'
   else
     asset="3m-ui-linux-$cpu"
-    download "$RELEASE_URL/$asset" "$WORK/release/3m-ui-bin"
-    verify_asset "$asset" "$WORK/release/3m-ui-bin"
+    reserve_for_asset "$RELEASE_URL/$asset"
+    say "Downloading $REPO $TAG ($asset)..."
+    verify_sum "$asset" "$(download_hashed "$RELEASE_URL/$asset" "$WORK/release/3m-ui-bin")"
     for member in install.sh update.sh uninstall.sh 3m-ui.sh 3m-ui; do
       download "$RELEASE_URL/$member" "$WORK/release/$member"
       verify_asset "$member" "$WORK/release/$member"
@@ -300,8 +387,11 @@ create_snapshot(){
   if [ -d "$DATA_DIR" ]; then
     mkdir -p "$WORK/snapshot/data"
     # Intermediate archive propagates tar errors rather than hiding a failing pipeline.
-    tar -cf "$WORK/data.tar" --exclude='./backups' -C "$DATA_DIR" .
+    tar -cf "$WORK/data.tar" --exclude='./backups' --exclude='./.tmp' -C "$DATA_DIR" .
     tar -xf "$WORK/data.tar" -C "$WORK/snapshot/data"
+    # Nothing reads data.tar again, and keeping it would hold the data directory
+    # twice over — unaffordable on the small-RAM machines this targets.
+    rm -f "$WORK/data.tar"
   fi
   printf '%s\n' '3m-ui-snapshot-v1' > "$WORK/snapshot/FORMAT"
   printf '%s\n' "$BASE" "$CONFIG_DIR" "$DATA_DIR" "$ENTRY" "$UNIT" > "$WORK/snapshot/PATHS"
@@ -365,13 +455,64 @@ cleanup(){
   if [ "$TRANSACTION" = 0 ] && [ "$STOPPED" = 1 ] && [ "$WAS_RUNNING" = 1 ]; then
     service_action start || say 'Could not restart the previous service; inspect 3m-ui logs.' >&2
   fi
-  [ -z "$WORK" ] || rm -rf "$WORK"
+  [ -z "$WORK" ] || { rm -rf "$WORK"; rmdir "$DATA_DIR/.tmp" 2>/dev/null || true; }
   exit "$result"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' HUP TERM
 
+# Rewrites the memory directives an installed unit already carries.
+#
+# write_service() deliberately keeps whatever unit an operator has tuned, which
+# means the values baked into it at install time would never be refreshed by an
+# update. Running it again has to converge instead: drop the four directives we
+# own, re-emit them with this run's numbers, and leave every other line — and
+# therefore every other operator override — exactly where it was.
+ensure_service_limits(){
+  [ -n "$UNIT" ] && [ -f "$UNIT" ] || return 0
+  if [ "$INIT" = systemd ]; then
+    limits="Environment=GOMEMLIMIT=${PANEL_GOMEMLIMIT}
+Environment=GOGC=${PANEL_GOGC}
+Environment=THREE_M_UI_CORE_LOW_MEMORY=${PANEL_CORE_LOW_MEMORY}
+MemoryMax=${PANEL_MEMORYMAX}"
+    sed '/^Environment=GOMEMLIMIT=/d; /^Environment=GOGC=/d; /^Environment=THREE_M_UI_CORE_LOW_MEMORY=/d; /^MemoryMax=/d' \
+      "$UNIT" > "$WORK/service.stripped" || return 0
+    # Insert into [Service]; appending at the end would land in [Install] and
+    # silently apply these settings to the wrong section.
+    awk -v limits="$limits" '
+      { lines[NR]=$0 }
+      END {
+        seen=0
+        for (i=1; i<=NR; i++) {
+          print lines[i]
+          if (lines[i] ~ /^\[Service\]/) { print limits; seen=1 }
+        }
+        if (!seen) print limits
+      }' "$WORK/service.stripped" > "$WORK/service.new"
+    install -m 0644 "$WORK/service.new" "$UNIT"
+    systemctl daemon-reload
+  else
+    limits="export GOMEMLIMIT=\"${PANEL_GOMEMLIMIT}\"
+export GOGC=\"${PANEL_GOGC}\"
+export THREE_M_UI_CORE_LOW_MEMORY=\"${PANEL_CORE_LOW_MEMORY}\""
+    sed '/^export GOMEMLIMIT=/d; /^export GOGC=/d; /^export THREE_M_UI_CORE_LOW_MEMORY=/d' \
+      "$UNIT" > "$WORK/service.stripped" || return 0
+    # OpenRC runscripts evaluate top to bottom, so re-export before anything
+    # could consult them.
+    awk -v limits="$limits" '
+      { lines[NR]=$0 }
+      END {
+        seen=0
+        for (i=1; i<=NR; i++) {
+          print lines[i]
+          if (lines[i] ~ /^description=/) { print limits; seen=1 }
+        }
+        if (!seen) print limits
+      }' "$WORK/service.stripped" > "$WORK/service.new"
+    install -m 0755 "$WORK/service.new" "$UNIT"
+  fi
+}
 write_service(){
   # Keep operator overrides, capabilities and enablement on an existing install.
   # Older systemd syscall filters cannot run the current pure-Go SQLite build.
@@ -383,6 +524,9 @@ write_service(){
       fi
       systemctl daemon-reload
     fi
+    # Existing install: nothing else about the unit changes, but the memory
+    # directives still have to track this host, not the day it was installed.
+    ensure_service_limits
     return 0
   fi
   mkdir -p "$(dirname "$UNIT")"
@@ -398,6 +542,7 @@ ExecStart=$APP_BIN
 Environment=THREE_M_UI_CONFIG=$CONFIG_FILE
 Environment=GOMEMLIMIT=${PANEL_GOMEMLIMIT}
 Environment=GOGC=${PANEL_GOGC}
+Environment=THREE_M_UI_CORE_LOW_MEMORY=${PANEL_CORE_LOW_MEMORY}
 WorkingDirectory=$DATA_DIR
 Restart=always
 RestartSec=5
@@ -438,6 +583,7 @@ directory="$DATA_DIR"
 export THREE_M_UI_CONFIG="$CONFIG_FILE"
 export GOMEMLIMIT="${PANEL_GOMEMLIMIT}"
 export GOGC="${PANEL_GOGC}"
+export THREE_M_UI_CORE_LOW_MEMORY="${PANEL_CORE_LOW_MEMORY}"
 output_log="$LOG_DIR/$SERVICE_NAME.log"
 error_log="$LOG_DIR/$SERVICE_NAME.log"
 respawn_delay=5
@@ -447,6 +593,7 @@ UNITFILE
     chmod 0755 "$UNIT"
     rc-update add "$SERVICE_NAME" default >/dev/null
   fi
+  ensure_service_limits
 }
 wait_healthy(){
   attempt=0
@@ -500,7 +647,7 @@ main(){
   INIT="$(init_system)"
   [ "$INIT" != unsupported ] || err 'A systemd or OpenRC Linux host is required.'
   if [ "$INIT" = systemd ]; then UNIT="$ROOT/etc/systemd/system/$SERVICE_NAME.service"; else UNIT="$ROOT/etc/init.d/$SERVICE_NAME"; fi
-  WORK="$(mktemp -d)"
+  create_workdir
   case "$OPERATION" in
     restore) manual_restore; return;;
     backup)
