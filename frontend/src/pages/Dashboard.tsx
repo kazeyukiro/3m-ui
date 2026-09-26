@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Row, Col, Statistic, Button, Space, Tag, Progress, Typography, message, theme } from 'antd';
 import { IconPlay, IconStop, IconRestart } from '../icons';
-import { fetchDashboard, startMihomo, stopMihomo, restartMihomo } from '../api/system';
+import { fetchDashboard, startMihomo, stopMihomo, restartMihomo, isTransientNetworkError } from '../api/system';
 import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
@@ -232,6 +232,14 @@ const Dashboard: React.FC = () => {
       message.success(t(`dashboard.${a === 'start' ? 'started' : a === 'stop' ? 'stopped' : 'restarted'}`));
       load();
     } catch (e: any) {
+      if (a === 'restart' && isTransientNetworkError(e)) {
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          await load();
+          message.success(t('dashboard.restarted'));
+          return;
+        } catch { /* fall through */ }
+      }
       message.error(e.message || t('dashboard.operationFailed'));
     } finally {
       setBusy(false);

@@ -977,8 +977,9 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
             name="obfs_opts_host"
             label={t('listeners.obfsOptsHost')}
             dependencies={['obfs_opts_mode']}
+            tooltip={t('listeners.obfs_opts_hostHint')}
             rules={[
-              ({ getFieldValue }) = tooltip={t('listeners.obfs_opts_hostHint')}> ({
+              ({ getFieldValue }) => ({
                 validator(_, value) {
                   const mode = getFieldValue('obfs_opts_mode');
                   if (mode && !String(value || '').trim()) {

@@ -1,4 +1,4 @@
-import client from './client';
+import client, { withNetworkRetry, isTransientNetworkError } from './client';
 
 export interface SystemStatus {
   cpu: { percent: number };
@@ -32,7 +32,15 @@ export const fetchDashboard = (signal?: AbortSignal) =>
   client.get<DashboardResponse>('/dashboard', { signal }).then(r => r.data);
 export const startMihomo = () => client.post('/mihomo/start');
 export const stopMihomo = () => client.post('/mihomo/stop');
-export const restartMihomo = () => client.post('/mihomo/restart');
+export const restartMihomo = () =>
+  withNetworkRetry(
+    () => client.post('/mihomo/restart', null, { timeout: 120_000 }),
+    4,
+    1200,
+  );
+
+/** After core restart, transient network errors often mean the HTTP response was dropped while Mihomo restarted — panel is still up. */
+export { isTransientNetworkError };
 export interface LogResponse {
   timestamp: string;
   level: string;
