@@ -3,8 +3,8 @@ package system
 import (
 	"math"
 	"os"
-	"strconv"
-	"strings"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -12,6 +12,8 @@ import (
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 )
 
 var (
@@ -19,10 +21,10 @@ var (
 	lastRecv uint64
 	lastSent uint64
 	lastTime time.Time
-
-	cpuMu       sync.Mutex
-	cpuLast     []float64
-	cpuLastTime time.Time
+	// Last rates reported, reused when a sample lands too close to the
+	// previous one for the delta to be meaningful.
+	lastDown float64
+	lastUp   float64
 )
 
 func clampPercent(v float64) float64 {
@@ -38,117 +40,267 @@ func clampPercent(v float64) float64 {
 	return math.Round(v*10) / 10
 }
 
-// sampleCPU returns overall CPU busy percent. Caches the previous sample so
-// rapid dashboard polls (every few seconds) still produce a stable reading;
-// a zero-interval call returns the last known value.
+// cpuBaselineWindow is how long the very first CPU measurement waits for a
+// second reading. Without a baseline there is nothing to difference against,
+// so the alternative is reporting 0% until the next poll.
+const cpuBaselineWindow = 120 * time.Millisecond
+
+// cpuSnapshot is one reading of whichever CPU counter we can trust, plus the
+// instant it was taken. Both cards (host and process) are derived by
+// differencing two snapshots, which is what turns a monotonic counter into a
+// rate.
+type cpuSnapshot struct {
+	at time.Time
+	// cgroup accounting: cumulative CPU microseconds burned by the whole
+	// cgroup, summed across cores.
+	cgBusyMicros uint64
+	cg           bool
+	// Host accounting: cumulative busy/total seconds summed across all cores.
+	hostBusy float64
+	hostAll  float64
+}
+
+// takeCPUSnapshot prefers cgroup CPU accounting over the host /proc/stat.
+//
+// The difference matters inside a container: /proc/stat describes the whole
+// machine, so a container pinned to 1 of 8 cores reads at most 12.5% no matter
+// how hard it works — the panel looked idle while it was actually throttled.
+// The cgroup counter only ticks for this container, which is also why quota
+// (rather than host core count) is the right denominator for it.
+func takeCPUSnapshot() (cpuSnapshot, bool) {
+	var s cpuSnapshot
+	if micros, ok := cgroupCPUUsage(); ok {
+		s.cg = true
+		s.cgBusyMicros = micros
+		s.at = time.Now()
+		return s, true
+	}
+	// Fallback: aggregate /proc/stat line. Busy is "everything except idle and
+	// iowait", matching gopsutil's own definition so the number agrees with
+	// what top(1) shows.
+	times, err := cpu.Times(false)
+	if err != nil || len(times) == 0 {
+		return cpuSnapshot{}, false
+	}
+	t := times[0]
+	all := t.Total() - t.Guest - t.GuestNice
+	s.hostAll = all
+	s.hostBusy = all - t.Idle - t.Iowait
+	s.at = time.Now()
+	return s, true
+}
+
+// onlineCPUs returns the number of logical CPUs /proc reports.
+func onlineCPUs() (int, error) {
+	n, err := cpu.Counts(true)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// cpuCapacityTTLCached reuses the last capacity for this long. The limits only
+// change when someone re-configures the container, and this value is read on
+// every poll by both cards, so re-reading three files each time buys nothing.
+const cpuCapacityTTL = 10 * time.Second
+
+var (
+	capacityMu    sync.Mutex
+	capacityCache float64
+	capacityAt    time.Time
+)
+
+// cpuCapacity returns how many CPUs the current accounting domain has. Every
+// limit that applies narrows it: a CFS quota, a cpuset pin, and finally the
+// number of CPUs actually online. It is the denominator both the system card
+// and the process card divide by, so they can never disagree.
+func cpuCapacity() float64 {
+	capacityMu.Lock()
+	defer capacityMu.Unlock()
+	if capacityCache > 0 && time.Since(capacityAt) < cpuCapacityTTL {
+		return capacityCache
+	}
+	capacityCache = computeCPUCapacity()
+	capacityAt = time.Now()
+	return capacityCache
+}
+
+func computeCPUCapacity() float64 {
+	caps := []float64{}
+	if q, ok := cgroupCPUQuota(); ok && q > 0 {
+		caps = append(caps, q)
+	}
+	if n, ok := cgroupCPUSet(); ok && n > 0 {
+		caps = append(caps, n)
+	}
+	if n, err := onlineCPUs(); err == nil && n > 0 {
+		caps = append(caps, float64(n))
+	}
+	if len(caps) == 0 {
+		if n := runtime.NumCPU(); n > 0 {
+			return float64(n)
+		}
+		return 0
+	}
+	min := caps[0]
+	for _, c := range caps[1:] {
+		if c < min {
+			min = c
+		}
+	}
+	return min
+}
+
+// cpuPercent turns two snapshots into a busy percentage of the available CPU
+// capacity. ok is false when the pair cannot be differenced (source changed,
+// clock went backwards, zero elapsed time), in which case the caller keeps the
+// previous reading rather than reporting a bogus one.
+func cpuPercent(prev, cur cpuSnapshot, capacity float64) (float64, bool) {
+	if prev.cg != cur.cg {
+		return 0, false
+	}
+	elapsed := cur.at.Sub(prev.at).Seconds()
+	if elapsed <= 0 || capacity <= 0 {
+		return 0, false
+	}
+	if cur.cg {
+		if cur.cgBusyMicros < prev.cgBusyMicros {
+			// Counter reset / cgroup recreated: nothing to difference.
+			return 0, false
+		}
+		// Zero consumption is a real reading (nothing ran), not a failure —
+		// returning false here would pin the card at its last value forever on
+		// an idle host.
+		busySec := float64(cur.cgBusyMicros-prev.cgBusyMicros) / 1e6
+		return math.Min(100, math.Max(0, busySec/elapsed/capacity*100)), true
+	}
+	dAll := cur.hostAll - prev.hostAll
+	if dAll < 0 {
+		return 0, false
+	}
+	if dAll == 0 {
+		// Nothing ticked: genuinely idle rather than unmeasurable.
+		return 0, true
+	}
+	busy := cur.hostBusy - prev.hostBusy
+	if busy < 0 {
+		busy = 0
+	}
+	return math.Min(100, math.Max(0, busy/dAll*100)), true
+}
+
+var (
+	cpuMu      sync.Mutex
+	cpuPrev    *cpuSnapshot
+	cpuLastPct float64
+)
+
+// sampleCPU returns CPU busy percent over the interval since the previous
+// sample.
+//
+// Deliberately difference-based rather than self-blocking: the old
+// cpu.Percent(200ms) insertion, when the dashboard polls every second, only
+// described 200ms of each second and cost that wait on the request thread. Two
+// non-blocking readings describe the whole interval since the last poll, which
+// is what a refreshing dashboard actually claims to show.
 func sampleCPU() float64 {
+	capacity := cpuCapacity()
+	if capacity <= 0 {
+		return 0
+	}
+
 	cpuMu.Lock()
 	defer cpuMu.Unlock()
 
-	// Prefer a short blocking sample — reliable on Linux hosts/VPS.
-	percents, err := cpu.Percent(200*time.Millisecond, false)
-	if err == nil && len(percents) > 0 {
-		v := clampPercent(percents[0])
-		cpuLast = percents
-		cpuLastTime = time.Now()
-		return v
+	if cpuPrev == nil {
+		first, ok := takeCPUSnapshot()
+		if !ok {
+			return cpuLastPct
+		}
+		// One short wait buys a real delta, so the very first render shows a
+		// measured value instead of a misleading 0%.
+		time.Sleep(cpuBaselineWindow)
+		second, ok := takeCPUSnapshot()
+		if !ok {
+			return cpuLastPct
+		}
+		cpuPrev = &second
+		if pct, ok := cpuPercent(first, second, capacity); ok {
+			cpuLastPct = clampPercent(pct)
+		}
+		return cpuLastPct
 	}
-	// Fallback: non-blocking times-based sample after first call.
-	percents, err = cpu.Percent(0, false)
-	if err == nil && len(percents) > 0 {
-		v := clampPercent(percents[0])
-		cpuLast = percents
-		cpuLastTime = time.Now()
-		return v
+
+	cur, ok := takeCPUSnapshot()
+	if !ok {
+		return cpuLastPct
 	}
-	if len(cpuLast) > 0 && time.Since(cpuLastTime) < 30*time.Second {
-		return clampPercent(cpuLast[0])
+	prev := *cpuPrev
+	cpuPrev = &cur
+	if pct, ok := cpuPercent(prev, cur, capacity); ok {
+		cpuLastPct = clampPercent(pct)
 	}
-	return 0
+	return cpuLastPct
+}
+
+// diskAnchor returns the directory whose filesystem the disk card should
+// describe: wherever the panel's SQLite database lives. That is the volume
+// growth actually threatens — in Docker it is commonly a mounted data volume
+// while "/" is the container's overlay layer, so reporting "/" hides the
+// pressure operators care about.
+//
+// disk.Usage resolves any path to its containing filesystem via statfs, so no
+// manual mountpoint lookup is needed.
+func diskAnchor() string {
+	if cfg := config.GlobalConfig; cfg != nil && cfg.Database.Path != "" {
+		return filepath.Dir(cfg.Database.Path)
+	}
+	return ""
 }
 
 func sampleDisk() DiskInfo {
-	candidates := []string{"/"}
+	var candidates []string
 	if home := os.Getenv("HOME"); home != "" {
 		candidates = append(candidates, home)
 	}
 	// Data directory commonly used by the panel installer.
 	candidates = append(candidates, "/var/lib/3m-ui", "/usr/local/lib/3m-ui")
 
-	var best *disk.UsageStat
+	var fallback *disk.UsageStat
 	for _, path := range candidates {
 		u, err := disk.Usage(path)
 		if err != nil || u == nil || u.Total == 0 {
 			continue
 		}
-		// Prefer the root filesystem; otherwise keep the largest volume seen.
-		if path == "/" {
-			best = u
-			break
-		}
-		if best == nil || u.Total > best.Total {
-			best = u
+		if fallback == nil || u.Total > fallback.Total {
+			fallback = u
 		}
 	}
-	if best == nil {
+
+	// The anchor wins when it resolves; "/" is only the last resort, because
+	// it describes the wrong device whenever the data directory is mounted.
+	if anchor := diskAnchor(); anchor != "" {
+		if u, err := disk.Usage(anchor); err == nil && u != nil && u.Total > 0 {
+			return diskInfo(u)
+		}
+	}
+
+	if fallback != nil {
+		return diskInfo(fallback)
+	}
+	u, err := disk.Usage("/")
+	if err != nil || u == nil || u.Total == 0 {
 		return DiskInfo{}
 	}
+	return diskInfo(u)
+}
+
+func diskInfo(u *disk.UsageStat) DiskInfo {
 	return DiskInfo{
-		Used:    float64(best.Used),
-		Total:   float64(best.Total),
-		Percent: clampPercent(best.UsedPercent),
+		Used:    float64(u.Used),
+		Total:   float64(u.Total),
+		Percent: clampPercent(u.UsedPercent),
 	}
-}
-
-// cgroup memory accounting paths (v2 first, v1 fallback).
-const (
-	cgroupV2Usage = "/sys/fs/cgroup/memory.current"
-	cgroupV2Max   = "/sys/fs/cgroup/memory.max"
-	cgroupV1Usage = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
-	cgroupV1Max   = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
-)
-
-// readUintFile reads a single unsigned integer from path. Returns false when
-// the file is missing, unreadable, holds "max" (cgroup v2 unlimited), or does
-// not parse as a number.
-func readUintFile(path string) (uint64, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, false
-	}
-	s := strings.TrimSpace(string(data))
-	if s == "" || strings.EqualFold(s, "max") {
-		return 0, false
-	}
-	v, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
-}
-
-// readCgroupMemory returns (used, total) from the process's own cgroup. Both
-// are 0 when cgroup accounting is unavailable (bare metal, or cgroups not
-// mounted), in which case the caller falls back to /proc/meminfo.
-//
-// v1 reports an absurdly large limit when unset (PAGE_COUNTER_MAX), so a limit
-// larger than the host's total RAM is treated as "no limit".
-func readCgroupMemory() (used, total float64) {
-	if u, ok := readUintFile(cgroupV2Usage); ok {
-		used = float64(u)
-	}
-	if m, ok := readUintFile(cgroupV2Max); ok && m > 0 {
-		total = float64(m)
-	}
-	if used == 0 || total == 0 {
-		if u, ok := readUintFile(cgroupV1Usage); ok && used == 0 {
-			used = float64(u)
-		}
-		if m, ok := readUintFile(cgroupV1Max); ok && m > 0 && total == 0 {
-			total = float64(m)
-		}
-	}
-	return used, total
 }
 
 // sampleMemory returns host memory usage.
@@ -212,17 +364,25 @@ func sampleMemory() MemoryInfo {
 	}
 }
 
-// statsTTL bounds how often a fresh sample is taken. Measuring CPU blocks for
-// 200ms, so with the dashboard polling every second a sample-per-request would
-// spend a fifth of a core on measurement alone - and it would multiply with
-// every open tab. Requests arriving inside the window share one sample; a
-// 500ms TTL still leaves each 1s poll with its own fresh reading.
+// statsTTL bounds how often a fresh sample is taken. It also sets a floor on
+// the interval a reading describes: network throughput is a rate, and a rate
+// differenced over a few milliseconds is dominated by rounding noise. Requests
+// arriving inside the window share one sample; a 500ms TTL still leaves each
+// 1s poll with its own fresh reading.
 const statsTTL = 500 * time.Millisecond
+
+// minNetSampleInterval is the shortest delta the network rate is computed
+// over. Anything tighter produces rates wildly larger than reality.
+const minNetSampleInterval = 250 * time.Millisecond
 
 var (
 	statsMu    sync.Mutex
 	statsCache *SystemStats
 	statsAt    time.Time
+	// Sampling serialises so two concurrent request handlers cannot both
+	// difference against the same network counters — the second would measure
+	// ~0 seconds of traffic and report a huge spike.
+	sampleMu sync.Mutex
 )
 
 // GetSystemStats returns host metrics, reusing a sample taken within statsTTL.
@@ -235,12 +395,25 @@ func GetSystemStats() *SystemStats {
 	}
 	statsMu.Unlock()
 
+	sampleMu.Lock()
+	// Double-check inside the barrier: another goroutine may have sampled
+	// while we were waiting for it.
+	statsMu.Lock()
+	if statsCache != nil && time.Since(statsAt) < statsTTL {
+		cached := *statsCache
+		statsMu.Unlock()
+		sampleMu.Unlock()
+		return &cached
+	}
+	statsMu.Unlock()
+
 	stats := sampleSystemStats()
 
 	statsMu.Lock()
 	statsCache = stats
 	statsAt = time.Now()
 	statsMu.Unlock()
+	sampleMu.Unlock()
 	return stats
 }
 
@@ -258,20 +431,23 @@ func sampleSystemStats() *SystemStats {
 		currRecv := netIO[0].BytesRecv
 		currSent := netIO[0].BytesSent
 		if !lastTime.IsZero() {
-			duration := now.Sub(lastTime).Seconds()
-			if duration > 0 {
+			duration := now.Sub(lastTime)
+			if duration >= minNetSampleInterval {
+				secs := duration.Seconds()
 				// Guard against counter reset (e.g. interface re-create).
 				if currRecv >= lastRecv {
-					networkInfo.Download = float64(currRecv-lastRecv) / duration
+					lastDown = float64(currRecv-lastRecv) / secs
 				}
 				if currSent >= lastSent {
-					networkInfo.Upload = float64(currSent-lastSent) / duration
+					lastUp = float64(currSent-lastSent) / secs
 				}
 			}
 		}
 		lastRecv = currRecv
 		lastSent = currSent
 		lastTime = now
+		networkInfo.Download = lastDown
+		networkInfo.Upload = lastUp
 		netMu.Unlock()
 	}
 
