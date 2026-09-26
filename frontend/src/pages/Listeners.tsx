@@ -286,6 +286,7 @@ const columns = [
   ];
   return <div>
     <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
+    <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('listeners.formHelpBanner')} />
     {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
       description={<Space className="page-toolbar" wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
     <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<IconCert />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<IconBan />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<IconRefreshList />}>{t('common.refresh')}</Button><Button type="primary" icon={<IconQuickCreate />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<IconAddNode />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
@@ -355,15 +356,15 @@ const columns = [
     <Modal open={quickModal} title={t('listeners.quickCreate', 'Quick create')} onCancel={() => setQuickModal(false)} onOk={doQuickCreate} confirmLoading={quickSubmitting} okText={t('common.create', 'Create')} destroyOnClose width={isMobile ? '100%' : 480} style={isMobile ? { top: 12 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
       <p style={{ marginBottom: 12, opacity: 0.75, fontSize: 13 }}>{t('listeners.quickCreateHint', 'Select protocol and name only. Port, credentials and REALITY/TLS are generated automatically.')}</p>
       <Form form={quickForm} layout="vertical" requiredMark={false}>
-        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} size={isMobile ? 'large' : 'middle'} showSearch optionFilterProp="label" /></Form.Item>
-        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input size={isMobile ? 'large' : 'middle'} maxLength={64} placeholder="my-node" /></Form.Item>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]} tooltip={t('listeners.protocolHint')}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} size={isMobile ? 'large' : 'middle'} showSearch optionFilterProp="label" /></Form.Item>
+        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input size={isMobile ? 'large' : 'middle'} maxLength={64} placeholder="my-node" /></Form.Item>
       </Form>
     </Modal>
     <Modal confirmLoading={submitting} closable={!submitting} maskClosable={!submitting} keyboard={!submitting} cancelButtonProps={{ disabled: submitting }} okText={submitting ? runtimeText.saving : t('common.save')} open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.validateFields().then((vals) => onSubmit(vals))} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
       {submitError && <Alert type="error" showIcon title={runtimeText.failed} description={<><div>{submitError}</div><div>{runtimeText.failedHint}</div></>} style={{ marginBottom: 16 }} />}
       <Form disabled={submitting} form={form} layout="vertical" onFinish={onSubmit} scrollToFirstError={{ block: 'center', focus: true }} preserve>
-        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input placeholder="my-vless" /></Form.Item>
-        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp', 'traffic_multiplier']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
+        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input placeholder="my-vless" /></Form.Item>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]} tooltip={t('listeners.protocolHint')}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp', 'traffic_multiplier']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
         <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, message: t('listeners.portHint') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.reject(new Error(t('listeners.portHint'))); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portHint'))); return Promise.resolve(); } }]}><Input placeholder="443" addonAfter={!editing ? <Button type="link" size="small" onClick={regeneratePort}>{t('listeners.randomPort')}</Button> : undefined} /></Form.Item>
         <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip="IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1"><Input placeholder="0.0.0.0 or ::" /></Form.Item>
         <Form.Item name="enabled" label={runtimeText.enabledSetting} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
@@ -376,19 +377,19 @@ const columns = [
         >
           <InputNumber min={0.01} max={100} step={0.1} style={{ width: '100%' }} placeholder="1" size={isMobile ? 'large' : 'middle'} />
         </Form.Item>
-        {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false}><Switch /></Form.Item>}
+        {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false} tooltip={t('listeners.udpHint')}><Switch /></Form.Item>}
         <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
         <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>
-        <Form.Item name="public_port" label={t('settings.publicPort')}><Input placeholder="443" /></Form.Item>
-        <Form.Item name="access_sni" label={t('listeners.sni')}><Input /></Form.Item>
-        <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome"><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
-        <Form.Item name="access_alpn" label={t('listeners.alpn')}><Input placeholder="h2,http/1.1" /></Form.Item>
+        <Form.Item name="public_port" label={t('settings.publicPort')} tooltip={t('listeners.public_portHint')}><Input placeholder="443" /></Form.Item>
+        <Form.Item name="access_sni" label={t('listeners.sni')} tooltip={t('listeners.access_sniHint')}><Input /></Form.Item>
+        <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome" tooltip={t('listeners.client_fingerprintHint')}><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
+        <Form.Item name="access_alpn" label={t('listeners.alpn')} tooltip={t('listeners.access_alpnHint')}><Input placeholder="h2,http/1.1" /></Form.Item>
         {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} autoSelectReality={modalOpen && !editing} />}
       </Form>
     </Modal>
-    <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
-    <Modal open={templateModal} title={t('listeners.saveTemplate')} onCancel={() => setTemplateModal(false)} onOk={() => templateForm.submit()}><Form form={templateForm} layout="vertical" onFinish={saveTemplate}><Form.Item name="name" label={t('listeners.templateName')} rules={[{ required: true }]}><Input /></Form.Item><Descriptions column={1} size="small"><Descriptions.Item label={t('listeners.protocol')}>{templateSource?.protocol}</Descriptions.Item></Descriptions></Form></Modal>
-    <Modal open={instantiateModal} title={t('listeners.instantiate')} onCancel={() => setInstantiateModal(false)} onOk={() => instantiateForm.submit()}><Form form={instantiateForm} layout="vertical" onFinish={doInstantiate}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]}><Input placeholder="443" /></Form.Item></Form></Modal>
+    <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item></Form></Modal>
+    <Modal open={templateModal} title={t('listeners.saveTemplate')} onCancel={() => setTemplateModal(false)} onOk={() => templateForm.submit()}><Form form={templateForm} layout="vertical" onFinish={saveTemplate}><Form.Item name="name" label={t('listeners.templateName')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input /></Form.Item><Descriptions column={1} size="small"><Descriptions.Item label={t('listeners.protocol')}>{templateSource?.protocol}</Descriptions.Item></Descriptions></Form></Modal>
+    <Modal open={instantiateModal} title={t('listeners.instantiate')} onCancel={() => setInstantiateModal(false)} onOk={() => instantiateForm.submit()}><Form form={instantiateForm} layout="vertical" onFinish={doInstantiate}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item></Form></Modal>
     <Modal open={versionsModal} title={`${t('listeners.versions')} — ${versionListener?.name || ''}`} onCancel={() => setVersionsModal(false)} footer={null} width={800}><Table dataSource={versions} rowKey="id" pagination={false} size={isMobile ? "small" : "middle"} columns={[{ title: t('listeners.version'), dataIndex: 'version', width: 100 }, { title: t('listeners.reason'), dataIndex: 'reason', render: (v: string) => v || '-' }, { title: t('listeners.createdAt'), dataIndex: 'created_at', render: (v: string) => new Date(v).toLocaleString() }, { title: t('common.actions'), render: (_: any, v: ListenerVersion) => <Space><Button size="small" icon={<IconDiff />} onClick={() => showDiff(v.version)}>{t('listeners.diff')}</Button><Popconfirm title={t('listeners.rollbackConfirm')} onConfirm={() => doRollback(v.version)}><Button size="small" type="primary">{t('listeners.rollback')}</Button></Popconfirm></Space> }]} /></Modal>
     <Modal open={diffModal} title={t('listeners.diff')} onCancel={() => setDiffModal(false)} footer={null} width={900}><pre style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{diffText || t('common.empty')}</pre></Modal>
     <Modal open={uriModal} title={t('listeners.urisTitle')} onCancel={() => setUriModal(false)} footer={null} width={isMobile ? '100%' : 560} style={isMobile ? { top: 8 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
@@ -423,10 +424,10 @@ const columns = [
             'Writes certificate + private-key into each selected node config. Use panel SSL files or paths under /etc/letsencrypt.'}
         </p>
         <Form form={certForm} layout="vertical" initialValues={{ from_panel_ssl: false }}>
-          <Form.Item name="from_panel_ssl" label={t('listeners.certFromPanel') || 'Use panel SSL files'} valuePropName="checked">
+          <Form.Item name="from_panel_ssl" label={t('listeners.certFromPanel') || 'Use panel SSL files'} valuePropName="checked" tooltip={t('listeners.from_panel_sslHint')}>
             <Switch />
           </Form.Item>
-          <Form.Item name="certificate" label={t('listeners.certPem') || 'Certificate PEM'}>
+          <Form.Item name="certificate" label={t('listeners.certPem') || 'Certificate PEM'} tooltip={t('listeners.certificateHint')}>
             <Input.TextArea rows={5} placeholder="-----BEGIN CERTIFICATE-----" />
           </Form.Item>
           <Form.Item name="private_key" label={t('listeners.certKeyPem') || 'Private key PEM'}>
@@ -435,7 +436,7 @@ const columns = [
           <Form.Item name="cert_file" label={t('listeners.certFile') || 'Or cert file path'} extra="/etc/letsencrypt/live/example.com/fullchain.pem">
             <Input placeholder="/etc/letsencrypt/live/.../fullchain.pem" />
           </Form.Item>
-          <Form.Item name="key_file" label={t('listeners.keyFile') || 'Or key file path'}>
+          <Form.Item name="key_file" label={t('listeners.keyFile') || 'Or key file path'} tooltip={t('listeners.key_fileHint')}>
             <Input placeholder="/etc/letsencrypt/live/.../privkey.pem" />
           </Form.Item>
         </Form>
