@@ -21,6 +21,12 @@ var (
 	controllerSecret     string
 )
 
+// geodataLoaderMemConservative is the core loader built for memory-constrained
+// devices. It must be re-applied after user config fragments merge (see
+// GenerateFinalConfig) because those fragments overwrite top-level keys and
+// could otherwise put the whole GEO dataset back into resident memory.
+const geodataLoaderMemConservative = "memconservative"
+
 // ControllerSecret returns the process-scoped external-controller secret,
 // generating it on first use. The value is 32 hex chars (128 bits of
 // entropy) which matches the strength Mihomo itself recommends.
@@ -37,6 +43,22 @@ func ControllerSecret() string {
 	return controllerSecret
 }
 
+// CoreLowMemory reports whether the core should be configured for a
+// memory-constrained host (small NAT / VPS boxes without swap).
+//
+// It is driven by THREE_M_UI_CORE_LOW_MEMORY rather than auto-detected so the
+// decision stays visible and reversible: the installer writes it into the
+// service unit, and an operator can flip it without rebuilding anything.
+// Anything unset or explicitly disabling means "emit no extra keys at all".
+func CoreLowMemory() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("THREE_M_UI_CORE_LOW_MEMORY"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // GetDefaultTemplate returns a deliberately minimal, localhost-safe base
 // configuration. Listener definitions are appended from the database.
 func GetDefaultTemplate() *MihomoConfig {
@@ -44,7 +66,7 @@ func GetDefaultTemplate() *MihomoConfig {
 	if controller == "" {
 		controller = "127.0.0.1:9090"
 	}
-	return &MihomoConfig{
+	tmpl := &MihomoConfig{
 		Mode:               "rule",
 		LogLevel:           "info",
 		AllowLan:           false,
@@ -66,4 +88,8 @@ func GetDefaultTemplate() *MihomoConfig {
 			"MATCH,DIRECT",
 		},
 	}
+	if CoreLowMemory() {
+		tmpl.GeodataLoader = geodataLoaderMemConservative
+	}
+	return tmpl
 }
