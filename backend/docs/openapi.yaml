@@ -6,7 +6,7 @@ info:
     REST API for the 3m-ui Mihomo management panel.
 
     - Base path: `/api/v1`
-    - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login`
+    - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login` (or GitHub OAuth callback when enabled)
     - Public subscription routes use path tokens (no JWT)
 
     Subscription URLs:
@@ -74,6 +74,69 @@ paths:
       responses:
         "200":
           description: token, expires_at, username
+
+
+  /auth/oauth/github:
+    get:
+      tags: [auth]
+      summary: Public GitHub OAuth status (enabled + client_id)
+      security: []
+      responses:
+        "200":
+          description: "{ enabled, client_id? }"
+
+  /auth/oauth/github/start:
+    get:
+      tags: [auth]
+      summary: Redirect browser to GitHub authorize URL
+      security: []
+      responses:
+        "302":
+          description: Redirect to github.com/login/oauth/authorize
+
+  /auth/oauth/github/callback:
+    get:
+      tags: [auth]
+      summary: OAuth callback; redirects to /login with oauth_token or oauth_error
+      security: []
+      parameters:
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect to panel /login
+
+  /auth/oauth/github/settings:
+    get:
+      tags: [auth]
+      summary: Get GitHub OAuth settings (admin)
+      responses:
+        "200":
+          description: "{ enabled, client_id, client_secret, allowed_logins[] }"
+    put:
+      tags: [auth]
+      summary: Save GitHub OAuth settings (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                client_id: { type: string }
+                client_secret: { type: string }
+                allowed_logins:
+                  type: array
+                  items: { type: string }
+                  description: GitHub usernames allowed to bind on first login
+      responses:
+        "200":
+          description: Saved; may include callback_url
 
   /auth/me:
     get:

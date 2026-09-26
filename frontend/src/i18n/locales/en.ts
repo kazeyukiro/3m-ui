@@ -765,7 +765,7 @@ export default {
     "githubOAuthEnable": "Enable GitHub login",
     "githubAllowed": "Allowed GitHub usernames",
     "githubAllowedHint": "Comma-separated GitHub logins allowed to bind when not yet linked.",
-    "githubOAuthSaved": "GitHub OAuth settings saved",,
+    "githubOAuthSaved": "GitHub OAuth settings saved",
     "navSubscription": "Subscription page",
     "navSSL": "Certificates / SSL",
     "navNetwork": "Proxy & Geo",

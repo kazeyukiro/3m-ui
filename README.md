@@ -31,7 +31,7 @@
 | **配置** | 生成 → 校验 → 应用 分离；失败回滚上一份 `config.yaml` |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、同步节点镜像、合并订阅；**按名称选择本机节点推送**到远程（默认禁用，可改名/端口） |
-| **安全** | JWT、首登改密、TOTP 两步验证、web_path 路径前缀、凭据加密、CORS |
+| **安全** | JWT、首登改密、TOTP 两步验证、可选 **GitHub OAuth**、web_path 路径前缀、凭据加密、CORS |
 | **运维** | 核心启停/更新、Geo、面板 SSL/ACME、备份、**Cloudflare WARP** 一键注册（WireGuard/MASQUE YAML） |
 
 ### 补充说明（用户限制 / 证书 / 订阅）

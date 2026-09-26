@@ -765,7 +765,7 @@ export default {
     "githubOAuthEnable": "启用 GitHub 登录",
     "githubAllowed": "允许的 GitHub 用户名",
     "githubAllowedHint": "逗号分隔；未绑定过的 GitHub 账号需在此名单中才能绑定。",
-    "githubOAuthSaved": "GitHub OAuth 设置已保存",,
+    "githubOAuthSaved": "GitHub OAuth 设置已保存",
     "navSubscription": "订阅页",
     "navSSL": "证书 / SSL",
     "navNetwork": "反代与 Geo",
