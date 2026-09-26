@@ -16,9 +16,11 @@ const (
 
 	cgroupV2MemUsage = "/sys/fs/cgroup/memory.current"
 	cgroupV2MemMax   = "/sys/fs/cgroup/memory.max"
+	cgroupV2MemStat  = "/sys/fs/cgroup/memory.stat"
 
 	cgroupV1MemUsage = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
 	cgroupV1MemMax   = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+	cgroupV1MemStat  = "/sys/fs/cgroup/memory/memory.stat"
 )
 
 // cgroupV1CPUAcctDirs are the directories that may hold cpu accounting files
@@ -189,26 +191,50 @@ func cgroupCPUSet() (float64, bool) {
 	return 0, false
 }
 
-// readCgroupMemory returns (used, total) from the process's own cgroup. Both
-// are 0 when cgroup accounting is unavailable (bare metal, or cgroups not
-// mounted), in which case the caller falls back to /proc/meminfo.
+// cgroupMemory is this process' cgroup memory accounting, all in bytes.
+type cgroupMemory struct {
+	// usage is everything charged to the cgroup: anonymous pages, slab, kernel
+	// memory **and reclaimable page cache**.
+	usage float64
+	// inactiveFile is the slice of usage that page cache holds and the kernel
+	// may drop the moment anything else wants the pages.
+	inactiveFile float64
+	// limit is the cap for the cgroup, 0 when unlimited.
+	limit float64
+	// ok reports whether usage could be read at all.
+	ok bool
+}
+
+// readCgroupMemory reads the process' own cgroup accounting. cgroup v2 is
+// preferred; v1 is used only when v2 is unavailable, and each field falls back
+// independently. ok is false on hosts without cgroup accounting (bare metal, or
+// cgroups not mounted), where the caller must fall back to /proc/meminfo.
 //
-// v1 reports an absurdly large limit when unset (PAGE_COUNTER_MAX), so a limit
-// larger than the host's total RAM is treated as "no limit" by the caller.
-func readCgroupMemory() (used, total float64) {
+// v1 reports an absurdly large limit when unset (PAGE_COUNTER_MAX), so the
+// caller treats a limit above the host's total RAM as "no limit".
+func readCgroupMemory() cgroupMemory {
+	var m cgroupMemory
 	if u, ok := readUintFile(cgroupV2MemUsage); ok {
-		used = float64(u)
-	}
-	if m, ok := readUintFile(cgroupV2MemMax); ok && m > 0 {
-		total = float64(m)
-	}
-	if used == 0 || total == 0 {
-		if u, ok := readUintFile(cgroupV1MemUsage); ok && used == 0 {
-			used = float64(u)
+		m.usage = float64(u)
+		if f, ok := readUintField(cgroupV2MemStat, "inactive_file"); ok {
+			m.inactiveFile = float64(f)
 		}
-		if m, ok := readUintFile(cgroupV1MemMax); ok && m > 0 && total == 0 {
-			total = float64(m)
+		if l, ok := readUintFile(cgroupV2MemMax); ok {
+			m.limit = float64(l)
 		}
+		m.ok = true
+		return m
 	}
-	return used, total
+	if u, ok := readUintFile(cgroupV1MemUsage); ok {
+		m.usage = float64(u)
+		if f, ok := readUintField(cgroupV1MemStat, "total_inactive_file"); ok {
+			m.inactiveFile = float64(f)
+		}
+		if l, ok := readUintFile(cgroupV1MemMax); ok {
+			m.limit = float64(l)
+		}
+		m.ok = true
+		return m
+	}
+	return m
 }
