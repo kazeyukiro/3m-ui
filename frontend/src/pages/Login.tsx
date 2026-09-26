@@ -9,7 +9,7 @@ import {
   IconBack,
 } from '../icons';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { login } from '../api/auth';
+import { login, fetchGithubOAuthPublic } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import { useThemeStore, type ThemeMode } from '../stores/themeStore';
@@ -28,6 +28,36 @@ const Login: React.FC = () => {
   const { mode, setMode } = useThemeStore();
   const { token } = theme.useToken();
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
+  const [githubEnabled, setGithubEnabled] = useState(false);
+  const [oauthErr, setOauthErr] = useState<string | null>(null);
+
+  // Handle OAuth callback query (?oauth_token= / ?oauth_error=)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const err = params.get('oauth_error');
+    if (err) {
+      setOauthErr(err);
+      message.error(err);
+      window.history.replaceState({}, '', '/login');
+      return;
+    }
+    const tok = params.get('oauth_token');
+    if (tok) {
+      const username = params.get('username') || 'admin';
+      const must = params.get('must_change_password') === '1';
+      useAuthStore.getState().login(tok, username, must);
+      window.history.replaceState({}, '', '/login');
+      message.success(t('login.welcomeBack'));
+      if (must) navigate('/change-password', { replace: true });
+      else navigate(from === '/login' || from === '/change-password' ? '/' : from, { replace: true });
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    fetchGithubOAuthPublic()
+      .then((s) => setGithubEnabled(!!s.enabled))
+      .catch(() => setGithubEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (totpNeeded) {
@@ -212,10 +242,24 @@ const Login: React.FC = () => {
               />
             </Form.Item>
           )}
+          {oauthErr && !totpNeeded && (
+            <Alert type="error" showIcon style={{ marginBottom: 12 }} message={oauthErr} />
+          )}
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Button type="primary" htmlType="submit" block loading={loading} size="large">
               {totpNeeded ? t('login.totpVerify', 'Verify') : t('login.button')}
             </Button>
+            {!totpNeeded && githubEnabled && (
+              <Button
+                block
+                size="large"
+                onClick={() => {
+                  window.location.href = '/api/v1/auth/oauth/github/start';
+                }}
+              >
+                {t('login.github', 'Continue with GitHub')}
+              </Button>
+            )}
             {totpNeeded && (
               <Button type="link" block icon={<IconBack />} onClick={backToPassword} disabled={loading}>
                 {t('login.totpBack', 'Back to password')}

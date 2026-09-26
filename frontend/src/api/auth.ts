@@ -72,3 +72,30 @@ export async function changePassword(current: string, next: string) {
   return data;
 }
 
+
+export interface GithubOAuthPublic {
+  enabled: boolean;
+  client_id?: string;
+}
+
+export async function fetchGithubOAuthPublic(): Promise<GithubOAuthPublic> {
+  const { data } = await client.get<GithubOAuthPublic>('/auth/oauth/github');
+  return data;
+}
+
+export interface GithubOAuthSettings {
+  enabled: boolean;
+  client_id: string;
+  client_secret: string;
+  allowed_logins: string[];
+}
+
+export async function fetchGithubOAuthSettings(): Promise<GithubOAuthSettings> {
+  const { data } = await client.get<GithubOAuthSettings>('/auth/oauth/github/settings');
+  return data;
+}
+
+export async function saveGithubOAuthSettings(s: GithubOAuthSettings): Promise<{ callback_url?: string }> {
+  const { data } = await client.put<{ callback_url?: string }>('/auth/oauth/github/settings', s);
+  return data;
+}

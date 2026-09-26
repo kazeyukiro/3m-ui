@@ -65,7 +65,7 @@ import {
 } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
-import { setupTOTP, enableTOTP, disableTOTP, fetchMe } from '../api/auth';
+import { setupTOTP, enableTOTP, disableTOTP, fetchMe, fetchGithubOAuthSettings, saveGithubOAuthSettings } from '../api/auth';
 import QRCode from '../components/QRCode';
 
 const { Text, Title } = Typography;
@@ -134,6 +134,9 @@ const Settings: React.FC = () => {
 
   const isMobile = useIsMobile();
   const [totpEnabled, setTotpEnabled] = useState(false);
+  const [githubForm] = Form.useForm();
+  const [githubCallback, setGithubCallback] = useState('');
+  const [githubSaving, setGithubSaving] = useState(false);
   const [totpSecret, setTotpSecret] = useState('');
   const [totpUrl, setTotpUrl] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -301,6 +304,20 @@ const Settings: React.FC = () => {
     ],
     [t, locale],
   );
+
+  useEffect(() => {
+    if (section !== 'security') return;
+    fetchGithubOAuthSettings()
+      .then((s) => {
+        githubForm.setFieldsValue({
+          enabled: !!s.enabled,
+          client_id: s.client_id || '',
+          client_secret: s.client_secret || '',
+          allowed_logins: (s.allowed_logins || []).join(', '),
+        });
+      })
+      .catch(() => {});
+  }, [section, githubForm]);
 
   return (
     <div>
@@ -847,6 +864,63 @@ const Settings: React.FC = () => {
                   </Typography.Paragraph>
                 </Space>
               </Card>
+              <Card title={t('settings.githubOAuth') || 'GitHub OAuth'} style={{ marginBottom: 16 }}>
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+                  {t('settings.githubOAuthHint') ||
+                    'Optional panel login via GitHub. Create an OAuth App on GitHub (Settings → Developer settings). Callback URL must match public_url + /api/v1/auth/oauth/github/callback. Allowed logins: GitHub usernames that may bind to local admin (comma-separated).'}
+                </Typography.Paragraph>
+                <Form
+                  form={githubForm}
+                  layout="vertical"
+                  onFinish={async (values) => {
+                    setGithubSaving(true);
+                    try {
+                      const allowed = String(values.allowed_logins || '')
+                        .split(/[,\s]+/)
+                        .map((x: string) => x.trim())
+                        .filter(Boolean);
+                      const res = await saveGithubOAuthSettings({
+                        enabled: !!values.enabled,
+                        client_id: (values.client_id || '').trim(),
+                        client_secret: (values.client_secret || '').trim(),
+                        allowed_logins: allowed,
+                      });
+                      if (res.callback_url) setGithubCallback(res.callback_url);
+                      message.success(t('settings.githubOAuthSaved') || 'GitHub OAuth saved');
+                    } catch (e: any) {
+                      message.error(e?.message || t('common.error'));
+                    } finally {
+                      setGithubSaving(false);
+                    }
+                  }}
+                >
+                  <Form.Item name="enabled" label={t('settings.githubOAuthEnable') || 'Enable'} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item name="client_id" label="Client ID" rules={[{ required: false }]}>
+                    <Input placeholder="Ov23..." autoComplete="off" />
+                  </Form.Item>
+                  <Form.Item name="client_secret" label="Client Secret">
+                    <Input.Password placeholder="github_oauth_..." autoComplete="new-password" />
+                  </Form.Item>
+                  <Form.Item
+                    name="allowed_logins"
+                    label={t('settings.githubAllowed') || 'Allowed GitHub usernames'}
+                    tooltip={t('settings.githubAllowedHint') || 'Comma-separated. Required to bind a GitHub account that is not linked yet.'}
+                  >
+                    <Input placeholder="your-github-login" />
+                  </Form.Item>
+                  {githubCallback ? (
+                    <Typography.Paragraph copyable type="secondary">
+                      Callback: {githubCallback}
+                    </Typography.Paragraph>
+                  ) : null}
+                  <Button type="primary" htmlType="submit" loading={githubSaving}>
+                    {t('common.save') || 'Save'}
+                  </Button>
+                </Form>
+              </Card>
+
               <Card title={t('settings.backup') || 'Backup'}>
                 <Space wrap>
                   <Button

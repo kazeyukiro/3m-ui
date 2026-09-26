@@ -170,6 +170,13 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/totp/setup", RequireAuth(h.db, h.secret), h.TOTPSetup)
 	rg.POST("/totp/enable", RequireAuth(h.db, h.secret), h.TOTPEnable)
 	rg.POST("/totp/disable", RequireAuth(h.db, h.secret), h.TOTPDisable)
+
+	// GitHub OAuth (optional panel login)
+	rg.GET("/oauth/github", h.GithubOAuthPublic)
+	rg.GET("/oauth/github/start", h.GithubOAuthStart)
+	rg.GET("/oauth/github/callback", h.GithubOAuthCallback)
+	rg.GET("/oauth/github/settings", RequireAuth(h.db, h.secret), h.GithubOAuthGetSettings)
+	rg.PUT("/oauth/github/settings", RequireAuth(h.db, h.secret), h.GithubOAuthPutSettings)
 }
 
 func (h *Handler) Login(c *gin.Context) {
@@ -395,6 +402,8 @@ func (h *Handler) Me(c *gin.Context) {
 		"expires_at":           claims.ExpiresAt,
 		"must_change_password": user.MustChangePassword,
 		"totp_enabled":         user.TOTPEnabled,
+		"github_id":            user.GithubID,
+		"github_login":         user.GithubLogin,
 	})
 }
 
