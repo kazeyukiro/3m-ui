@@ -26,6 +26,7 @@ import {
   LogOut,
   CirclePlus,
   ListPlus,
+  Rows3,
   UserPlus,
   Server,
   Plus,
@@ -45,7 +46,10 @@ import {
   LayoutGrid,
   AppWindow,
   Wrench,
+  FolderKanban,
   ArrowLeft,
+  ChevronUp,
+  ChevronDown,
   Undo2,
   HeartPulse,
   Monitor,
@@ -53,6 +57,7 @@ import {
   LogIn,
   LineChart,
   Check,
+  CheckCheck,
   GitBranch,
   History,
   Power,
@@ -71,6 +76,7 @@ import {
   CircleMinus,
   Eraser,
   PlayCircle,
+  CirclePlay,
   Square,
   Download,
   Send,
@@ -267,6 +273,15 @@ export const CloudSyncOutlined = IconSync;
 export const DesktopOutlined = IconDesktop;
 export const HddOutlined = IconDisk;
 export const LoginOutlined = IconLogin;
+
+
+/* —— Routing page —— unique vs generic add/play/check —— */
+export const IconAddRule = wrap(Rows3, 'IconAddRule');
+export const IconAddGroup = wrap(FolderKanban, 'IconAddGroup');
+export const IconMoveUp = wrap(ChevronUp, 'IconMoveUp');
+export const IconMoveDown = wrap(ChevronDown, 'IconMoveDown');
+export const IconSaveRules = wrap(CheckCheck, 'IconSaveRules');
+export const IconApplyRules = wrap(CirclePlay, 'IconApplyRules');
 
 export const IconSettingsPanel = wrap(AppWindow, 'IconSettingsPanel');
 export const IconSettingsAccess = wrap(Fingerprint, 'IconSettingsAccess');

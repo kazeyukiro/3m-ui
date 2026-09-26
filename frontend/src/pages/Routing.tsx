@@ -18,14 +18,14 @@ import {
   Divider,
 } from 'antd';
 import {
-  Rows3,
-  Trash,
-  ChevronUp,
-  ChevronDown,
-  FolderKanban,
-  CheckCheck,
-  CirclePlay,
-} from 'lucide-react';
+  IconAddRule,
+  IconAddGroup,
+  IconMoveUp,
+  IconMoveDown,
+  IconSaveRules,
+  IconApplyRules,
+  IconDelete,
+} from '../icons';
 import {
   fetchGroups,
   saveGroups,
@@ -278,15 +278,15 @@ const RoutingPage: React.FC = () => {
       <Dropdown menu={templateMenu}>
         <Button size="small">{t('routing.templates') || 'Templates'}</Button>
       </Dropdown>
-      <Button size="small" icon={<Rows3 size={16} />} onClick={addRule}>
+      <Button size="small" icon={<IconAddRule />} onClick={addRule}>
         {t('routing.addRule') || 'Add rule'}
       </Button>
-      <Button type="primary" size="small" icon={<CheckCheck size={16} />} loading={saving} onClick={onSaveRules}>
+      <Button type="primary" size="small" icon={<IconSaveRules />} loading={saving} onClick={onSaveRules}>
         {t('common.save') || 'Save'}
       </Button>
       <Button
         size="small"
-        icon={<CirclePlay size={16} />}
+        icon={<IconApplyRules />}
         loading={applying}
         onClick={() => offerApply()}
       >
@@ -306,7 +306,7 @@ const RoutingPage: React.FC = () => {
       <Card
         title={t('routing.groups')}
         extra={
-          <Button type="primary" icon={<FolderKanban size={16} />} onClick={() => setGroupOpen(true)}>
+          <Button type="primary" icon={<IconAddGroup />} onClick={() => setGroupOpen(true)}>
             {t('routing.addGroup')}
           </Button>
         }
@@ -334,7 +334,7 @@ const RoutingPage: React.FC = () => {
               width: 72,
               render: (_: any, __: any, idx: number) => (
                 <Popconfirm title={t('common.confirmDelete')} onConfirm={() => onDeleteGroup(idx)}>
-                  <Button size="small" danger icon={<Trash size={16} />} />
+                  <Button size="small" danger icon={<IconDelete />} />
                 </Popconfirm>
               ),
             },
@@ -417,17 +417,17 @@ const RoutingPage: React.FC = () => {
                 </Typography.Text>
                 <Space size={4}>
                   <Tooltip title={t('routing.moveUp') || 'Move up'}>
-                    <Button size="small" icon={<ChevronUp size={14} />} disabled={index === 0} onClick={() => moveRule(index, -1)} />
+                    <Button size="small" icon={<IconMoveUp />} disabled={index === 0} onClick={() => moveRule(index, -1)} />
                   </Tooltip>
                   <Tooltip title={t('routing.moveDown') || 'Move down'}>
                     <Button
                       size="small"
-                      icon={<ChevronDown size={14} />}
+                      icon={<IconMoveDown />}
                       disabled={index === rules.length - 1}
                       onClick={() => moveRule(index, 1)}
                     />
                   </Tooltip>
-                  <Button size="small" danger icon={<Trash size={14} />} disabled={rules.length <= 1} onClick={() => removeRule(index)} />
+                  <Button size="small" danger icon={<IconDelete />} disabled={rules.length <= 1} onClick={() => removeRule(index)} />
                 </Space>
               </div>
             </div>
