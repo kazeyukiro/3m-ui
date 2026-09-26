@@ -131,6 +131,51 @@ arch(){
     *) err "Unsupported architecture: $(uname -m)";;
   esac
 }
+# ── Go runtime memory tuning (no swap, no mmap tricks) ──────────
+# GOMEMLIMIT = soft cap; Go GC runs harder before hitting it.
+# GOGC       = GC trigger ratio (lower = more frequent GC = less RSS).
+# MemoryMax  = systemd hard cap (OOM kills panel, not SSH).
+#
+# No swap creation. No mmap hacks. Pure Go runtime tuning.
+#
+# Override: THREE_M_UI_GOMEMLIMIT=80MiB THREE_M_UI_GOGC=75
+compute_mem_tuning() {
+  TOTAL_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 524288)
+  TOTAL_MB=$((TOTAL_KB / 1024))
+  if [ -n "${THREE_M_UI_GOMEMLIMIT:-}" ]; then
+    PANEL_GOMEMLIMIT="$THREE_M_UI_GOMEMLIMIT"
+  elif [ "$TOTAL_MB" -le 128 ]; then
+    PANEL_GOMEMLIMIT="48MiB"
+    PANEL_GOGC="20"
+  elif [ "$TOTAL_MB" -le 256 ]; then
+    PANEL_GOMEMLIMIT="96MiB"
+    PANEL_GOGC="50"
+  elif [ "$TOTAL_MB" -le 512 ]; then
+    PANEL_GOMEMLIMIT="192MiB"
+    PANEL_GOGC="75"
+  else
+    PANEL_GOMEMLIMIT="off"
+    PANEL_GOGC="100"
+  fi
+  [ -n "${THREE_M_UI_GOGC:-}" ] && PANEL_GOGC="$THREE_M_UI_GOGC"
+  case "$PANEL_GOMEMLIMIT" in
+    off) PANEL_MEMORYMAX="infinity" ;;
+    *MiB)
+      _r=$(echo "$PANEL_GOMEMLIMIT" | sed 's/MiB//')
+      PANEL_MEMORYMAX="$((_r + _r / 2))M"
+      ;;
+    *) PANEL_MEMORYMAX="infinity" ;;
+  esac
+  # Export immediately so ALL subprocesses (download, extract, init,
+  # healthcheck, service start) inherit the limits.
+  if [ "$PANEL_GOMEMLIMIT" != "off" ]; then
+    export GOMEMLIMIT="$PANEL_GOMEMLIMIT"
+    export GOGC="$PANEL_GOGC"
+  fi
+  say "Memory tuning: GOMEMLIMIT=$PANEL_GOMEMLIMIT GOGC=$PANEL_GOGC MemoryMax=$PANEL_MEMORYMAX (RAM: ${TOTAL_MB}MB)"
+}
+compute_mem_tuning
+
 install_deps(){
   if command_exists curl && command_exists tar && command_exists gzip &&
      { command_exists sha256sum || command_exists shasum || command_exists openssl; }; then return; fi
@@ -351,6 +396,8 @@ Wants=network-online.target
 Type=simple
 ExecStart=$APP_BIN
 Environment=THREE_M_UI_CONFIG=$CONFIG_FILE
+Environment=GOMEMLIMIT=${PANEL_GOMEMLIMIT}
+Environment=GOGC=${PANEL_GOGC}
 WorkingDirectory=$DATA_DIR
 Restart=always
 RestartSec=5
@@ -372,6 +419,7 @@ LockPersonality=true
 SystemCallArchitectures=native
 NoNewPrivileges=true
 LimitNOFILE=65535
+MemoryMax=${PANEL_MEMORYMAX}
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 [Install]
@@ -388,6 +436,8 @@ command_background="yes"
 pidfile="/run/$SERVICE_NAME.pid"
 directory="$DATA_DIR"
 export THREE_M_UI_CONFIG="$CONFIG_FILE"
+export GOMEMLIMIT="${PANEL_GOMEMLIMIT}"
+export GOGC="${PANEL_GOGC}"
 output_log="$LOG_DIR/$SERVICE_NAME.log"
 error_log="$LOG_DIR/$SERVICE_NAME.log"
 respawn_delay=5
@@ -401,7 +451,7 @@ UNITFILE
 wait_healthy(){
   attempt=0
   while [ "$attempt" -lt 30 ]; do
-    if service_active && (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" "$APP_BIN" healthcheck) >/dev/null 2>&1; then return 0; fi
+    if service_active && (cd "$DATA_DIR" && GOMEMLIMIT="${PANEL_GOMEMLIMIT}" GOGC="${PANEL_GOGC}" THREE_M_UI_CONFIG="$CONFIG_FILE" "$APP_BIN" healthcheck) >/dev/null 2>&1; then return 0; fi
     attempt=$((attempt + 1))
     sleep 1
   done
@@ -503,7 +553,9 @@ main(){
   printf '%s\n' "$CHANNEL" > "$BASE/CHANNEL"
   printf '%s\n' "$DATA_DIR" > "$BASE/DATA_DIRECTORY"
   # Existing YAML/DB settings are preserved by init, including external core paths.
-  (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" \
+  (cd "$DATA_DIR" && \
+    GOMEMLIMIT="${PANEL_GOMEMLIMIT}" GOGC="${PANEL_GOGC}" \
+    THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" \
     THREE_M_UI_MIHOMO_BINARY="${THREE_M_UI_MIHOMO_BINARY:-$MIHOMO_BIN}" "$APP_BIN" init)
   write_service
   service_action start
