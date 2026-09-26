@@ -1,10 +1,10 @@
 # 3m-ui
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
+  <img src="../../frontend/public/logo.png" alt="3m-ui logo" width="160" />
 </p>
 
-> Languages / 语言: [README](./README.md) · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · **ไทย** · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
+> Languages / 语言: [README](../../README.md) · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · **ไทย** · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
 
 **แผงควบคุมเว็บสำหรับเซิร์ฟเวอร์ Mihomo**
@@ -13,8 +13,8 @@
 
 น้ำหนักเบา self-hosted จัดการ listener ผู้ใช้ subscription และสถานะ [Mihomo](https://github.com/MetaCubeX/mihomo) บน Linux
 
-[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](./backend/go.mod)
+[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](../../LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](../../backend/go.mod)
 
 > เอกสาร: [https://3m-ui.top/docs/](https://3m-ui.top/docs/) · [Website](https://3m-ui.top/)
 
@@ -82,9 +82,9 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 
 ## สัญญาอนุญาต
 
-[Eclipse Public License 2.0](./LICENSE)
+[Eclipse Public License 2.0](../../LICENSE)
 
-ประกาศบุคคลที่สาม: [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)
+ประกาศบุคคลที่สาม: [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md)
 
 
 ## Star History

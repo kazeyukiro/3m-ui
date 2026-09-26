@@ -1,10 +1,10 @@
 # 3m-ui
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
+  <img src="../../frontend/public/logo.png" alt="3m-ui logo" width="160" />
 </p>
 
-> Languages / 语言: [README](./README.md) · **English** · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
+> Languages / 语言: [README](../../README.md) · **English** · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
 **Mihomo server web management panel**
 
@@ -12,8 +12,8 @@
 
 Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo) listeners, users, subscriptions, and runtime status on Linux.
 
-[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](./backend/go.mod)
+[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](../../LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](../../backend/go.mod)
 
 > Documentation: [https://3m-ui.top/docs/](https://3m-ui.top/docs/) · [Website](https://3m-ui.top/)
 
@@ -52,7 +52,7 @@ Default panel: `http://SERVER_IP:8080/` — user `admin`, one-time random passwo
 
 ### Install with an AI assistant prompt
 
-Copy the prompt into ChatGPT / Claude / Cursor (and state your OS, e.g. Ubuntu 22.04, and whether you have root SSH). The assistant should only use the official installer — not rewrite URLs or invent third-party commands. The full prompt and usage notes live in [the AI install prompt doc](docs/ai-install-prompt.md).
+Copy the prompt into ChatGPT / Claude / Cursor (and state your OS, e.g. Ubuntu 22.04, and whether you have root SSH). The assistant should only use the official installer — not rewrite URLs or invent third-party commands. The full prompt and usage notes live in [the AI install prompt doc](../ai-install-prompt.md).
 
 Skip manual copy-paste — load the plain-text prompt straight to your clipboard with `curl`:
 
@@ -68,7 +68,7 @@ The prompt only ever runs the official one-liner below; all downloads verify `SH
 curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
 ```
 
-For the optional pre-release / test channel, see [installation docs](docs/installation.md#ai-提示词安装).
+For the optional pre-release / test channel, see [installation docs](../installation.md#ai-提示词安装).
 
 ## Build from source
 
@@ -96,12 +96,12 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 
 ### Extra docs (limits / certs / subscriptions)
 
-- [User limits: IP · sub pulls](docs/users-limits.md)
-- [Per-node traffic & multiplier](docs/node-traffic.md)
-- [Batch node certificates](docs/batch-certificate.md)
-- [Subscription formats](docs/subscription-formats.md)
-- [Cluster / push nodes](docs/cluster.md)
-- [Routing & groups](docs/routing.md) · [Cloudflare WARP](docs/warp.md)
+- [User limits: IP · sub pulls](../users-limits.md)
+- [Per-node traffic & multiplier](../node-traffic.md)
+- [Batch node certificates](../batch-certificate.md)
+- [Subscription formats](../subscription-formats.md)
+- [Cluster / push nodes](../cluster.md)
+- [Routing & groups](../routing.md) · [Cloudflare WARP](../warp.md)
 
 - Go, Node.js, and the open-source community
 
@@ -121,6 +121,6 @@ Contributors: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contribu
 
 ## License
 
-[Eclipse Public License 2.0](./LICENSE)
+[Eclipse Public License 2.0](../../LICENSE)
 
-Third-party notices: [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
+Third-party notices: [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md).

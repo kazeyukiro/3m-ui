@@ -1,10 +1,10 @@
 # 3m-ui
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
+  <img src="../../frontend/public/logo.png" alt="3m-ui logo" width="160" />
 </p>
 
-> Languages / 语言: [README](./README.md) · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · **Tiếng Việt** · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
+> Languages / 语言: [README](../../README.md) · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · **Tiếng Việt** · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
 
 **Bảng điều khiển web quản lý máy chủ Mihomo**
@@ -13,8 +13,8 @@
 
 Nhẹ, tự lưu trữ. Quản lý listener, người dùng, subscription và trạng thái [Mihomo](https://github.com/MetaCubeX/mihomo) trên Linux.
 
-[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](./backend/go.mod)
+[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](../../LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](../../backend/go.mod)
 
 > Tài liệu: [https://3m-ui.top/docs/](https://3m-ui.top/docs/) · [Website](https://3m-ui.top/)
 
@@ -92,6 +92,6 @@ Người đóng góp: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/
 
 ## Giấy phép
 
-[Eclipse Public License 2.0](./LICENSE)
+[Eclipse Public License 2.0](../../LICENSE)
 
-Thành phần bên thứ ba: [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
+Thành phần bên thứ ba: [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md).

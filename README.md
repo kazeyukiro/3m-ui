@@ -4,7 +4,7 @@
   <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
 </p>
 
-> Languages / 语言: **README** · [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
+> Languages / 语言: **README** · [English](./docs/readme/README.en.md) · [简体中文](./docs/readme/README.zh-CN.md) · [繁體中文](./docs/readme/README.zh-TW.md) · [日本語](./docs/readme/README.ja.md) · [한국어](./docs/readme/README.ko.md) · [Español](./docs/readme/README.es.md) · [Français](./docs/readme/README.fr.md) · [Deutsch](./docs/readme/README.de.md) · [Русский](./docs/readme/README.ru.md) · [Português (Brasil)](./docs/readme/README.pt-BR.md) · [Tiếng Việt](./docs/readme/README.vi.md) · [Bahasa Indonesia](./docs/readme/README.id.md) · [ไทย](./docs/readme/README.th.md) · [Türkçe](./docs/readme/README.tr.md) · [العربية](./docs/readme/README.ar.md) · [हिन्दी](./docs/readme/README.hi.md) · [Polski](./docs/readme/README.pl.md) · [Українська](./docs/readme/README.uk.md)
 
 **Mihomo 服务端 Web 管理面板**
 
@@ -229,5 +229,5 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 
 ## English & other languages
 
-Full translations (18 languages): see the language links at the top, or open [README.en.md](./README.en.md).
+Full translations (18 languages): see the language links at the top, or open [README.en.md](./docs/readme/README.en.md).
 

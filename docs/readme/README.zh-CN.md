@@ -1,10 +1,10 @@
 # 3m-ui
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="3m-ui logo" width="160" />
+  <img src="../../frontend/public/logo.png" alt="3m-ui logo" width="160" />
 </p>
 
-> Languages / 语言: [README](./README.md) · [English](./README.en.md) · **简体中文** · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
+> Languages / 语言: [README](../../README.md) · [English](./README.en.md) · **简体中文** · [繁體中文](./README.zh-TW.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md) · [Español](./README.es.md) · [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Русский](./README.ru.md) · [Português (Brasil)](./README.pt-BR.md) · [Tiếng Việt](./README.vi.md) · [Bahasa Indonesia](./README.id.md) · [ไทย](./README.th.md) · [Türkçe](./README.tr.md) · [العربية](./README.ar.md) · [हिन्दी](./README.hi.md) · [Polski](./README.pl.md) · [Українська](./README.uk.md)
 
 **Mihomo 服务端 Web 管理面板**
 
@@ -12,8 +12,8 @@
 
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
 
-[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](./LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](./backend/go.mod)
+[![License](https://img.shields.io/badge/license-EPL--2.0-blue.svg)](../../LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/kazeyukiro/3m-ui?filename=backend%2Fgo.mod)](../../backend/go.mod)
 
 > 文档: [https://3m-ui.top/docs/](https://3m-ui.top/docs/) · [Website](https://3m-ui.top/)
 
@@ -35,12 +35,12 @@
 
 ### 补充说明
 
-- [用户限制：IP · 订阅拉取](docs/users-limits.md)
-- [路由与策略组](docs/routing.md)
-- [Cloudflare WARP](docs/warp.md)
-- [按节点流量与倍率](docs/node-traffic.md)
-- [批量应用节点证书](docs/batch-certificate.md)
-- [订阅格式与 target](docs/subscription-formats.md)
+- [用户限制：IP · 订阅拉取](../users-limits.md)
+- [路由与策略组](../routing.md)
+- [Cloudflare WARP](../warp.md)
+- [按节点流量与倍率](../node-traffic.md)
+- [批量应用节点证书](../batch-certificate.md)
+- [订阅格式与 target](../subscription-formats.md)
 
 ---
 
@@ -61,7 +61,7 @@ sudo 3m-ui update
 
 ### AI 提示词安装
 
-把提示词复制到 ChatGPT / Claude / Cursor 等助手，并说明你的系统（如 Ubuntu 22.04）与是否已有 root SSH。助手应只协助执行官方脚本，不要改写成不明来源命令。完整提示词及使用说明见 [AI 提示词安装文档](docs/ai-install-prompt.md)。
+把提示词复制到 ChatGPT / Claude / Cursor 等助手，并说明你的系统（如 Ubuntu 22.04）与是否已有 root SSH。助手应只协助执行官方脚本，不要改写成不明来源命令。完整提示词及使用说明见 [AI 提示词安装文档](../ai-install-prompt.md)。
 
 无需手动复制大段文本，用 `curl` 直接把纯文本提示词加载到剪贴板再粘贴：
 
@@ -120,6 +120,6 @@ cd ../backend && CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags=
 
 ## 许可证
 
-[Eclipse Public License 2.0](./LICENSE)
+[Eclipse Public License 2.0](../../LICENSE)
 
-第三方组件见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)。
+第三方组件见 [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md)。
