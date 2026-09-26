@@ -100,3 +100,4 @@ jobs:
       source_sha: ${{ github.sha }}
       version: ${{ needs.metadata.outputs.version }}
       image_tag: pre
+      latest: false
