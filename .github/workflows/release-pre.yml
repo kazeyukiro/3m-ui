@@ -2,7 +2,7 @@ name: Development release (rolling pre)
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: release-pre-rolling
   cancel-in-progress: false
@@ -31,6 +31,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: release-files
@@ -60,21 +61,35 @@ jobs:
           git tag -f pre "$GITHUB_SHA"
           git push -f origin refs/tags/pre
       - name: Publish explicit development channel
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: pre
-          target_commitish: ${{ github.sha }}
-          name: Development build ${{ needs.metadata.outputs.version }}
-          prerelease: true
-          make_latest: false
-          body: |
-            Rolling development build, selected explicitly with THREE_M_UI_CHANNEL=pre.
-            This tag and its assets may change; ordinary installs use stable releases.
-            Panel version: ${{ needs.metadata.outputs.version }}
-            Commit: ${{ github.sha }}
-            Complete amd64/arm64 bundles include the pinned Mihomo core.
-            Docker image: ghcr.io/<owner>/<repository>:pre.
-          files: release-files/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          NOTES="$(mktemp)"
+          cat > "$NOTES" <<EOF
+          Rolling development build, selected explicitly with THREE_M_UI_CHANNEL=pre.
+
+          This tag and its assets may change; ordinary installs use stable releases.
+
+          Panel version: ${VERSION}
+          Commit: ${SHA}
+
+          Complete amd64/arm64 bundles include the pinned Mihomo core.
+          Docker image: \`ghcr.io/${{ github.repository }}:pre\`.
+          EOF
+          # Rolling pre: replace the previous release entirely (softprops update hits
+          # "Resource not accessible by integration" on some GitHub token policies).
+          if gh release view pre >/dev/null 2>&1; then
+            gh release delete pre --yes
+          fi
+          gh release create pre \
+            --target "$SHA" \
+            --title "Development build ${VERSION}" \
+            --prerelease \
+            --notes-file "$NOTES" \
+            release-files/*
   image:
     needs: [metadata, release]
     permissions:
@@ -85,4 +100,3 @@ jobs:
       source_sha: ${{ github.sha }}
       version: ${{ needs.metadata.outputs.version }}
       image_tag: pre
-      latest: false
