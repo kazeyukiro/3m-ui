@@ -20,13 +20,12 @@ import {
   Share2,
   Activity,
   Network,
-  Waypoints,
   Cpu,
-  ScrollText,
   SlidersHorizontal,
   Settings,
   LogOut,
   CirclePlus,
+  ListPlus,
   UserPlus,
   Server,
   Plus,
@@ -44,9 +43,7 @@ import {
   Save,
   BadgeCheck,
   LayoutGrid,
-  MonitorPlay,
-  GitFork,
-  Rocket,
+  AppWindow,
   Wrench,
   ArrowLeft,
   Undo2,
@@ -61,11 +58,14 @@ import {
   Power,
   FileDiff,
   Info,
+  CircleHelp,
   CloudDownload,
   CloudUpload,
+  PackagePlus,
   Cable,
   Bell,
   Timer,
+  Gauge,
   PanelLeftClose,
   PanelLeftOpen,
   CircleMinus,
@@ -74,8 +74,10 @@ import {
   Square,
   Download,
   Send,
+  MessageCircle,
   MoreHorizontal,
   FileText as LucideFileText,
+  FileKey2,
   Shield,
   User,
   Lock,
@@ -151,7 +153,7 @@ export const IconQuickCreate = wrap(Sparkles, 'IconQuickCreate');
 export const IconAddUser = wrap(UserPlus, 'IconAddUser');
 export const IconAddRemote = wrap(Server, 'IconAddRemote');
 export const IconAddGeneric = wrap(Plus, 'IconAddGeneric');
-export const IconAddField = wrap(CirclePlus, 'IconAddField');
+export const IconAddField = wrap(ListPlus, 'IconAddField');
 export const IconRemoveField = wrap(CircleMinus, 'IconRemoveField');
 export const IconDelete = wrap(Trash2, 'IconDelete');
 export const IconDeleteAlt = wrap(CircleX, 'IconDeleteAlt');
@@ -266,15 +268,15 @@ export const DesktopOutlined = IconDesktop;
 export const HddOutlined = IconDisk;
 export const LoginOutlined = IconLogin;
 
-export const IconSettingsPanel = wrap(LayoutGrid, 'IconSettingsPanel');
+export const IconSettingsPanel = wrap(AppWindow, 'IconSettingsPanel');
 export const IconSettingsAccess = wrap(Fingerprint, 'IconSettingsAccess');
-export const IconSettingsTelegram = wrap(Send, 'IconSettingsTelegram');
+export const IconSettingsTelegram = wrap(MessageCircle, 'IconSettingsTelegram');
 export const IconSettingsSecurity = wrap(ShieldCheck, 'IconSettingsSecurity');
 export const IconSettingsSubPage = wrap(BookOpen, 'IconSettingsSubPage');
-export const IconSettingsSSL = wrap(BadgeCheck, 'IconSettingsSSL');
-export const IconSettingsProxy = wrap(Globe, 'IconSettingsProxy');
-export const IconSettingsTraffic = wrap(Timer, 'IconSettingsTraffic');
-export const IconSettingsAbout = wrap(Info, 'IconSettingsAbout');
+export const IconSettingsSSL = wrap(FileKey2, 'IconSettingsSSL');
+export const IconSettingsProxy = wrap(Network, 'IconSettingsProxy');
+export const IconSettingsTraffic = wrap(Gauge, 'IconSettingsTraffic');
+export const IconSettingsAbout = wrap(CircleHelp, 'IconSettingsAbout');
 export const IconSettingsOps = wrap(Wrench, 'IconSettingsOps');
-export const IconUpdate = wrap(CloudDownload, 'IconUpdate');
+export const IconUpdate = wrap(PackagePlus, 'IconUpdate');
 export const IconSettingsData = wrap(Database, 'IconSettingsData');
