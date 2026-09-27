@@ -161,18 +161,33 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		aid := stringValue(cfg["alterId"], "0")
 		cipher := stringValue(cfg["cipher"], "auto")
 		obj := map[string]string{"v": "2", "ps": name, "add": host, "port": port, "id": uuid, "aid": aid, "scy": cipher, "net": "tcp", "type": "none"}
-		if tls, ok := tlsParams(cfg)["security"]; ok && tls == "tls" {
+		tlsOpts := tlsParams(cfg)
+		if tlsOpts["security"] == "tls" {
 			obj["tls"] = "tls"
 		}
-		if sni := tlsParams(cfg)["sni"]; sni != "" {
-			obj["sni"] = sni
+		if tlsOpts["sni"] != "" {
+			obj["sni"] = tlsOpts["sni"]
 		}
-		if fp := tlsParams(cfg)["fp"]; fp != "" {
-			obj["fp"] = fp
+		if tlsOpts["fp"] != "" {
+			obj["fp"] = tlsOpts["fp"]
+		}
+		// vless/trojan carry this in the query string; vmess JSON has the field
+		// too, and a listener with a certificate the client cannot verify was
+		// exporting a link that failed the handshake.
+		if tlsOpts["allowInsecure"] != "" {
+			obj["allowInsecure"] = tlsOpts["allowInsecure"]
 		}
 		if ws, ok := cfg["ws-path"].(string); ok && ws != "" {
 			obj["net"] = "ws"
 			obj["path"] = ws
+			// The Host header is carried separately from the path. Without it a
+			// ws listener that pins a Host is unreachable through the exported
+			// link, even though the same listener works from the client YAML.
+			if headers, ok := cfg["ws-headers"].(map[string]interface{}); ok {
+				if h, ok := headers["Host"].(string); ok && h != "" {
+					obj["host"] = h
+				}
+			}
 		}
 		if grpc, ok := cfg["grpc-service-name"].(string); ok && grpc != "" {
 			obj["net"] = "grpc"
@@ -263,8 +278,11 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := cfg["sni"].(string); ok && v != "" {
 				params["sni"] = v
 			}
-			if certutil.ShouldSkipCertVerify(cfg) {
+			// Matches the config-embedded users branch below: same listener must
+			// produce the same link whichever way its users are stored.
+			if clientSkipCert(cfg, host) {
 				params["insecure"] = "1"
+				params["allowInsecure"] = "1"
 			}
 			if v, ok := cfg["obfs"].(string); ok && v != "" {
 				params["obfs"] = v
