@@ -171,12 +171,6 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		if tlsOpts["fp"] != "" {
 			obj["fp"] = tlsOpts["fp"]
 		}
-		// vless/trojan carry this in the query string; vmess JSON has the field
-		// too, and a listener with a certificate the client cannot verify was
-		// exporting a link that failed the handshake.
-		if tlsOpts["allowInsecure"] != "" {
-			obj["allowInsecure"] = tlsOpts["allowInsecure"]
-		}
 		if ws, ok := cfg["ws-path"].(string); ok && ws != "" {
 			obj["net"] = "ws"
 			obj["path"] = ws
