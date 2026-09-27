@@ -223,13 +223,7 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 			out = normalizeUsersValue(raw)
 		}
 	}
-	if flow, ok := cfg["flow"].(string); ok && strings.TrimSpace(flow) != "" {
-		for _, user := range out {
-			if _, exists := user["flow"]; !exists {
-				user["flow"] = flow
-			}
-		}
-	}
+	applyListenerFlow(cfg, out)
 	// Propagate top-level alterId to each user object. The official Mihomo
 	// schema for VMess expects alterId inside users[].alterId; without it,
 	// per-user alterId is silently dropped when panel credentials are bound.
@@ -316,6 +310,24 @@ func asUsersMapUUID(cfg map[string]interface{}, fromCreds []UserCred, hasCredSta
 		return nil
 	}
 	return out
+}
+
+// applyListenerFlow copies a listener-level VLESS flow onto every user that does
+// not carry one.
+//
+// Vision flow is TCP-only, so a stale flow must not be pushed onto users of a
+// listener that has since been switched to ws/grpc/xhttp: Mihomo rejects that
+// combination outright, which takes the whole listener down rather than one user.
+func applyListenerFlow(cfg map[string]interface{}, users []map[string]interface{}) {
+	flow, ok := cfg["flow"].(string)
+	if !ok || strings.TrimSpace(flow) == "" || !TransportCarriesFlow(cfg) {
+		return
+	}
+	for _, user := range users {
+		if _, exists := user["flow"]; !exists {
+			user["flow"] = flow
+		}
+	}
 }
 
 func normalizeUsersValue(value interface{}) []map[string]interface{} {

@@ -87,7 +87,7 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 	} else {
 		params["encryption"] = "none"
 	}
-	if spec.Flow != "" {
+	if spec.Flow != "" && spec.Transport.CarriesFlow() {
 		params["flow"] = spec.Flow
 	}
 	if spec.SNI != "" {
@@ -144,7 +144,7 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 	if node.UDP {
 		p["udp"] = true
 	}
-	if spec.Flow != "" {
+	if spec.Flow != "" && spec.Transport.CarriesFlow() {
 		p["flow"] = spec.Flow
 	}
 	// tls / reality

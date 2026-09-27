@@ -1051,6 +1051,18 @@ func copyTransport(dst, src map[string]interface{}) {
 			dst["mekya-opts"] = opts
 		}
 	}
+	// VLESS flow (XTLS Vision) is TCP-only. The transport has just been resolved
+	// into `network`, so drop a flow that no longer applies: a listener switched
+	// to ws/grpc/xhttp still carries the old value, and a client given it refuses
+	// to connect.
+	if network, _ := dst["network"].(string); network != "" {
+		switch strings.ToLower(strings.TrimSpace(network)) {
+		case "tcp", "raw":
+			// keep
+		default:
+			delete(dst, "flow")
+		}
+	}
 }
 
 func realityClientOptions(src map[string]interface{}) map[string]interface{} {

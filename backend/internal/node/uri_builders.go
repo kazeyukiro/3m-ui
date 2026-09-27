@@ -11,6 +11,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -106,7 +107,14 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		}
 		params := tlsParams(cfg)
 		params["type"] = "tcp"
-		if flow, _ := row["flow"].(string); flow != "" {
+		// Resolve the transport before deciding anything that depends on it.
+		for k, v := range transportParams(cfg) {
+			params[k] = v
+		}
+		// Vision flow is TCP-only. Ask the transport rather than the config: a
+		// listener switched to ws/grpc/xhttp keeps its old flow in storage, and
+		// exporting it produces a link no client can use.
+		if flow, _ := row["flow"].(string); flow != "" && protocol.TransportCarriesFlow(cfg) {
 			params["flow"] = flow
 		}
 		if encryption, _ := cfg["encryption"].(string); encryption != "" {
@@ -133,9 +141,6 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 			if params["fp"] == "" {
 				params["fp"] = "chrome"
 			}
-		}
-		for k, v := range transportParams(cfg) {
-			params[k] = v
 		}
 		result = append(result, addName(query("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}

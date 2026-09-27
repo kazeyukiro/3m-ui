@@ -246,6 +246,19 @@ type VLESSHandlerSpec struct {
 	MKCP      *MKCPConfig      `json:"mkcp,omitempty"`
 }
 
+// CarriesFlow reports whether this handler can carry VLESS flow (XTLS Vision).
+// Vision is TCP-only: on ws, grpc, xhttp or mkcp the core rejects the
+// combination, so a flow left over from an earlier transport must not be put
+// into a share link.
+func (h VLESSHandlerSpec) CarriesFlow() bool {
+	switch h.Type {
+	case "", VLESSHandlerRaw:
+		return true
+	default:
+		return false
+	}
+}
+
 // MKCPConfig mirrors listener/inbound.MKCPConfig on Mihomo Meta. It is
 // currently registered only by the VMess module.
 type MKCPConfig struct {
