@@ -186,6 +186,11 @@ func BuildShares(l models.Listener, publicHost string, creds []Cred) ([]muiproto
 	}
 	enrichAccessProfileFromNode(&profile, node, l)
 	flowDefault := listenerFlowHint(l)
+	// Vision flow is TCP-only, so the listener's default must not be pushed onto
+	// users of a listener that has since been switched to ws/grpc/xhttp.
+	if flowDefault != "" && node.VLESS != nil && !node.VLESS.Handler.CarriesFlow() {
+		flowDefault = ""
+	}
 	state := domain.DesiredState{AsOf: time.Now().UTC(), PublicHost: profile.PublicHost}
 	reg := muiprotocol.DefaultRegistry()
 	out := make([]muiprotocol.Share, 0, len(node.Users))

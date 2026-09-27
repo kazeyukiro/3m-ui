@@ -118,7 +118,10 @@ func (VLESSModule) BuildShare(
 	if profile.PacketEncoding != "" {
 		query.Set("packetEncoding", profile.PacketEncoding)
 	}
-	if user.VLESS.Flow != "" {
+	// Vision flow is TCP-only. A listener migrated to ws/grpc/xhttp keeps its
+	// flow in storage; emitting it here would hand the client a link that cannot
+	// connect.
+	if user.VLESS.Flow != "" && node.VLESS.Handler.CarriesFlow() {
 		query.Set("flow", user.VLESS.Flow)
 	}
 	switch node.VLESS.Handler.Type {

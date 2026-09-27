@@ -230,21 +230,31 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 			}
 		}
 	}
-	if primary == "" && clientYAML == "" {
+	// Tier 2 covers a different protocol set than the legacy builders: vmess,
+	// snell, shadowquic, mieru, sudoku and trusttunnel compile to client YAML
+	// but never produce a share URI there. Gating this tier on the YAML too
+	// would leave those listeners reporting no link at all, even though
+	// ClientURIsWithCredentials exports one — so it runs whenever the URI is
+	// still missing, and only replaces the YAML if none arrived.
+	if primary == "" {
 		legacy, lerr := ClientURIsWithCredentials(*listener, host, credentials)
-		if lerr != nil {
+		if lerr != nil && clientYAML == "" {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": lerr.Error()})
 			return
 		}
-		uris = legacy
-		if uris == nil {
-			uris = []string{}
+		if lerr == nil {
+			uris = legacy
+			if uris == nil {
+				uris = []string{}
+			}
+			if len(uris) > 0 {
+				primary = uris[0]
+			}
 		}
-		if len(uris) > 0 {
-			primary = uris[0]
-		}
-		if y, err := converter.ExportClientYAML(*listener, host, credentials); err == nil {
-			clientYAML = y
+		if clientYAML == "" {
+			if y, err := converter.ExportClientYAML(*listener, host, credentials); err == nil {
+				clientYAML = y
+			}
 		}
 	}
 	if clientYAML == "" {

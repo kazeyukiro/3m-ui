@@ -405,6 +405,18 @@ export function formValuesToConfig(
     cfg[key] = v;
   };
 
+  // XTLS Vision flow is TCP-only (MetaCubeX / Xray). Decide this *before* any
+  // field writes the config. The protocol switch below used to write `flow`
+  // unconditionally and the clear only ran later, so it edited the form state
+  // after the value had already been copied into the saved listener — the UI
+  // said the flow was dropped for ws/grpc/xhttp while the share link kept
+  // advertising it.
+  const transportLayer = String(values.transport_layer ?? 'raw');
+  const flowAllowed =
+    (transportLayer === 'raw' || transportLayer === 'tcp') &&
+    !values.mkcp_enabled &&
+    !values.mekya_enabled;
+
   switch (protocol) {
     case 'shadowsocks':
       set('cipher', values.cipher);
@@ -442,7 +454,7 @@ export function formValuesToConfig(
       set('max-streams', toInt(values['max-streams']));
       break;
     case 'vless':
-      set('flow', values.flow);
+      set('flow', flowAllowed ? values.flow : undefined);
       set('ws-path', values['ws-path']);
       set('grpc-service-name', values['grpc-service-name']);
       set('decryption', values.decryption);
@@ -604,13 +616,12 @@ export function formValuesToConfig(
   if (!XHTTP_PROTOCOLS.has(protocol)) {
     values.xhttp_enabled = false;
   }
-  // Vision flow is TCP-only (MetaCubeX / Xray); strip on ws/grpc/xhttp/mkcp/mekya.
-  const layerNow = values.transport_layer || 'raw';
-  if (layerNow !== 'raw' && layerNow !== 'tcp') {
+  // Keeps the form state consistent with what was written above, and drops any
+  // flow that reached cfg by another route. The decision itself was made before
+  // the protocol switch — see flowAllowed.
+  if (!flowAllowed) {
     values.flow = undefined;
-  }
-  if (values.mkcp_enabled || values.mekya_enabled) {
-    values.flow = undefined;
+    delete cfg.flow;
   }
   const realityOn = REALITY_PROTOCOLS.has(protocol) && (!!values.reality_enabled || values.security_layer === 'reality');
   const wantTLSMaterial =

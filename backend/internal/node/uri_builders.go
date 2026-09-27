@@ -11,6 +11,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -106,7 +107,14 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		}
 		params := tlsParams(cfg)
 		params["type"] = "tcp"
-		if flow, _ := row["flow"].(string); flow != "" {
+		// Resolve the transport before deciding anything that depends on it.
+		for k, v := range transportParams(cfg) {
+			params[k] = v
+		}
+		// Vision flow is TCP-only. Ask the transport rather than the config: a
+		// listener switched to ws/grpc/xhttp keeps its old flow in storage, and
+		// exporting it produces a link no client can use.
+		if flow, _ := row["flow"].(string); flow != "" && protocol.TransportCarriesFlow(cfg) {
 			params["flow"] = flow
 		}
 		if encryption, _ := cfg["encryption"].(string); encryption != "" {
@@ -134,9 +142,6 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 				params["fp"] = "chrome"
 			}
 		}
-		for k, v := range transportParams(cfg) {
-			params[k] = v
-		}
 		result = append(result, addName(query("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
@@ -156,18 +161,34 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		aid := stringValue(cfg["alterId"], "0")
 		cipher := stringValue(cfg["cipher"], "auto")
 		obj := map[string]string{"v": "2", "ps": name, "add": host, "port": port, "id": uuid, "aid": aid, "scy": cipher, "net": "tcp", "type": "none"}
-		if tls, ok := tlsParams(cfg)["security"]; ok && tls == "tls" {
+		tlsOpts := tlsParams(cfg)
+		if tlsOpts["security"] == "tls" {
 			obj["tls"] = "tls"
 		}
-		if sni := tlsParams(cfg)["sni"]; sni != "" {
-			obj["sni"] = sni
+		if tlsOpts["sni"] != "" {
+			obj["sni"] = tlsOpts["sni"]
 		}
-		if fp := tlsParams(cfg)["fp"]; fp != "" {
-			obj["fp"] = fp
+		if tlsOpts["fp"] != "" {
+			obj["fp"] = tlsOpts["fp"]
+		}
+		// vless and trojan carry this in their query string. v2rayN's documented
+		// vmess field set has no skip-certificate field, so it ignores this one,
+		// but clients that do read it are the ones whose verification would
+		// otherwise fail — see vmessSchema for why it is kept anyway.
+		if tlsOpts["allowInsecure"] != "" {
+			obj["allowInsecure"] = tlsOpts["allowInsecure"]
 		}
 		if ws, ok := cfg["ws-path"].(string); ok && ws != "" {
 			obj["net"] = "ws"
 			obj["path"] = ws
+			// The Host header is carried separately from the path. Without it a
+			// ws listener that pins a Host is unreachable through the exported
+			// link, even though the same listener works from the client YAML.
+			if headers, ok := cfg["ws-headers"].(map[string]interface{}); ok {
+				if h, ok := headers["Host"].(string); ok && h != "" {
+					obj["host"] = h
+				}
+			}
 		}
 		if grpc, ok := cfg["grpc-service-name"].(string); ok && grpc != "" {
 			obj["net"] = "grpc"
@@ -258,8 +279,11 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := cfg["sni"].(string); ok && v != "" {
 				params["sni"] = v
 			}
-			if certutil.ShouldSkipCertVerify(cfg) {
+			// Matches the config-embedded users branch below: same listener must
+			// produce the same link whichever way its users are stored.
+			if clientSkipCert(cfg, host) {
 				params["insecure"] = "1"
+				params["allowInsecure"] = "1"
 			}
 			if v, ok := cfg["obfs"].(string); ok && v != "" {
 				params["obfs"] = v

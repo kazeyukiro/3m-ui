@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
 
@@ -67,7 +68,11 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 			users := make([]interface{}, 0, len(credentials))
 			for _, credential := range credentials {
 				row := map[string]interface{}{"username": credential.Username, "password": credential.Password, "uuid": credential.UUID}
-				if flow != "" && (listener.Protocol == "vless" || listener.Protocol == "vmess") {
+				// The listener-level flow is only meaningful on a raw/TCP
+				// transport; copying it onto users of a ws/grpc/xhttp listener
+				// reintroduces the value the form was supposed to have dropped.
+				if flow != "" && protocol.TransportCarriesFlow(cfg) &&
+					(listener.Protocol == "vless" || listener.Protocol == "vmess") {
 					row["flow"] = flow
 				}
 				users = append(users, row)

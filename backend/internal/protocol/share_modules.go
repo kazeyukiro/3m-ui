@@ -87,7 +87,7 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 	} else {
 		params["encryption"] = "none"
 	}
-	if spec.Flow != "" {
+	if spec.Flow != "" && spec.Transport.CarriesFlow() {
 		params["flow"] = spec.Flow
 	}
 	if spec.SNI != "" {
@@ -144,7 +144,7 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 	if node.UDP {
 		p["udp"] = true
 	}
-	if spec.Flow != "" {
+	if spec.Flow != "" && spec.Transport.CarriesFlow() {
 		p["flow"] = spec.Flow
 	}
 	// tls / reality
@@ -379,7 +379,15 @@ func (VMessCompiler) BuildShare(in ShareInput) (Share, error) {
 		extra["alpn"] = spec.ALPN
 	}
 	if netw == "ws" && spec.Transport.WSPath != "" {
-		extra["ws-opts"] = map[string]interface{}{"path": spec.Transport.WSPath}
+		// Per mihomo wiki (proxies-transport: ws-opts), the Host header belongs
+		// under `headers`, not at the top level of ws-opts. vlessClientYAML
+		// already emits it that way; a ws listener that pins a Host is
+		// unreachable when the client YAML leaves it out.
+		wsOpts := map[string]interface{}{"path": spec.Transport.WSPath}
+		if spec.Transport.WSHost != "" {
+			wsOpts["headers"] = map[string]interface{}{"Host": spec.Transport.WSHost}
+		}
+		extra["ws-opts"] = wsOpts
 	}
 	if netw == "grpc" && spec.Transport.GRPCService != "" {
 		extra["grpc-opts"] = map[string]interface{}{"grpc-service-name": spec.Transport.GRPCService}
