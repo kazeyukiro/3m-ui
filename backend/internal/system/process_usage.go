@@ -140,7 +140,7 @@ func applyCgroupMemoryShares(procs []*ProcessUsage) {
 		return
 	}
 	total := memoryTotalForPercent()
-	cg := readCgroupMemory()
+	cg := readServiceCgroupMemory()
 	hostTotal := total
 	info, ok := memoryFromCgroup(cg, hostTotal)
 	if !ok || info.Used <= 0 {
