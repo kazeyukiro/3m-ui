@@ -1,11 +1,10 @@
-# Crowdin configuration for 3m-ui panel UI strings.
-# Project setup: https://crowdin.com → create project → Languages match locales below.
-# Secrets (GitHub Actions): CROWDIN_PROJECT_ID, CROWDIN_PERSONAL_TOKEN
+# Crowdin config for 3m-ui panel UI strings.
+# Secrets: CROWDIN_PROJECT_ID, CROWDIN_PERSONAL_TOKEN
+# Generate JSON: node scripts/i18n/ts-to-json.mjs
+# Apply download: node scripts/i18n/json-to-ts.mjs
 #
-# Intermediate JSON is generated from TypeScript via:
-#   node scripts/i18n/ts-to-json.mjs
-# After download:
-#   node scripts/i18n/json-to-ts.mjs
+# File names match Crowdin language codes (zh-CN, pt-BR, …).
+# Do not add identity languages_mapping — Crowdin rejects invalid mapping entries.
 
 project_id_env: CROWDIN_PROJECT_ID
 api_token_env: CROWDIN_PERSONAL_TOKEN
@@ -17,25 +16,9 @@ preserve_hierarchy: true
 files:
   - source: /frontend/src/i18n/crowdin/en.json
     translation: /frontend/src/i18n/crowdin/%locale%.json
+    # Path of the source file inside the Crowdin project
     dest: /panel/en.json
     type: json
-    # Map Crowdin locale codes → our file names (zh-CN, pt-BR, …)
-    languages_mapping:
-      locale:
-        zh-CN: zh-CN
-        zh-TW: zh-TW
-        pt-BR: pt-BR
-        ja: ja
-        ko: ko
-        es: es
-        fr: fr
-        de: de
-        ru: ru
-        vi: vi
-        id: id
-        th: th
-        tr: tr
-        ar: ar
-        hi: hi
-        pl: pl
-        uk: uk
+    # Only map when Crowdin's code differs from our filename.
+    # Official codes: https://developer.crowdin.com/language-codes/
+    # Our targets already use Crowdin codes (zh-CN, zh-TW, pt-BR, ja, …) — no mapping needed.

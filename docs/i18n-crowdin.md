@@ -39,3 +39,12 @@ Until the two secrets exist, the job is skipped (`if: secrets…`).
 ## App code
 
 Do not edit `frontend/src/i18n/crowdin/` by hand for long-term source of truth — edit `locales/*.ts` (especially `en.ts`), export JSON, translate on Crowdin, import back.
+
+
+## Language codes
+
+Target languages in the Crowdin project must use the same codes as repo files:
+
+`zh-CN`, `zh-TW`, `ja`, `ko`, `es`, `fr`, `de`, `ru`, `pt-BR`, `vi`, `id`, `th`, `tr`, `ar`, `hi`, `pl`, `uk`.
+
+See [Crowdin language codes](https://developer.crowdin.com/language-codes/). No `languages_mapping` is required when codes match filenames.
