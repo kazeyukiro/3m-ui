@@ -29,7 +29,7 @@ Lightweight and self-hosted. Manage [Mihomo](https://github.com/MetaCubeX/mihomo
 | **Config** | Generate → validate → apply; rollback previous `config.yaml` on failure |
 | **Telegram** | Alerts and bot commands (token + chat IDs) |
 | **Cluster** | Register remote panels, health checks, node mirror sync, merged subscriptions; **push local nodes by name** (created disabled on remote) |
-| **Ops** | Core lifecycle, Geo, panel SSL/ACME, backup, **Cloudflare WARP** one-click register (WireGuard/MASQUE YAML) |
+| **Ops** | Core lifecycle, Geo, panel SSL/ACME (incl. DNS-01 wildcards), backup, **Cloudflare WARP** one-click register (WireGuard/MASQUE YAML) |
 
 ---
 
@@ -124,3 +124,6 @@ Contributors: [Contributors](https://github.com/kazeyukiro/3m-ui/graphs/contribu
 [Eclipse Public License 2.0](../../LICENSE)
 
 Third-party notices: [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md).
+
+- [Panel SSL / ACME (HTTP-01, DNS-01 wildcard)](../panel-ssl.md)
+- [Batch apply node certificates](../batch-certificate.md)
