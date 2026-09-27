@@ -232,3 +232,6 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 
 Full translations (18 languages): see the language links at the top, or open [README.en.md](./docs/readme/README.en.md).
 
+## Panel UI translations
+
+See [docs/i18n-crowdin.md](./docs/i18n-crowdin.md) for Crowdin setup.
