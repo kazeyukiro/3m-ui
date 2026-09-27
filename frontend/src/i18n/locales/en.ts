@@ -786,7 +786,7 @@ export default {
     "quickCreated": "User created",
     "quickCredTitle": "Credentials (save now)",
     "quickCredWarn": "Password is not shown again in the list. Copy it now.",
-    "bindAllNodes": "Bind all nodes"
+    "bindAllNodes": "Bind all nodes",
     "usernameHint": "Login / proxy username for this user.",
     "passwordHint": "Password or secret used by the protocol (format depends on node type).",
     "start_on_first_useHint": "Expiry countdown starts on first successful use instead of creation time.",
@@ -1109,7 +1109,7 @@ export default {
     "warpDoneNoCopy": "WARP registered. Copy the YAML manually if clipboard is unavailable.",
     "warpEmpty": "No WARP configuration returned.",
     "domainOrIP": "Domain or public IP",
-    "domainOrIPExtra": "Hostname for standard LE, or public IPv4/IPv6 for shortlived IP certs (~6 days, auto-renew). Port 80 (HTTP-01) or 443 (TLS-ALPN-01) must be reachable."
+    "domainOrIPExtra": "Hostname for standard LE, or public IPv4/IPv6 for shortlived IP certs (~6 days, auto-renew). Port 80 (HTTP-01) or 443 (TLS-ALPN-01) must be reachable.",
     "enabledHint": "Master switch for this settings group where applicable.",
     "domainHint": "Hostname, *.example.com (DNS-01), or public IP for panel SSL.",
     "emailHint": "ACME account email (Let’s Encrypt notices).",
