@@ -7,7 +7,7 @@
 1. Create a project on [Crowdin](https://crowdin.com/) (source language: **English**).
 2. Add target languages matching repo codes: `zh-CN`, `zh-TW`, `ja`, `ko`, `es`, `fr`, `de`, `ru`, `pt-BR`, `vi`, `id`, `th`, `tr`, `ar`, `hi`, `pl`, `uk`.
 3. Create a **Personal Access Token** (Crowdin account → Settings → API).
-4. In the GitHub repo → **Settings → Secrets and variables → Actions**, add:
+4. In the GitHub repo → **Settings → Secrets and variables → Actions** → tab **Secrets** → **Repository secrets** (not Environment secrets), click **New repository secret**, add:
    - `CROWDIN_PROJECT_ID` — numeric project id
    - `CROWDIN_PERSONAL_TOKEN` — API token
 5. (Optional) Install the [Crowdin GitHub app](https://github.com/apps/crowdin) on the repo for UI integration; Actions below work with the token alone.

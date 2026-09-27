@@ -24,22 +24,38 @@ permissions:
   contents: write
   pull-requests: write
 
+# Do NOT reference secrets in job-level `if:` — GitHub evaluates that as empty and the workflow fails with 0 jobs.
 jobs:
   sync:
     runs-on: ubuntu-latest
-    if: ${{ secrets.CROWDIN_PERSONAL_TOKEN != '' && secrets.CROWDIN_PROJECT_ID != '' }}
     steps:
+      - name: Detect Crowdin configuration
+        id: cfg
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+        run: |
+          if [ -z "${CROWDIN_PERSONAL_TOKEN}" ] || [ -z "${CROWDIN_PROJECT_ID}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Crowdin secrets not set (CROWDIN_PROJECT_ID / CROWDIN_PERSONAL_TOKEN). Skipping. Add them under Settings → Secrets and variables → Actions → Repository secrets."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.cfg.outputs.enabled == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.enabled == 'true'
         with:
           node-version: '22'
 
       - name: Export TypeScript locales → Crowdin JSON
+        if: steps.cfg.outputs.enabled == 'true'
         run: node scripts/i18n/ts-to-json.mjs
 
       - name: Upload English sources
-        if: github.event_name == 'push' || inputs.mode == 'upload' || inputs.mode == 'both'
+        if: steps.cfg.outputs.enabled == 'true' && (github.event_name == 'push' || inputs.mode == 'upload' || inputs.mode == 'both')
         uses: crowdin/github-action@v2
         with:
           upload_sources: true
@@ -52,7 +68,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download translations
-        if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'download' || inputs.mode == 'both')
+        if: steps.cfg.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && (inputs.mode == 'download' || inputs.mode == 'both')
         uses: crowdin/github-action@v2
         with:
           upload_sources: false
@@ -66,7 +82,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Convert JSON → TypeScript and open PR
-        if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'download' || inputs.mode == 'both')
+        if: steps.cfg.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && (inputs.mode == 'download' || inputs.mode == 'both')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node scripts/i18n/json-to-ts.mjs
           node scripts/i18n/check-keys.mjs || true
@@ -84,5 +102,3 @@ jobs:
             || gh pr create --base main --head l10n_crowdin_translations \
               --title "i18n: Crowdin translations" \
               --body "Automated pull from Crowdin. Review with \`node scripts/i18n/check-keys.mjs\` before merge."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
