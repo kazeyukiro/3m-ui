@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Form, Input, InputNumber, Select, Switch, Divider, Radio, Space, Typography } from 'antd';
 import type { ProtocolCapability, FieldCapability } from '../api/capabilities';
-import { useI18n } from '../i18n';
+import { useI18n, fieldTip } from '../i18n';
 
 const { Text } = Typography;
 
@@ -38,7 +38,7 @@ function renderFields(
         key={f.path}
         name={f.path}
         label={f.label}
-        tooltip={t(tipKey, f.description || '') || f.description}
+        tooltip={fieldTip(t, tipKey, f.description || undefined)}
         rules={!transientRequired && f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} is required` }] : undefined}
         valuePropName={f.type === 'boolean' ? 'checked' : 'value'}
       >

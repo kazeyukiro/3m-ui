@@ -23,7 +23,7 @@ import {
   theme,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
+import { useI18n, LOCALE_OPTIONS, type Locale , fieldTip} from '../i18n';
 import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 import { copyText } from '../utils/clipboard';
@@ -415,7 +415,7 @@ const Settings: React.FC = () => {
                       t('settings.panelPortHint') ||
                       'NAT: map this host port to the WAN. Restart 3m-ui after change.'
                     }
-                   tooltip={t('settings.portHint')}>
+                   tooltip={fieldTip(t, 'settings.portHint')}>
                     <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                   </Form.Item>
                   <Form.Item
@@ -425,7 +425,7 @@ const Settings: React.FC = () => {
                       t('settings.panelListenHint') ||
                       'Empty = all interfaces (IPv4/IPv6). Use 127.0.0.1 for reverse-proxy only.'
                     }
-                   tooltip={t('settings.listenHint')}>
+                   tooltip={fieldTip(t, 'settings.listenHint')}>
                     <Input placeholder="0.0.0.0 / :: / 127.0.0.1" />
                   </Form.Item>
                   <Form.Item
@@ -435,7 +435,7 @@ const Settings: React.FC = () => {
                       t('settings.panelPublicURLHint') ||
                       'Used in subscription links behind NAT, e.g. https://panel.example.com:8443'
                     }
-                   tooltip={t('settings.public_urlHint')}>
+                   tooltip={fieldTip(t, 'settings.public_urlHint')}>
                     <Input placeholder="https://example.com:8443" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit">
@@ -513,7 +513,7 @@ const Settings: React.FC = () => {
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="alpn" label={t('listeners.alpn')} tooltip={t('settings.alpnHint')}>
+                <Form.Item name="alpn" label={t('listeners.alpn')} tooltip={fieldTip(t, 'settings.alpnHint')}>
                   <Input placeholder="h2,http/1.1" />
                 </Form.Item>
                 <Button type="primary" htmlType="submit">
@@ -561,37 +561,37 @@ const Settings: React.FC = () => {
                   }
                 }}
               >
-                <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={t('settings.tgEnabledHint')}>
+                <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={fieldTip(t, 'settings.tgEnabledHint')}>
                   <Switch />
                 </Form.Item>
                 <Form.Item name="bot_token" label={t('settings.botToken')} tooltip={t('settings.botTokenHint') || 'Get from @BotFather. Format: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz'}>
                   <Input.Password />
                 </Form.Item>
-                <Form.Item name="chat_ids" label={t('settings.chatIds')} tooltip={t('settings.chatIdsHint')}>
+                <Form.Item name="chat_ids" label={t('settings.chatIds')} tooltip={fieldTip(t, 'settings.chatIdsHint')}>
                   <Input placeholder="123456789, -100123..." />
                 </Form.Item>
-                <Form.Item name="notify_on_login" label={t('settings.notifyLogin') || 'Notify on panel login'} valuePropName="checked" tooltip={t('settings.notifyLoginHint')}>
+                <Form.Item name="notify_on_login" label={t('settings.notifyLogin') || 'Notify on panel login'} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyLoginHint')}>
                   <Switch />
                 </Form.Item>
-                <Form.Item name="notify_on_cpu" label={t('settings.notifyCPU') || 'Notify on high CPU'} valuePropName="checked" tooltip={t('settings.notifyCPUHint')}>
+                <Form.Item name="notify_on_cpu" label={t('settings.notifyCPU') || 'Notify on high CPU'} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyCPUHint')}>
                   <Switch />
                 </Form.Item>
                 <Form.Item name="cpu_warn_pct" label={t('settings.cpuWarnPct') || 'CPU warn %'} tooltip={t('settings.cpuWarnPctHint') || '0 = disabled. Alert when panel CPU usage exceeds this percentage.'} initialValue={0}>
                   <InputNumber min={0} max={100} style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked" tooltip={t('settings.notifyBlockHint')}>
+                <Form.Item name="notify_on_block" label={t('settings.notifyBlock')} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyBlockHint')}>
                   <Switch />
                 </Form.Item>
-                <Form.Item name="notify_on_unblock" label={t('settings.notifyUnblock')} valuePropName="checked" tooltip={t('settings.notifyUnblockHint')}>
+                <Form.Item name="notify_on_unblock" label={t('settings.notifyUnblock')} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyUnblockHint')}>
                   <Switch />
                 </Form.Item>
-                <Form.Item name="notify_on_expiry" label={t('settings.notifyExpiry')} valuePropName="checked" tooltip={t('settings.notifyExpiryHint')}>
+                <Form.Item name="notify_on_expiry" label={t('settings.notifyExpiry')} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyExpiryHint')}>
                   <Switch />
                 </Form.Item>
-                <Form.Item name="notify_daily_digest" label={t('settings.notifyDailyDigest')} valuePropName="checked" tooltip={t('settings.notifyDailyDigestHint')}>
+                <Form.Item name="notify_daily_digest" label={t('settings.notifyDailyDigest')} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyDailyDigestHint')}>
                   <Switch />
                 </Form.Item>
-                <Form.Item name="notify_on_traffic" label={t('settings.notifyTraffic') || 'Traffic threshold warning'} valuePropName="checked" tooltip={t('settings.notifyTrafficHint')}>
+                <Form.Item name="notify_on_traffic" label={t('settings.notifyTraffic') || 'Traffic threshold warning'} valuePropName="checked" tooltip={fieldTip(t, 'settings.notifyTrafficHint')}>
                   <Switch />
                 </Form.Item>
                 <Form.Item name="traffic_warn_pct" label={t('settings.trafficWarnPct') || 'Traffic warn %'} tooltip={t('settings.trafficWarnPctHint') || '0 = disabled. Alert when user traffic exceeds this percentage of their quota.'}>
@@ -600,7 +600,7 @@ const Settings: React.FC = () => {
                 <Form.Item name="expiry_warn_hours" label={t('settings.expiryWarnHours') || 'Expiry warn (hours)'} tooltip={t('settings.expiryWarnHoursHint') || 'Hours before user expiry to send a warning notification.'}>
                   <InputNumber min={1} max={720} style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item name="enabled_events" label={t('settings.tgEvents') || 'Enabled events'} tooltip={t('settings.tgEventsHint')}>
+                <Form.Item name="enabled_events" label={t('settings.tgEvents') || 'Enabled events'} tooltip={fieldTip(t, 'settings.tgEventsHint')}>
                   <Select
                     mode="multiple"
                     options={[
@@ -612,7 +612,7 @@ const Settings: React.FC = () => {
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="language" label={t('settings.tgLanguage') || 'Bot language'} tooltip={t('settings.tgLanguageHint')}>
+                <Form.Item name="language" label={t('settings.tgLanguage') || 'Bot language'} tooltip={fieldTip(t, 'settings.tgLanguageHint')}>
                   <Select
                     showSearch
                     optionFilterProp="label"
@@ -639,7 +639,7 @@ const Settings: React.FC = () => {
                     allowClear
                   />
                 </Form.Item>
-                <Form.Item name="schedule" label={t('settings.tgSchedule') || 'Report schedule'} tooltip={t('settings.tgScheduleHint')}>
+                <Form.Item name="schedule" label={t('settings.tgSchedule') || 'Report schedule'} tooltip={fieldTip(t, 'settings.tgScheduleHint')}>
                   <Input placeholder="0 9 * * * / @daily" />
                 </Form.Item>
                 <Form.Item name="proxy_url" label={t('settings.tgProxy') || 'Proxy URL'} tooltip={t('settings.tgProxyHint') || 'SOCKS5/HTTP proxy for Telegram API if GitHub/Telegram is blocked. e.g. socks5://127.0.0.1:1080'}>
@@ -648,7 +648,7 @@ const Settings: React.FC = () => {
                 <Form.Item name="api_server" label={t('settings.tgApiServer') || 'Telegram API server'} tooltip={t('settings.tgApiServerHint') || 'Custom Telegram API server (for Bot API instances). Leave empty for default api.telegram.org'}>
                   <Input placeholder="https://api.telegram.org" />
                 </Form.Item>
-                <Form.Item name="attach_backup" label={t('settings.tgAttachBackup') || 'Attach DB backup in report'} valuePropName="checked" tooltip={t('settings.tgAttachBackupHint')}>
+                <Form.Item name="attach_backup" label={t('settings.tgAttachBackup') || 'Attach DB backup in report'} valuePropName="checked" tooltip={fieldTip(t, 'settings.tgAttachBackupHint')}>
                   <Switch />
                 </Form.Item>
                 <Space wrap>
@@ -894,13 +894,13 @@ const Settings: React.FC = () => {
                     }
                   }}
                 >
-                  <Form.Item name="enabled" label={t('settings.githubOAuthEnable') || 'Enable'} valuePropName="checked" tooltip={t('settings.githubOAuthEnableHint')}>
+                  <Form.Item name="enabled" label={t('settings.githubOAuthEnable') || 'Enable'} valuePropName="checked" tooltip={fieldTip(t, 'settings.githubOAuthEnableHint')}>
                     <Switch />
                   </Form.Item>
-                  <Form.Item name="client_id" label="Client ID" rules={[{ required: false }]} tooltip={t('settings.githubClientIdHint')}>
+                  <Form.Item name="client_id" label="Client ID" rules={[{ required: false }]} tooltip={fieldTip(t, 'settings.githubClientIdHint')}>
                     <Input placeholder="Ov23..." autoComplete="off" />
                   </Form.Item>
-                  <Form.Item name="client_secret" label="Client Secret" tooltip={t('settings.githubClientSecretHint')}>
+                  <Form.Item name="client_secret" label="Client Secret" tooltip={fieldTip(t, 'settings.githubClientSecretHint')}>
                     <Input.Password placeholder="github_oauth_..." autoComplete="new-password" />
                   </Form.Item>
                   <Form.Item
@@ -1154,7 +1154,7 @@ const Settings: React.FC = () => {
                 <Form.Item
                   name="theme_dir"
                   label={t('settings.subThemeDir') || 'Theme directory'}
-                 tooltip={t('settings.theme_dirHint')}>
+                 tooltip={fieldTip(t, 'settings.theme_dirHint')}>
                   <Input placeholder="/var/lib/3m-ui/sub-theme" />
                 </Form.Item>
                 <Form.Item name="title" label={t('settings.subTitle') || 'Page title'} tooltip={t('settings.subTitleHint') || 'Title shown on the user subscription info page.'}>
@@ -1163,20 +1163,20 @@ const Settings: React.FC = () => {
                 <Form.Item name="support_url" label={t('settings.subSupportUrl') || 'Support URL'} tooltip={t('settings.subSupportUrlHint') || 'Optional link shown on the subscription page (e.g. Telegram support link).'}>
                   <Input />
                 </Form.Item>
-                <Form.Item name="announce" label={t('settings.subAnnounce') || 'Announce'} tooltip={t('settings.subAnnounceHint')}>
+                <Form.Item name="announce" label={t('settings.subAnnounce') || 'Announce'} tooltip={fieldTip(t, 'settings.subAnnounceHint')}>
                   <Input.TextArea rows={2} />
                 </Form.Item>
-                <Form.Item name="web_page_url" label={t('settings.subWebPage') || 'Web page URL'} tooltip={t('settings.subWebPageHint')}>
+                <Form.Item name="web_page_url" label={t('settings.subWebPage') || 'Web page URL'} tooltip={fieldTip(t, 'settings.subWebPageHint')}>
                   <Input />
                 </Form.Item>
-                <Form.Item name="update_hours" label={t('settings.subUpdates') || 'Update interval (hours)'} tooltip={t('settings.subUpdatesHint')}>
+                <Form.Item name="update_hours" label={t('settings.subUpdates') || 'Update interval (hours)'} tooltip={fieldTip(t, 'settings.subUpdatesHint')}>
                   <InputNumber min={1} max={168} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item
                   name="encrypt"
                   label={t('settings.subEncrypt') || 'Base64-encode URI list'}
                   valuePropName="checked"
-                  tooltip={t('settings.subEncryptHint')}
+                  tooltip={fieldTip(t, 'settings.subEncryptHint')}
                 >
                   <Switch />
                 </Form.Item>
@@ -1246,16 +1246,16 @@ const Settings: React.FC = () => {
                     }
                   }}
                 >
-                  <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={t('settings.sslEnabledHint')}>
+                  <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={fieldTip(t, 'settings.sslEnabledHint')}>
                     <Switch />
                   </Form.Item>
-                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.'} tooltip={t('settings.domainHint')}>
+                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.'} tooltip={fieldTip(t, 'settings.domainHint')}>
                     <Input placeholder="panel.example.com or *.example.com" />
                   </Form.Item>
-                  <Form.Item name="email" label={t('settings.email')} tooltip={t('settings.sslEmailHint')}>
+                  <Form.Item name="email" label={t('settings.email')} tooltip={fieldTip(t, 'settings.sslEmailHint')}>
                     <Input placeholder="you@example.com" />
                   </Form.Item>
-                  <Form.Item name="challenge" label={t('settings.sslChallenge') || 'ACME challenge'} tooltip={t('settings.sslChallengeHint')} initialValue="">
+                  <Form.Item name="challenge" label={t('settings.sslChallenge') || 'ACME challenge'} tooltip={fieldTip(t, 'settings.sslChallengeHint')} initialValue="">
                     <Select allowClear placeholder="http-01"
                       options={[
                         { value: '', label: t('settings.sslChallengeHTTP') || 'HTTP-01 (default, single domain / IP)' },
@@ -1263,29 +1263,29 @@ const Settings: React.FC = () => {
                       ]}
                     />
                   </Form.Item>
-                  <Form.Item name="dns_provider" label={t('settings.sslDNSProvider') || 'DNS provider'} initialValue="cloudflare" tooltip={t('settings.sslDNSProviderHint')}>
+                  <Form.Item name="dns_provider" label={t('settings.sslDNSProvider') || 'DNS provider'} initialValue="cloudflare" tooltip={fieldTip(t, 'settings.sslDNSProviderHint')}>
                     <Select options={[{ value: 'cloudflare', label: 'Cloudflare' }]} />
                   </Form.Item>
-                  <Form.Item name="dns_token" label={t('settings.sslDNSToken') || 'DNS API token'} tooltip={t('settings.sslDNSTokenHint')}>
+                  <Form.Item name="dns_token" label={t('settings.sslDNSToken') || 'DNS API token'} tooltip={fieldTip(t, 'settings.sslDNSTokenHint')}>
                     <Input.Password placeholder={sslStatus?.has_dns_token ? '•••••••• (saved)' : 'Cloudflare API token'} autoComplete="new-password" />
                   </Form.Item>
-                  <Form.Item name="dns_zone" label={t('settings.sslDNSZone') || 'DNS zone (optional)'} tooltip={t('settings.sslDNSZoneHint')}>
+                  <Form.Item name="dns_zone" label={t('settings.sslDNSZone') || 'DNS zone (optional)'} tooltip={fieldTip(t, 'settings.sslDNSZoneHint')}>
                     <Input placeholder="example.com" />
                   </Form.Item>
 
-                  <Form.Item name="cache_dir" label={t('settings.acmeCacheDir') || 'ACME cache dir'} tooltip={t('settings.acmeCacheDirHint')}>
+                  <Form.Item name="cache_dir" label={t('settings.acmeCacheDir') || 'ACME cache dir'} tooltip={fieldTip(t, 'settings.acmeCacheDirHint')}>
                     <Input placeholder="/var/lib/3m-ui/acme" />
                   </Form.Item>
-                  <Form.Item name="listen_http" label={t('settings.listenHttp') || 'HTTP listen'} tooltip={t('settings.listenHttpHint')}>
+                  <Form.Item name="listen_http" label={t('settings.listenHttp') || 'HTTP listen'} tooltip={fieldTip(t, 'settings.listenHttpHint')}>
                     <Input placeholder=":80" />
                   </Form.Item>
-                  <Form.Item name="listen_tls" label={t('settings.listenTls') || 'TLS listen'} tooltip={t('settings.listenTlsHint')}>
+                  <Form.Item name="listen_tls" label={t('settings.listenTls') || 'TLS listen'} tooltip={fieldTip(t, 'settings.listenTlsHint')}>
                     <Input placeholder=":443" />
                   </Form.Item>
-                  <Form.Item name="cert_file" label={t('settings.manualCert') || 'Manual cert file'} tooltip={t('settings.manualCertHint')}>
+                  <Form.Item name="cert_file" label={t('settings.manualCert') || 'Manual cert file'} tooltip={fieldTip(t, 'settings.manualCertHint')}>
                     <Input />
                   </Form.Item>
-                  <Form.Item name="key_file" label={t('settings.manualKey') || 'Manual key file'} tooltip={t('settings.manualKeyHint')}>
+                  <Form.Item name="key_file" label={t('settings.manualKey') || 'Manual key file'} tooltip={fieldTip(t, 'settings.manualKeyHint')}>
                     <Input />
                   </Form.Item>
                   <Button type="primary" htmlType="submit">
@@ -1308,13 +1308,13 @@ const Settings: React.FC = () => {
                     }
                   }}
                 >
-                  <Form.Item name="email" label={t('settings.email')} rules={[{ required: true }]} tooltip={t('settings.certbotEmailHint')}>
+                  <Form.Item name="email" label={t('settings.email')} rules={[{ required: true }]} tooltip={fieldTip(t, 'settings.certbotEmailHint')}>
                     <Input />
                   </Form.Item>
-                  <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]} tooltip={t('settings.certbotDomainHint')}>
+                  <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]} tooltip={fieldTip(t, 'settings.certbotDomainHint')}>
                     <Input />
                   </Form.Item>
-                  <Form.Item name="webroot" label={t('settings.webroot')} tooltip={t('settings.webrootHint')}>
+                  <Form.Item name="webroot" label={t('settings.webroot')} tooltip={fieldTip(t, 'settings.webrootHint')}>
                     <Input placeholder="/var/www/html" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit">
@@ -1358,7 +1358,7 @@ const Settings: React.FC = () => {
                     }
                   }}
                 >
-                  <Form.Item name="kind" label={t('settings.proxyKind')} tooltip={t('settings.proxyKindHint')}>
+                  <Form.Item name="kind" label={t('settings.proxyKind')} tooltip={fieldTip(t, 'settings.proxyKindHint')}>
                     <Select
                       options={[
                         { value: 'nginx', label: 'Nginx' },
@@ -1366,10 +1366,10 @@ const Settings: React.FC = () => {
                       ]}
                     />
                   </Form.Item>
-                  <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]} tooltip={t('settings.domainHint')}>
+                  <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]} tooltip={fieldTip(t, 'settings.domainHint')}>
                     <Input placeholder="panel.example.com" />
                   </Form.Item>
-                  <Form.Item name="upstream" label={t('settings.upstream')} tooltip={t('settings.upstreamHint')}>
+                  <Form.Item name="upstream" label={t('settings.upstream')} tooltip={fieldTip(t, 'settings.upstreamHint')}>
                     <Input />
                   </Form.Item>
                   <Button type="primary" htmlType="submit">

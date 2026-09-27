@@ -149,3 +149,20 @@ export const useI18n = () => {
   if (!ctx) throw new Error('useI18n must be used within I18nProvider');
   return ctx;
 };
+
+
+/** Tooltip text only when translation is real — never the raw key or a generic wiki stub. */
+export function fieldTip(
+  t: (key: string, fallback?: string) => string,
+  key: string,
+  fallback?: string,
+): string | undefined {
+  const v = (t(key, '') || '').trim();
+  if (!v || v === key) return fallback?.trim() || undefined;
+  const low = v.toLowerCase();
+  if (low.includes('wiki.metacubex') || low.includes('see mihomo meta') || v.includes('对照 Mihomo')) {
+    return fallback?.trim() || undefined;
+  }
+  return v;
+}
+
