@@ -28,8 +28,13 @@ func (h *Handler) Get(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	// Never echo full key path contents; just settings metadata.
-	c.JSON(http.StatusOK, s)
+	// Never echo DNS API tokens to the browser.
+	out := s
+	if out.DNSToken != "" {
+		out.DNSToken = ""
+		// Client uses has_dns_token from /ssl/status; keep shape stable.
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 func (h *Handler) Status(c *gin.Context) {
@@ -57,6 +62,29 @@ func (h *Handler) Put(c *gin.Context) {
 		if (in.CertFile == "") != (in.KeyFile == "") {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "cert_file and key_file must be set together"})
 			return
+		}
+		if NeedsDNS01(in) && in.CertFile == "" {
+			if IsIPHost(in.Domain) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "DNS-01 cannot be used with an IP address"})
+				return
+			}
+			prev, _ := LoadSettings(h.db)
+			if strings.TrimSpace(in.DNSToken) == "" {
+				in.DNSToken = prev.DNSToken
+			}
+			if strings.TrimSpace(in.DNSToken) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "dns_token is required for DNS-01 / wildcard certificates (Cloudflare API token with Zone.DNS Edit)"})
+				return
+			}
+			if strings.TrimSpace(in.DNSProvider) == "" {
+				in.DNSProvider = "cloudflare"
+			}
+		}
+	}
+	// Never clear a stored DNS token when the client sends an empty field.
+	if strings.TrimSpace(in.DNSToken) == "" {
+		if prev, err := LoadSettings(h.db); err == nil && prev.DNSToken != "" {
+			in.DNSToken = prev.DNSToken
 		}
 	}
 	if err := SaveSettings(h.db, in); err != nil {

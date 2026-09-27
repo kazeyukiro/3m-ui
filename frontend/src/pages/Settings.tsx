@@ -1233,6 +1233,10 @@ const Settings: React.FC = () => {
                         key_file: values.key_file || '',
                         listen_http: values.listen_http || ':80',
                         listen_tls: values.listen_tls || ':443',
+                        challenge: values.challenge || '',
+                        dns_provider: values.dns_provider || 'cloudflare',
+                        dns_token: values.dns_token || '',
+                        dns_zone: values.dns_zone || '',
                       });
                       message.success(t('settings.sslSaved') || 'SSL saved — restart panel');
                       const st = await client.get('/system/ssl/status');
@@ -1245,12 +1249,30 @@ const Settings: React.FC = () => {
                   <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={t('settings.sslEnabledHint')}>
                     <Switch />
                   </Form.Item>
-                  <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname or IPv4/IPv6. IP uses Let\'s Encrypt shortlived profile (~6 days).'}>
-                    <Input placeholder="panel.example.com or 203.0.113.10" />
+                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.'}>
+                    <Input placeholder="panel.example.com or *.example.com" />
                   </Form.Item>
                   <Form.Item name="email" label={t('settings.email')} tooltip={t('settings.sslEmailHint')}>
                     <Input placeholder="you@example.com" />
                   </Form.Item>
+                  <Form.Item name="challenge" label={t('settings.sslChallenge') || 'ACME challenge'} tooltip={t('settings.sslChallengeHint')} initialValue="">
+                    <Select allowClear placeholder="http-01"
+                      options={[
+                        { value: '', label: t('settings.sslChallengeHTTP') || 'HTTP-01 (default, single domain / IP)' },
+                        { value: 'dns-01', label: t('settings.sslChallengeDNS') || 'DNS-01 (wildcard / no port 80)' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="dns_provider" label={t('settings.sslDNSProvider') || 'DNS provider'} initialValue="cloudflare" tooltip={t('settings.sslDNSProviderHint')}>
+                    <Select options={[{ value: 'cloudflare', label: 'Cloudflare' }]} />
+                  </Form.Item>
+                  <Form.Item name="dns_token" label={t('settings.sslDNSToken') || 'DNS API token'} tooltip={t('settings.sslDNSTokenHint')}>
+                    <Input.Password placeholder={sslStatus?.has_dns_token ? '•••••••• (saved)' : 'Cloudflare API token'} autoComplete="new-password" />
+                  </Form.Item>
+                  <Form.Item name="dns_zone" label={t('settings.sslDNSZone') || 'DNS zone (optional)'} tooltip={t('settings.sslDNSZoneHint')}>
+                    <Input placeholder="example.com" />
+                  </Form.Item>
+
                   <Form.Item name="cache_dir" label={t('settings.acmeCacheDir') || 'ACME cache dir'} tooltip={t('settings.acmeCacheDirHint')}>
                     <Input placeholder="/var/lib/3m-ui/acme" />
                   </Form.Item>

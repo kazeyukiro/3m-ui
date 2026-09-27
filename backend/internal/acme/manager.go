@@ -22,14 +22,18 @@ const settingKey = "panel_ssl"
 
 // Settings controls panel HTTPS via Let's Encrypt (autocert) or manual cert files.
 type Settings struct {
-	Enabled    bool   `json:"enabled"`
-	Domain     string `json:"domain"`
-	Email      string `json:"email"`
-	CacheDir   string `json:"cache_dir"`
-	CertFile   string `json:"cert_file"`   // optional manual cert (PEM)
-	KeyFile    string `json:"key_file"`    // optional manual key (PEM)
-	ListenHTTP string `json:"listen_http"` // e.g. ":80" for ACME HTTP-01 + redirect
-	ListenTLS  string `json:"listen_tls"`  // e.g. ":443"
+	Enabled     bool   `json:"enabled"`
+	Domain      string `json:"domain"`
+	Email       string `json:"email"`
+	CacheDir    string `json:"cache_dir"`
+	CertFile    string `json:"cert_file"`   // optional manual cert (PEM)
+	KeyFile     string `json:"key_file"`    // optional manual key (PEM)
+	ListenHTTP  string `json:"listen_http"` // e.g. ":80" for ACME HTTP-01 + redirect
+	ListenTLS   string `json:"listen_tls"`  // e.g. ":443"
+	Challenge   string `json:"challenge,omitempty"`
+	DNSProvider string `json:"dns_provider,omitempty"`
+	DNSToken    string `json:"dns_token,omitempty"`
+	DNSZone     string `json:"dns_zone,omitempty"`
 }
 
 func DefaultSettings() Settings {
@@ -90,6 +94,10 @@ func LoadSettings(db *gorm.DB) (Settings, error) {
 	s.Domain = strings.TrimSpace(s.Domain)
 	s.Email = strings.TrimSpace(s.Email)
 	s.CacheDir = strings.TrimSpace(s.CacheDir)
+	s.Challenge = strings.TrimSpace(s.Challenge)
+	s.DNSProvider = strings.TrimSpace(s.DNSProvider)
+	s.DNSToken = strings.TrimSpace(s.DNSToken)
+	s.DNSZone = strings.TrimSpace(s.DNSZone)
 	if s.CacheDir == "" {
 		s.CacheDir = DefaultSettings().CacheDir
 	}
@@ -127,10 +135,11 @@ func SaveSettings(db *gorm.DB, s Settings) error {
 
 // Manager wraps autocert or manual TLS for the panel listener.
 type Manager struct {
-	mu       sync.Mutex
-	settings Settings
-	manager  *autocert.Manager
-	ipIssuer *ipIssuer
+	mu        sync.Mutex
+	settings  Settings
+	manager   *autocert.Manager
+	ipIssuer  *ipIssuer
+	dnsIssuer *dnsIssuer
 }
 
 func NewManager(s Settings) (*Manager, error) {
@@ -158,6 +167,10 @@ func (m *Manager) configure() error {
 		m.ipIssuer.close()
 		m.ipIssuer = nil
 	}
+	if m.dnsIssuer != nil {
+		m.dnsIssuer.Close()
+		m.dnsIssuer = nil
+	}
 	m.manager = nil
 	if s.Domain == "" {
 		return fmt.Errorf("panel SSL: domain or public IP is required for Let's Encrypt")
@@ -166,12 +179,26 @@ func (m *Manager) configure() error {
 		return fmt.Errorf("panel SSL: create cache dir: %w", err)
 	}
 	if IsIPHost(s.Domain) {
+		if NeedsDNS01(s) {
+			return fmt.Errorf("panel SSL: DNS-01 cannot be used with an IP address")
+		}
 		iss, err := newIPIssuer(s.Domain, s.Email, s.CacheDir)
 		if err != nil {
 			return err
 		}
 		m.ipIssuer = iss
 		return nil
+	}
+	if NeedsDNS01(s) {
+		iss, err := newDNSIssuer(s)
+		if err != nil {
+			return err
+		}
+		m.dnsIssuer = iss
+		return nil
+	}
+	if IsWildcardDomain(s.Domain) {
+		return fmt.Errorf("panel SSL: wildcard domains require DNS-01 (set challenge=dns-01 and a DNS API token)")
 	}
 	hostPolicy := autocert.HostWhitelist(s.Domain)
 	m.manager = &autocert.Manager{
@@ -228,6 +255,13 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 				}
 				return c, nil
 			},
+		}, nil
+	}
+	if m.dnsIssuer != nil {
+		return &tls.Config{
+			MinVersion:     tls.VersionTLS12,
+			NextProtos:     []string{"h2", "http/1.1"},
+			GetCertificate: m.dnsIssuer.GetCertificate,
 		}, nil
 	}
 	if m.manager == nil {
@@ -294,20 +328,26 @@ func Status(db *gorm.DB) map[string]interface{} {
 	}
 	manual := s.CertFile != "" && s.KeyFile != ""
 	return map[string]interface{}{
-		"enabled":     s.Enabled,
-		"domain":      s.Domain,
-		"email":       s.Email,
-		"cache_dir":   s.CacheDir,
-		"cert_file":   s.CertFile,
-		"key_file":    s.KeyFile,
-		"listen_http": s.ListenHTTP,
-		"listen_tls":  s.ListenTLS,
-		"mode":        modeLabel(s, manual),
-		"is_ip":       IsIPHost(s.Domain),
-		"has_cache":   hasCache,
-		"cert_path":   filepath.Join(s.CacheDir, s.Domain),
-		"ip_profile":  ipCertProfile,
-		"ip_note":     "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
+		"enabled":       s.Enabled,
+		"domain":        s.Domain,
+		"email":         s.Email,
+		"cache_dir":     s.CacheDir,
+		"cert_file":     s.CertFile,
+		"key_file":      s.KeyFile,
+		"listen_http":   s.ListenHTTP,
+		"listen_tls":    s.ListenTLS,
+		"challenge":     s.Challenge,
+		"dns_provider":  s.DNSProvider,
+		"dns_zone":      s.DNSZone,
+		"has_dns_token": strings.TrimSpace(s.DNSToken) != "",
+		"mode":          modeLabel(s, manual),
+		"is_ip":         IsIPHost(s.Domain),
+		"is_wildcard":   IsWildcardDomain(s.Domain),
+		"has_cache":     hasCache,
+		"cert_path":     filepath.Join(s.CacheDir, s.Domain),
+		"ip_profile":    ipCertProfile,
+		"ip_note":       "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
+		"dns_note":      "Wildcard (*.example.com) and DNS-01 need a DNS API token (Cloudflare Zone.DNS Edit). Apex is included on wildcard certs.",
 	}
 }
 
@@ -320,6 +360,9 @@ func modeLabel(s Settings, manual bool) string {
 	}
 	if IsIPHost(s.Domain) {
 		return "letsencrypt-ip"
+	}
+	if NeedsDNS01(s) {
+		return "letsencrypt-dns01"
 	}
 	return "letsencrypt"
 }
@@ -336,6 +379,11 @@ func LogHint(s Settings) {
 	if IsIPHost(s.Domain) {
 		log.Printf("panel SSL: Let's Encrypt IP (shortlived) for %s (HTTP-01 %s / TLS-ALPN-01 %s, cache %s)",
 			s.Domain, s.ListenHTTP, s.ListenTLS, s.CacheDir)
+		return
+	}
+	if NeedsDNS01(s) {
+		log.Printf("panel SSL: Let's Encrypt DNS-01 for %s (provider=%s, cache %s)",
+			s.Domain, s.DNSProvider, s.CacheDir)
 		return
 	}
 	log.Printf("panel SSL: Let's Encrypt for %s (HTTP %s → TLS %s, cache %s)",
