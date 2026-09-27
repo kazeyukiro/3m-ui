@@ -171,6 +171,7 @@ export default {
     "create": "创建节点",
     "quickCreate": "一键创建",
     "quickCreated": "已创建",
+    "quickCreateHint": "只需选择协议并填写名称。端口、凭证以及 REALITY/TLS 会自动生成。",
     "nameRenamed": "名称已被占用，已改用 {{name}} 创建",
     "edit": "编辑节点",
     "name": "名称",
