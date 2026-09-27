@@ -19,7 +19,11 @@ function FieldInput({ field }: { field: FieldCapability }) {
   }
 }
 
-function renderFields(fields: FieldCapability[] | undefined, showAdvanced: boolean) {
+function renderFields(
+  fields: FieldCapability[] | undefined,
+  showAdvanced: boolean,
+  t: (key: string, fallback?: string) => string,
+) {
   if (!fields?.length) return null;
   return fields.filter((f) => showAdvanced || !f.advanced).map((f) => {
     // Component fields are rendered conditionally inside shouldUpdate. AntD can
@@ -28,12 +32,13 @@ function renderFields(fields: FieldCapability[] | undefined, showAdvanced: boole
     // value. Required checks are therefore performed by the submit handler for
     // protocol-specific critical fields (not by these transient Form.Items).
     const transientRequired = f.path === 'reality_dest' || f.path === 'reality_private_key';
+    const tipKey = `listeners.${String(f.path).replace(/-/g, '_')}Hint`;
     return (
       <Form.Item
         key={f.path}
         name={f.path}
         label={f.label}
-        tooltip={t(`listeners.${String(f.path).replace(/-/g, '_')}Hint`) || f.description}
+        tooltip={t(tipKey, f.description || '') || f.description}
         rules={!transientRequired && f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} is required` }] : undefined}
         valuePropName={f.type === 'boolean' ? 'checked' : 'value'}
       >
@@ -65,7 +70,7 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
           <Radio.Group optionType="button" buttonStyle="solid">{transportComps.map((c) => <Radio.Button key={c.kind} value={c.kind}>{c.label}</Radio.Button>)}</Radio.Group>
         </Form.Item>
         <Form.Item noStyle shouldUpdate={(a, b) => a.transport_layer !== b.transport_layer}>
-          {({ getFieldValue }) => renderFields(transportComps.find((c) => c.kind === (getFieldValue('transport_layer') || defaultTransport))?.fields, showAdvanced)}
+          {({ getFieldValue }) => renderFields(transportComps.find((c) => c.kind === (getFieldValue('transport_layer') || defaultTransport))?.fields, showAdvanced, t)}
         </Form.Item>
       </>}
       {securityComps.length > 0 && <>
@@ -74,10 +79,10 @@ const CapabilityFormFields: React.FC<Props> = ({ protocol, capability, showAdvan
           <Radio.Group optionType="button" buttonStyle="solid">{securityComps.map((c) => <Radio.Button key={c.kind} value={c.kind}>{c.label}</Radio.Button>)}</Radio.Group>
         </Form.Item>
         <Form.Item noStyle shouldUpdate={(a, b) => a.security_layer !== b.security_layer}>
-          {({ getFieldValue }) => renderFields(securityComps.find((c) => c.kind === (getFieldValue('security_layer') || defaultSecurity))?.fields, showAdvanced)}
+          {({ getFieldValue }) => renderFields(securityComps.find((c) => c.kind === (getFieldValue('security_layer') || defaultSecurity))?.fields, showAdvanced, t)}
         </Form.Item>
       </>}
-      {capability.fields?.length ? <><Divider titlePlacement="start" plain>{t('listeners.protocol')}</Divider>{renderFields(capability.fields, showAdvanced)}</> : null}
+      {capability.fields?.length ? <><Divider titlePlacement="start" plain>{t('listeners.protocol')}</Divider>{renderFields(capability.fields, showAdvanced, t)}</> : null}
     </Space>
   );
 };
