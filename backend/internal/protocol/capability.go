@@ -86,18 +86,18 @@ func DefaultManifest() CapabilityManifest {
 			Branch:     "Meta",
 		},
 		NodeFields: []FieldCapability{
-			{Path: "name", Label: "Name", Type: FieldString, Required: true},
-			{Path: "listen", Label: "Listen", Type: FieldString, Required: true},
-			{Path: "port", Label: "Port", Type: FieldString, Required: true, Description: "Single port or official ports syntax"},
-			{Path: "enabled", Label: "Enabled", Type: FieldBoolean},
-			{Path: "udp", Label: "UDP", Type: FieldBoolean},
+			{Path: "name", Label: "Name", Type: FieldString, Required: true, Description: "Listener name (unique). Becomes the Mihomo listeners[].name entry."},
+			{Path: "listen", Label: "Listen", Type: FieldString, Required: true, Description: "Bind address (wiki: listen). 0.0.0.0 or :: for all interfaces."},
+			{Path: "port", Label: "Port", Type: FieldString, Required: true, Description: "Listen port (wiki: port). Single port or official ports range syntax."},
+			{Path: "enabled", Label: "Enabled", Type: FieldBoolean, Description: "When off, the listener is omitted from the running core config."},
+			{Path: "udp", Label: "UDP", Type: FieldBoolean, Description: "Enable UDP (wiki: udp). Required for many QUIC/UDP-based protocols; 3m-ui may manage this for some types."},
 		},
 		AccessProfileFields: []FieldCapability{
-			{Path: "public_host", Label: "Public Host", Type: FieldString, Description: "Hostname/IP used in share links and client YAML"},
-			{Path: "public_port", Label: "Public Port", Type: FieldString, Description: "Override listen port in share links when behind NAT"},
-			{Path: "sni", Label: "SNI", Type: FieldString},
-			{Path: "client_fingerprint", Label: "Client Fingerprint", Type: FieldString, Options: []string{"chrome", "firefox", "safari", "ios", "android", "edge", "random"}},
-			{Path: "alpn", Label: "ALPN", Type: FieldStringList},
+			{Path: "public_host", Label: "Public Host", Type: FieldString, Description: "Hostname/IP written into share links and client YAML (NAT / CDN front)."},
+			{Path: "public_port", Label: "Public Port", Type: FieldString, Description: "Port in share links when mapped differently than listen port (NAT)."},
+			{Path: "sni", Label: "SNI", Type: FieldString, Description: "TLS Server Name for clients (wiki proxies: servername / sni). Empty may use public host."},
+			{Path: "client_fingerprint", Label: "Client Fingerprint", Type: FieldString, Options: []string{"chrome", "firefox", "safari", "ios", "android", "edge", "random"}, Description: "uTLS client fingerprint (wiki: client-fingerprint)."},
+			{Path: "alpn", Label: "ALPN", Type: FieldStringList, Description: "TLS ALPN list (wiki: alpn), e.g. h2, http/1.1."},
 		},
 		Protocols: []ProtocolCapability{
 			vlessCapability(),
@@ -161,8 +161,8 @@ func securityComponents(withReality bool) []ComponentCapability {
 	comps := []ComponentCapability{
 		{Group: ComponentSecurity, Kind: "none", Label: "None", SelectionPath: "security_layer"},
 		{Group: ComponentSecurity, Kind: "tls", Label: "TLS", SelectionPath: "security_layer", Fields: []FieldCapability{
-			{Path: "certificate", Label: "Certificate", Type: FieldText},
-			{Path: "private-key", Label: "Private Key", Type: FieldSecret},
+			{Path: "certificate", Label: "Certificate", Type: FieldText, Description: "TLS certificate PEM or path (wiki: certificate). Empty → panel may auto self-sign."},
+			{Path: "private-key", Label: "Private Key", Type: FieldSecret, Description: "TLS private key PEM or path (wiki: private-key)."},
 			{Path: "alpn", Label: "ALPN", Type: FieldStringList},
 			{Path: "allow-insecure", Label: "Allow Insecure", Type: FieldBoolean, Advanced: true},
 		}, Conflicts: []string{"security:reality"}},
@@ -190,13 +190,13 @@ func vlessCapability() ProtocolCapability {
 		Layers:     transportSecurityLayers("raw", "reality"),
 		Components: comps,
 		Fields: []FieldCapability{
-			{Path: "flow", Label: "Flow", Type: FieldString, Options: []string{"xtls-rprx-vision"}},
-			{Path: "decryption", Label: "Decryption", Type: FieldText, Advanced: true, Description: "Server-side VLESS decryption (mihomo generate vless-x25519 / vless-mlkem768)"},
-			{Path: "encryption", Label: "Encryption", Type: FieldText, Advanced: true, Description: "Client-side VLESS encryption pair (do not reuse decryption value)"},
+			{Path: "flow", Label: "Flow", Type: FieldString, Options: []string{"xtls-rprx-vision"}, Description: "XTLS Vision flow (wiki: flow). Only with TCP/raw; not with ws/grpc/xhttp."},
+			{Path: "decryption", Label: "Decryption", Type: FieldText, Advanced: true, Description: "Server-side VLESS decryption (wiki/decryption). Generate with mihomo vless-x25519 / vless-mlkem768."},
+			{Path: "encryption", Label: "Encryption", Type: FieldText, Advanced: true, Description: "Client-side encryption pairing; for subscription export only, not inbound YAML."},
 		},
 		UserFields: []FieldCapability{
-			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true},
-			{Path: "flow", Label: "Flow", Type: FieldString, Options: []string{"", "xtls-rprx-vision"}},
+			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true, Description: "User id (wiki users[].uuid)."},
+			{Path: "flow", Label: "Flow", Type: FieldString, Options: []string{"", "xtls-rprx-vision"}, Description: "Per-user Vision flow; empty inherits node default."},
 		},
 		Features: []string{"reality", "ws", "grpc", "xhttp", "vision"},
 	}
@@ -209,10 +209,10 @@ func vmessCapability() ProtocolCapability {
 		Layers:     transportSecurityLayers("raw", "none"),
 		Components: comps,
 		Fields: []FieldCapability{
-			{Path: "alterId", Label: "Alter ID", Type: FieldInteger},
+			{Path: "alterId", Label: "Alter ID", Type: FieldInteger, Description: "VMess alterId (wiki). Use 0 for AEAD-only modern clients."},
 		},
 		UserFields: []FieldCapability{
-			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true},
+			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true, Description: "VMess user UUID."},
 		},
 		Features: []string{"reality", "ws", "grpc", "mkcp", "mekya"},
 	}
@@ -225,7 +225,7 @@ func trojanCapability() ProtocolCapability {
 		Layers:     transportSecurityLayers("raw", "tls"),
 		Components: comps,
 		UserFields: []FieldCapability{
-			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true, Description: "Trojan password (wiki users password)."},
 		},
 		Features: []string{"reality", "ws", "grpc", "ss-option"},
 	}
@@ -240,11 +240,11 @@ func shadowsocksCapability() ProtocolCapability {
 			{Path: "cipher", Label: "Cipher", Type: FieldString, Required: true, Options: []string{
 				"2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305",
 				"aes-128-gcm", "aes-192-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "xchacha20-ietf-poly1305", "none",
-			}},
-			{Path: "password", Label: "Password", Type: FieldSecret},
+			}, Description: "Shadowsocks method (wiki: cipher). Prefer 2022-blake3-* when clients support it."},
+			{Path: "password", Label: "Password", Type: FieldSecret, Description: "Node default password; per-user passwords override when using multi-user mode."},
 		},
 		UserFields: []FieldCapability{
-			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true, Description: "User password (wiki)."},
 		},
 		Features: []string{"udp", "simple-obfs", "shadow-tls"},
 	}
@@ -258,20 +258,20 @@ func hysteria2Capability() ProtocolCapability {
 		},
 		Components: []ComponentCapability{
 			{Group: ComponentSecurity, Kind: "tls", Label: "TLS", SelectionPath: "security_layer", Fields: []FieldCapability{
-				{Path: "certificate", Label: "Certificate", Type: FieldText},
-				{Path: "private-key", Label: "Private Key", Type: FieldSecret},
+				{Path: "certificate", Label: "Certificate", Type: FieldText, Description: "TLS certificate PEM or path (wiki: certificate). Empty → panel may auto self-sign."},
+				{Path: "private-key", Label: "Private Key", Type: FieldSecret, Description: "TLS private key PEM or path (wiki: private-key)."},
 			}},
 		},
 		Fields: []FieldCapability{
-			{Path: "up", Label: "Up", Type: FieldString},
-			{Path: "down", Label: "Down", Type: FieldString},
-			{Path: "obfs", Label: "Obfs", Type: FieldString, Options: []string{"salamander"}},
-			{Path: "obfs-password", Label: "Obfs Password", Type: FieldSecret},
-			{Path: "masquerade", Label: "Masquerade", Type: FieldString},
-			{Path: "alpn", Label: "ALPN", Type: FieldStringList},
+			{Path: "up", Label: "Up", Type: FieldString, Description: "Max upload bandwidth (wiki: up), e.g. 100 Mbps."},
+			{Path: "down", Label: "Down", Type: FieldString, Description: "Max download bandwidth (wiki: down)."},
+			{Path: "obfs", Label: "Obfs", Type: FieldString, Options: []string{"salamander"}, Description: "QUIC obfuscation type (wiki: obfs). salamander is common."},
+			{Path: "obfs-password", Label: "Obfs Password", Type: FieldSecret, Description: "Obfuscation password (wiki: obfs-password); must match client."},
+			{Path: "masquerade", Label: "Masquerade", Type: FieldString, Description: "HTTP masquerade URL/path (wiki: masquerade) for browser-like probes."},
+			{Path: "alpn", Label: "ALPN", Type: FieldStringList, Description: "QUIC/TLS ALPN (wiki: alpn)."},
 		},
 		UserFields: []FieldCapability{
-			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true, Description: "Hysteria2 user password (map users)."},
 		},
 		Features: []string{"quic", "bandwidth"},
 	}
@@ -285,13 +285,13 @@ func tuicCapability() ProtocolCapability {
 		},
 		Components: securityComponents(false),
 		Fields: []FieldCapability{
-			{Path: "token", Label: "Token", Type: FieldString},
-			{Path: "congestion-controller", Label: "Congestion", Type: FieldString, Options: []string{"bbr", "cubic", "new_reno"}},
-			{Path: "alpn", Label: "ALPN", Type: FieldStringList},
+			{Path: "token", Label: "Token", Type: FieldString, Description: "TUIC v4 shared token (wiki tuic-v4: token). Leave empty for v5 users map."},
+			{Path: "congestion-controller", Label: "Congestion", Type: FieldString, Options: []string{"bbr", "cubic", "new_reno"}, Description: "QUIC congestion control (wiki: congestion-controller)."},
+			{Path: "alpn", Label: "ALPN", Type: FieldStringList, Description: "QUIC ALPN (wiki: alpn)."},
 		},
 		UserFields: []FieldCapability{
-			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true},
-			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+			{Path: "uuid", Label: "UUID", Type: FieldString, Required: true, Description: "TUIC v5 user UUID (wiki users: UUID: password)."},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true, Description: "TUIC v5 user password."},
 		},
 		Features: []string{"quic"},
 	}
@@ -303,13 +303,13 @@ func shadowquicCapability() ProtocolCapability {
 		Layers:     []LayerCapability{},
 		Components: []ComponentCapability{},
 		Fields: []FieldCapability{
-			{Path: "alpn", Label: "ALPN", Type: FieldStringList},
-			{Path: "congestion-controller", Label: "Congestion", Type: FieldString, Options: []string{"bbr", "cubic", "new_reno"}},
-			{Path: "zero-rtt", Label: "0-RTT", Type: FieldBoolean},
+			{Path: "alpn", Label: "ALPN", Type: FieldStringList, Description: "QUIC ALPN for ShadowQUIC."},
+			{Path: "congestion-controller", Label: "Congestion", Type: FieldString, Options: []string{"bbr", "cubic", "new_reno"}, Description: "QUIC congestion controller."},
+			{Path: "zero-rtt", Label: "0-RTT", Type: FieldBoolean, Description: "Enable 0-RTT (wiki). Lower latency, slightly weaker replay properties."},
 		},
 		UserFields: []FieldCapability{
-			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
-			{Path: "username", Label: "Username", Type: FieldString},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true, Description: "ShadowQUIC user password."},
+			{Path: "username", Label: "Username", Type: FieldString, Description: "Optional username when multi-user is used."},
 		},
 		Features: []string{"quic", "jls-upstream"},
 	}

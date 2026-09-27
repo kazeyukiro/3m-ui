@@ -415,7 +415,7 @@ const Settings: React.FC = () => {
                       t('settings.panelPortHint') ||
                       'NAT: map this host port to the WAN. Restart 3m-ui after change.'
                     }
-                  >
+                   tooltip={t('settings.portHint')}>
                     <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                   </Form.Item>
                   <Form.Item
@@ -425,7 +425,7 @@ const Settings: React.FC = () => {
                       t('settings.panelListenHint') ||
                       'Empty = all interfaces (IPv4/IPv6). Use 127.0.0.1 for reverse-proxy only.'
                     }
-                  >
+                   tooltip={t('settings.listenHint')}>
                     <Input placeholder="0.0.0.0 / :: / 127.0.0.1" />
                   </Form.Item>
                   <Form.Item
@@ -435,7 +435,7 @@ const Settings: React.FC = () => {
                       t('settings.panelPublicURLHint') ||
                       'Used in subscription links behind NAT, e.g. https://panel.example.com:8443'
                     }
-                  >
+                   tooltip={t('settings.public_urlHint')}>
                     <Input placeholder="https://example.com:8443" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit">
@@ -1154,7 +1154,7 @@ const Settings: React.FC = () => {
                 <Form.Item
                   name="theme_dir"
                   label={t('settings.subThemeDir') || 'Theme directory'}
-                >
+                 tooltip={t('settings.theme_dirHint')}>
                   <Input placeholder="/var/lib/3m-ui/sub-theme" />
                 </Form.Item>
                 <Form.Item name="title" label={t('settings.subTitle') || 'Page title'} tooltip={t('settings.subTitleHint') || 'Title shown on the user subscription info page.'}>
@@ -1249,7 +1249,7 @@ const Settings: React.FC = () => {
                   <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={t('settings.sslEnabledHint')}>
                     <Switch />
                   </Form.Item>
-                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.'}>
+                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.'} tooltip={t('settings.domainHint')}>
                     <Input placeholder="panel.example.com or *.example.com" />
                   </Form.Item>
                   <Form.Item name="email" label={t('settings.email')} tooltip={t('settings.sslEmailHint')}>
@@ -1366,7 +1366,7 @@ const Settings: React.FC = () => {
                       ]}
                     />
                   </Form.Item>
-                  <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]}>
+                  <Form.Item name="domain" label={t('settings.domain')} rules={[{ required: true }]} tooltip={t('settings.domainHint')}>
                     <Input placeholder="panel.example.com" />
                   </Form.Item>
                   <Form.Item name="upstream" label={t('settings.upstream')} tooltip={t('settings.upstreamHint')}>

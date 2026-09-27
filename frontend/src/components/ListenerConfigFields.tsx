@@ -907,7 +907,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
                 ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS.')
                 : (t('listeners.transportExclusiveHint') || 'One transport only. mKCP/Mekya (VMess) require TCP.')
             }
-          >
+           tooltip={t('listeners.transport_layerHint')}>
             <Radio.Group
               optionType="button"
               buttonStyle="solid"
@@ -967,7 +967,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="psk" label={t('listeners.psk')} tooltip={t('listeners.pskHint')}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
-          <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4}>
+          <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4} tooltip={t('listeners.versionHint')}>
             <Select options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))} />
           </Form.Item>
           <Form.Item name="obfs_opts_mode" label={t('listeners.obfsOptsMode')} tooltip={t('listeners.obfsOptsHint') || 'Leave both empty to disable. Mode and host must be set together.'}>
@@ -1261,7 +1261,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="padding-max" label={t('listeners.paddingMax')} tooltip={t('listeners.padding-maxHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="table-type" label={t('listeners.tableType')}>
+          <Form.Item name="table-type" label={t('listeners.tableType')} tooltip={t('listeners.table_typeHint')}>
             <Input />
           </Form.Item>
           <Form.Item name="custom-table" label={t('listeners.customTable')} tooltip={t('listeners.customTable') || 'Custom byte layout (must contain 2x, 2p, 4v); entropy direction only'}>
@@ -1273,7 +1273,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="handshake-timeout" label={t('listeners.handshakeTimeout')} tooltip={t('listeners.handshake-timeoutHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="enable-pure-downlink" label={t('listeners.enablePureDownlink')} valuePropName="checked">
+          <Form.Item name="enable-pure-downlink" label={t('listeners.enablePureDownlink')} valuePropName="checked" tooltip={t('listeners.enable_pure_downlinkHint')}>
             <Switch />
           </Form.Item>
           <Form.Item name="fallback" label={t('listeners.sudokuFallback')} tooltip={t('listeners.sudokuFallback') || 'When HTTPMask is on, forward non-tunnel HTTP-like requests to this address (host:port)'}>
@@ -1289,7 +1289,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
                 options={['legacy', 'stream', 'poll', 'auto', 'ws'].map((v) => ({ value: v, label: v }))}
               />
             </Form.Item>
-            <Form.Item name="httpmask_path_root" label={t('listeners.httpmaskPathRoot')}>
+            <Form.Item name="httpmask_path_root" label={t('listeners.httpmaskPathRoot')} tooltip={t('listeners.httpmask_path_rootHint')}>
               <Input placeholder="aabbcc" />
             </Form.Item>
           </EnableSection>
@@ -1333,7 +1333,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
               <Form.Item name="private-key" label={t('listeners.privateKey')} tooltip={t('listeners.private-keyHint')}>
                 <Input.TextArea rows={2} placeholder={ALWAYS_TLS_PROTOCOLS.has(protocol) ? 'auto' : './server.key'} />
               </Form.Item>
-              <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')}>
+              <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')} tooltip={t('listeners.client_auth_typeHint')}>
                 <Select
                   allowClear
                   options={['request', 'require-any', 'verify-if-given', 'require-and-verify'].map((v) => ({
@@ -1342,10 +1342,10 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
                   }))}
                 />
               </Form.Item>
-              <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')}>
+              <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')} tooltip={t('listeners.client_auth_certHint')}>
                 <Input.TextArea rows={2} />
               </Form.Item>
-              <Form.Item name="ech-key" label={t('listeners.echKey')}>
+              <Form.Item name="ech-key" label={t('listeners.echKey')} tooltip={t('listeners.ech_keyHint')}>
                 <Input.TextArea rows={2} />
               </Form.Item>
               {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
@@ -1388,13 +1388,13 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           label={t('listeners.sectionTlsMirror') || 'TLS Mirror'}
           hint={t('listeners.tlsMirrorHint') || 'Advanced. Requires dest and primary-key; mutually exclusive with certificate TLS.'}
         >
-          <Form.Item name="tlsmirror_dest" label={t('listeners.tlsMirrorDest') || 'Dest'}>
+          <Form.Item name="tlsmirror_dest" label={t('listeners.tlsMirrorDest') || 'Dest'} tooltip={t('listeners.tlsmirror_destHint')}>
             <Input placeholder="www.example.com:443" />
           </Form.Item>
-          <Form.Item name="tlsmirror_primary_key" label={t('listeners.tlsMirrorPrimaryKey') || 'Primary key'}>
+          <Form.Item name="tlsmirror_primary_key" label={t('listeners.tlsMirrorPrimaryKey') || 'Primary key'} tooltip={t('listeners.tlsmirror_primary_keyHint')}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="tlsmirror_proxy" label={t('listeners.tlsMirrorProxy') || 'Proxy'}>
+          <Form.Item name="tlsmirror_proxy" label={t('listeners.tlsMirrorProxy') || 'Proxy'} tooltip={t('listeners.tlsmirror_proxyHint')}>
             <Input />
           </Form.Item>
         </EnableSection>
@@ -1403,7 +1403,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {/* ---- simple-obfs (SS) ---- */}
       {SIMPLE_OBFS_PROTOCOLS.has(protocol) && (
         <EnableSection name="simple_obfs_enabled" label={t('listeners.sectionSimpleObfs')}>
-          <Form.Item name="simple_obfs_mode" label={t('listeners.simpleObfsMode')}>
+          <Form.Item name="simple_obfs_mode" label={t('listeners.simpleObfsMode')} tooltip={t('listeners.simple_obfs_modeHint')}>
             <Select options={[{ value: 'http', label: 'http' }, { value: 'tls', label: 'tls' }]} />
           </Form.Item>
         </EnableSection>
@@ -1416,16 +1416,16 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           label={t('listeners.sectionShadowTLS')}
           hint={t('listeners.shadowTlsHint')}
         >
-          <Form.Item name="shadow_tls_version" label={t('listeners.shadowTlsVersion')}>
+          <Form.Item name="shadow_tls_version" label={t('listeners.shadowTlsVersion')} tooltip={t('listeners.shadow_tls_versionHint')}>
             <Select options={[1, 2, 3].map((v) => ({ value: v, label: `v${v}` }))} />
           </Form.Item>
           <Form.Item name="shadow_tls_password" label={t('listeners.shadowTlsPassword')} tooltip={t('listeners.shadowTlsPasswordHint')}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="shadow_tls_handshake_dest" label={t('listeners.shadowTlsHandshakeDest')}>
+          <Form.Item name="shadow_tls_handshake_dest" label={t('listeners.shadowTlsHandshakeDest')} tooltip={t('listeners.shadow_tls_handshake_destHint')}>
             <Input placeholder="www.example.com:443" />
           </Form.Item>
-          <Form.Item name="shadow_tls_handshake_proxy" label={t('listeners.shadowTlsHandshakeProxy')}>
+          <Form.Item name="shadow_tls_handshake_proxy" label={t('listeners.shadowTlsHandshakeProxy')} tooltip={t('listeners.shadow_tls_handshake_proxyHint')}>
             <Input />
           </Form.Item>
           <Form.List name="shadow_tls_users">
@@ -1455,19 +1455,19 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {/* ---- res-tls ---- */}
       {WRAPPER_TLS_PROTOCOLS.has(protocol) && (
         <EnableSection name="res_tls_enabled" label={t('listeners.sectionResTLS')} hint={t('listeners.resTlsHint')}>
-          <Form.Item name="res_tls_dest" label={t('listeners.resTlsDest')}>
+          <Form.Item name="res_tls_dest" label={t('listeners.resTlsDest')} tooltip={t('listeners.res_tls_destHint')}>
             <Input placeholder="www.example.com:443" />
           </Form.Item>
-          <Form.Item name="res_tls_password" label={t('listeners.resTlsPassword')}>
+          <Form.Item name="res_tls_password" label={t('listeners.resTlsPassword')} tooltip={t('listeners.res_tls_passwordHint')}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="res_tls_restls_script" label={t('listeners.resTlsScript')}>
+          <Form.Item name="res_tls_restls_script" label={t('listeners.resTlsScript')} tooltip={t('listeners.res_tls_restls_scriptHint')}>
             <Input />
           </Form.Item>
-          <Form.Item name="res_tls_min_record_len" label={t('listeners.resTlsMinRecordLen')}>
+          <Form.Item name="res_tls_min_record_len" label={t('listeners.resTlsMinRecordLen')} tooltip={t('listeners.res_tls_min_record_lenHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="res_tls_proxy" label={t('listeners.resTlsProxy')}>
+          <Form.Item name="res_tls_proxy" label={t('listeners.resTlsProxy')} tooltip={t('listeners.res_tls_proxyHint')}>
             <Input />
           </Form.Item>
           <Form.Item name="res_tls_rate_limit" label={t('listeners.rateLimit')} tooltip={t('listeners.rateLimitHint')}>
@@ -1479,16 +1479,16 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {/* ---- jls-config ---- */}
       {WRAPPER_TLS_PROTOCOLS.has(protocol) && (
         <EnableSection name="jls_enabled" label={t('listeners.sectionJLS')} hint={t('listeners.jlsHint')}>
-          <Form.Item name="jls_dest" label={t('listeners.jlsDest')}>
+          <Form.Item name="jls_dest" label={t('listeners.jlsDest')} tooltip={t('listeners.jls_destHint')}>
             <Input placeholder="www.example.com:443" />
           </Form.Item>
           <Form.Item name="jls_sni" label={t('listeners.jlsSni')} tooltip={t('listeners.jlsSniHint')}>
             <Input placeholder="www.example.com" />
           </Form.Item>
-          <Form.Item name="jls_alpn" label={t('listeners.alpn')}>
+          <Form.Item name="jls_alpn" label={t('listeners.alpn')} tooltip={t('listeners.jls_alpnHint')}>
             <Select mode="tags" tokenSeparators={[',']} placeholder="h2, http/1.1" />
           </Form.Item>
-          <Form.Item name="jls_proxy" label={t('listeners.jlsProxy')}>
+          <Form.Item name="jls_proxy" label={t('listeners.jlsProxy')} tooltip={t('listeners.jls_proxyHint')}>
             <Input />
           </Form.Item>
           <Form.Item name="jls_rate_limit" label={t('listeners.rateLimit')} tooltip={t('listeners.rateLimitHint')}>
@@ -1521,20 +1521,20 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {/* ---- mux-option ---- */}
       {MUX_PROTOCOLS.has(protocol) && (
         <EnableSection name="mux_enabled" label={t('listeners.sectionMux')}>
-          <Form.Item name="mux_padding" label={t('listeners.muxPadding')} valuePropName="checked">
+          <Form.Item name="mux_padding" label={t('listeners.muxPadding')} valuePropName="checked" tooltip={t('listeners.mux_paddingHint')}>
             <Switch />
           </Form.Item>
-          <Form.Item name="mux_brutal_enabled" label={t('listeners.muxBrutal')} valuePropName="checked">
+          <Form.Item name="mux_brutal_enabled" label={t('listeners.muxBrutal')} valuePropName="checked" tooltip={t('listeners.mux_brutal_enabledHint')}>
             <Switch />
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(p, c) => p.mux_brutal_enabled !== c.mux_brutal_enabled}>
             {({ getFieldValue }) =>
               getFieldValue('mux_brutal_enabled') ? (
                 <>
-                  <Form.Item name="mux_brutal_up" label={t('listeners.muxBrutalUp')}>
+                  <Form.Item name="mux_brutal_up" label={t('listeners.muxBrutalUp')} tooltip={t('listeners.mux_brutal_upHint')}>
                     <InputNumber min={0} style={{ width: '100%' }} placeholder="1000" />
                   </Form.Item>
-                  <Form.Item name="mux_brutal_down" label={t('listeners.muxBrutalDown')}>
+                  <Form.Item name="mux_brutal_down" label={t('listeners.muxBrutalDown')} tooltip={t('listeners.mux_brutal_downHint')}>
                     <InputNumber min={0} style={{ width: '100%' }} placeholder="1000" />
                   </Form.Item>
                 </>
@@ -1547,10 +1547,10 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {/* ---- kcp-tun (SS) ---- */}
       {KCP_TUN_PROTOCOLS.has(protocol) && (
         <EnableSection name="kcp_tun_enabled" label={t('listeners.sectionKcpTun')}>
-          <Form.Item name="kcp_tun_key" label={t('listeners.kcpTunKey')}>
+          <Form.Item name="kcp_tun_key" label={t('listeners.kcpTunKey')} tooltip={t('listeners.kcp_tun_keyHint')}>
             <Input.Password />
           </Form.Item>
-          <Form.Item name="kcp_tun_crypt" label={t('listeners.kcpTunCrypt')}>
+          <Form.Item name="kcp_tun_crypt" label={t('listeners.kcpTunCrypt')} tooltip={t('listeners.kcp_tun_cryptHint')}>
             <Select
               allowClear
               options={[
@@ -1559,22 +1559,22 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
               ].map((v) => ({ value: v, label: v }))}
             />
           </Form.Item>
-          <Form.Item name="kcp_tun_mode" label={t('listeners.kcpTunMode')}>
+          <Form.Item name="kcp_tun_mode" label={t('listeners.kcpTunMode')} tooltip={t('listeners.kcp_tun_modeHint')}>
             <Select allowClear options={['fast3', 'fast2', 'fast', 'normal', 'manual'].map((v) => ({ value: v, label: v }))} />
           </Form.Item>
-          <Form.Item name="kcp_tun_conn" label={t('listeners.kcpTunConn')}>
+          <Form.Item name="kcp_tun_conn" label={t('listeners.kcpTunConn')} tooltip={t('listeners.kcp_tun_connHint')}>
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="kcp_tun_mtu" label="MTU">
+          <Form.Item name="kcp_tun_mtu" label="MTU" tooltip={t('listeners.kcp_tun_mtuHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="1350" />
           </Form.Item>
-          <Form.Item name="kcp_tun_sndwnd" label={t('listeners.kcpTunSndwnd')}>
+          <Form.Item name="kcp_tun_sndwnd" label={t('listeners.kcpTunSndwnd')} tooltip={t('listeners.kcp_tun_sndwndHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="kcp_tun_rcvwnd" label={t('listeners.kcpTunRcvwnd')}>
+          <Form.Item name="kcp_tun_rcvwnd" label={t('listeners.kcpTunRcvwnd')} tooltip={t('listeners.kcp_tun_rcvwndHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="kcp_tun_nocomp" label={t('listeners.kcpTunNocomp')} valuePropName="checked">
+          <Form.Item name="kcp_tun_nocomp" label={t('listeners.kcpTunNocomp')} valuePropName="checked" tooltip={t('listeners.kcp_tun_nocompHint')}>
             <Switch />
           </Form.Item>
         </EnableSection>
@@ -1601,10 +1601,10 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="mkcp_congestion" label={t('listeners.mkcpCongestion')} valuePropName="checked" tooltip={t('listeners.mkcp_congestionHint')}>
             <Switch />
           </Form.Item>
-          <Form.Item name="mkcp_write_buffer" label={t('listeners.mkcpWriteBuffer')}>
+          <Form.Item name="mkcp_write_buffer" label={t('listeners.mkcpWriteBuffer')} tooltip={t('listeners.mkcp_write_bufferHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="mkcp_read_buffer" label={t('listeners.mkcpReadBuffer')}>
+          <Form.Item name="mkcp_read_buffer" label={t('listeners.mkcpReadBuffer')} tooltip={t('listeners.mkcp_read_bufferHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="mkcp_seed" label={t('listeners.mkcpSeed')} tooltip={t('listeners.mkcp_seedHint')}>
@@ -1634,38 +1634,38 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
             <InputNumber min={0} style={{ width: '100%' }} placeholder="65536" />
           </Form.Item>
           {/* R-M3 client-metadata fields (vmess only) */}
-          <Form.Item name="mekya-polling-interval-initial" label={t('listeners.mekyaPollingInterval')}>
+          <Form.Item name="mekya-polling-interval-initial" label={t('listeners.mekyaPollingInterval')} tooltip={t('listeners.mekya_polling_interval_initialHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="mekya-h2-pool-size" label={t('listeners.mekyaH2PoolSize')}>
+          <Form.Item name="mekya-h2-pool-size" label={t('listeners.mekyaH2PoolSize')} tooltip={t('listeners.mekya_h2_pool_sizeHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Divider titlePlacement="start" plain style={{ marginTop: 8 }}>{t('listeners.mekyaKcpSection')}</Divider>
-          <Form.Item name="mekya_kcp_mtu" label="MTU">
+          <Form.Item name="mekya_kcp_mtu" label="MTU" tooltip={t('listeners.mekya_kcp_mtuHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="1350" />
           </Form.Item>
-          <Form.Item name="mekya_kcp_tti" label="TTI">
+          <Form.Item name="mekya_kcp_tti" label="TTI" tooltip={t('listeners.mekya_kcp_ttiHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="15" />
           </Form.Item>
-          <Form.Item name="mekya_kcp_uplink" label={t('listeners.mkcpUplink')}>
+          <Form.Item name="mekya_kcp_uplink" label={t('listeners.mkcpUplink')} tooltip={t('listeners.mekya_kcp_uplinkHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="40" />
           </Form.Item>
-          <Form.Item name="mekya_kcp_downlink" label={t('listeners.mkcpDownlink')}>
+          <Form.Item name="mekya_kcp_downlink" label={t('listeners.mkcpDownlink')} tooltip={t('listeners.mekya_kcp_downlinkHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="2000" />
           </Form.Item>
-          <Form.Item name="mekya_kcp_congestion" label={t('listeners.mkcpCongestion')} valuePropName="checked">
+          <Form.Item name="mekya_kcp_congestion" label={t('listeners.mkcpCongestion')} valuePropName="checked" tooltip={t('listeners.mekya_kcp_congestionHint')}>
             <Switch />
           </Form.Item>
-          <Form.Item name="mekya_kcp_write_buffer" label={t('listeners.mkcpWriteBuffer')}>
+          <Form.Item name="mekya_kcp_write_buffer" label={t('listeners.mkcpWriteBuffer')} tooltip={t('listeners.mekya_kcp_write_bufferHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="67108864" />
           </Form.Item>
-          <Form.Item name="mekya_kcp_read_buffer" label={t('listeners.mkcpReadBuffer')}>
+          <Form.Item name="mekya_kcp_read_buffer" label={t('listeners.mkcpReadBuffer')} tooltip={t('listeners.mekya_kcp_read_bufferHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="67108864" />
           </Form.Item>
-          <Form.Item name="mekya_kcp_seed" label={t('listeners.mkcpSeed')}>
+          <Form.Item name="mekya_kcp_seed" label={t('listeners.mkcpSeed')} tooltip={t('listeners.mekya_kcp_seedHint')}>
             <Input />
           </Form.Item>
-          <Form.Item name="mekya_kcp_header" label={t('listeners.mkcpHeader')}>
+          <Form.Item name="mekya_kcp_header" label={t('listeners.mkcpHeader')} tooltip={t('listeners.mekya_kcp_headerHint')}>
             <Select
               allowClear
               options={['none', 'srtp', 'utp', 'wechat-video', 'dtls', 'wireguard'].map((v) => ({ value: v, label: v }))}
@@ -1683,10 +1683,10 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="jls_upstream_sni" label={t('listeners.jlsSni')} tooltip={t('listeners.jls_upstream_sniHint')}>
             <Input />
           </Form.Item>
-          <Form.Item name="jls_upstream_proxy" label={t('listeners.jlsProxy')}>
+          <Form.Item name="jls_upstream_proxy" label={t('listeners.jlsProxy')} tooltip={t('listeners.jls_upstream_proxyHint')}>
             <Input />
           </Form.Item>
-          <Form.Item name="jls_upstream_rate_limit" label={t('listeners.rateLimit')}>
+          <Form.Item name="jls_upstream_rate_limit" label={t('listeners.rateLimit')} tooltip={t('listeners.jls_upstream_rate_limitHint')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </EnableSection>
@@ -1707,7 +1707,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="realm_stun" label={t('listeners.realmStun')} tooltip={t('listeners.realm_stunHint')}>
             <Select mode="tags" tokenSeparators={[',']} />
           </Form.Item>
-          <Form.Item name="realm_proxy" label={t('listeners.realmProxy')}>
+          <Form.Item name="realm_proxy" label={t('listeners.realmProxy')} tooltip={t('listeners.realm_proxyHint')}>
             <Input />
           </Form.Item>
           <Form.Item name="realm_skip_cert" label={t('listeners.realmSkipCert')} valuePropName="checked" tooltip={t('listeners.realm_skip_certHint')}>

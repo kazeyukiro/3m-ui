@@ -767,10 +767,10 @@ const Users: React.FC = () => {
         className={isMobile ? 'mobile-full-modal' : undefined}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit} disabled={submitting}>
-          <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
+          <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]} tooltip={t('users.usernameHint')}>
             <Input />
           </Form.Item>
-          <Form.Item name="password" label={t('users.password')} rules={[{ required: !editing }]}>
+          <Form.Item name="password" label={t('users.password')} rules={[{ required: !editing }]} tooltip={t('users.passwordHint')}>
             <Input.Password placeholder={editing ? t('users.passwordKeep') : ''} />
           </Form.Item>
           <Form.Item
@@ -794,34 +794,34 @@ const Users: React.FC = () => {
           >
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
           </Form.Item>
-<Form.Item name="start_on_first_use" label={t('users.startOnFirstUse', 'Start on first use')} valuePropName="checked">
+<Form.Item name="start_on_first_use" label={t('users.startOnFirstUse', 'Start on first use')} valuePropName="checked" tooltip={t('users.start_on_first_useHint')}>
           <Switch />
         </Form.Item>
-        <Form.Item name="expire_days_after_first" label={t('users.expireDaysAfterFirst', 'Days after first use')}>
+        <Form.Item name="expire_days_after_first" label={t('users.expireDaysAfterFirst', 'Days after first use')} tooltip={t('users.expire_days_after_firstHint')}>
           <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
         </Form.Item>
-        <Form.Item name="external_links" label={t('users.externalLinks', 'External subscription URLs')} extra={t('users.externalLinksHint', 'One URL per line')}>
+        <Form.Item name="external_links" label={t('users.externalLinks', 'External subscription URLs')} extra={t('users.externalLinksHint', 'One URL per line')} tooltip={t('users.external_linksHint')}>
           <Input.TextArea rows={3} placeholder={"https://example.com/sub1\nhttps://example.com/sub2"} />
         </Form.Item>
-          <Form.Item name="group" label={t('users.group', 'Group')}>
+          <Form.Item name="group" label={t('users.group', 'Group')} tooltip={t('users.groupHint')}>
             <Input placeholder="vip" allowClear />
           </Form.Item>
-          <Form.Item name="tags" label={t('users.tags', 'Tags')}>
+          <Form.Item name="tags" label={t('users.tags', 'Tags')} tooltip={t('users.tagsHint')}>
             <Input placeholder="tag1,tag2" allowClear />
           </Form.Item>
-          <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays', 'Traffic reset cycle (days)')} extra={t('users.trafficResetDaysHint', '0 = off')}>
+          <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays', 'Traffic reset cycle (days)')} extra={t('users.trafficResetDaysHint', '0 = off')} tooltip={t('users.traffic_reset_daysHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
           </Form.Item>
-          <Form.Item name="expire_renew_days" label={t('users.expireRenewDays', 'Expire renew cycle (days)')} extra={t('users.expireRenewDaysHint', '0 = off')}>
+          <Form.Item name="expire_renew_days" label={t('users.expireRenewDays', 'Expire renew cycle (days)')} extra={t('users.expireRenewDaysHint', '0 = off')} tooltip={t('users.expire_renew_daysHint')}>
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
           </Form.Item>
-          <Form.Item name="remark" label={t('users.remark') || 'Remark'}>
+          <Form.Item name="remark" label={t('users.remark') || 'Remark'} tooltip={t('users.remarkHint')}>
             <Input maxLength={255} />
           </Form.Item>
           <Form.Item name="expire_time" label={t('users.expire')} tooltip={t('users.expireHint')}>
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="enabled" label={t('users.enabled')} valuePropName="checked" initialValue={true}>
+          <Form.Item name="enabled" label={t('users.enabled')} valuePropName="checked" initialValue={true} tooltip={t('users.enabledHint')}>
             <Switch />
           </Form.Item>
         </Form>
@@ -919,13 +919,13 @@ const Users: React.FC = () => {
           )}
         </p>
         <Form form={quickForm} layout="vertical" requiredMark={false}>
-          <Form.Item name="username" label={t('users.username')}>
+          <Form.Item name="username" label={t('users.username')} tooltip={t('users.usernameHint')}>
             <Input placeholder={t('users.quickNamePlaceholder', 'Auto if empty')} allowClear />
           </Form.Item>
-          <Form.Item name="remark" label={t('users.remark')}>
+          <Form.Item name="remark" label={t('users.remark')} tooltip={t('users.remarkHint')}>
             <Input allowClear />
           </Form.Item>
-          <Form.Item name="bind_all_listeners" label={t('users.bindAllNodes', 'Bind all nodes')} valuePropName="checked">
+          <Form.Item name="bind_all_listeners" label={t('users.bindAllNodes', 'Bind all nodes')} valuePropName="checked" tooltip={t('users.bind_all_listenersHint')}>
             <Switch />
           </Form.Item>
         </Form>
