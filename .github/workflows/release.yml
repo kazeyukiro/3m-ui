@@ -124,6 +124,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.metadata.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/download-artifact@v4
         with:
           path: release-files
@@ -154,18 +156,55 @@ jobs:
           TAG: ${{ needs.metadata.outputs.tag }}
           PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
           LATEST: ${{ needs.metadata.outputs.latest }}
+          SHA: ${{ needs.metadata.outputs.sha }}
         run: |
-          cat > release-notes.md <<'NOTES'
-          Complete Linux installation bundles are provided for amd64 and arm64.
-          Each bundle includes the panel, its pinned Mihomo core and lifecycle scripts.
-          Other architectures are standalone panel builds for advanced installations.
-          Verify downloads against SHA256SUMS. SHA256SUMS.pem and SHA256SUMS.sig
-          provide Sigstore keyless verification for this release workflow.
-          Docker images are published to ghcr.io/<owner>/<repository>:<tag>.
-          The latest image and default installer follow stable releases only.
-          NOTES
+          set -euo pipefail
+          # Previous formal SemVer tag (ignore pre / the tag we are publishing).
+          PREV="$(git tag -l 'v*' --sort=-version:refname | grep -E '^v[0-9]' | grep -vxF "$TAG" | head -n1 || true)"
+          {
+            if [ -n "${PREV}" ]; then
+              echo "## Changes since ${PREV}"
+              echo
+              RANGE="${PREV}..${SHA}"
+            else
+              echo "## Changes"
+              echo
+              RANGE="${SHA}"
+            fi
+            # Categorize conventional commits (same shape as v1.3.7 notes).
+            feats=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- feat' || true)
+            fixes=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- fix' || true)
+            perfs=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- perf' || true)
+            docs=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- docs' || true)
+            chores=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- (chore|ci|build|refactor|style|test)' || true)
+            other=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -Ev '^- (feat|fix|perf|docs|chore|ci|build|refactor|style|test)' || true)
+            if [ -n "$feats" ]; then echo "### Features"; echo "$feats"; echo; fi
+            if [ -n "$fixes" ]; then echo "### Fixes"; echo "$fixes"; echo; fi
+            if [ -n "$perfs" ]; then echo "### Performance"; echo "$perfs"; echo; fi
+            if [ -n "$docs" ]; then echo "### Docs"; echo "$docs"; echo; fi
+            if [ -n "$chores" ]; then echo "### Chore / CI"; echo "$chores"; echo; fi
+            if [ -n "$other" ]; then echo "### Other"; echo "$other"; echo; fi
+            if [ -z "$feats$fixes$perfs$docs$chores$other" ]; then
+              echo "_No conventional commits in range._"
+              echo
+            fi
+            echo "---"
+            echo
+            echo "Complete Linux installation bundles are provided for amd64 and arm64."
+            echo "Each bundle includes the panel, its pinned Mihomo core and lifecycle scripts."
+            echo "Other architectures are standalone panel builds for advanced installations."
+            echo "Verify downloads against SHA256SUMS. SHA256SUMS.pem and SHA256SUMS.sig"
+            echo "provide Sigstore keyless verification for this release workflow."
+            echo "Docker images are published to ghcr.io/<owner>/<repository>:<tag>."
+            echo "The latest image and default installer follow stable releases only."
+          } > release-notes.md
+          cat release-notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite."
+            exit 1
+          fi
           gh release create "$TAG" --verify-tag --draft --title "$TAG" \
-            --notes-file release-notes.md --generate-notes
+            --notes-file release-notes.md
           gh release upload "$TAG" release-files/*
           gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST"
 
