@@ -110,3 +110,27 @@ func TestVLESSCompileSkipsStaleFlowForWebSocket(t *testing.T) {
 		t.Fatalf("raw listener must keep the default flow: %#v", users[0])
 	}
 }
+
+// The VMess client YAML lost the ws Host header: it built ws-opts with the path
+// only, so a listener that pins a Host was unreachable through the exported
+// config while the identical vless YAML worked.
+func TestVMessYAMLCarriesWebSocketHost(t *testing.T) {
+	l := models.Listener{
+		Name: "n", Protocol: "vmess", Type: "vmess", Port: "443",
+		BindAddress: "0.0.0.0", Enabled: true,
+		Config: `{"ws-path":"/ws","ws-headers":{"Host":"cdn.example.com"}}`,
+	}
+	shares, err := ExportShares(l, "example.com", []UserCred{{Username: "u", UUID: "00000000-0000-0000-0000-000000000001"}})
+	if err != nil {
+		t.Fatalf("ExportShares: %v", err)
+	}
+	if len(shares) == 0 {
+		t.Fatal("expected a share")
+	}
+	yaml := shares[0].ClientYAML
+	for _, want := range []string{"network: ws", "path: /ws", "Host: cdn.example.com"} {
+		if !strings.Contains(yaml, want) {
+			t.Fatalf("client YAML missing %q:\n%s", want, yaml)
+		}
+	}
+}
