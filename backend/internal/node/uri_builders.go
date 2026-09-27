@@ -171,6 +171,13 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		if tlsOpts["fp"] != "" {
 			obj["fp"] = tlsOpts["fp"]
 		}
+		// vless and trojan carry this in their query string. v2rayN's documented
+		// vmess field set has no skip-certificate field, so it ignores this one,
+		// but clients that do read it are the ones whose verification would
+		// otherwise fail — see vmessSchema for why it is kept anyway.
+		if tlsOpts["allowInsecure"] != "" {
+			obj["allowInsecure"] = tlsOpts["allowInsecure"]
+		}
 		if ws, ok := cfg["ws-path"].(string); ok && ws != "" {
 			obj["net"] = "ws"
 			obj["path"] = ws

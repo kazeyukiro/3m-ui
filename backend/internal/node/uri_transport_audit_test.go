@@ -77,17 +77,32 @@ func TestVMessURIOmitsWebSocketHostWhenUnset(t *testing.T) {
 }
 
 // v2rayN's VmessQRCode model — the reference parser for vmess:// links —
-// declares exactly these fields. Anything outside the set is ignored by it, so
-// emitting extra keys produces a link that looks configured but is not.
+// declares exactly this field set. Anything outside it is ignored by v2rayN.
 //
-// Notably there is no skip-certificate field at all: v2rayN's model has neither
-// `allowInsecure` nor `insecure`, and Xray-core has removed allowInsecure in
-// favour of pinnedPeerCertSha256. An earlier attempt to copy allowInsecure over
-// from the vless/trojan query strings was therefore reverted.
+// allowInsecure is the one deliberate exception. v2rayN's model has no
+// skip-certificate field at all (neither allowInsecure nor insecure), v2rayNG
+// reads `insecure`, and Xray-core has removed allowInsecure in favour of
+// pinnedPeerCertSha256 — so no spelling is honoured by every client. It is kept
+// anyway because the clients that do read it are exactly the ones whose
+// handshake would otherwise fail, and v2rayN ignoring an extra key costs
+// nothing. Any further field needs the same justification before it joins this
+// set.
 var vmessSchema = map[string]bool{
 	"v": true, "ps": true, "add": true, "port": true, "id": true, "aid": true,
 	"scy": true, "net": true, "type": true, "host": true, "path": true,
 	"tls": true, "sni": true, "alpn": true, "fp": true,
+	"allowInsecure": true,
+}
+
+func TestVMessURICarriesAllowInsecure(t *testing.T) {
+	cfg := vmessCfg()
+	cfg["skip-cert-verify"] = true
+	cfg["certificate"] = "cert"
+
+	obj := decodeVMess(t, vmessURI(t, cfg))
+	if obj["allowInsecure"] != "1" {
+		t.Fatalf("allowInsecure = %v, want 1", obj["allowInsecure"])
+	}
 }
 
 func TestVMessURIStaysWithinV2RayNSchema(t *testing.T) {
