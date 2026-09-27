@@ -171,6 +171,7 @@ export default {
     "create": "Create Node",
     "quickCreate": "Quick create",
     "quickCreated": "Created",
+    "quickCreateHint": "Select protocol and name only. Port, credentials and REALITY/TLS are generated automatically.",
     "nameRenamed": "Name was taken; created as {{name}}",
     "edit": "Edit Node",
     "name": "Name",
