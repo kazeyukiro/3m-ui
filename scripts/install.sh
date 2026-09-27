@@ -147,6 +147,10 @@ compute_mem_tuning() {
   TOTAL_MB=$((TOTAL_KB / 1024))
   if [ -n "${THREE_M_UI_GOMEMLIMIT:-}" ]; then
     PANEL_GOMEMLIMIT="$THREE_M_UI_GOMEMLIMIT"
+  elif [ "$TOTAL_MB" -le 64 ]; then
+    # The 128MB tier reserves three quarters of a 64MB box for the heap alone.
+    PANEL_GOMEMLIMIT="24MiB"
+    PANEL_GOGC="10"
   elif [ "$TOTAL_MB" -le 128 ]; then
     PANEL_GOMEMLIMIT="48MiB"
     PANEL_GOGC="20"
@@ -165,7 +169,14 @@ compute_mem_tuning() {
     off) PANEL_MEMORYMAX="infinity" ;;
     *MiB)
       _r=$(echo "$PANEL_GOMEMLIMIT" | sed 's/MiB//')
-      PANEL_MEMORYMAX="$((_r + _r / 2))M"
+      # Below 128MB the process is mostly mapped binary pages rather than heap,
+      # so heap+50% leaves it no room to fault its own code back in. Give the
+      # smallest tier a fixed margin instead.
+      if [ "${_r:-0}" -le 24 ]; then
+        PANEL_MEMORYMAX="$((_r + 20))M"
+      else
+        PANEL_MEMORYMAX="$((_r + _r / 2))M"
+      fi
       ;;
     *) PANEL_MEMORYMAX="infinity" ;;
   esac
@@ -188,6 +199,11 @@ compute_mem_tuning() {
     PANEL_CORE_LOW_MEMORY=1
   else
     PANEL_CORE_LOW_MEMORY=0
+  fi
+  # Be honest about the floor: the panel alone fits in 64MB, the bundled core
+  # does not. Say so instead of letting the update die on an OOM later.
+  if [ "${TOTAL_MB:-0}" -le 64 ] && [ "$INSTALL_MIHOMO" = 1 ]; then
+    say "Warning: ${TOTAL_MB}MB of RAM. The bundled Mihomo core does not fit alongside the panel at this size; install with --no-mihomo and point the panel at a core elsewhere." >&2
   fi
   say "Memory tuning: GOMEMLIMIT=$PANEL_GOMEMLIMIT GOGC=$PANEL_GOGC MemoryMax=$PANEL_MEMORYMAX core low-memory=$PANEL_CORE_LOW_MEMORY (RAM: ${TOTAL_MB}MB)"
 }

@@ -17,7 +17,17 @@ func OpenReadOnly(path string) (*gorm.DB, error) {
 		return nil, err
 	}
 	uri := url.URL{Scheme: "file", Path: abs, RawQuery: "mode=ro"}
-	return gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: uri.String()}), &gorm.Config{
+	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: pragmaDSN(uri.String())}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
+	if err != nil {
+		return nil, err
+	}
+	// Maintenance commands run a handful of queries; one warm connection is
+	// enough and keeps the memory these commands add negligible.
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(2)
+		sqlDB.SetMaxIdleConns(1)
+	}
+	return db, nil
 }

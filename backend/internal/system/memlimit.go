@@ -22,15 +22,23 @@ import (
 // Tiers mirror scripts/install.sh compute_mem_tuning() so that the installer,
 // the service unit and the running process agree on one budget instead of
 // three different guesses.
+//
+// The 64MB tier exists because the 128MB one is actively wrong below it: a
+// 48MiB heap cap on a 64MB machine reserves three quarters of the box for the
+// heap alone. Do not assume a lower tier can be reached by leaning harder on
+// the GC — see the note on runtimeTier.
 const (
-	tierSmallRAM  = 128 << 20 // <=128MB total
-	tierMediumRAM = 256 << 20 // <=256MB total
-	tierLargeRAM  = 512 << 20 // <=512MB total
+	tierTinyRAM   = 64 << 20 // <=64MB total
+	tierSmallRAM  = 128 << 20
+	tierMediumRAM = 256 << 20
+	tierLargeRAM  = 512 << 20
 
+	tierTinyLimit   = 24 << 20
 	tierSmallLimit  = 48 << 20
 	tierMediumLimit = 96 << 20
 	tierLargeLimit  = 192 << 20
 
+	tierTinyGC   = 10
 	tierSmallGC  = 20
 	tierMediumGC = 50
 	tierLargeGC  = 75
@@ -100,8 +108,18 @@ func budgetFor(allowance float64, goMemLimit, goGC string) RuntimeBudget {
 }
 
 // runtimeTier maps an allowance onto the shared tuning table.
+//
+// Tightening these numbers stops paying off long before it looks like it should.
+// Measured on the panel, steady-state RSS barely moved between an unlimited heap
+// and GOMEMLIMIT=16MiB, because the footprint is dominated by mapped binary
+// pages and runtime structures rather than by live heap: RssAnon was about 9MB
+// against roughly 23MB of clean, reclaimable file pages. The tiers are therefore
+// about not letting the heap claim memory the rest of the process needs, not
+// about squeezing the process below its floor.
 func runtimeTier(allowance float64) (RuntimeBudget, bool) {
 	switch {
+	case allowance <= tierTinyRAM:
+		return RuntimeBudget{Heap: tierTinyLimit, GC: tierTinyGC}, true
 	case allowance <= tierSmallRAM:
 		return RuntimeBudget{Heap: tierSmallLimit, GC: tierSmallGC}, true
 	case allowance <= tierMediumRAM:

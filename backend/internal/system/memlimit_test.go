@@ -18,7 +18,9 @@ func TestBudgetForTiers(t *testing.T) {
 		// Tiers mirror scripts/install.sh compute_mem_tuning().
 		{"unknown allowance", 0, 0, 0, false},
 		{"negative allowance", -1, 0, 0, false},
-		{"64MB device", 64 << 20, tierSmallLimit, tierSmallGC, true},
+		{"32MB device", 32 << 20, tierTinyLimit, tierTinyGC, true},
+		{"64MB device upper bound", tierTinyRAM, tierTinyLimit, tierTinyGC, true},
+		{"just above 64MB", tierTinyRAM + 1, tierSmallLimit, tierSmallGC, true},
 		{"128MB device upper bound", tierSmallRAM, tierSmallLimit, tierSmallGC, true},
 		{"just above 128MB", tierSmallRAM + 1, tierMediumLimit, tierMediumGC, true},
 		{"256MB device upper bound", tierMediumRAM, tierMediumLimit, tierMediumGC, true},
@@ -42,7 +44,7 @@ func TestBudgetForTiers(t *testing.T) {
 // panel budgets more heap than the machine actually has — the exact failure
 // this tuning is meant to prevent.
 func TestBudgetStaysUnderAllowance(t *testing.T) {
-	for _, allowance := range []float64{tierSmallRAM, tierMediumRAM, tierLargeRAM} {
+	for _, allowance := range []float64{tierTinyRAM, tierSmallRAM, tierMediumRAM, tierLargeRAM} {
 		got := budgetFor(allowance, "", "")
 		if !got.Applied {
 			t.Fatalf("expected a budget for allowance %v", allowance)

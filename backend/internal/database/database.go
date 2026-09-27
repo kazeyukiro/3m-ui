@@ -15,6 +15,13 @@ import (
 
 var GlobalDB *gorm.DB
 
+// maxSQLiteConns bounds the connection pool. Every SQLite connection carries its
+// own page cache, and gorm's default pool is unbounded, so concurrent requests
+// could each open one at roughly 2MB apiece — on a small host that is the whole
+// budget. Bounded but never 1: iterating a result set holds a connection, and a
+// query issued inside that loop would then deadlock.
+const maxSQLiteConns = 4
+
 func InitDB(dbPath string) (*gorm.DB, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -24,7 +31,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// tokens. Do not leave it readable by other local users.
 	_ = os.Chmod(dir, 0700)
 
-	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: dbPath}), &gorm.Config{
+	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: pragmaDSN(dbPath)}), &gorm.Config{
 		// Info logs every ErrRecordNotFound (e.g. optional panel_settings keys).
 		// Warn keeps real SQL failures without flooding journald every tick.
 		Logger: logger.Default.LogMode(logger.Warn),
@@ -35,6 +42,13 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// Best-effort: file may not exist yet on brand-new installs until first write.
 	if _, statErr := os.Stat(dbPath); statErr == nil {
 		_ = os.Chmod(dbPath, 0600)
+	}
+
+	// Cap the pool and keep a single warm idle connection, so the common case
+	// reuses one instead of churning through fresh ones.
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(maxSQLiteConns)
+		sqlDB.SetMaxIdleConns(1)
 	}
 
 	// Resolve collisions (including soft-deleted rows) before unique indexes.
