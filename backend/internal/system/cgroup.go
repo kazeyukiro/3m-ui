@@ -212,7 +212,132 @@ type cgroupMemory struct {
 //
 // v1 reports an absurdly large limit when unset (PAGE_COUNTER_MAX), so the
 // caller treats a limit above the host's total RAM as "no limit".
+
+// selfCgroupDir returns the absolute sysfs directory for this process' cgroup
+// on the unified hierarchy (v2) or the memory controller (v1). Empty when the
+// path cannot be resolved — callers then fall back to the legacy root paths.
+func selfCgroupDir() string {
+	data, err := os.ReadFile("/proc/self/cgroup")
+	if err != nil {
+		return ""
+	}
+	var v2Rel, v1MemRel string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// v2: "0::/system.slice/3m-ui.service"
+		if strings.HasPrefix(line, "0::") {
+			rel := strings.TrimPrefix(line, "0::")
+			if rel == "" {
+				rel = "/"
+			}
+			v2Rel = rel
+			continue
+		}
+		// v1: "memory:/system.slice/3m-ui.service" or "1:memory:/..."
+		parts := strings.SplitN(line, ":", 3)
+		if len(parts) == 3 && (parts[1] == "memory" || strings.Contains(parts[1], "memory")) {
+			v1MemRel = parts[2]
+		}
+	}
+	if v2Rel != "" {
+		dir := "/sys/fs/cgroup"
+		if v2Rel != "/" {
+			dir = "/sys/fs/cgroup" + v2Rel
+		}
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			return dir
+		}
+	}
+	if v1MemRel != "" {
+		dir := "/sys/fs/cgroup/memory"
+		if v1MemRel != "/" {
+			dir = "/sys/fs/cgroup/memory" + v1MemRel
+		}
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			return dir
+		}
+	}
+	return ""
+}
+
 func readCgroupMemory() cgroupMemory {
+	// System card: prefer the process' own cgroup when it has a real MemoryMax
+	// (container / unit limit). Otherwise use the hierarchy root so bare-metal
+	// hosts still show machine-wide pressure, not only the panel unit.
+	if dir := selfCgroupDir(); dir != "" {
+		if u, ok := readUintFile(dir + "/memory.current"); ok {
+			var m cgroupMemory
+			m.usage = float64(u)
+			if f, ok := readUintField(dir+"/memory.stat", "inactive_file"); ok {
+				m.inactiveFile = float64(f)
+			}
+			if l, ok := readUintFile(dir + "/memory.max"); ok {
+				m.limit = float64(l)
+			}
+			// Real cap → this cgroup is the accounting domain for the system card.
+			if m.limit > 0 {
+				m.ok = true
+				return m
+			}
+		}
+		if u, ok := readUintFile(dir + "/memory.usage_in_bytes"); ok {
+			var m cgroupMemory
+			m.usage = float64(u)
+			if f, ok := readUintField(dir+"/memory.stat", "total_inactive_file"); ok {
+				m.inactiveFile = float64(f)
+			}
+			if l, ok := readUintFile(dir + "/memory.limit_in_bytes"); ok {
+				m.limit = float64(l)
+			}
+			if m.limit > 0 && m.limit < (1<<62) {
+				m.ok = true
+				return m
+			}
+		}
+	}
+	return readRootCgroupMemory()
+}
+
+// readServiceCgroupMemory returns memory.current for this process' unit
+// (e.g. system.slice/3m-ui.service). Used to split panel/core so their sum
+// matches systemd MemoryCurrent. No root fallback — if the service path is
+// unreadable, callers keep RSS.
+func readServiceCgroupMemory() cgroupMemory {
+	dir := selfCgroupDir()
+	if dir == "" {
+		return cgroupMemory{}
+	}
+	if u, ok := readUintFile(dir + "/memory.current"); ok {
+		var m cgroupMemory
+		m.usage = float64(u)
+		if f, ok := readUintField(dir+"/memory.stat", "inactive_file"); ok {
+			m.inactiveFile = float64(f)
+		}
+		if l, ok := readUintFile(dir + "/memory.max"); ok {
+			m.limit = float64(l)
+		}
+		m.ok = true
+		return m
+	}
+	if u, ok := readUintFile(dir + "/memory.usage_in_bytes"); ok {
+		var m cgroupMemory
+		m.usage = float64(u)
+		if f, ok := readUintField(dir+"/memory.stat", "total_inactive_file"); ok {
+			m.inactiveFile = float64(f)
+		}
+		if l, ok := readUintFile(dir + "/memory.limit_in_bytes"); ok {
+			m.limit = float64(l)
+		}
+		m.ok = true
+		return m
+	}
+	return cgroupMemory{}
+}
+
+func readRootCgroupMemory() cgroupMemory {
 	var m cgroupMemory
 	if u, ok := readUintFile(cgroupV2MemUsage); ok {
 		m.usage = float64(u)
