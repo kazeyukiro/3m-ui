@@ -6,18 +6,13 @@ import (
 	"strings"
 )
 
-// cgroup accounting paths, v2 first with a v1 fallback. The v1 controller
-// directory name is distro-dependent ("cpu,cpuacct" vs "cpuacct"), hence the
-// probe lists below.
+// Every accounting file is read relative to a resolved cgroup directory, never
+// from a fixed path: in a container the figures for this process do not live at
+// the hierarchy root, and reading them there produces host-wide numbers. See
+// cpuAccountingDir and selfCgroupDir.
 //
-// Memory paths are deliberately absent: those files are read relative to a
-// resolved cgroup directory (see cgroupMemoryFiles), because a container's
-// accounting does not live at the hierarchy root.
-const (
-	cgroupV2CPUStat = "/sys/fs/cgroup/cpu.stat"
-	cgroupV2CPUMax  = "/sys/fs/cgroup/cpu.max"
-	cgroupV2CPUSet  = "/sys/fs/cgroup/cpuset.cpus.effective"
-)
+// The v1 controller directory name is distro-dependent ("cpu,cpuacct" vs
+// "cpuacct"), hence the probe list below.
 
 // cgroupV1CPUAcctDirs are the directories that may hold cpu accounting files
 // under cgroup v1. They are probed in order.
@@ -84,12 +79,51 @@ func readUintField(path, key string) (uint64, bool) {
 	return 0, false
 }
 
+// cpuAccountingDir returns the directory whose CPU figures describe the load
+// this process is subject to. The process' own cgroup wins when the kernel
+// enforces a cap there — a memory limit or a CPU quota — because that is the
+// domain actually confining us. Otherwise the hierarchy root, so a bare-metal
+// host keeps reporting machine-wide load instead of only the panel's unit.
+//
+// Without this, a container whose cgroup lives below /sys/fs/cgroup (LXC's
+// default) reads the CPU files of whatever the hierarchy root happens to be —
+// often nothing at all — and silently falls back to host-wide /proc/stat, which
+// is the same mistake the memory card made.
+func cpuAccountingDir() string {
+	dir := selfCgroupDir()
+	if dir == "" {
+		return sysfsCgroupRoot
+	}
+	if m, ok := cgroupMemoryFiles(dir, dir); ok && hasRealLimit(m) {
+		return dir
+	}
+	if _, _, ok := readCPUMaxPair(dir + "/cpu.max"); ok {
+		return dir
+	}
+	return sysfsCgroupRoot
+}
+
+// cpuCgroupDirs lists the directories to probe for cgroup v2 CPU files, most
+// specific first. Caps are read across all of them and the tightest applies,
+// while cumulative usage is only ever taken from the first that has it — a
+// delta across two different cgroups would be meaningless.
+func cpuCgroupDirs() []string {
+	dir := cpuAccountingDir()
+	if dir == sysfsCgroupRoot {
+		return []string{dir}
+	}
+	return []string{dir, sysfsCgroupRoot}
+}
+
 // cgroupCPUUsage returns cumulative CPU microseconds consumed by this process'
-// cgroup. It reads cgroup v2 cpu.stat ("usage_usec") first and falls back to
-// v1 cpuacct.usage (nanoseconds), which is converted to microseconds.
+// cgroup. It reads cgroup v2 cpu.stat ("usage_usec") from the accounting
+// directory and falls back to v1 cpuacct.usage (nanoseconds), converted to
+// microseconds.
 func cgroupCPUUsage() (uint64, bool) {
-	if usec, ok := readUintField(cgroupV2CPUStat, "usage_usec"); ok {
-		return usec, true
+	for _, dir := range cpuCgroupDirs() {
+		if usec, ok := readUintField(dir+"/cpu.stat", "usage_usec"); ok {
+			return usec, true
+		}
 	}
 	for _, dir := range cgroupV1CPUAcctDirs {
 		if nsec, ok := readUintFile(dir + "/cpuacct.usage"); ok {
@@ -103,8 +137,10 @@ func cgroupCPUUsage() (uint64, bool) {
 // bandwidth limit is configured ("--cpus=" / -c /cpu quota variants). Returns
 // false when there is no quota, meaning the cgroup may use every visible CPU.
 func cgroupCPUQuota() (float64, bool) {
-	if quota, period, ok := readCPUMaxPair(cgroupV2CPUMax); ok {
-		return quota / period, true
+	for _, dir := range cpuCgroupDirs() {
+		if quota, period, ok := readCPUMaxPair(dir + "/cpu.max"); ok {
+			return quota / period, true
+		}
 	}
 	for _, dir := range cgroupV1CPUAcctDirs {
 		quota, ok := readUintFile(dir + "/cpu.cfs_quota_us")
@@ -185,19 +221,26 @@ func parseCPUSetCount(s string) (int, bool) {
 }
 
 // cgroupCPUSet returns the number of CPUs this cgroup is pinned to, when a
-// cpuset restriction exists.
+// cpuset restriction exists. The v2 file is named cpuset.cpus.effective; the v1
+// controller exposes cpuset.cpus under cpuset/<controller> instead.
 func cgroupCPUSet() (float64, bool) {
-	if data, err := os.ReadFile(cgroupV2CPUSet); err == nil {
-		if n, ok := parseCPUSetCount(string(data)); ok {
+	for _, dir := range cpuCgroupDirs() {
+		if n, ok := readCPUSetCount(dir + "/cpuset.cpus.effective"); ok {
 			return float64(n), true
 		}
-	}
-	if data, err := os.ReadFile("/sys/fs/cgroup/cpuset/cpuset.cpus"); err == nil {
-		if n, ok := parseCPUSetCount(string(data)); ok {
+		if n, ok := readCPUSetCount(dir + "/cpuset/cpuset.cpus"); ok {
 			return float64(n), true
 		}
 	}
 	return 0, false
+}
+
+func readCPUSetCount(path string) (int, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	return parseCPUSetCount(string(data))
 }
 
 // cgroupMemory is this process' cgroup memory accounting, all in bytes.

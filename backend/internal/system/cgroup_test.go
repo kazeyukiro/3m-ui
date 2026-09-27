@@ -97,6 +97,39 @@ func (f *cgroupFixture) cgroupV1(rel string, usage, inactive, limit uint64) {
 func (f *cgroupFixture) selfV2(rel string) { f.file(f.self, "0::"+rel+"\n") }
 func (f *cgroupFixture) selfV1(rel string) { f.file(f.self, "1:memory:"+rel+"\n") }
 
+// dir materialises a cgroup directory below the fake sysfs root and returns it.
+func (f *cgroupFixture) dir(rel string) string {
+	f.t.Helper()
+	dir := f.root
+	if rel != "" && rel != "/" {
+		dir = filepath.Join(f.root, rel)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+	return dir
+}
+
+func (f *cgroupFixture) cpuStat(rel string, usageUsec uint64) {
+	f.t.Helper()
+	f.file(filepath.Join(f.dir(rel), "cpu.stat"), "usage_usec "+strconv.FormatUint(usageUsec, 10)+"\nsystem_usec 0\n")
+}
+
+// cpuMax writes a cgroup v2 cpu.max file. quotaUs == 0 means "max" (no quota).
+func (f *cgroupFixture) cpuMax(rel string, quotaUs, periodUs uint64) {
+	f.t.Helper()
+	if quotaUs == 0 {
+		f.file(filepath.Join(f.dir(rel), "cpu.max"), "max 100000\n")
+		return
+	}
+	f.file(filepath.Join(f.dir(rel), "cpu.max"), strconv.FormatUint(quotaUs, 10)+" "+strconv.FormatUint(periodUs, 10)+"\n")
+}
+
+func (f *cgroupFixture) cpuset(rel, value string) {
+	f.t.Helper()
+	f.file(filepath.Join(f.dir(rel), "cpuset.cpus.effective"), value+"\n")
+}
+
 func formatLimit(limit uint64) string {
 	if limit == 0 {
 		return "max"
@@ -335,5 +368,121 @@ func TestHasRealLimitRejectsSentinels(t *testing.T) {
 		if got := hasRealLimit(cgroupMemory{limit: float64(c.limit)}); got != c.want {
 			t.Errorf("hasRealLimit(%d) = %v, want %v", c.limit, got, c.want)
 		}
+	}
+}
+
+// The CPU files have the same problem as the memory ones: on LXC they are not
+// at the hierarchy root. The domain is chosen with the same rule, so an
+// unbounded host keeps reporting machine-wide load.
+
+func TestCPUAccountingDirUsesContainerCgroupWhenCapped(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/lxc/1000")
+	f.selfV2("/lxc/1000")
+	f.cgroupV2("", usageSM, reclSM, limitSM) // container is memory-capped
+	f.cpuStat("", 4242)
+
+	if got := cpuAccountingDir(); got != f.root {
+		t.Fatalf("cpuAccountingDir() = %q, want the container cgroup %q", got, f.root)
+	}
+	if usec, ok := cgroupCPUUsage(); !ok || usec != 4242 {
+		t.Fatalf("cgroupCPUUsage() = (%d, %v), want 4242", usec, ok)
+	}
+}
+
+// A CPU quota alone is enough to make a cgroup our accounting domain, even with
+// no memory cap configured.
+func TestCPUAccountingDirUsesOwnCgroupWhenCPUQuotaSet(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/")
+	f.selfV2("/system.slice/3m-ui.service")
+	f.cgroupV2("system.slice/3m-ui.service", usageSM, reclSM, 0)
+	f.cpuMax("system.slice/3m-ui.service", 200000, 100000) // 2 CPUs
+
+	want := filepath.Join(f.root, "system.slice/3m-ui.service")
+	if got := cpuAccountingDir(); got != want {
+		t.Fatalf("cpuAccountingDir() = %q, want %q", got, want)
+	}
+	if q, ok := cgroupCPUQuota(); !ok || q != 2 {
+		t.Fatalf("cgroupCPUQuota() = (%v, %v), want 2", q, ok)
+	}
+}
+
+// Unbounded cgroup: bare-metal semantics must be preserved — the machine, not
+// the panel's own unit.
+func TestCPUAccountingDirFallsBackToRootWhenUnbounded(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/")
+	f.selfV2("/system.slice/3m-ui.service")
+	f.cgroupV2("system.slice/3m-ui.service", usageSM, reclSM, 0)
+	f.cpuMax("system.slice/3m-ui.service", 0, 0) // "max": no quota
+	f.cpuStat("", 777)
+
+	if got := cpuAccountingDir(); got != f.root {
+		t.Fatalf("cpuAccountingDir() = %q, want the hierarchy root %q", got, f.root)
+	}
+	if usec, ok := cgroupCPUUsage(); !ok || usec != 777 {
+		t.Fatalf("cgroupCPUUsage() = (%d, %v), want the root's 777", usec, ok)
+	}
+}
+
+// Usage must never be a delta across two different cgroups: the accounting
+// directory wins outright, not the largest or the first readable.
+func TestCgroupCPUUsagePrefersAccountingDirOverRoot(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/lxc/1000")
+	f.selfV2("/lxc/1000")
+	f.cgroupV2("", usageSM, reclSM, limitSM)
+	f.cpuStat("", 1000)
+	// A broader domain reporting a larger number must not be picked up.
+	f.cpuStat("elsewhere", 999999)
+
+	if usec, ok := cgroupCPUUsage(); !ok || usec != 1000 {
+		t.Fatalf("cgroupCPUUsage() = (%d, %v), want 1000", usec, ok)
+	}
+}
+
+// A quota on a broader domain still applies to us when our own cgroup has none.
+func TestCgroupCPUQuotaFallsBackToRootQuota(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/lxc/1000")
+	f.selfV2("/lxc/1000")
+	f.cgroupV2("", usageSM, reclSM, limitSM)
+	f.cpuMax("", 400000, 100000) // 4 CPUs, on the container itself
+
+	if q, ok := cgroupCPUQuota(); !ok || q != 4 {
+		t.Fatalf("cgroupCPUQuota() = (%v, %v), want 4", q, ok)
+	}
+}
+
+func TestCgroupCPUSetReadsResolvedCgroup(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/lxc/1000")
+	f.selfV2("/lxc/1000")
+	f.cgroupV2("", usageSM, reclSM, limitSM)
+	f.cpuset("", "0-3")
+
+	if n, ok := cgroupCPUSet(); !ok || n != 4 {
+		t.Fatalf("cgroupCPUSet() = (%v, %v), want 4", n, ok)
+	}
+}
+
+// Capacity is the tightest limit that applies, so a container quota must beat
+// the number of CPUs the host happens to have.
+func TestComputeCPUCapacityHonoursContainerQuota(t *testing.T) {
+	f := newCgroupFixture(t)
+	f.mount("cgroup2", "/lxc/1000")
+	f.selfV2("/lxc/1000")
+	f.cgroupV2("", usageSM, reclSM, limitSM)
+	f.cpuMax("", 200000, 100000) // 2 CPUs
+	f.cpuset("", "0-3")          // 4 CPUs pinned, looser than the quota
+
+	// onlineCPUs() reads the real machine, so only assert the ceiling it imposes.
+	online, err := onlineCPUs()
+	if err != nil || online < 2 {
+		t.Skipf("need at least 2 online CPUs to reason about the minimum, got %v (%v)", online, err)
+	}
+	if got := computeCPUCapacity(); got != 2 {
+		t.Fatalf("computeCPUCapacity() = %v, want the container quota 2", got)
 	}
 }
