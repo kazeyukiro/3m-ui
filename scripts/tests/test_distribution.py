@@ -43,9 +43,10 @@ class DistributionTests(unittest.TestCase):
             directory = Path(tmp)
             fake_curl = directory / "curl"
             fake_curl.write_text(
-                '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n'
-                '  if [ "$1" = --output ]; then shift; printf tampered > "$1"; exit; fi\n'
-                '  shift\ndone\nexit 1\n', encoding="utf-8"
+                # Writes the tampered body to stdout, which is what a real curl
+                # does when no --output is given. The asset must be rejected on
+                # its checksum before anything is extracted from it.
+                '#!/bin/sh\nprintf tampered\n', encoding="utf-8"
             )
             fake_curl.chmod(0o755)
             dest = directory / "output"
