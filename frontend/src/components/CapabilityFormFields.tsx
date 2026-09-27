@@ -33,7 +33,7 @@ function renderFields(fields: FieldCapability[] | undefined, showAdvanced: boole
         key={f.path}
         name={f.path}
         label={f.label}
-        tooltip={f.description}
+        tooltip={t(`listeners.${String(f.path).replace(/-/g, '_')}Hint`) || f.description}
         rules={!transientRequired && f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} is required` }] : undefined}
         valuePropName={f.type === 'boolean' ? 'checked' : 'value'}
       >
