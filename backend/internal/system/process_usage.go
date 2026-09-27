@@ -7,18 +7,18 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
-// ProcessUsage is RSS + CPU for a single OS process (panel or Mihomo core).
+// ProcessUsage is CPU + memory for a single OS process (panel or Mihomo core).
 //
-// Both percentages are expressed against the capacity the dashboard reports
-// for the whole system: the cgroup CFS quota when limited, otherwise the CPUs
-// online. A single-threaded process pegging one of four cores therefore reads
-// 25% instead of top(1)'s 100% — the same unit as the "system resources" card
-// beside it, which is what lets the two cards be compared at a glance.
+// CPU percentages use the same capacity as the system card (cgroup CFS quota or
+// online CPUs). Memory is reported on the **cgroup working-set** basis used by
+// the system card and by systemd's MemoryCurrent: when the panel and core share
+// one unit, SampleProcessUsagePair splits that cgroup figure by RSS share so the
+// two rows sum to the service total instead of double-counting shared pages.
 type ProcessUsage struct {
 	PID           int     `json:"pid"`
 	CPUPercent    float64 `json:"cpu_percent"`
-	MemoryUsed    float64 `json:"memory_used"`    // RSS bytes
-	MemoryPercent float64 `json:"memory_percent"` // 0–100 of system RAM
+	MemoryUsed    float64 `json:"memory_used"`    // bytes (cgroup share, or RSS fallback)
+	MemoryPercent float64 `json:"memory_percent"` // 0–100 of system/cgroup total
 }
 
 // procBaseline is one process CPU counter reading, differenced against the
@@ -94,6 +94,27 @@ func processCPUTotal(p *process.Process) (float64, bool) {
 // some containers/gVisor) totalTime goes negative and the call silently yields
 // 0. Validate either way.
 func SampleProcessUsage(pid int) ProcessUsage {
+	out := sampleProcessUsageRaw(pid)
+	// Single-process path: attribute the whole cgroup working set to this PID
+	// so MemoryUsed stays ≤ system Memory.Used (same denominator as the system card).
+	applyCgroupMemoryShares([]*ProcessUsage{&out})
+	return out
+}
+
+// SampleProcessUsagePair samples panel and core together and splits the unit's
+// cgroup working-set memory by RSS share. Shared library pages are no longer
+// double-counted; panel.MemoryUsed + core.MemoryUsed matches systemd MemoryCurrent
+// (and the system card's Used when both live in the same cgroup).
+func SampleProcessUsagePair(panelPID, corePID int) (panel, core ProcessUsage) {
+	panel = sampleProcessUsageRaw(panelPID)
+	core = sampleProcessUsageRaw(corePID)
+	applyCgroupMemoryShares([]*ProcessUsage{&panel, &core})
+	return panel, core
+}
+
+// sampleProcessUsageRaw fills CPU and raw RSS; memory fields are adjusted by
+// applyCgroupMemoryShares.
+func sampleProcessUsageRaw(pid int) ProcessUsage {
 	out := ProcessUsage{PID: pid}
 	if pid <= 0 {
 		return out
@@ -105,18 +126,83 @@ func SampleProcessUsage(pid int) ProcessUsage {
 	if mi, err := p.MemoryInfo(); err == nil && mi != nil {
 		out.MemoryUsed = float64(mi.RSS)
 	}
-	// Percentage against the same total the dashboard shows for system memory
-	// (cgroup limit inside a container, host RAM otherwise). gopsutil's
-	// MemoryPercent divides by its own total, which diverges from the system
-	// card whenever cgroup accounting is in play — the two cards then disagree
-	// about what 100% means.
-	if total := memoryTotalForPercent(); total > 0 && out.MemoryUsed > 0 {
-		out.MemoryPercent = clampPercent(out.MemoryUsed / total * 100)
-	} else if mp, err := p.MemoryPercent(); err == nil {
-		out.MemoryPercent = clampPercent(float64(mp))
-	}
 	out.CPUPercent = sampleProcessCPU(p)
 	return out
+}
+
+// applyCgroupMemoryShares rewrites MemoryUsed/MemoryPercent so the values use
+// the same cgroup working set as sampleMemory(). Shares are proportional to
+// each process' RSS (only a relative weight — the absolute bytes come from the
+// cgroup). Processes with no RSS or outside a readable cgroup keep RSS-based
+// figures against memoryTotalForPercent().
+func applyCgroupMemoryShares(procs []*ProcessUsage) {
+	if len(procs) == 0 {
+		return
+	}
+	total := memoryTotalForPercent()
+	cg := readCgroupMemory()
+	hostTotal := total
+	info, ok := memoryFromCgroup(cg, hostTotal)
+	if !ok || info.Used <= 0 {
+		for _, u := range procs {
+			if u == nil || u.PID <= 0 {
+				continue
+			}
+			if total > 0 && u.MemoryUsed > 0 {
+				u.MemoryPercent = clampPercent(u.MemoryUsed / total * 100)
+			}
+		}
+		return
+	}
+	if info.Total > 0 {
+		total = info.Total
+	}
+
+	var rssSum float64
+	for _, u := range procs {
+		if u != nil && u.PID > 0 && u.MemoryUsed > 0 {
+			rssSum += u.MemoryUsed
+		}
+	}
+
+	if rssSum <= 0 {
+		// No RSS weights: give the whole working set to the first live PID.
+		for _, u := range procs {
+			if u != nil && u.PID > 0 {
+				u.MemoryUsed = info.Used
+				if total > 0 {
+					u.MemoryPercent = clampPercent(u.MemoryUsed / total * 100)
+				}
+				return
+			}
+		}
+		return
+	}
+
+	var assigned float64
+	var last *ProcessUsage
+	for _, u := range procs {
+		if u == nil || u.PID <= 0 {
+			continue
+		}
+		share := info.Used * (u.MemoryUsed / rssSum)
+		u.MemoryUsed = share
+		assigned += share
+		last = u
+		if total > 0 {
+			u.MemoryPercent = clampPercent(u.MemoryUsed / total * 100)
+		}
+	}
+	// Absorb floating error on the last process so the sum matches the cgroup.
+	if last != nil {
+		last.MemoryUsed += info.Used - assigned
+		if last.MemoryUsed < 0 {
+			last.MemoryUsed = 0
+		}
+		if total > 0 {
+			last.MemoryPercent = clampPercent(last.MemoryUsed / total * 100)
+		}
+	}
 }
 
 // memoryTotalForPercent returns the memory total the dashboard displays for

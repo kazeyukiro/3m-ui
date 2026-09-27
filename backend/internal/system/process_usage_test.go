@@ -158,3 +158,27 @@ func TestSystemCPUSampleReacts(t *testing.T) {
 	}
 	t.Logf("system cpu: idle-ish=%.1f%% loaded=%.1f%%", stats.CPU.Percent, loaded.CPU.Percent)
 }
+
+// TestProcessMemoryUsesCgroupShare asserts panel+core memory is split from the
+// same cgroup working set as the system card, so the rows cannot sum above
+// system Memory.Used (the RSS double-count failure mode).
+func TestProcessMemoryUsesCgroupShare(t *testing.T) {
+	if !procAvailable() {
+		t.Skip("requires /proc")
+	}
+	stats := system.GetSystemStats()
+	if stats == nil || stats.Memory.Total <= 0 {
+		t.Skip("memory stats unavailable")
+	}
+	panel, core := system.SampleProcessUsagePair(os.Getpid(), 0)
+	if panel.MemoryUsed <= 0 {
+		t.Fatal("panel memory should be measurable")
+	}
+	if panel.MemoryUsed > stats.Memory.Used+1 {
+		t.Fatalf("panel memory %.0f exceeds system used %.0f", panel.MemoryUsed, stats.Memory.Used)
+	}
+	sum := panel.MemoryUsed + core.MemoryUsed
+	if sum > stats.Memory.Used+1 {
+		t.Fatalf("panel+core memory %.0f exceeds system used %.0f", sum, stats.Memory.Used)
+	}
+}
