@@ -786,7 +786,7 @@ export default {
     "quickCreated": "用户已创建",
     "quickCredTitle": "凭据（请立即保存）",
     "quickCredWarn": "列表里不会再显示明文密码，请现在复制。",
-    "bindAllNodes": "绑定全部节点"
+    "bindAllNodes": "绑定全部节点",
     "usernameHint": "用户名（登录/代理标识，视协议而定）。",
     "passwordHint": "密码或密钥（具体用法取决于节点协议）。",
     "start_on_first_useHint": "开启后，到期时间从首次成功使用起算，而不是创建时间。",
@@ -1109,7 +1109,7 @@ export default {
     "warpDoneNoCopy": "WARP 已注册。若无法复制，请在弹窗中手动选择文本。",
     "warpEmpty": "未返回 WARP 配置。",
     "domainOrIP": "域名或公网 IP",
-    "domainOrIPExtra": "填域名走常规 LE；填公网 IP 走 shortlived 约 6 天并自动续期。需放行 80 端口。"
+    "domainOrIPExtra": "填域名走常规 LE；填公网 IP 走 shortlived 约 6 天并自动续期。需放行 80 端口。",
     "enabledHint": "该组功能的总开关（如适用）。",
     "domainHint": "面板 SSL 域名、*.example.com（需 DNS-01）或公网 IP。",
     "emailHint": "ACME 账户邮箱（Let’s Encrypt 通知）。",
