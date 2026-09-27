@@ -42,6 +42,10 @@ esac
 
 CURL = '''#!/usr/bin/env python3
 import os, pathlib, sys, shutil
+# Models the parts of curl the installer actually uses:
+#   -o FILE   write the response body to FILE
+#   (no -o)   write the response body to stdout
+#   -I        emit response headers only, including Content-Length
 args=sys.argv[1:]
 url=next(a for a in args if a.startswith('https://'))
 with open(os.environ['TEST_EVENTS'], 'a') as f: f.write('download '+url+'\\n')
@@ -51,7 +55,12 @@ else:
  path=url.split('/releases/download/',1)[1]
  source=pathlib.Path(os.environ['TEST_RELEASES'])/path
  if not source.is_file(): sys.exit(22)
- shutil.copyfile(source,args[args.index('-o')+1])
+ if '-I' in args:
+   sys.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Length: %d\\r\\n\\r\\n' % source.stat().st_size)
+ elif '-o' in args:
+   shutil.copyfile(source,args[args.index('-o')+1])
+ else:
+   sys.stdout.buffer.write(source.read_bytes())
 '''
 
 SYSTEMCTL = '''#!/usr/bin/env python3
