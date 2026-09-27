@@ -166,19 +166,21 @@ func TestProcessMemoryUsesCgroupShare(t *testing.T) {
 	if !procAvailable() {
 		t.Skip("requires /proc")
 	}
+	// Process first, system second: see TestSystemMemoryMatchesProcessMemory.
+	panel, core := system.SampleProcessUsagePair(os.Getpid(), 0)
 	stats := system.GetSystemStats()
 	if stats == nil || stats.Memory.Total <= 0 {
 		t.Skip("memory stats unavailable")
 	}
-	panel, core := system.SampleProcessUsagePair(os.Getpid(), 0)
 	if panel.MemoryUsed <= 0 {
 		t.Fatal("panel memory should be measurable")
 	}
-	if panel.MemoryUsed > stats.Memory.Used+1 {
+	ceiling := stats.Memory.Used + memorySkewTolerance(stats.Memory.Total)
+	if panel.MemoryUsed > ceiling {
 		t.Fatalf("panel memory %.0f exceeds system used %.0f", panel.MemoryUsed, stats.Memory.Used)
 	}
 	sum := panel.MemoryUsed + core.MemoryUsed
-	if sum > stats.Memory.Used+1 {
+	if sum > ceiling {
 		t.Fatalf("panel+core memory %.0f exceeds system used %.0f", sum, stats.Memory.Used)
 	}
 }
