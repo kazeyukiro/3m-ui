@@ -523,7 +523,6 @@ export default {
     "certApplyPartial": "Partial success",
     "reloadListHint": "List may be stale after core reload — refresh if a node is missing.",
     "trafficMultiplier": "Traffic multiplier",
-    "trafficMultiplierHint": "Raw traffic × this value counts toward each user’s quota. Default 1."
     "allow_insecureHint": "Allow insecure TLS on client export when applicable (wiki allow-insecure).",
     "alpnHint": "TLS/QUIC ALPN list (wiki: alpn), e.g. h2, http/1.1.",
     "client_auth_certHint": "Client CA/cert material when client-auth is enabled.",
@@ -953,7 +952,6 @@ export default {
     "sslDNSTokenHint": "Cloudflare API token. Leave blank when saving to keep the previously stored token.",
     "sslDNSZone": "DNS zone (optional)",
     "sslDNSZoneHint": "Zone name if auto-detect fails, e.g. example.com for *.example.com.",
-    "domainOrIPExtra": "Hostname, *.example.com (wildcard + DNS-01), or IPv4/IPv6. IP uses shortlived HTTP-01/TLS-ALPN-01.",
     "sslEnabledHint": "Enable HTTPS for the panel. Prefer ACME (Let’s Encrypt) or provide manual cert/key paths.",
     "subEncryptHint": "When on, the plain URI list is Base64-encoded (common for Clash/V2Ray style clients).",
     "subUpdatesHint": "Client recommended subscription refresh interval, in hours (1–168).",

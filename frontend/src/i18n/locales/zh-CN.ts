@@ -523,7 +523,6 @@ export default {
     "certApplyPartial": "部分成功",
     "reloadListHint": "内核重载后列表可能未及时刷新——若节点缺失请点刷新。",
     "trafficMultiplier": "流量倍率",
-    "trafficMultiplierHint": "节点实际流量 × 倍率计入用户配额。默认 1，例如 1.5 表示多计 50%。"
     "allow_insecureHint": "客户端导出允许不安全 TLS（wiki allow-insecure）。",
     "alpnHint": "TLS/QUIC ALPN（wiki: alpn），如 h2、http/1.1。",
     "client_auth_certHint": "client_auth_cert：请对照 Mihomo Meta 文档（wiki.metacubex.one）配置。",
@@ -953,7 +952,6 @@ export default {
     "sslDNSTokenHint": "Cloudflare API Token。留空保存表示不修改已存储的 Token。",
     "sslDNSZone": "DNS Zone（可选）",
     "sslDNSZoneHint": "自动识别失败时填写，例如 *.example.com 对应 example.com。",
-    "domainOrIPExtra": "域名、*.example.com（通配符需 DNS-01），或 IPv4/IPv6。IP 证书为短期 HTTP-01/TLS-ALPN-01。",
     "sslEnabledHint": "为面板启用 HTTPS。可用 ACME（Let’s Encrypt）或手动填写证书/私钥路径。",
     "subEncryptHint": "开启后对 URI 列表做 Base64 编码（常见于 Clash/V2Ray 客户端）。",
     "subUpdatesHint": "建议客户端刷新订阅的间隔（小时，1–168）。",

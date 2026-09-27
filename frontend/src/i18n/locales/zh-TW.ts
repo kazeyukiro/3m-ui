@@ -439,7 +439,6 @@ export default {
     "certApplyPartial": "部分成功",
     "reloadListHint": "核心重載後列表可能未及時更新——若節點缺失請重新整理。",
     "trafficMultiplier": "流量倍率",
-    "trafficMultiplierHint": "節點實際流量 × 倍率計入用戶配額。預設 1。"
     "access_alpnHint": "access_alpn: see Mihomo Meta docs (wiki.metacubex.one) for this listener field.",
     "access_sniHint": "access_sni: see Mihomo Meta docs (wiki.metacubex.one) for this listener field.",
     "aead-methodHint": "aead-method: see Mihomo Meta docs (wiki.metacubex.one) for this listener field.",
