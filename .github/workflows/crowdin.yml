@@ -1,0 +1,88 @@
+name: Crowdin
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "upload sources | download translations | both"
+        required: true
+        type: choice
+        options:
+          - upload
+          - download
+          - both
+        default: both
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/src/i18n/locales/en.ts'
+      - 'crowdin.yml'
+      - 'scripts/i18n/**'
+      - '.github/workflows/crowdin.yml'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.CROWDIN_PERSONAL_TOKEN != '' && secrets.CROWDIN_PROJECT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Export TypeScript locales → Crowdin JSON
+        run: node scripts/i18n/ts-to-json.mjs
+
+      - name: Upload English sources
+        if: github.event_name == 'push' || inputs.mode == 'upload' || inputs.mode == 'both'
+        uses: crowdin/github-action@v2
+        with:
+          upload_sources: true
+          upload_translations: false
+          download_translations: false
+          config: crowdin.yml
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download translations
+        if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'download' || inputs.mode == 'both')
+        uses: crowdin/github-action@v2
+        with:
+          upload_sources: false
+          upload_translations: false
+          download_translations: true
+          create_pull_request: false
+          config: crowdin.yml
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Convert JSON → TypeScript and open PR
+        if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'download' || inputs.mode == 'both')
+        run: |
+          node scripts/i18n/json-to-ts.mjs
+          node scripts/i18n/check-keys.mjs || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B l10n_crowdin_translations
+          git add frontend/src/i18n/locales/*.ts
+          if git diff --cached --quiet; then
+            echo "No translation changes."
+            exit 0
+          fi
+          git commit -m "i18n: apply Crowdin translations"
+          git push -u origin l10n_crowdin_translations --force
+          gh pr list --head l10n_crowdin_translations --json number --jq '.[0].number' | grep -q . \
+            || gh pr create --base main --head l10n_crowdin_translations \
+              --title "i18n: Crowdin translations" \
+              --body "Automated pull from Crowdin. Review with \`node scripts/i18n/check-keys.mjs\` before merge."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

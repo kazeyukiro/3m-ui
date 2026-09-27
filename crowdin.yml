@@ -1,0 +1,41 @@
+# Crowdin configuration for 3m-ui panel UI strings.
+# Project setup: https://crowdin.com → create project → Languages match locales below.
+# Secrets (GitHub Actions): CROWDIN_PROJECT_ID, CROWDIN_PERSONAL_TOKEN
+#
+# Intermediate JSON is generated from TypeScript via:
+#   node scripts/i18n/ts-to-json.mjs
+# After download:
+#   node scripts/i18n/json-to-ts.mjs
+
+project_id_env: CROWDIN_PROJECT_ID
+api_token_env: CROWDIN_PERSONAL_TOKEN
+base_path: .
+base_url: https://api.crowdin.com
+
+preserve_hierarchy: true
+
+files:
+  - source: /frontend/src/i18n/crowdin/en.json
+    translation: /frontend/src/i18n/crowdin/%locale%.json
+    dest: /panel/en.json
+    type: json
+    # Map Crowdin locale codes → our file names (zh-CN, pt-BR, …)
+    languages_mapping:
+      locale:
+        zh-CN: zh-CN
+        zh-TW: zh-TW
+        pt-BR: pt-BR
+        ja: ja
+        ko: ko
+        es: es
+        fr: fr
+        de: de
+        ru: ru
+        vi: vi
+        id: id
+        th: th
+        tr: tr
+        ar: ar
+        hi: hi
+        pl: pl
+        uk: uk
