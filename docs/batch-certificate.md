@@ -22,3 +22,8 @@ Provide **either** PEM strings, **or** both file paths (allowlisted directories 
 Response: `{ "updated": [1, 2], "failed": [{ "id": 3, "name": "...", "error": "..." }] }`.
 
 Writes `certificate` and `private-key` into each listener’s config JSON and schedules a Mihomo reload. Protocols that reject certificate mode (e.g. pure Reality) appear under `failed`.
+
+## Panel SSL
+
+See [Panel SSL / ACME](./panel-ssl.md) for HTTP-01, DNS-01 wildcards (`*.example.com` + Cloudflare), IP certs, and manual PEMs.
+

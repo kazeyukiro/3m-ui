@@ -1247,186 +1247,36 @@ paths:
     get:
       tags: [system]
       summary: Panel SSL settings
-      responses:
-        "200":
-          description: SSL settings
-    put:
-      tags: [system]
-      summary: Update panel SSL (restart to apply)
-      responses:
-        "200":
-          description: Saved
-  /system/subscription-page:
-    get:
-      tags: [system, subscription]
-      summary: Subscription HTML page settings
-      responses:
-        "200":
-          description: Settings
-    put:
-      tags: [system, subscription]
-      summary: Update subscription page settings
-      responses:
-        "200":
-          description: Saved
-  /system/geofiles/update:
-    post:
-      tags: [system]
-      summary: Download MetaCubeX geo databases
-      responses:
-        "200":
-          description: Updated
-
-  /system/templates/warp:
-    post:
-      tags: [system]
-      summary: Build Mihomo WARP outbound YAML from provided keys
       description: |
-        Emits WireGuard-style YAML by default. Prefer separate `address` (IPv4) and
-        `ipv6` fields. `address` may still be a comma-joined "v4,v6" string for
-        compatibility. `reserved` accepts decimal "a,b,c" or base64 Cloudflare client_id.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                private_key: { type: string }
-                address: { type: string, description: "IPv4 or comma-joined v4,v6" }
-                ipv6: { type: string, description: "IPv6 interface address" }
-                reserved: { type: string, description: "decimal list or base64 client_id" }
+        Returns panel SSL configuration. `dns_token` is never echoed (use
+        `/system/ssl/status` → `has_dns_token`). Modes include HTTP-01 autocert,
+        DNS-01 wildcard (Cloudflare), IP shortlived certs, and manual PEMs.
       responses:
         "200":
-          description: '{ "yaml": "..." }'
-
-  /system/templates/warp/register:
-    post:
-      tags: [system]
-      summary: One-click Cloudflare WARP registration
-      description: |
-        Registers a device with Cloudflare and returns Mihomo outbound YAML.
-        Query `mode`: `wireguard` (default) — `yaml` is WireGuard; `masque` — `yaml`
-        is MASQUE (`type: masque`); `both` — full payload including both YAMLs.
-        Requires a Mihomo core that supports the chosen outbound type.
-      parameters:
-        - in: query
-          name: mode
-          schema: { type: string, enum: [wireguard, masque, both], default: wireguard }
-      description: |
-        Generates a WireGuard keypair, registers with Cloudflare's client API, and
-        returns private_key, address, reserved, and ready-to-paste Mihomo YAML.
-        Requires outbound HTTPS to api.cloudflareclient.com.
-      responses:
-        "200":
-          description: WARPRegisterResult
+          description: SSL settings (token redacted)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  private_key: { type: string }
-                  public_key: { type: string }
-                  address: { type: string }
-                  reserved: { type: string }
-                  yaml: { type: string }
-        "502":
-          description: Upstream registration failed
-
-  /telegram/settings:
-    get:
-      tags: [telegram]
-      summary: Telegram bot settings
-      responses:
-        "200":
-          description: Settings
+                $ref: '#/components/schemas/PanelSSLSettings'
     put:
-      tags: [telegram]
-      summary: Save Telegram settings
-      responses:
-        "200":
-          description: Saved
-  /telegram/test:
-    post:
-      tags: [telegram]
-      summary: Send test message (localized via settings.language)
-      responses:
-        "200":
-          description: OK
-  /telegram/set-my-commands:
-    post:
-      tags: [telegram]
-      summary: Register bot command menu with Telegram (setMyCommands)
-      responses:
-        "200":
-          description: Telegram API response
-  /telegram/bot-info:
-    get:
-      tags: [telegram]
-      summary: Telegram getMe profile
-      responses:
-        "200":
-          description: username, id, first_name
-
-
-  /access-tokens:
-    get:
-      tags: [subscription]
-      summary: List access tokens (per-listener client access)
-      responses:
-        "200":
-          description: Token list (token secret may be omitted)
-    post:
-      tags: [subscription]
-      summary: Create access token for a listener
+      tags: [system]
+      summary: Update panel SSL (restart to apply)
+      description: |
+        Enable HTTPS via Let's Encrypt or manual certs. Wildcard domains
+        (`*.example.com`) require `challenge=dns-01` and a Cloudflare `dns_token`.
+        Empty `dns_token` on update keeps the previously stored token.
+        Restart the panel process for ListenTLS / issuance to take effect.
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [listener_id]
-              properties:
-                name: { type: string }
-                listener_id: { type: integer }
-                expire_at: { type: string, format: date-time, nullable: true }
-      responses:
-        "201":
-          description: Created token + subscription links
-  /access-tokens/{id}:
-    parameters:
-      - $ref: "#/components/parameters/IdPath"
-    put:
-      tags: [subscription]
-      summary: Update access token
-      responses:
-        "200":
-          description: Updated
-    delete:
-      tags: [subscription]
-      summary: Delete access token (hard delete)
-      responses:
-        "200":
-          description: Deleted
-
-  /panel-settings:
-    get:
-      tags: [system]
-      summary: Panel key/value settings (traffic_reset_day, etc.)
-      responses:
-        "200":
-          description: Settings map
-    put:
-      tags: [system]
-      summary: Update panel settings
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: { type: string }
+              $ref: '#/components/schemas/PanelSSLSettings'
       responses:
         "200":
           description: Saved
-
+        "400":
+          description: Validation error (missing domain/token, etc.)
   /system/ssl/status:
     get:
       tags: [system]
@@ -1470,6 +1320,23 @@ paths:
 
 components:
   schemas:
+
+    PanelSSLSettings:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        domain: { type: string, description: "Hostname, *.example.com, or public IP" }
+        email: { type: string }
+        cache_dir: { type: string }
+        cert_file: { type: string }
+        key_file: { type: string }
+        listen_http: { type: string, example: ":80" }
+        listen_tls: { type: string, example: ":443" }
+        challenge: { type: string, description: "empty/http-01 or dns-01", enum: ["", "http-01", "dns-01"] }
+        dns_provider: { type: string, example: cloudflare }
+        dns_token: { type: string, description: "Write-only; omitted on GET" }
+        dns_zone: { type: string, description: "Optional zone name e.g. example.com" }
+
     ProcessUsage:
       type: object
       description: CPU and RSS for one OS process (panel binary or Mihomo core)

@@ -29,7 +29,7 @@
 | **配置** | 生成 → 校验 → 应用；失败回滚上一份 `config.yaml` |
 | **Telegram** | 告警与管理命令（需 Token + Chat ID） |
 | **多机** | 登记远程面板、健康检查、节点镜像同步、合并订阅；按名称选择本机节点推送到远程（默认禁用） |
-| **运维** | 核心启停/更新、Geo、面板 SSL/ACME、备份、**Cloudflare WARP** 一键注册（WireGuard/MASQUE YAML） |
+| **运维** | 核心启停/更新、Geo、面板 SSL/ACME（含 DNS-01 通配符）、备份、**Cloudflare WARP** 一键注册（WireGuard/MASQUE YAML） |
 
 ---
 
@@ -39,6 +39,7 @@
 - [路由与策略组](../routing.md)
 - [Cloudflare WARP](../warp.md)
 - [按节点流量与倍率](../node-traffic.md)
+- [面板 SSL / ACME（HTTP-01、DNS-01 通配符）](../panel-ssl.md)
 - [批量应用节点证书](../batch-certificate.md)
 - [订阅格式与 target](../subscription-formats.md)
 
