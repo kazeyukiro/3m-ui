@@ -77,7 +77,8 @@ export default {
     "id": "ID",
     "network": "网络",
     "bound": "已绑定",
-    "missing": "缺失"
+    "missing": "缺失",
+    "deleted": "已删除",
   },
   "login": {
     "title": "3M-UI",
@@ -471,6 +472,25 @@ export default {
     "versionHint": "协议版本（如 Snell 版本，TUIC v4/v5 语义）。",
     "zero_rttHint": "QUIC 0-RTT（wiki）。延迟更低，需注意重放风险。",
 
+    "access_alpnHint": "该接入配置向客户端提供的 ALPN 列表（wiki: alpn），如 h2、http/1.1。",
+    "access_sniHint": "该接入配置下客户端应发送的 SNI 主机名（wiki: sni）。",
+    "alwaysTlsHint": "该协议必须使用 TLS。证书留空时保存会自动生成面板自签证书对。",
+    "applyCertHint": "把证书与私钥写入所选节点的配置。可使用面板 SSL 文件，或 /etc/letsencrypt 下的路径。",
+    "clientExportOnlyHint": "以下仅用于客户端订阅，不会写入 Mihomo 入站 YAML。",
+    "from_panel_sslHint": "使用面板自身的 SSL 证书，无需手工填写证书路径。",
+    "jlsHint": "JLS 包装（wiki jls-config）。高级选项，需单独配置目标与密码。",
+    "key_fileHint": "TLS 私钥文件路径，用于不直接粘贴私钥内容的场景。",
+    "mekyaExclusiveHint": "需要 TCP 传输层，与 WS/gRPC/mKCP 互斥。启用后保存时会清除其它传输层。",
+    "mkcpExclusiveHint": "需要 TCP 传输层，与 WS/gRPC/Mekya 互斥。启用后保存时会清除其它传输层。",
+    "protocolHint": "入站协议（wiki）。切换后下面的传输层与安全层选项会随之变化。",
+    "resTlsHint": "resTLS 包装（wiki res-tls）。高级选项，客户端需做对应配置。",
+    "shadowTlsHint": "ShadowTLS 包装（wiki shadow-tls）。版本与密码需与客户端一致。",
+    "tlsMirrorHint": "高级选项。需要 dest 与 primary-key，与证书型 TLS 互斥。",
+    "tlsPairAutoHint": "证书与私钥为必填。两者都留空时保存会生成面板自签证书。",
+    "tlsPairHint": "该监听器的证书与私钥对；两者都留空表示不使用 TLS。",
+    "trafficMultiplierHint": "实际流量 × 倍率计入用户配额。默认 1，例如 1.5 表示多计 50%。",
+    "transportExclusiveHint": "仅能选择一种传输层。mKCP/Mekya（VMess）需要 TCP。",
+    "transportXhttpHint": "XHTTP 仅适用于 VLESS。",
   },
   "core": {
     "title": "核心管理",
@@ -1006,6 +1026,10 @@ export default {
     "public_urlHint": "面板公网根 URL（OAuth 回调、订阅拼接等）。需含 https://。",
     "web_pathHint": "面板 UI 可选路径前缀。",
 
+    "restoreAutoReload": "5 秒后自动刷新…",
+    "restoreTimeout": "面板 30 秒内未恢复，请手动刷新页面。",
+    "switchToPre": "切换到预发布通道",
+    "switchToStable": "切换到稳定通道",
   },
   "share": {
     "title": "分享 / 订阅",

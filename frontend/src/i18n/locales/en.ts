@@ -77,7 +77,8 @@ export default {
     "id": "ID",
     "network": "Network",
     "bound": "Bound",
-    "missing": "Missing"
+    "missing": "Missing",
+    "deleted": "Deleted",
   },
   "login": {
     "title": "3M-UI",
@@ -471,6 +472,25 @@ export default {
     "versionHint": "Protocol version (e.g. Snell version, TUIC v4/v5 semantics).",
     "zero_rttHint": "QUIC 0-RTT (wiki). Lower latency; be aware of replay trade-offs.",
 
+    "access_alpnHint": "ALPN list offered to clients on this access profile (wiki: alpn), e.g. h2,http/1.1.",
+    "access_sniHint": "SNI hostname clients should send on this access profile (wiki: sni).",
+    "alwaysTlsHint": "This protocol requires TLS. Leave certificate empty to auto-generate a panel self-signed pair on save.",
+    "applyCertHint": "Writes certificate + private-key into each selected node config. Use panel SSL files or paths under /etc/letsencrypt.",
+    "clientExportOnlyHint": "Below: client subscription only — not written to Mihomo inbound YAML.",
+    "from_panel_sslHint": "Use the panel's own SSL material instead of entering certificate paths by hand.",
+    "jlsHint": "JLS wrapper (wiki jls-config). Advanced; needs its own destination and password.",
+    "key_fileHint": "Path to the TLS key file, for when the key is not pasted inline.",
+    "mekyaExclusiveHint": "Requires TCP transport; exclusive with WS/gRPC/mKCP. Enabling clears other transports on save.",
+    "mkcpExclusiveHint": "Requires TCP transport; exclusive with WS/gRPC/Mekya. Enabling clears other transports on save.",
+    "protocolHint": "Inbound protocol (wiki). Changing it swaps the transport and security options below.",
+    "resTlsHint": "resTLS wrapper (wiki res-tls). Advanced; the client must be configured to match.",
+    "shadowTlsHint": "ShadowTLS wrapper (wiki shadow-tls). Version and password must match the client.",
+    "tlsMirrorHint": "Advanced. Requires dest and primary-key; mutually exclusive with certificate TLS.",
+    "tlsPairAutoHint": "Certificate + private-key required. Leave both empty → panel self-signed on save.",
+    "tlsPairHint": "Certificate and private-key for this listener; leave both empty for no TLS.",
+    "trafficMultiplierHint": "Charged traffic is the real traffic multiplied by this factor. Default 1; 1.5 counts 50% extra.",
+    "transportExclusiveHint": "One transport only. mKCP/Mekya (VMess) require TCP.",
+    "transportXhttpHint": "XHTTP is available for VLESS.",
   },
   "core": {
     "title": "Core",
@@ -1006,6 +1026,10 @@ export default {
     "public_urlHint": "Public base URL of the panel (used in OAuth redirect, subscription links, etc.). Include https://.",
     "web_pathHint": "Optional URL path prefix for the panel UI.",
 
+    "restoreAutoReload": "Auto-reloading in 5s…",
+    "restoreTimeout": "Panel did not come back in 30s; please refresh manually.",
+    "switchToPre": "Switch to pre-release channel",
+    "switchToStable": "Switch to stable channel",
   },
   "share": {
     "title": "Share / Subscription",
