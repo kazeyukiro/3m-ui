@@ -439,7 +439,6 @@ export default {
     "certApplyPartial": "Partial success",
     "reloadListHint": "List may be stale after core reload — refresh if a node is missing.",
     "trafficMultiplier": "Traffic multiplier",
-    "trafficMultiplierHint": "Raw traffic × this value counts toward each user’s quota. Default 1."
     "access_alpnHint": "access_alpn: see Mihomo Meta docs (wiki.metacubex.one) for this listener field.",
     "access_sniHint": "access_sni: see Mihomo Meta docs (wiki.metacubex.one) for this listener field.",
     "aead-methodHint": "aead-method: see Mihomo Meta docs (wiki.metacubex.one) for this listener field.",
