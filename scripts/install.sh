@@ -420,7 +420,13 @@ restore_files(){
   mkdir -p "$DATA_DIR" || return 1
   for path in "$DATA_DIR"/* "$DATA_DIR"/.[!.]* "$DATA_DIR"/..?*; do
     [ -e "$path" ] || [ -L "$path" ] || continue
-    [ "$path" = "$DATA_DIR/backups" ] || rm -rf "$path" || return 1
+    [ "$path" = "$DATA_DIR/backups" ] && continue
+    # Scratch work now lives under DATA_DIR instead of tmpfs, so a restore would
+    # otherwise delete the directory it is currently reading its own rollback
+    # out of. Nothing here is application data; leave it for the cleanup trap.
+    [ -n "$WORK" ] && [ "$path" = "$WORK" ] && continue
+    [ "$path" = "$DATA_DIR/.tmp" ] && continue
+    rm -rf "$path" || return 1
   done
   [ ! -d "$restore_dir/data" ] || cp -a "$restore_dir/data/." "$DATA_DIR/" || return 1
   for spec in "base:$BASE" "config:$CONFIG_DIR" "entry:$ENTRY" "service:$UNIT"; do
