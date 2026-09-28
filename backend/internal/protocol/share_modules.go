@@ -779,7 +779,6 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 
 // --- helpers ---
 
-
 // effectiveWSHost picks the WebSocket Host header for client share/YAML.
 // CDN-fronted nodes almost always need Host; when the panel left ws-headers
 // empty, fall back to SNI then public host so exports match the access profile.
