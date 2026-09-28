@@ -31,9 +31,26 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if first["auto_route"] != true {
 		t.Fatalf("auto_route: %#v", first["auto_route"])
 	}
+	if _, has := first["sniff"]; has {
+		t.Fatalf("legacy inbound sniff must not be set (removed in sing-box 1.13): %#v", first)
+	}
 	route, ok := parsed["route"].(map[string]interface{})
 	if !ok || route["final"] != "proxy" {
 		t.Fatalf("route.final: %#v", route)
+	}
+	rules, ok := route["rules"].([]interface{})
+	if !ok || len(rules) < 1 {
+		t.Fatalf("route.rules missing sniff/hijack-dns: %#v", route)
+	}
+	foundSniff := false
+	for _, r := range rules {
+		m, _ := r.(map[string]interface{})
+		if m["action"] == "sniff" {
+			foundSniff = true
+		}
+	}
+	if !foundSniff {
+		t.Fatalf("route.rules should include action=sniff: %#v", rules)
 	}
 	obs, ok := parsed["outbounds"].([]interface{})
 	if !ok || len(obs) != 3 {

@@ -94,8 +94,13 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 			defaultSingboxTUNInbound(),
 		},
 		"outbounds": outbounds,
+		// sing-box 1.11+: sniff / domain_strategy moved from inbound to route rule actions.
+		// https://sing-box.sagernet.org/migration/#migrate-legacy-inbound-fields-to-rule-actions
 		"route": map[string]interface{}{
-			// final selector tag from GenerateUserSingboxSubscription
+			"rules": []map[string]interface{}{
+				{"action": "sniff"},
+				{"protocol": "dns", "action": "hijack-dns"},
+			},
 			"final":                 "proxy",
 			"auto_detect_interface": true,
 		},
@@ -105,7 +110,7 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 // defaultSingboxTUNInbound is a conservative TUN profile accepted by recent
 // sing-box builds used by SFI/SFM. Operators can still edit the profile on device.
 func defaultSingboxTUNInbound() map[string]interface{} {
-	// Fields follow official Tun inbound schema (address, mtu, auto_route, strict_route, stack).
+	// Official Tun schema without legacy inbound fields (sniff/domain_strategy removed in 1.13).
 	// https://sing-box.sagernet.org/configuration/inbound/tun/
 	return map[string]interface{}{
 		"type":         "tun",
@@ -115,8 +120,6 @@ func defaultSingboxTUNInbound() map[string]interface{} {
 		"auto_route":   true,
 		"strict_route": true,
 		"stack":        "system",
-		// Protocol sniffing is applied on the inbound so DNS/HTTP hostnames resolve for routing.
-		"sniff": true,
 	}
 }
 
