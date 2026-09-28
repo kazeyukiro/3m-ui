@@ -41,14 +41,20 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if !ok || dns["final"] != "remote" {
 		t.Fatalf("dns: %#v", parsed["dns"])
 	}
+	route, ok := parsed["route"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("missing route")
+	}
+	if _, ok := route["default_domain_resolver"]; !ok {
+		t.Fatalf("missing default_domain_resolver: %#v", route)
+	}
 	if first["auto_route"] != true {
 		t.Fatalf("auto_route: %#v", first["auto_route"])
 	}
 	if _, has := first["sniff"]; has {
 		t.Fatalf("legacy inbound sniff must not be set (removed in sing-box 1.13): %#v", first)
 	}
-	route, ok := parsed["route"].(map[string]interface{})
-	if !ok || route["final"] != "proxy" {
+	if route["final"] != "proxy" {
 		t.Fatalf("route.final: %#v", route)
 	}
 	rules, ok := route["rules"].([]interface{})

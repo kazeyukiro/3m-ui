@@ -90,57 +90,67 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 		"log": map[string]interface{}{
 			"level": "warn",
 		},
-		// DNS is required for TUN profiles: without it, hijack-dns has nowhere to
-		// resolve and browsers often load HTML but fail CSS/JS CDNs → broken pages.
-		// https://sing-box.sagernet.org/configuration/dns/
 		"dns": defaultSingboxDNS(),
 		"inbounds": []map[string]interface{}{
 			defaultSingboxTUNInbound(),
 		},
 		"outbounds": outbounds,
-		// sing-box 1.11+: sniff / domain_strategy moved from inbound to route rule actions.
-		// https://sing-box.sagernet.org/migration/#migrate-legacy-inbound-fields-to-rule-actions
+		// Route: private traffic stays local; DNS is hijacked into the dns module;
+		// everything else uses the proxy selector. Domain names of outbounds are
+		// resolved via local DNS so we do not create a DNS↔proxy dependency loop
+		// (a common cause of "works but extremely laggy" on SFA).
 		"route": map[string]interface{}{
 			"rules": []map[string]interface{}{
 				{"action": "sniff"},
-				{"protocol": "dns", "action": "hijack-dns"},
+				{
+					"type":   "logical",
+					"mode":   "or",
+					"action": "hijack-dns",
+					"rules": []map[string]interface{}{
+						{"protocol": "dns"},
+						{"port": 53},
+					},
+				},
+				{"ip_is_private": true, "action": "route", "outbound": "direct"},
 			},
 			"final":                 "proxy",
 			"auto_detect_interface": true,
+			"default_domain_resolver": map[string]interface{}{
+				"server": "local",
+			},
 		},
 	}
 }
 
-// defaultSingboxDNS sends queries through the proxy selector so domain
-// resolution matches the tunneled path (avoids split-horizon / poisoned local DNS).
+// defaultSingboxDNS: resolve outbound server names via local; general queries via
+// DoH through the proxy selector (after the outbound domain is known).
 func defaultSingboxDNS() map[string]interface{} {
 	return map[string]interface{}{
 		"servers": []map[string]interface{}{
-			{
-				"type":        "udp",
-				"tag":         "remote",
-				"server":      "8.8.8.8",
-				"server_port": 53,
-				"detour":      "proxy",
-			},
 			{
 				"type":   "local",
 				"tag":    "local",
 				"detour": "direct",
 			},
+			{
+				"type":   "https",
+				"tag":    "remote",
+				"server": "8.8.8.8",
+				"detour": "proxy",
+			},
+		},
+		"rules": []map[string]interface{}{
+			// Prefer local for private reverse lookups / plain local names.
+			{"ip_is_private": true, "action": "route", "server": "local"},
 		},
 		"final":    "remote",
 		"strategy": "prefer_ipv4",
 	}
 }
 
-// defaultSingboxTUNInbound is a conservative TUN profile accepted by recent
-// sing-box builds used by SFI/SFM. Operators can still edit the profile on device.
+// defaultSingboxTUNInbound mirrors common SFA templates without stack/auto_redirect
+// (auto_redirect is Linux-oriented and often hurts mobile clients).
 func defaultSingboxTUNInbound() map[string]interface{} {
-	// Tun fields aligned with common SFA-ready templates (e.g. sing-box_v1.14):
-	// https://github.com/LongLights/sing-box_template_merge_sub-store
-	// No "stack" — leave stack to the client default for better device compatibility.
-	// No legacy inbound sniff (use route rule actions instead).
 	return map[string]interface{}{
 		"type":           "tun",
 		"tag":            "tun-in",
@@ -156,9 +166,8 @@ func defaultSingboxTUNInbound() map[string]interface{} {
 			"192.0.0.0/24",
 			"192.168.0.0/16",
 		},
-		"strict_route":  true,
-		"dns_mode":      "hijack",
-		"auto_redirect": true,
+		"strict_route": true,
+		"dns_mode":     "hijack",
 	}
 }
 
