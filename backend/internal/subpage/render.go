@@ -344,7 +344,9 @@ const defaultHTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light dark">
   <title>{{if .SubTitle}}{{.SubTitle}}{{else}}3m-ui Subscription{{end}}</title>
   <style>
@@ -382,28 +384,72 @@ const defaultHTML = `<!DOCTYPE html>
       }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      width: 100%;
+      overflow-x: hidden;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Noto Sans SC", sans-serif;
-      background-color: var(--bg);
-      color: var(--text-main);
+      /* Solid fallbacks first — some SFA/SFM WebViews resolve CSS variables poorly. */
+      background-color: #0f172a;
+      color: #f8fafc;
+      background-color: var(--bg, #0f172a);
+      color: var(--text-main, #f8fafc);
+      min-height: 100%;
       min-height: 100vh;
+      min-height: 100dvh;
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden;
+      display: -webkit-box;
+      display: -webkit-flex;
       display: flex;
+      -webkit-box-pack: center;
       justify-content: center;
+      -webkit-box-align: start;
       align-items: flex-start;
-      padding: 32px 16px 64px;
+      padding: 20px 12px 48px;
+      padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(32px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
       line-height: 1.5;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
     }
-    .wrap { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 20px; }
+    .wrap {
+      width: 100%;
+      max-width: 520px;
+      display: -webkit-box;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-box-orient: vertical;
+      -webkit-flex-direction: column;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
     .header {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      background: var(--card-bg); border: 1px solid var(--card-border);
-      padding: 16px 20px; border-radius: var(--radius);
+      display: -webkit-box;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-flex-wrap: wrap;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--card-bg, #1e293b);
+      border: 1px solid var(--card-border, #334155);
+      padding: 14px 16px;
+      border-radius: var(--radius, 12px);
+      min-width: 0;
     }
     .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .logo {
       width: 42px; height: 42px; background: var(--primary); color: #fff;
       font-weight: 800; font-size: 1.15rem; border-radius: 10px;
-      display: grid; place-items: center; letter-spacing: -0.5px; flex-shrink: 0;
+      display: -webkit-box; display: -webkit-flex; display: flex;
+      -webkit-box-align: center; align-items: center; -webkit-box-pack: center; justify-content: center;
+      letter-spacing: -0.5px; flex-shrink: 0;
     }
     .brand-text h1 { font-size: 1.05rem; font-weight: 700; line-height: 1.2; }
     .brand-text .user { font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -442,28 +488,38 @@ const defaultHTML = `<!DOCTYPE html>
     .progress-bar { height: 8px; background: var(--code-bg); border-radius: 999px; overflow: hidden; }
     .progress-fill { height: 100%; background: var(--primary); border-radius: 999px; transition: width 0.3s ease; }
     .grid-info {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-      padding-top: 12px; border-top: 1px dashed var(--card-border);
+      display: -webkit-box; display: -webkit-flex; display: flex;
+      -webkit-flex-wrap: wrap; flex-wrap: wrap; gap: 12px;
+      padding-top: 12px; border-top: 1px dashed var(--card-border, #334155);
     }
+    .grid-info .info-item { -webkit-box-flex: 1; flex: 1 1 120px; min-width: 0; }
     .info-item { display: flex; flex-direction: column; gap: 2px; }
     .info-item .lbl { font-size: 0.78rem; color: var(--text-muted); }
     .info-item .val { font-size: 0.92rem; font-weight: 600; }
-    .import-grid { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-    @media (min-width: 480px) {
-      .import-grid { flex-direction: row; align-items: flex-start; }
+    /* Always column: SFA/SFM WebView often reports a wide width and breaks side-by-side layout. */
+    .import-grid {
+      display: -webkit-box; display: -webkit-flex; display: flex;
+      -webkit-box-orient: vertical; -webkit-flex-direction: column; flex-direction: column;
+      align-items: stretch; gap: 16px; width: 100%; min-width: 0;
     }
     .qr-box { text-align: center; flex-shrink: 0; }
+    .qr-box { width: 100%; text-align: center; }
     .qr-box img {
-      width: 150px; height: 150px; border-radius: 8px; background: #fff;
-      padding: 8px; border: 1px solid var(--card-border);
+      width: 150px; max-width: 100%; height: auto; aspect-ratio: 1 / 1;
+      border-radius: 8px; background: #fff;
+      padding: 8px; border: 1px solid var(--card-border, #334155);
     }
     .qr-box .hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; max-width: 150px; margin-left: auto; margin-right: auto; }
     .actions { flex: 1; width: 100%; display: flex; flex-direction: column; gap: 10px; }
     .btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 10px 16px; font-size: 0.88rem; font-weight: 600; border-radius: 8px;
+      display: -webkit-inline-box; display: -webkit-inline-flex; display: inline-flex;
+      align-items: center; justify-content: center;
+      padding: 12px 16px; font-size: 0.88rem; font-weight: 600; border-radius: 8px;
       text-decoration: none; cursor: pointer; border: 1px solid transparent;
-      transition: all 0.15s ease; gap: 6px; font-family: inherit; width: 100%;
+      transition: background-color 0.15s ease, border-color 0.15s ease; gap: 6px;
+      font-family: inherit; width: 100%; max-width: 100%;
+      -webkit-appearance: none; appearance: none;
+      -webkit-tap-highlight-color: transparent;
     }
     .btn-primary { background: var(--primary); color: #ffffff; }
     .btn-primary:hover { background: var(--primary-hover); }
@@ -477,8 +533,11 @@ const defaultHTML = `<!DOCTYPE html>
     }
     .uri-list { display: flex; flex-direction: column; gap: 10px; }
     .uri-item {
-      background: var(--code-bg); border: 1px solid var(--card-border); border-radius: 8px;
-      padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--code-bg, #0f172a); border: 1px solid var(--card-border, #334155); border-radius: 8px;
+      padding: 10px 12px; display: -webkit-box; display: -webkit-flex; display: flex;
+      -webkit-flex-wrap: wrap; flex-wrap: wrap;
+      align-items: center; justify-content: space-between; gap: 10px;
+      min-width: 0; width: 100%;
     }
     .uri-info { display: flex; align-items: center; gap: 8px; overflow: hidden; flex: 1; min-width: 0; }
     .protocol-tag {
