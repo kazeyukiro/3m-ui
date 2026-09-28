@@ -84,7 +84,7 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 
 // buildSingboxSubscriptionDoc wraps outbounds with a default TUN inbound and
 // route so official SFI/SFM clients create a system VPN interface. Without
-# inbounds, outbounds alone never capture traffic (issue #88).
+// inbounds, outbounds alone never capture traffic (issue #88).
 func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"log": map[string]interface{}{
