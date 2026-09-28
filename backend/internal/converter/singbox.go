@@ -78,10 +78,43 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 			"default":   tagNames[0],
 		},
 	)
-	doc := map[string]interface{}{
-		"outbounds": outbounds,
-	}
+	doc := buildSingboxSubscriptionDoc(outbounds)
 	return json.MarshalIndent(doc, "", "  ")
+}
+
+// buildSingboxSubscriptionDoc wraps outbounds with a default TUN inbound and
+// route so official SFI/SFM clients create a system VPN interface. Without
+# inbounds, outbounds alone never capture traffic (issue #88).
+func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"log": map[string]interface{}{
+			"level": "warn",
+		},
+		"inbounds": []map[string]interface{}{
+			defaultSingboxTUNInbound(),
+		},
+		"outbounds": outbounds,
+		"route": map[string]interface{}{
+			// final selector tag from GenerateUserSingboxSubscription
+			"final":                 "proxy",
+			"auto_detect_interface": true,
+		},
+	}
+}
+
+// defaultSingboxTUNInbound is a conservative TUN profile accepted by recent
+// sing-box builds used by SFI/SFM. Operators can still edit the profile on device.
+func defaultSingboxTUNInbound() map[string]interface{} {
+	return map[string]interface{}{
+		"type":         "tun",
+		"tag":          "tun-in",
+		"address":      []string{"172.19.0.1/30", "fdfe:dcba:9876::1/126"},
+		"mtu":          9000,
+		"auto_route":   true,
+		"strict_route": true,
+		"stack":        "system",
+		"sniff":        true,
+	}
 }
 
 func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, string) {
