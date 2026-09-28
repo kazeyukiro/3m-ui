@@ -148,7 +148,6 @@ func defaultSingboxTUNInbound() map[string]interface{} {
 		"mtu":          1500,
 		"auto_route":   true,
 		"strict_route": false,
-		"stack":        "mixed",
 	}
 }
 
