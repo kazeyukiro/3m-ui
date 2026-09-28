@@ -28,6 +28,15 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if first["type"] != "tun" {
 		t.Fatalf("first inbound not tun: %#v", first)
 	}
+	if _, has := first["stack"]; has {
+		t.Fatalf("stack must be omitted (client default): %#v", first)
+	}
+	if first["interface_name"] != "singbox_tun" {
+		t.Fatalf("interface_name: %#v", first["interface_name"])
+	}
+	if first["dns_mode"] != "hijack" {
+		t.Fatalf("dns_mode: %#v", first["dns_mode"])
+	}
 	dns, ok := parsed["dns"].(map[string]interface{})
 	if !ok || dns["final"] != "remote" {
 		t.Fatalf("dns: %#v", parsed["dns"])

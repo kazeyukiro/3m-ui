@@ -137,17 +137,28 @@ func defaultSingboxDNS() map[string]interface{} {
 // defaultSingboxTUNInbound is a conservative TUN profile accepted by recent
 // sing-box builds used by SFI/SFM. Operators can still edit the profile on device.
 func defaultSingboxTUNInbound() map[string]interface{} {
-	// Official Tun schema without legacy inbound fields (sniff/domain_strategy removed in 1.13).
-	// https://sing-box.sagernet.org/configuration/inbound/tun/
-	// MTU 1500 (not 9000): oversized TUN MTU on mobile causes partial loads / broken CSS.
-	// stack mixed is more compatible on Android than pure system for many devices.
+	// Tun fields aligned with common SFA-ready templates (e.g. sing-box_v1.14):
+	// https://github.com/LongLights/sing-box_template_merge_sub-store
+	// No "stack" — leave stack to the client default for better device compatibility.
+	// No legacy inbound sniff (use route rule actions instead).
 	return map[string]interface{}{
-		"type":         "tun",
-		"tag":          "tun-in",
-		"address":      []string{"172.18.0.1/30", "fdfe:dcba:9876::1/126"},
-		"mtu":          1500,
-		"auto_route":   true,
-		"strict_route": false,
+		"type":           "tun",
+		"tag":            "tun-in",
+		"interface_name": "singbox_tun",
+		"address":        []string{"172.18.0.1/30"},
+		"mtu":            1500,
+		"auto_route":     true,
+		"route_exclude_address": []string{
+			"10.0.0.0/8",
+			"100.64.0.0/10",
+			"169.254.0.0/16",
+			"172.16.0.0/12",
+			"192.0.0.0/24",
+			"192.168.0.0/16",
+		},
+		"strict_route":  true,
+		"dns_mode":      "hijack",
+		"auto_redirect": true,
 	}
 }
 
