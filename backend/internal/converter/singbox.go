@@ -90,6 +90,10 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 		"log": map[string]interface{}{
 			"level": "warn",
 		},
+		// DNS is required for TUN profiles: without it, hijack-dns has nowhere to
+		// resolve and browsers often load HTML but fail CSS/JS CDNs → broken pages.
+		// https://sing-box.sagernet.org/configuration/dns/
+		"dns": defaultSingboxDNS(),
 		"inbounds": []map[string]interface{}{
 			defaultSingboxTUNInbound(),
 		},
@@ -107,19 +111,44 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 	}
 }
 
+// defaultSingboxDNS sends queries through the proxy selector so domain
+// resolution matches the tunneled path (avoids split-horizon / poisoned local DNS).
+func defaultSingboxDNS() map[string]interface{} {
+	return map[string]interface{}{
+		"servers": []map[string]interface{}{
+			{
+				"type":        "udp",
+				"tag":         "remote",
+				"server":      "8.8.8.8",
+				"server_port": 53,
+				"detour":      "proxy",
+			},
+			{
+				"type":   "local",
+				"tag":    "local",
+				"detour": "direct",
+			},
+		},
+		"final":    "remote",
+		"strategy": "prefer_ipv4",
+	}
+}
+
 // defaultSingboxTUNInbound is a conservative TUN profile accepted by recent
 // sing-box builds used by SFI/SFM. Operators can still edit the profile on device.
 func defaultSingboxTUNInbound() map[string]interface{} {
 	// Official Tun schema without legacy inbound fields (sniff/domain_strategy removed in 1.13).
 	// https://sing-box.sagernet.org/configuration/inbound/tun/
+	// MTU 1500 (not 9000): oversized TUN MTU on mobile causes partial loads / broken CSS.
+	// stack mixed is more compatible on Android than pure system for many devices.
 	return map[string]interface{}{
 		"type":         "tun",
 		"tag":          "tun-in",
 		"address":      []string{"172.18.0.1/30", "fdfe:dcba:9876::1/126"},
-		"mtu":          9000,
+		"mtu":          1500,
 		"auto_route":   true,
-		"strict_route": true,
-		"stack":        "system",
+		"strict_route": false,
+		"stack":        "mixed",
 	}
 }
 

@@ -28,6 +28,10 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if first["type"] != "tun" {
 		t.Fatalf("first inbound not tun: %#v", first)
 	}
+	dns, ok := parsed["dns"].(map[string]interface{})
+	if !ok || dns["final"] != "remote" {
+		t.Fatalf("dns: %#v", parsed["dns"])
+	}
 	if first["auto_route"] != true {
 		t.Fatalf("auto_route: %#v", first["auto_route"])
 	}
