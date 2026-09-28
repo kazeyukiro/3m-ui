@@ -106,6 +106,13 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 	}
 	applyTransportParams(params, spec.Transport)
 	applyALPNParams(params, spec.ALPN)
+	// CDN: when ws-headers Host was not set on the listener, fill share URI host
+	// from SNI / public host so clients send the correct Host header.
+	if params["type"] == "ws" && params["host"] == "" {
+		if h := effectiveWSHost(spec.Transport, in.Node, spec.SNI); h != "" {
+			params["host"] = h
+		}
+	}
 	if spec.Reality != nil {
 		params["security"] = "reality"
 		pbk, err := realityPublicKeyFromSpec(spec.Reality)
