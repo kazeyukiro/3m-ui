@@ -457,6 +457,9 @@ export default {
     "uuidHint": "User UUID (wiki users).",
     "versionHint": "Protocol version (e.g. Snell version, TUIC v4/v5 semantics).",
     "zero_rttHint": "QUIC 0-RTT (wiki). Lower latency; be aware of replay trade-offs.",
+    "wsHost": "WebSocket Host",
+    "wsHostHint": "Host header in client subscription (CDN). Leave empty to use SNI or public host automatically.",
+    "wsHostPlaceholder": "cdn.example.com",
 
   },
   "core": {

@@ -969,7 +969,23 @@ func copyTransport(dst, src map[string]interface{}) {
 	if path, ok := src["ws-path"].(string); ok && strings.TrimSpace(path) != "" {
 		dst["network"] = "ws"
 		wsOpts := map[string]interface{}{"path": path}
-		if headers, ok := src["ws-headers"].(map[string]interface{}); ok && len(headers) > 0 {
+		headers := map[string]interface{}{}
+		if raw, ok := src["ws-headers"].(map[string]interface{}); ok {
+			for k, v := range raw {
+				headers[k] = v
+			}
+		}
+		// CDN-fronted WS clients need a Host header. If the listener left
+		// ws-headers empty, reuse TLS SNI / servername / server from the proxy.
+		if hostStr, _ := headers["Host"].(string); strings.TrimSpace(hostStr) == "" {
+			for _, key := range []string{"sni", "servername", "server"} {
+				if v, ok := dst[key].(string); ok && strings.TrimSpace(v) != "" {
+					headers["Host"] = strings.TrimSpace(v)
+					break
+				}
+			}
+		}
+		if len(headers) > 0 {
 			wsOpts["headers"] = headers
 		}
 		dst["ws-opts"] = wsOpts

@@ -42,6 +42,11 @@ func (TrojanCompiler) BuildShare(in ShareInput) (Share, error) {
 	}
 	applyTransportParams(params, spec.Transport)
 	applyALPNParams(params, spec.ALPN)
+	if params["type"] == "ws" && params["host"] == "" {
+		if h := effectiveWSHost(spec.Transport, in.Node, spec.SNI); h != "" {
+			params["host"] = h
+		}
+	}
 	if spec.Reality != nil {
 		params["security"] = "reality"
 		pbk, err := realityPublicKeyFromSpec(spec.Reality)
@@ -189,22 +194,14 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 	}
 	switch spec.Transport.Network {
 	case "ws":
-		ws := map[string]interface{}{}
-		if spec.Transport.WSPath != "" {
-			ws["path"] = spec.Transport.WSPath
+		// Always emit path (default "/") and Host when resolvable so CDN-fronted
+		// VLESS/WS clients match the access profile without a separate ws-headers field.
+		ws := map[string]interface{}{"path": effectiveWSPath(spec.Transport)}
+		if h := effectiveWSHost(spec.Transport, node, spec.SNI); h != "" {
+			ws["headers"] = map[string]interface{}{"Host": h}
 		}
-		if spec.Transport.WSHost != "" {
-			// Per mihomo wiki (proxies-transport: ws-opts), the Host
-			// header must be nested under `headers`, not placed at the
-			// top level of ws-opts. See /tmp/wiki/REF.txt block 3.
-			headers := map[string]interface{}{}
-			headers["Host"] = spec.Transport.WSHost
-			ws["headers"] = headers
-		}
-		if len(ws) > 0 {
-			p["network"] = "ws"
-			p["ws-opts"] = ws
-		}
+		p["network"] = "ws"
+		p["ws-opts"] = ws
 	case "grpc":
 		grpc := map[string]interface{}{}
 		if spec.Transport.GRPCService != "" {
@@ -782,13 +779,33 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 
 // --- helpers ---
 
+
+// effectiveWSHost picks the WebSocket Host header for client share/YAML.
+// CDN-fronted nodes almost always need Host; when the panel left ws-headers
+// empty, fall back to SNI then public host so exports match the access profile.
+func effectiveWSHost(t TransportSpec, node NodeModel, sni string) string {
+	if h := strings.TrimSpace(t.WSHost); h != "" {
+		return h
+	}
+	if h := strings.TrimSpace(sni); h != "" {
+		return h
+	}
+	return strings.TrimSpace(node.PublicHost)
+}
+
+// effectiveWSPath returns the WS path for share export (default "/").
+func effectiveWSPath(t TransportSpec) string {
+	if p := strings.TrimSpace(t.WSPath); p != "" {
+		return p
+	}
+	return "/"
+}
+
 func applyTransportParams(params map[string]string, t TransportSpec) {
 	switch t.Network {
 	case "ws":
 		params["type"] = "ws"
-		if t.WSPath != "" {
-			params["path"] = t.WSPath
-		}
+		params["path"] = effectiveWSPath(t)
 		if t.WSHost != "" {
 			params["host"] = t.WSHost
 		}

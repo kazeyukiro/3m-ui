@@ -71,6 +71,14 @@ func transportParams(cfg map[string]interface{}) map[string]string {
 			params["host"] = host
 		}
 	}
+	if params["type"] == "ws" && params["host"] == "" {
+		for _, key := range []string{"sni", "servername"} {
+			if v, ok := cfg[key].(string); ok && strings.TrimSpace(v) != "" {
+				params["host"] = strings.TrimSpace(v)
+				break
+			}
+		}
+	}
 	if v, ok := cfg["grpc-service-name"].(string); ok && v != "" {
 		params["type"] = "grpc"
 		params["serviceName"] = v

@@ -491,6 +491,10 @@ export default {
     "trafficMultiplierHint": "Charged traffic is the real traffic multiplied by this factor. Default 1; 1.5 counts 50% extra.",
     "transportExclusiveHint": "One transport only. mKCP/Mekya (VMess) require TCP.",
     "transportXhttpHint": "XHTTP is available for VLESS.",
+    "wsHost": "WebSocket Host",
+    "wsHostHint": "Host header in client subscription (CDN). Leave empty to use SNI or public host automatically.",
+    "wsHostPlaceholder": "cdn.example.com",
+
   },
   "core": {
     "title": "Core",

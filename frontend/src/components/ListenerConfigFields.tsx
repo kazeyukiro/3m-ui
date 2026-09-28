@@ -333,6 +333,7 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
   delete values['httpmask'];
 
   if (cfg['ws-path']) values.transport_layer = 'ws';
+  if (cfg['ws-headers'] && typeof cfg['ws-headers'] === 'object' && cfg['ws-headers'].Host) values.ws_host = cfg['ws-headers'].Host;
   else if (cfg['grpc-service-name']) values.transport_layer = 'grpc';
   else if (cfg['xhttp-config']) values.transport_layer = 'xhttp';
   else values.transport_layer = 'raw';
@@ -444,6 +445,7 @@ export function formValuesToConfig(
         if (aid !== undefined) set('alterId', aid);
       }
       set('ws-path', values['ws-path']);
+      if (values.ws_host) { cfg['ws-headers'] = { Host: String(values.ws_host).trim() }; }
       set('grpc-service-name', values['grpc-service-name']);
       // R-M4 grpc-opts client-metadata fields (panel-side; converter emits them
       // into the client-side grpc-opts block).
@@ -456,6 +458,7 @@ export function formValuesToConfig(
     case 'vless':
       set('flow', flowAllowed ? values.flow : undefined);
       set('ws-path', values['ws-path']);
+      if (values.ws_host) { cfg['ws-headers'] = { Host: String(values.ws_host).trim() }; }
       set('grpc-service-name', values['grpc-service-name']);
       set('decryption', values.decryption);
       set('encryption', values.encryption);
@@ -468,6 +471,7 @@ export function formValuesToConfig(
       break;
     case 'trojan':
       set('ws-path', values['ws-path']);
+      if (values.ws_host) { cfg['ws-headers'] = { Host: String(values.ws_host).trim() }; }
       set('grpc-service-name', values['grpc-service-name']);
       // R-M4 grpc-opts client-metadata fields
       set('grpc-user-agent', values['grpc-user-agent']);
@@ -1061,9 +1065,18 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
             return (
               <>
                 {layer === 'ws' && (
+                  <>
                   <Form.Item name="ws-path" label={t('listeners.wsPath')} tooltip={fieldTip(t, 'listeners.wsPathHint')} rules={[{ required: true }]}>
-                    <Input placeholder="/" />
+                    <Input placeholder="/ws" />
                   </Form.Item>
+                  <Form.Item
+                    name="ws_host"
+                    label={t('listeners.wsHost') || 'WebSocket Host'}
+                    tooltip={fieldTip(t, 'listeners.wsHostHint') || 'Client Host header (CDN). Empty = use SNI / public host in subscription export.'}
+                  >
+                    <Input placeholder={t('listeners.wsHostPlaceholder') || 'cdn.example.com'} />
+                  </Form.Item>
+                  </>
                 )}
                 {layer === 'grpc' && (
                   <>

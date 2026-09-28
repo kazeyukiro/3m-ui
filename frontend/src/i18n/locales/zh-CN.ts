@@ -491,6 +491,10 @@ export default {
     "trafficMultiplierHint": "实际流量 × 倍率计入用户配额。默认 1，例如 1.5 表示多计 50%。",
     "transportExclusiveHint": "仅能选择一种传输层。mKCP/Mekya（VMess）需要 TCP。",
     "transportXhttpHint": "XHTTP 仅适用于 VLESS。",
+    "wsHost": "WebSocket Host",
+    "wsHostHint": "写入客户端订阅的 Host 头（CDN 常用）。留空则自动用 SNI 或公网 Host。",
+    "wsHostPlaceholder": "cdn.example.com",
+
   },
   "core": {
     "title": "核心管理",
