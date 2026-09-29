@@ -70,8 +70,21 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
         <img src="/logo.png" alt="" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} />
         {!collapsed && <span>3M-UI</span>}
       </div>
-      <Menu mode="inline" selectedKeys={selectedKeys} items={items} onClick={onMenuClick} style={{ flex: 1, borderInlineEnd: 'none' }} />
-      <Menu mode="inline" selectable={false} items={[{ key: 'logout', icon: <IconNavLogout />, label: t('nav.logout'), onClick: onLogout }]} style={{ borderInlineEnd: 'none', borderTop: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))' }} />
+      <Menu
+        mode="inline"
+        inlineCollapsed={!!collapsed}
+        selectedKeys={selectedKeys}
+        items={items}
+        onClick={onMenuClick}
+        style={{ flex: 1, borderInlineEnd: 'none', overflowY: 'auto' }}
+      />
+      <Menu
+        mode="inline"
+        inlineCollapsed={!!collapsed}
+        selectable={false}
+        items={[{ key: 'logout', icon: <IconNavLogout />, label: t('nav.logout'), onClick: onLogout }]}
+        style={{ borderInlineEnd: 'none', borderTop: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))', flexShrink: 0 }}
+      />
     </div>
   );
 };
@@ -79,7 +92,7 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
 const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const isDark = useThemeStore((s) => s.isDark);
   return (
-    <Sider trigger={null} collapsible collapsed={collapsed} theme={isDark ? 'dark' : 'light'} breakpoint="md" collapsedWidth={80} width={220}
+    <Sider trigger={null} collapsible collapsed={collapsed} theme={isDark ? 'dark' : 'light'} breakpoint="md" collapsedWidth={64} width={220}
       style={{ overflow: 'auto', height: '100vh', position: 'sticky', insetInlineStart: 0, top: 0, bottom: 0 }}>
       <SidebarMenu collapsed={collapsed} />
     </Sider>

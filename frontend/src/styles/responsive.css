@@ -28,6 +28,7 @@ body {
   line-height: 1.4 !important;
 }
 
+/* Expanded: allow long i18n labels to wrap */
 .ant-menu-item,
 .ant-menu-submenu-title {
   white-space: normal !important;
@@ -39,6 +40,31 @@ body {
 .ant-menu-item .ant-menu-title-content,
 .ant-menu-submenu-title .ant-menu-title-content {
   white-space: normal;
+}
+
+/* Collapsed sider: icon-only rows — keep compact fixed height
+   (height:auto + padding-block above would leave huge gaps between icons) */
+.ant-layout-sider-collapsed .ant-menu-item,
+.ant-layout-sider-collapsed .ant-menu-submenu-title,
+.ant-menu-inline-collapsed > .ant-menu-item,
+.ant-menu-inline-collapsed > .ant-menu-item-group > .ant-menu-item-group-list > .ant-menu-item,
+.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+  height: 40px !important;
+  line-height: 40px !important;
+  padding-block: 0 !important;
+  margin-block: 2px !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.ant-layout-sider-collapsed .ant-menu-item .ant-menu-item-icon,
+.ant-layout-sider-collapsed .ant-menu-item .anticon,
+.ant-menu-inline-collapsed .ant-menu-item .ant-menu-item-icon,
+.ant-menu-inline-collapsed .ant-menu-item .anticon {
+  margin-inline: 0 !important;
+  line-height: 1 !important;
 }
 
 /* Desktop readability */
