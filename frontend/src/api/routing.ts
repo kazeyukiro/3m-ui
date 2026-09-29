@@ -16,3 +16,18 @@ export const fetchRules = () =>
   withNetworkRetry(() => client.get<string[]>('/config/rules').then((r) => r.data));
 export const saveRules = (rules: string[]) =>
   withNetworkRetry(() => client.put<string[]>('/config/rules', rules).then((r) => r.data));
+
+export interface ServerRoutingConfig {
+  proxies: Array<Record<string, unknown> & { name: string; type: string; server?: string; port?: number | string }>;
+  proxyGroups: GroupEntry[];
+  rules: string[];
+}
+
+export const fetchServerRouting = () =>
+  withNetworkRetry(() =>
+    client.get<ServerRoutingConfig>('/config/server-routing').then((r) => r.data),
+  );
+export const saveServerRouting = (cfg: ServerRoutingConfig) =>
+  withNetworkRetry(() =>
+    client.put<ServerRoutingConfig>('/config/server-routing', cfg).then((r) => r.data),
+  );

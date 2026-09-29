@@ -16,6 +16,8 @@ import {
   Dropdown,
   Tooltip,
   Divider,
+  Tabs,
+  Alert,
 } from 'antd';
 import {
   IconAddRule,
@@ -31,6 +33,8 @@ import {
   saveGroups,
   fetchRules,
   saveRules,
+  fetchServerRouting,
+  saveServerRouting,
   type GroupEntry,
 } from '../api/routing';
 import { generateConfig, applyConfigYAML, fetchProxies } from '../api/config';
@@ -60,6 +64,8 @@ const RoutingPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [scope, setScope] = useState<'client' | 'server'>('client');
+  const [serverRules, setServerRules] = useState<RuleRow[]>([]);
   const [form] = Form.useForm();
 
   const targetOptions = useMemo(() => {
@@ -72,13 +78,15 @@ const RoutingPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [g, r, px] = await Promise.all([
+      const [g, r, px, sr] = await Promise.all([
         fetchGroups(),
         fetchRules(),
         fetchProxies().catch(() => []),
+        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [] })),
       ]);
       setGroups(Array.isArray(g) ? g : []);
       setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
+      setServerRules(parseRulesText((Array.isArray(sr?.rules) ? sr.rules : ['MATCH,DIRECT']).join('\n')));
       setProxyNames(
         (Array.isArray(px) ? px : [])
           .map((p: any) => String(p?.name || '').trim())
@@ -121,8 +129,12 @@ const RoutingPage: React.FC = () => {
     });
   };
 
+  const activeRules = scope === 'server' ? serverRules : rules;
+  const setActiveRules = scope === 'server' ? setServerRules : setRules;
+
   const onSaveRules = async () => {
-    const issues = validateRules(rules);
+    const current = scope === 'server' ? serverRules : rules;
+    const issues = validateRules(current);
     const hard = issues.filter((i) => !i.message.includes('recommended'));
     if (hard.length) {
       message.error(
@@ -139,10 +151,21 @@ const RoutingPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      const saved = await saveRules(serializeRules(rules));
-      setRules(parseRulesText((Array.isArray(saved) ? saved : serializeRules(rules)).join('\n')));
-      message.success(t('routing.rulesSaved') || 'Rules saved');
-      offerApply();
+      if (scope === 'server') {
+        const saved = await saveServerRouting({
+          proxies: [],
+          proxyGroups: [],
+          rules: serializeRules(current),
+        });
+        setServerRules(parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(current)).join('\n')));
+        message.success(t('routing.serverRulesSaved') || 'Server routing saved');
+        offerApply();
+      } else {
+        const saved = await saveRules(serializeRules(current));
+        setRules(parseRulesText((Array.isArray(saved) ? saved : serializeRules(current)).join('\n')));
+        message.success(t('routing.rulesSaved') || 'Rules saved');
+        offerApply();
+      }
     } catch (e: any) {
       message.error(errMsg(e));
     } finally {
@@ -190,11 +213,13 @@ const RoutingPage: React.FC = () => {
   };
 
   const updateRule = (index: number, patch: Partial<RuleRow>) => {
-    setRules((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch, raw: undefined } : r)));
+    const setter = scope === 'server' ? setServerRules : setRules;
+    setter((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch, raw: undefined } : r)));
   };
 
   const moveRule = (index: number, dir: -1 | 1) => {
-    setRules((prev) => {
+    const setter = scope === 'server' ? setServerRules : setRules;
+    setter((prev) => {
       const j = index + dir;
       if (j < 0 || j >= prev.length) return prev;
       const next = [...prev];
@@ -206,11 +231,13 @@ const RoutingPage: React.FC = () => {
   };
 
   const removeRule = (index: number) => {
-    setRules((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+    const setter = scope === 'server' ? setServerRules : setRules;
+    setter((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
   };
 
   const addRule = () => {
-    setRules((prev) => [...prev, emptyRule({ type: 'DOMAIN-SUFFIX', target: 'DIRECT' })]);
+    const setter = scope === 'server' ? setServerRules : setRules;
+    setter((prev) => [...prev, emptyRule({ type: 'DOMAIN-SUFFIX', target: 'DIRECT' })]);
   };
 
   const onTemplate = async (id: string) => {
@@ -298,11 +325,29 @@ const RoutingPage: React.FC = () => {
   return (
     <div>
       <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
-      <Typography.Paragraph type="secondary" style={{ marginTop: -4, marginBottom: isMobile ? 8 : 12, fontSize: isMobile ? 12 : undefined }}>
-        {t('routing.pageHint') ||
-          'Proxy-groups and rules are for **client** Mihomo/Clash subscriptions only (not server-side split). Save, then update the subscription in the client. Panel core always uses MATCH,DIRECT.'}
-      </Typography.Paragraph>
+      <Tabs
+        activeKey={scope}
+        onChange={(k) => setScope(k as 'client' | 'server')}
+        style={{ marginBottom: 8 }}
+        items={[
+          { key: 'client', label: t('routing.tabClient') || 'Client subscription' },
+          { key: 'server', label: t('routing.tabServer') || 'Server egress' },
+        ]}
+      />
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: isMobile ? 8 : 12 }}
+        message={
+          scope === 'server'
+            ? (t('routing.serverHint') ||
+              'Server egress: rules applied to the panel Mihomo process (like 3x-ui Xray routing). Affects traffic after it hits your listeners. Save then Apply.')
+            : (t('routing.pageHint') ||
+              'Client subscription: proxy-groups and rules go into Mihomo/Clash subscription YAML only. Save, then refresh the subscription in the client.')
+        }
+      />
 
+      {scope === 'client' && (
       <Card
         title={t('routing.groups')}
         extra={
@@ -341,11 +386,12 @@ const RoutingPage: React.FC = () => {
           ]}
         />
       </Card>
+      )}
 
       <Card title={t('routing.rules')} extra={isMobile ? undefined : ruleCardExtra}>
         {isMobile ? <div style={{ marginBottom: 12 }}>{ruleCardExtra}</div> : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {rules.map((row, index) => (
+          {activeRules.map((row, index) => (
             <div
               key={row.key || newRuleKey()}
               style={{
@@ -427,7 +473,7 @@ const RoutingPage: React.FC = () => {
                       onClick={() => moveRule(index, 1)}
                     />
                   </Tooltip>
-                  <Button size="small" danger icon={<IconDelete />} disabled={rules.length <= 1} onClick={() => removeRule(index)} />
+                  <Button size="small" danger icon={<IconDelete />} disabled={activeRules.length <= 1} onClick={() => removeRule(index)} />
                 </Space>
               </div>
             </div>

@@ -62,4 +62,31 @@ func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 		}
 		c.JSON(http.StatusOK, visual.Rules)
 	})
+
+	// Server-side egress (serving Mihomo), distinct from client subscription visual-config.
+	group.GET("/server-routing", func(c *gin.Context) {
+		sr, err := mihomoConfig.GetServerRouting(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, sr)
+	})
+	group.PUT("/server-routing", func(c *gin.Context) {
+		var sr mihomoConfig.ServerRoutingConfig
+		if err := c.ShouldBindJSON(&sr); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := mihomoConfig.SaveServerRouting(db, sr); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		saved, err := mihomoConfig.GetServerRouting(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, saved)
+	})
 }

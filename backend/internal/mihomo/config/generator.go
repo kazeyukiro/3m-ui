@@ -67,9 +67,13 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 	if CoreLowMemory() {
 		merged["geodata-loader"] = geodataLoaderMemConservative
 	}
-	// Inbound panel: always DIRECT exit (no server-side split).
-	merged["rules"] = []interface{}{"MATCH,DIRECT"}
-	merged["proxy-groups"] = []interface{}{}
+	// Server-side egress routing (3x-ui-style): proxies / groups / rules for the
+	// serving Mihomo process. visual-config remains client-subscription only.
+	sr, srErr := GetServerRouting(ce.db)
+	if srErr != nil {
+		return "", fmt.Errorf("load server-routing: %w", srErr)
+	}
+	applyServerRouting(merged, sr)
 	var listeners []models.Listener
 	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
 		return "", fmt.Errorf("load enabled listeners: %w", err)
