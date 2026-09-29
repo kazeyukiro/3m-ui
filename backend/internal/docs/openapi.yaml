@@ -1,9 +1,13 @@
 openapi: 3.0.3
 info:
   title: 3m-ui API
-  version: "1.2"
+  version: "1.3"
   description: |
     REST API for the 3m-ui Mihomo management panel.
+
+    Server egress: GET/PUT /config/server-routing (serving Mihomo rules + warpDomains).
+    WARP account: GET/POST/DELETE /system/warp (injects outbound WARP at config apply).
+    Client subscription rules: /config/rules and /config/groups (visual-config only).
 
     - Base path: `/api/v1`
     - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login` (or GitHub OAuth callback when enabled)
@@ -1437,18 +1441,17 @@ security:
   - bearerAuth: []
 
 
-  /api/v1/config/rules:
+  /config/rules:
     get:
-      summary: List Mihomo routing rules (visual-config)
-      tags: [Config]
-      security: [{ bearerAuth: [] }]
+      tags: [config]
+      summary: List client-subscription routing rules (visual-config only)
+      description: Does not affect the serving Mihomo process.
       responses:
         "200":
-          description: Array of rule line strings
+          description: string[] rule lines
     put:
-      summary: Replace routing rules
-      tags: [Config]
-      security: [{ bearerAuth: [] }]
+      tags: [config]
+      summary: Replace client-subscription routing rules
       requestBody:
         required: true
         content:
@@ -1459,36 +1462,144 @@ security:
       responses:
         "200":
           description: Saved rules
-  /api/v1/config/groups:
+  /config/groups:
     get:
-      summary: List proxy-groups (visual-config)
-      tags: [Config]
-      security: [{ bearerAuth: [] }]
+      tags: [config]
+      summary: List client-subscription proxy-groups (visual-config)
       responses:
         "200":
           description: Group list
     put:
-      summary: Replace proxy-groups
-      tags: [Config]
-      security: [{ bearerAuth: [] }]
+      tags: [config]
+      summary: Replace client-subscription proxy-groups
       responses:
         "200":
           description: Saved groups
-  /api/v1/config/routing/inject-warp:
+  /config/server-routing:
+    get:
+      tags: [config]
+      summary: Get server egress routing (serving Mihomo)
+      description: |
+        Controls how traffic leaves the VPS after hitting listeners.
+        Distinct from visual-config (client subscription).
+        When warpDomains is non-empty, a saved WARP account is required at apply time.
+      responses:
+        "200":
+          description: ServerRoutingConfig
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proxies:
+                    type: array
+                    items: { type: object }
+                  proxyGroups:
+                    type: array
+                    items: { type: object }
+                  rules:
+                    type: array
+                    items: { type: string }
+                    example: ["MATCH,DIRECT"]
+                  warpDomains:
+                    type: array
+                    items: { type: string }
+                    description: Domains (or GEOSITE:name) routed via outbound WARP
+    put:
+      tags: [config]
+      summary: Save server egress routing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxies: { type: array, items: { type: object } }
+                proxyGroups: { type: array, items: { type: object } }
+                rules: { type: array, items: { type: string } }
+                warpDomains: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Saved ServerRoutingConfig
+  /system/warp:
+    get:
+      tags: [system]
+      summary: WARP account status (no secrets)
+      responses:
+        "200":
+          description: WARPAccountView
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
+                  device_id: { type: string }
+                  license_key: { type: string }
+                  address_v4: { type: string }
+                  address_v6: { type: string }
+                  endpoint_host: { type: string }
+                  endpoint_port: { type: integer }
+                  peer_public_key: { type: string }
+                  updated_at: { type: string, format: date-time }
+                  proxy_name: { type: string, example: WARP }
     post:
-      summary: Register WARP and merge outbound into visual-config
-      tags: [Config]
-      security: [{ bearerAuth: [] }]
+      tags: [system]
+      summary: Register Cloudflare WARP and persist account
+      description: |
+        Creates a WARP device, stores warp-account in panel settings, and enables
+        outbound name WARP for server egress. Query mode=wireguard|masque selects YAML preview.
+      parameters:
+        - in: query
+          name: mode
+          schema: { type: string, enum: [wireguard, masque] }
+      responses:
+        "200":
+          description: account + optional yaml
+        "502":
+          description: Cloudflare registration failed
+    delete:
+      tags: [system]
+      summary: Delete persisted WARP account
+      responses:
+        "200":
+          description: ok
+  /system/templates/warp/register:
+    post:
+      tags: [system]
+      summary: Register WARP (YAML + persist account by default)
+      description: |
+        Same registration as POST /system/warp. Persists account unless nosave=1.
+        Prefer POST /system/warp for account lifecycle.
+      parameters:
+        - in: query
+          name: mode
+          schema: { type: string, enum: [wireguard, masque, both] }
+        - in: query
+          name: nosave
+          schema: { type: string, enum: ["1"] }
+          description: Skip persisting warp-account
+      responses:
+        "200":
+          description: yaml / masque_yaml and addresses
+        "502":
+          description: Registration failed
+  /system/templates/warp:
+    post:
+      tags: [system]
+      summary: Build WireGuard YAML from operator-supplied keys (advanced)
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                mode: { type: string, enum: [wireguard, masque] }
-                rule_mode: { type: string, enum: [none, match, cn_direct] }
-                name: { type: string }
+                private_key: { type: string }
+                address: { type: string }
+                ipv6: { type: string }
+                reserved: { type: string }
       responses:
         "200":
-          description: Updated visual rules and proxies
+          description: yaml
 

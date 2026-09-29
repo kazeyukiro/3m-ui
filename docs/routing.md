@@ -20,7 +20,7 @@ Same idea as 3x-ui server-side routing: decide how traffic **leaves the VPS** af
 - Default: `MATCH,DIRECT` (historical behaviour — all egress direct from the host).
 - You can add Mihomo rules (e.g. `GEOIP,private,DIRECT`, domain rules) and optional `proxies` / `proxy-groups` (e.g. WARP outbound pasted from Settings).
 - **Save → Generate & apply** so the core reloads with the new rules.
-- API: `GET/PUT /api/v1/config/server-routing` body `{ "proxies": [], "proxyGroups": [], "rules": ["MATCH,DIRECT"] }`.
+- API: `GET/PUT /api/v1/config/server-routing` body `{ "proxies": [], "proxyGroups": [], "rules": ["MATCH,DIRECT"], "warpDomains": [] }`.
 - Last rule should include a `MATCH,...` line (panel appends `MATCH,DIRECT` if missing).
 
 GEOIP/GEOSITE rules need Geo data on the host (Settings → update Geo files).
@@ -39,3 +39,6 @@ Cloudflare WARP registration is under **Settings**. See [WARP](warp.md) for regi
 | **服务端出站** | 写入面板 Mihomo（用户流量进节点之后的出口），类似 3x-ui 服务端路由；默认 `MATCH,DIRECT`；保存后请「生成并应用」 |
 
 WARP 在 **设置** 里一键注册，把 YAML 作为出站合并进服务端规则即可（不会自动注入）。
+
+
+See embedded OpenAPI (`GET /api/v1/openapi.yaml`) for `/config/server-routing` and `/system/warp`.
