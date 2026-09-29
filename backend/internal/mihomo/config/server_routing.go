@@ -89,6 +89,8 @@ func SaveServerRouting(db *gorm.DB, cfg ServerRoutingConfig) error {
 		return fmt.Errorf("database is not initialized")
 	}
 	normalizeServerRouting(&cfg)
+	materializeWARPDomainRules(&cfg)
+	normalizeServerRouting(&cfg) // ensure MATCH still present after materialize
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -178,6 +180,64 @@ func warpDomainRule(value, target string) string {
 	return "DOMAIN-SUFFIX," + value + "," + target
 }
 
+// isManagedWARPDomainRule reports rules owned by the WARP domains list
+// (DOMAIN / DOMAIN-SUFFIX / DOMAIN-KEYWORD / GEOSITE → WARP).
+func isManagedWARPDomainRule(rule string) bool {
+	rule = strings.TrimSpace(rule)
+	if rule == "" {
+		return false
+	}
+	parts := strings.Split(rule, ",")
+	if len(parts) < 3 {
+		return false
+	}
+	typ := strings.ToUpper(strings.TrimSpace(parts[0]))
+	target := strings.TrimSpace(parts[len(parts)-1])
+	// optional modifiers after target are rare; target is last field for simple rules
+	if !strings.EqualFold(target, "WARP") {
+		// allow trailing no-resolve etc: DOMAIN-SUFFIX,x,WARP,no-resolve
+		ok := false
+		for _, p := range parts[2:] {
+			if strings.EqualFold(strings.TrimSpace(p), "WARP") {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	switch typ {
+	case "DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "GEOSITE":
+		return true
+	default:
+		return false
+	}
+}
+
+// materializeWARPDomainRules puts domain-list rules at the front of Rules so the
+// panel UI and API show the same lines that will be applied to Mihomo.
+func materializeWARPDomainRules(cfg *ServerRoutingConfig) {
+	if cfg == nil {
+		return
+	}
+	managed := make([]string, 0, len(cfg.WarpDomains))
+	for _, d := range cfg.WarpDomains {
+		if line := warpDomainRule(d, "WARP"); line != "" {
+			managed = append(managed, line)
+		}
+	}
+	rest := make([]string, 0, len(cfg.Rules))
+	for _, r := range cfg.Rules {
+		r = strings.TrimSpace(r)
+		if r == "" || isManagedWARPDomainRule(r) {
+			continue
+		}
+		rest = append(rest, r)
+	}
+	cfg.Rules = append(managed, rest...)
+}
+
 // applyServerRouting writes proxies / groups / rules into the serving config map.
 // warpProxy, when non-nil, is injected (or replaces same-name entry) as the WARP outbound.
 func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, warpProxy map[string]interface{}) {
@@ -239,6 +299,10 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 		if r == "" {
 			continue
 		}
+		// Domain-list rules are re-built from WarpDomains above — skip duplicates.
+		if isManagedWARPDomainRule(r) {
+			continue
+		}
 		// Drop MATCH lines when WarpGlobal rewrites the final catch-all.
 		if sr.WarpGlobal && warpProxy != nil && strings.HasPrefix(strings.ToUpper(r), "MATCH,") {
 			continue
@@ -270,15 +334,16 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 	// and a minimal DNS so DOMAIN-SUFFIX / GEOSITE rules can hit.
 	if warpProxy != nil && (len(sr.WarpDomains) > 0 || sr.WarpGlobal) {
 		merged["mode"] = "rule"
-		if _, ok := merged["sniffer"]; !ok {
-			merged["sniffer"] = map[string]interface{}{
-				"enable":               true,
-				"override-destination": true,
-				"sniff": map[string]interface{}{
-					"TLS":  map[string]interface{}{"ports": []interface{}{443, 8443}},
-					"HTTP": map[string]interface{}{"ports": []interface{}{80, "8080-8880"}},
-				},
-			}
+		// Always refresh sniffer when WARP routing is active (override prior fragment).
+		merged["sniffer"] = map[string]interface{}{
+			"enable":               true,
+			"parse-pure-ip":        true,
+			"force-dns-mapping":    true,
+			"override-destination": true,
+			"sniff": map[string]interface{}{
+				"TLS":  map[string]interface{}{"ports": []interface{}{443, 8443}},
+				"HTTP": map[string]interface{}{"ports": []interface{}{80, "8080-8880"}},
+			},
 		}
 		dns, _ := merged["dns"].(map[string]interface{})
 		if dns == nil {

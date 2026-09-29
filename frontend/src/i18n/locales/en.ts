@@ -842,7 +842,7 @@ export default {
     "warpGlobalHint": "When on, the final rule is MATCH,WARP (Cloudflare tunnel endpoints stay DIRECT). Domain list is optional.",
     "warpDomains": "WARP domains",
     "warpDomainsHintShort": "Requires WARP account in Settings",
-    "warpDomainsHint": "One per line: host (DOMAIN-SUFFIX), domain:/full:/keyword:/geosite: prefixes, or GEOSITE:name. After Apply, sniffer+DNS help match SNI. Register WARP under Settings first.",
+    "warpDomainsHint": "One per line: host, domain:/full:/keyword:/geosite:. On blur/save these become DOMAIN-* rules targeting WARP in the list below. Then Generate & apply.",
     "groupDeleted": "Group deleted"
   },
   "settings": {

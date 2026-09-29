@@ -48,6 +48,9 @@ import {
   type RuleRow,
   emptyRule,
   parseRulesText,
+  expandWarpDomainLines,
+  mergeWarpDomainRules,
+  isManagedWarpDomainRule,
   serializeRules,
   validateRules,
   applyTemplate,
@@ -77,7 +80,7 @@ const RoutingPage: React.FC = () => {
   const [form] = Form.useForm();
 
   const targetOptions = useMemo(() => {
-    const set = new Set<string>(['DIRECT', 'REJECT', 'COMPATIBLE']);
+    const set = new Set<string>(['DIRECT', 'REJECT', 'COMPATIBLE', 'WARP']);
     groups.forEach((g) => g.name && set.add(g.name));
     proxyNames.forEach((n) => n && set.add(n));
     return Array.from(set).map((v) => ({ value: v, label: v }));
@@ -171,10 +174,11 @@ const RoutingPage: React.FC = () => {
           .split(/[\n,，]+/)
           .map((s) => s.trim())
           .filter(Boolean);
+        const mergedRuleLines = mergeWarpDomainRules(serializeRules(current), warpDomains);
         const saved = await saveServerRouting({
           proxies: [],
           proxyGroups: [],
-          rules: serializeRules(current),
+          rules: mergedRuleLines,
           warpDomains: domains,
           warpGlobal,
           ruleProviders,
@@ -387,7 +391,7 @@ const RoutingPage: React.FC = () => {
 
       {scope === 'server' && (
         <Card
-          title={t('routing.warpDomains') || 'WARP domains'}
+          title={t('routing.warpDomains') || 'WARP domains → rules'}
           style={{ marginBottom: 16 }}
           extra={
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -409,7 +413,10 @@ const RoutingPage: React.FC = () => {
             rows={4}
             value={warpDomains}
             onChange={(e) => setWarpDomains(e.target.value)}
-            disabled={false}
+            onBlur={() => {
+              const merged = mergeWarpDomainRules(serializeRules(serverRules), warpDomains);
+              setServerRules(parseRulesText(merged.join('\n')));
+            }}
             placeholder={'openai.com\nfull:api.openai.com\nkeyword:openai\ngeosite:openai'}
           />
           <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>

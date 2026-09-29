@@ -842,7 +842,7 @@ export default {
     "warpGlobalHint": "开启后兜底规则为 MATCH,WARP（Cloudflare 隧道控制面仍 DIRECT）。下方域名列表可选。",
     "warpDomains": "WARP 域名",
     "warpDomainsHintShort": "需先在设置中注册 WARP 账户",
-    "warpDomainsHint": "每行一条：域名（DOMAIN-SUFFIX），或 domain:/full:/keyword:/geosite: 前缀，或 GEOSITE:名称。应用后会启用 sniffer+DNS。请先在设置中注册 WARP。",
+    "warpDomainsHint": "每行一条：域名或 domain:/full:/keyword:/geosite:。失焦/保存后会写入下方规则列表（目标 WARP）。然后请生成并应用。",
     "groupDeleted": "策略组已删除"
   },
   "settings": {

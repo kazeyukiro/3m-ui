@@ -290,3 +290,68 @@ export function applyTemplate(
       return { rules: [emptyRule({ type: 'MATCH', target: 'DIRECT' })] };
   }
 }
+
+/** Expand WARP domain list lines to Mihomo rule strings (target WARP). */
+export function expandWarpDomainLines(text: string): string[] {
+  const lines = String(text || '')
+    .split(/[\n,，]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (const value of lines) {
+    const upper = value.toUpperCase();
+    if (value.split(',').length >= 3) {
+      out.push(value);
+      continue;
+    }
+    if (
+      upper.startsWith('DOMAIN,') ||
+      upper.startsWith('DOMAIN-SUFFIX,') ||
+      upper.startsWith('DOMAIN-KEYWORD,') ||
+      upper.startsWith('GEOSITE,')
+    ) {
+      out.push(value.includes(',WARP') || value.toUpperCase().includes(',WARP') ? value : `${value},WARP`);
+      continue;
+    }
+    const colon = value.indexOf(':');
+    if (colon > 0) {
+      const prefix = value.slice(0, colon).toLowerCase();
+      const payload = value.slice(colon + 1).trim().replace(/^\./, '');
+      if (prefix === 'domain') {
+        out.push(`DOMAIN-SUFFIX,${payload},WARP`);
+        continue;
+      }
+      if (prefix === 'full') {
+        out.push(`DOMAIN,${payload},WARP`);
+        continue;
+      }
+      if (prefix === 'keyword') {
+        out.push(`DOMAIN-KEYWORD,${payload},WARP`);
+        continue;
+      }
+      if (prefix === 'geosite') {
+        out.push(`GEOSITE,${payload},WARP`);
+        continue;
+      }
+    }
+    out.push(`DOMAIN-SUFFIX,${value.replace(/^\./, '')},WARP`);
+  }
+  return out;
+}
+
+export function isManagedWarpDomainRule(line: string): boolean {
+  const parts = String(line || '')
+    .split(',')
+    .map((s) => s.trim());
+  if (parts.length < 3) return false;
+  const typ = parts[0].toUpperCase();
+  if (!['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'GEOSITE'].includes(typ)) return false;
+  return parts.slice(2).some((p) => p.toUpperCase() === 'WARP');
+}
+
+/** Replace managed WARP domain rules at the front of a rule list. */
+export function mergeWarpDomainRules(existing: string[], domainText: string): string[] {
+  const managed = expandWarpDomainLines(domainText);
+  const rest = existing.filter((r) => !isManagedWarpDomainRule(r));
+  return [...managed, ...rest];
+}

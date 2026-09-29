@@ -90,3 +90,24 @@ func containsRule(rules []interface{}, want string) bool {
 	}
 	return false
 }
+
+func TestMaterializeWARPDomainRules(t *testing.T) {
+	cfg := ServerRoutingConfig{
+		WarpDomains: []string{"openai.com", "geosite:google"},
+		Rules:       []string{"DOMAIN-SUFFIX,openai.com,WARP", "MATCH,DIRECT"},
+	}
+	materializeWARPDomainRules(&cfg)
+	if len(cfg.Rules) < 3 {
+		t.Fatalf("%#v", cfg.Rules)
+	}
+	if cfg.Rules[0] != "DOMAIN-SUFFIX,openai.com,WARP" {
+		t.Fatalf("first %s", cfg.Rules[0])
+	}
+	if cfg.Rules[1] != "GEOSITE,google,WARP" {
+		t.Fatalf("second %s", cfg.Rules[1])
+	}
+	last := cfg.Rules[len(cfg.Rules)-1]
+	if last != "MATCH,DIRECT" {
+		t.Fatalf("last %s", last)
+	}
+}
