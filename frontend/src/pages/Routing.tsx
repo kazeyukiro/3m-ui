@@ -241,6 +241,47 @@ const RoutingPage: React.FC = () => {
   };
 
   const onTemplate = async (id: string) => {
+    if (scope === 'server') {
+      const serverPresets: Record<string, RuleRow[]> = {
+        direct_only: [emptyRule({ type: 'MATCH', payload: '', target: 'DIRECT' })],
+        private_direct: [
+          emptyRule({ type: 'GEOIP', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'MATCH', payload: '', target: 'DIRECT' }),
+        ],
+        warp_ai: [
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'openai.com', target: 'WARP' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'chatgpt.com', target: 'WARP' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'anthropic.com', target: 'WARP' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'claude.ai', target: 'WARP' }),
+          emptyRule({ type: 'MATCH', payload: '', target: 'DIRECT' }),
+        ],
+      };
+      const next = serverPresets[id] || serverPresets.direct_only;
+      setServerRules(next);
+      setSaving(true);
+      try {
+        const saved = await saveServerRouting({
+          proxies: [],
+          proxyGroups: [],
+          rules: serializeRules(next),
+        });
+        setServerRules(
+          parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(next)).join('\n')),
+        );
+        message.success(
+          (t('routing.serverRulesSaved') || 'Server routing saved') +
+            (id === 'warp_ai'
+              ? ' — ' + (t('routing.warpAiHint') || 'Add WARP proxy named WARP (Settings → register) then Apply')
+              : ''),
+        );
+        offerApply();
+      } catch (e: any) {
+        message.error(errMsg(e));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const tpl = applyTemplate(id, {
       groupName: groups.find((g) => g.name === 'PROXY')?.name || groups[0]?.name || 'PROXY',
       existingProxies: proxyNames,
@@ -278,25 +319,44 @@ const RoutingPage: React.FC = () => {
   };
 
   const templateMenu = {
-    items: [
-      { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
-      { key: 'cn_direct', label: t('routing.tplCnDirect') || 'GEOSITE/GEOIP CN → DIRECT, else group' },
-      { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
-      { key: 'via_group', label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY' },
-      { type: 'divider' as const },
-      {
-        key: 'community-yixuan',
-        label: t('routing.tplYixuan') || 'Community: YiXuanZX/rules (CN + GFW)',
-      },
-      {
-        key: 'community-echs',
-        label: t('routing.tplEchs') || 'Community: echs-top/proxy (ads + CN)',
-      },
-      {
-        key: 'community-aisouler',
-        label: t('routing.tplAisouler') || 'Community: AIsouler/MyClash lite',
-      },
-    ],
+    items:
+      scope === 'server'
+        ? [
+            { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
+            {
+              key: 'private_direct',
+              label: t('routing.tplPrivateDirect') || 'GEOIP private → DIRECT, MATCH → DIRECT',
+            },
+            {
+              key: 'warp_ai',
+              label: t('routing.tplWarpAi') || 'AI domains → WARP (needs proxy named WARP)',
+            },
+          ]
+        : [
+            { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
+            {
+              key: 'cn_direct',
+              label: t('routing.tplCnDirect') || 'GEOSITE/GEOIP CN → DIRECT, else group',
+            },
+            { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
+            {
+              key: 'via_group',
+              label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY',
+            },
+            { type: 'divider' as const },
+            {
+              key: 'community-yixuan',
+              label: t('routing.tplYixuan') || 'Community: YiXuanZX/rules (CN + GFW)',
+            },
+            {
+              key: 'community-echs',
+              label: t('routing.tplEchs') || 'Community: echs-top/proxy (ads + CN)',
+            },
+            {
+              key: 'community-aisouler',
+              label: t('routing.tplAisouler') || 'Community: AIsouler/MyClash lite',
+            },
+          ],
     onClick: ({ key }: { key: string }) => onTemplate(key),
   };
 

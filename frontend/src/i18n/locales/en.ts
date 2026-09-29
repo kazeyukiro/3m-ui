@@ -825,6 +825,9 @@ export default {
     "tabServer": "Server egress",
     "serverHint": "Server egress: rules apply to panel Mihomo (like 3x-ui Xray routing) after traffic hits listeners. Save then Apply.",
     "serverRulesSaved": "Server routing saved",
+    "tplPrivateDirect": "GEOIP private → DIRECT, MATCH → DIRECT",
+    "tplWarpAi": "AI domains → WARP (needs outbound named WARP)",
+    "warpAiHint": "Register WARP in Settings (name the proxy WARP), then Generate & apply",
     "groupDeleted": "Group deleted"
   },
   "settings": {
