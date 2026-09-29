@@ -34,10 +34,13 @@ type RuleProvider struct {
 }
 
 type ServerRoutingConfig struct {
-	Proxies       []ProxyEntry   `json:"proxies" yaml:"proxies"`
-	Groups        []GroupEntry   `json:"proxyGroups" yaml:"proxy-groups"`
-	Rules         []string       `json:"rules" yaml:"rules"`
-	WarpDomains   []string       `json:"warpDomains" yaml:"warp-domains,omitempty"`
+	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
+	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules       []string     `json:"rules" yaml:"rules"`
+	WarpDomains []string     `json:"warpDomains" yaml:"warp-domains,omitempty"`
+	// WarpGlobal sends all non-exempt traffic via the WARP outbound (MATCH,WARP).
+	// Cloudflare control-plane domains stay DIRECT so the tunnel can dial.
+	WarpGlobal    bool           `json:"warpGlobal" yaml:"warp-global,omitempty"`
 	RuleProviders []RuleProvider `json:"ruleProviders" yaml:"rule-providers,omitempty"`
 }
 
@@ -133,6 +136,48 @@ func normalizeServerRouting(cfg *ServerRoutingConfig) {
 	}
 }
 
+// warpDomainRule maps a panel domain line to a Mihomo rule string.
+// Supported forms (payload is the rest after the first colon):
+//
+//	example.com          → DOMAIN-SUFFIX,example.com,TARGET
+//	domain:example.com   → DOMAIN-SUFFIX,example.com,TARGET
+//	full:example.com     → DOMAIN,example.com,TARGET
+//	keyword:openai       → DOMAIN-KEYWORD,openai,TARGET
+//	geosite:openai       → GEOSITE,openai,TARGET
+//	GEOSITE:openai       → same (case-insensitive type)
+//	DOMAIN-SUFFIX,x      → DOMAIN-SUFFIX,x,TARGET (if target missing)
+func warpDomainRule(value, target string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || target == "" {
+		return ""
+	}
+	upper := strings.ToUpper(value)
+	// Already a full 3-field rule.
+	if strings.Count(value, ",") >= 2 {
+		return value
+	}
+	// DOMAIN-SUFFIX,host or DOMAIN,host without target
+	if strings.HasPrefix(upper, "DOMAIN,") || strings.HasPrefix(upper, "DOMAIN-SUFFIX,") || strings.HasPrefix(upper, "DOMAIN-KEYWORD,") || strings.HasPrefix(upper, "GEOSITE,") {
+		return value + "," + target
+	}
+	prefix, payload, ok := strings.Cut(value, ":")
+	if ok {
+		switch strings.ToLower(strings.TrimSpace(prefix)) {
+		case "domain":
+			payload = strings.TrimPrefix(strings.TrimSpace(payload), ".")
+			return "DOMAIN-SUFFIX," + payload + "," + target
+		case "full":
+			return "DOMAIN," + strings.TrimSpace(payload) + "," + target
+		case "keyword":
+			return "DOMAIN-KEYWORD," + strings.TrimSpace(payload) + "," + target
+		case "geosite":
+			return "GEOSITE," + strings.TrimSpace(payload) + "," + target
+		}
+	}
+	value = strings.TrimPrefix(value, ".")
+	return "DOMAIN-SUFFIX," + value + "," + target
+}
+
 // applyServerRouting writes proxies / groups / rules into the serving config map.
 // warpProxy, when non-nil, is injected (or replaces same-name entry) as the WARP outbound.
 func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, warpProxy map[string]interface{}) {
@@ -185,38 +230,37 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 	}
 	// Managed WARP domain rules next.
 	for _, d := range sr.WarpDomains {
-		d = strings.TrimSpace(d)
-		if d == "" {
-			continue
-		}
-		upper := strings.ToUpper(d)
-		switch {
-		case strings.HasPrefix(upper, "GEOSITE:"):
-			code := strings.TrimSpace(d[8:])
-			if code != "" {
-				rules = append(rules, "GEOSITE,"+code+","+warpName)
-			}
-		case strings.HasPrefix(upper, "DOMAIN,"), strings.HasPrefix(upper, "DOMAIN-SUFFIX,"), strings.HasPrefix(upper, "DOMAIN-KEYWORD,"):
-			if strings.Count(d, ",") >= 2 {
-				rules = append(rules, d)
-			} else {
-				rules = append(rules, d+","+warpName)
-			}
-		default:
-			d = strings.TrimPrefix(d, ".")
-			// Exact + suffix so both apex and subdomains match when host is present.
-			rules = append(rules, "DOMAIN,"+d+","+warpName)
-			rules = append(rules, "DOMAIN-SUFFIX,"+d+","+warpName)
+		if line := warpDomainRule(d, warpName); line != "" {
+			rules = append(rules, line)
 		}
 	}
 	for _, r := range sr.Rules {
 		r = strings.TrimSpace(r)
-		if r != "" {
-			rules = append(rules, r)
+		if r == "" {
+			continue
 		}
+		// Drop MATCH lines when WarpGlobal rewrites the final catch-all.
+		if sr.WarpGlobal && warpProxy != nil && strings.HasPrefix(strings.ToUpper(r), "MATCH,") {
+			continue
+		}
+		rules = append(rules, r)
 	}
-	if len(rules) == 0 {
+	if sr.WarpGlobal && warpProxy != nil {
+		rules = append(rules, "MATCH,"+warpName)
+	} else if len(rules) == 0 {
 		rules = []interface{}{"MATCH,DIRECT"}
+	} else {
+		hasMatch := false
+		for _, r := range rules {
+			s, _ := r.(string)
+			if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(s)), "MATCH,") {
+				hasMatch = true
+				break
+			}
+		}
+		if !hasMatch {
+			rules = append(rules, "MATCH,DIRECT")
+		}
 	}
 	merged["rules"] = rules
 	applyRuleProviders(merged, sr.RuleProviders)
@@ -224,7 +268,7 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 	// Domain-based WARP egress only matches when metadata has a host name.
 	// Many clients dial by IP after local DNS; enable sniffer (TLS SNI / HTTP Host)
 	// and a minimal DNS so DOMAIN-SUFFIX / GEOSITE rules can hit.
-	if len(sr.WarpDomains) > 0 && warpProxy != nil {
+	if warpProxy != nil && (len(sr.WarpDomains) > 0 || sr.WarpGlobal) {
 		merged["mode"] = "rule"
 		if _, ok := merged["sniffer"]; !ok {
 			merged["sniffer"] = map[string]interface{}{

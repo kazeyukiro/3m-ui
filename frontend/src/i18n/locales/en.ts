@@ -838,9 +838,11 @@ export default {
     "rpDup": "Name already exists",
     "rpAddedHint": "Added — Save then Generate & apply so Mihomo loads rule-providers",
     "noServerTemplates": "Server egress has no templates — set WARP domains below or edit rules.",
+    "warpGlobal": "Send all traffic via WARP",
+    "warpGlobalHint": "When on, the final rule is MATCH,WARP (Cloudflare tunnel endpoints stay DIRECT). Domain list is optional.",
     "warpDomains": "WARP domains",
     "warpDomainsHintShort": "Requires WARP account in Settings",
-    "warpDomainsHint": "One domain per line (or GEOSITE:name). Traffic to these domains leaves via the WARP outbound after Apply. Register WARP under Settings first.",
+    "warpDomainsHint": "One per line: host (DOMAIN-SUFFIX), domain:/full:/keyword:/geosite: prefixes, or GEOSITE:name. After Apply, sniffer+DNS help match SNI. Register WARP under Settings first.",
     "groupDeleted": "Group deleted"
   },
   "settings": {

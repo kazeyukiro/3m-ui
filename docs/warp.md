@@ -44,3 +44,19 @@ WARP does **not** guarantee streaming / AI unlock. Domain list is operator-contr
 | After delete, still seeing WARP in core | Re-apply config so generator omits the outbound |
 
 Flow: **Settings → Register WARP** → **Routing → Server egress → WARP domains** → **Save → Generate & apply**.
+
+## Domain list syntax
+
+Each line in **WARP domains**:
+
+| Input | Rule |
+|-------|------|
+| `openai.com` | `DOMAIN-SUFFIX,openai.com,WARP` |
+| `domain:openai.com` | same as above |
+| `full:api.openai.com` | `DOMAIN,api.openai.com,WARP` |
+| `keyword:openai` | `DOMAIN-KEYWORD,openai,WARP` |
+| `geosite:openai` | `GEOSITE,openai,WARP` |
+
+## Global WARP
+
+Enable **Send all traffic via WARP** (`warpGlobal: true`). The catch-all becomes `MATCH,WARP`. Cloudflare client endpoints stay `DIRECT` so the WireGuard tunnel can still dial. Domain list can be empty when global is on.

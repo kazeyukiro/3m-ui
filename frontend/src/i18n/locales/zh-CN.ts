@@ -838,9 +838,11 @@ export default {
     "rpDup": "名称已存在",
     "rpAddedHint": "已添加 — 请保存并「生成并应用」以便 Mihomo 加载 rule-providers",
     "noServerTemplates": "服务端出站没有模板 — 请在下方填写 WARP 域名或编辑规则。",
+    "warpGlobal": "全局走 WARP",
+    "warpGlobalHint": "开启后兜底规则为 MATCH,WARP（Cloudflare 隧道控制面仍 DIRECT）。下方域名列表可选。",
     "warpDomains": "WARP 域名",
     "warpDomainsHintShort": "需先在设置中注册 WARP 账户",
-    "warpDomainsHint": "每行一个域名（或 GEOSITE:name）。保存并应用后，这些域名经 WARP 出站。请先在设置中注册 WARP。",
+    "warpDomainsHint": "每行一条：域名（DOMAIN-SUFFIX），或 domain:/full:/keyword:/geosite: 前缀，或 GEOSITE:名称。应用后会启用 sniffer+DNS。请先在设置中注册 WARP。",
     "groupDeleted": "策略组已删除"
   },
   "settings": {

@@ -84,8 +84,8 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		}
 		warpProxy = pm
 	}
-	if len(sr.WarpDomains) > 0 && warpProxy == nil {
-		return "", fmt.Errorf("WARP domains are set but no WARP account is saved — open Settings → Cloudflare WARP → Register, then Apply again")
+	if warpProxy == nil && (len(sr.WarpDomains) > 0 || sr.WarpGlobal) {
+		return "", fmt.Errorf("WARP routing is enabled (domains or global) but no WARP account is saved — open Settings → Cloudflare WARP → Register, then Apply again")
 	}
 	applyServerRouting(merged, sr, warpProxy)
 	var listeners []models.Listener

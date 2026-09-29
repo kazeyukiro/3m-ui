@@ -69,6 +69,7 @@ const RoutingPage: React.FC = () => {
   const [scope, setScope] = useState<'client' | 'server'>('client');
   const [serverRules, setServerRules] = useState<RuleRow[]>([]);
   const [warpDomains, setWarpDomains] = useState<string>('');
+  const [warpGlobal, setWarpGlobal] = useState(false);
   const [ruleProviders, setRuleProviders] = useState<import('../api/routing').RuleProvider[]>([]);
   const [rpOpen, setRpOpen] = useState(false);
   const [rpUpdating, setRpUpdating] = useState<string | null>(null);
@@ -89,12 +90,13 @@ const RoutingPage: React.FC = () => {
         fetchGroups(),
         fetchRules(),
         fetchProxies().catch(() => []),
-        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [], ruleProviders: [] })),
+        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [], warpGlobal: false, ruleProviders: [] })),
       ]);
       setGroups(Array.isArray(g) ? g : []);
       setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
       setServerRules(parseRulesText((Array.isArray(sr?.rules) ? sr.rules : ['MATCH,DIRECT']).join('\n')));
       setWarpDomains(Array.isArray(sr?.warpDomains) ? sr.warpDomains.join('\n') : '');
+      setWarpGlobal(!!sr?.warpGlobal);
       setRuleProviders(Array.isArray(sr?.ruleProviders) ? sr.ruleProviders : []);
       setProxyNames(
         (Array.isArray(px) ? px : [])
@@ -174,12 +176,14 @@ const RoutingPage: React.FC = () => {
           proxyGroups: [],
           rules: serializeRules(current),
           warpDomains: domains,
+          warpGlobal,
           ruleProviders,
         });
         setServerRules(parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(current)).join('\n')));
         if (Array.isArray(saved?.warpDomains)) {
           setWarpDomains(saved.warpDomains.join('\n'));
         }
+        setWarpGlobal(!!saved?.warpGlobal);
         message.success(t('routing.serverRulesSaved') || 'Server routing saved — Apply to load WARP domains into Mihomo');
         offerApply();
       } else {
@@ -391,15 +395,26 @@ const RoutingPage: React.FC = () => {
             </Typography.Text>
           }
         >
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Switch checked={warpGlobal} onChange={setWarpGlobal} />
+            <Typography.Text>
+              {t('routing.warpGlobal') || 'Send all traffic via WARP'}
+            </Typography.Text>
+          </div>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 0 }}>
+            {t('routing.warpGlobalHint') ||
+              'When on, the final rule is MATCH,WARP (Cloudflare tunnel endpoints stay DIRECT). Domain list below is optional extra matching; leave empty if you only need global.'}
+          </Typography.Paragraph>
           <Input.TextArea
             rows={4}
             value={warpDomains}
             onChange={(e) => setWarpDomains(e.target.value)}
-            placeholder={'openai.com\nchatgpt.com\ngeosite:openai'}
+            disabled={false}
+            placeholder={'openai.com\nfull:api.openai.com\nkeyword:openai\ngeosite:openai'}
           />
           <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
             {t('routing.warpDomainsHint') ||
-              'One domain per line (or GEOSITE:name). After Apply, DOMAIN/DOMAIN-SUFFIX rules + TLS sniffer are enabled so SNI can match even when the client dials by IP. Register WARP under Settings first.'}
+              'One per line: host (DOMAIN-SUFFIX), domain:/full:/keyword:/geosite: prefixes, or GEOSITE:name. After Apply, sniffer+DNS help match SNI. Register WARP under Settings first.'}
           </Typography.Paragraph>
         </Card>
       )}

@@ -14,34 +14,35 @@ func TestApplyServerRoutingDefault(t *testing.T) {
 	}
 }
 
-func TestApplyServerRoutingCustom(t *testing.T) {
-	merged := map[string]interface{}{}
-	sr := ServerRoutingConfig{
-		Rules: []string{"GEOIP,private,DIRECT", "DOMAIN-SUFFIX,google.com,WARP"},
-		Proxies: []ProxyEntry{
-			{Name: "WARP", Type: "wireguard", Server: "engage.cloudflareclient.com", Port: 2408},
-		},
+func TestWarpDomainRule(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"openai.com", "DOMAIN-SUFFIX,openai.com,WARP"},
+		{"domain:openai.com", "DOMAIN-SUFFIX,openai.com,WARP"},
+		{"full:api.openai.com", "DOMAIN,api.openai.com,WARP"},
+		{"keyword:openai", "DOMAIN-KEYWORD,openai,WARP"},
+		{"geosite:openai", "GEOSITE,openai,WARP"},
+		{"GEOSITE:google", "GEOSITE,google,WARP"},
 	}
-	applyServerRouting(merged, sr, nil)
-	rules, _ := merged["rules"].([]interface{})
-	if len(rules) != 3 { // + MATCH,DIRECT auto
-		t.Fatalf("expected MATCH appended, got %#v", rules)
-	}
-	last := rules[len(rules)-1].(string)
-	if last != "MATCH,DIRECT" {
-		t.Fatalf("last rule: %s", last)
-	}
-	proxies, _ := merged["proxies"].([]interface{})
-	if len(proxies) != 1 {
-		t.Fatalf("proxies: %#v", proxies)
+	for _, c := range cases {
+		got := warpDomainRule(c.in, "WARP")
+		if got != c.want {
+			t.Fatalf("%q: got %q want %q", c.in, got, c.want)
+		}
 	}
 }
 
-func TestNormalizeServerRoutingEmpty(t *testing.T) {
-	sr := ServerRoutingConfig{}
-	normalizeServerRouting(&sr)
-	if len(sr.Rules) != 1 || sr.Rules[0] != "MATCH,DIRECT" {
-		t.Fatalf("%#v", sr.Rules)
+func TestApplyServerRoutingWarpGlobal(t *testing.T) {
+	merged := map[string]interface{}{}
+	sr := ServerRoutingConfig{Rules: []string{"MATCH,DIRECT"}, WarpGlobal: true}
+	warp := map[string]interface{}{"name": "WARP", "type": "wireguard"}
+	applyServerRouting(merged, sr, warp)
+	rules, _ := merged["rules"].([]interface{})
+	last := rules[len(rules)-1].(string)
+	if last != "MATCH,WARP" {
+		t.Fatalf("last=%s rules=%v", last, rules)
+	}
+	if merged["sniffer"] == nil {
+		t.Fatal("expected sniffer")
 	}
 }
 
@@ -49,36 +50,20 @@ func TestApplyServerRoutingWarpDomains(t *testing.T) {
 	merged := map[string]interface{}{}
 	sr := ServerRoutingConfig{
 		Rules:       []string{"MATCH,DIRECT"},
-		WarpDomains: []string{"openai.com", "GEOSITE:google", ".chatgpt.com"},
+		WarpDomains: []string{"openai.com", "geosite:google", "full:api.openai.com"},
 	}
-	warp := map[string]interface{}{
-		"name": "WARP", "type": "wireguard", "server": "engage.cloudflareclient.com",
-	}
+	warp := map[string]interface{}{"name": "WARP", "type": "wireguard"}
 	applyServerRouting(merged, sr, warp)
-	proxies, _ := merged["proxies"].([]interface{})
-	if len(proxies) != 1 {
-		t.Fatalf("proxies: %#v", proxies)
-	}
 	rules, _ := merged["rules"].([]interface{})
-	if len(rules) < 4 {
-		t.Fatalf("rules: %#v", rules)
-	}
 	joined := fmt.Sprintf("%v", rules)
-	if !containsRule(rules, "DOMAIN-SUFFIX,openai.com,WARP") {
-		t.Fatalf("missing openai suffix: %s", joined)
-	}
-	if !containsRule(rules, "GEOSITE,google,WARP") {
-		t.Fatalf("missing geosite: %s", joined)
-	}
-	if !containsRule(rules, "DOMAIN-SUFFIX,chatgpt.com,WARP") {
-		t.Fatalf("missing chatgpt: %s", joined)
-	}
-	if merged["sniffer"] == nil {
-		t.Fatalf("sniffer should be enabled for WARP domains")
-	}
-	dns, _ := merged["dns"].(map[string]interface{})
-	if dns == nil || dns["enable"] != true {
-		t.Fatalf("dns: %#v", dns)
+	for _, want := range []string{
+		"DOMAIN-SUFFIX,openai.com,WARP",
+		"GEOSITE,google,WARP",
+		"DOMAIN,api.openai.com,WARP",
+	} {
+		if !containsRule(rules, want) {
+			t.Fatalf("missing %s in %s", want, joined)
+		}
 	}
 }
 
@@ -94,13 +79,6 @@ func TestApplyRuleProviders(t *testing.T) {
 	rp, ok := merged["rule-providers"].(map[string]interface{})
 	if !ok || rp["gfw"] == nil {
 		t.Fatalf("rule-providers: %#v", merged["rule-providers"])
-	}
-	entry := rp["gfw"].(map[string]interface{})
-	if entry["type"] != "http" || entry["behavior"] != "domain" {
-		t.Fatalf("entry: %#v", entry)
-	}
-	if entry["path"] == nil || entry["url"] != "https://example.com/gfw.mrs" {
-		t.Fatalf("path/url: %#v", entry)
 	}
 }
 

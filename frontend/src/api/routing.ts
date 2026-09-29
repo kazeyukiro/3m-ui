@@ -36,6 +36,7 @@ export interface ServerRoutingConfig {
   proxyGroups: GroupEntry[];
   rules: string[];
   warpDomains?: string[];
+  warpGlobal?: boolean;
   ruleProviders?: RuleProvider[];
 }
 
