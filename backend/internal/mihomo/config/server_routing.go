@@ -157,13 +157,21 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 		if d == "" {
 			continue
 		}
-		// Allow GEOSITE:xxx or DOMAIN-SUFFIX style payloads.
 		upper := strings.ToUpper(d)
-		if strings.HasPrefix(upper, "GEOSITE:") {
-			rules = append(rules, "GEOSITE,"+strings.TrimSpace(d[8:])+","+warpName)
-		} else if strings.HasPrefix(upper, "DOMAIN,") || strings.HasPrefix(upper, "DOMAIN-SUFFIX,") {
-			rules = append(rules, d+","+warpName)
-		} else {
+		switch {
+		case strings.HasPrefix(upper, "GEOSITE:"):
+			code := strings.TrimSpace(d[8:])
+			if code != "" {
+				rules = append(rules, "GEOSITE,"+code+","+warpName)
+			}
+		case strings.HasPrefix(upper, "DOMAIN,"), strings.HasPrefix(upper, "DOMAIN-SUFFIX,"), strings.HasPrefix(upper, "DOMAIN-KEYWORD,"):
+			if strings.Count(d, ",") >= 2 {
+				rules = append(rules, d)
+			} else {
+				rules = append(rules, d+","+warpName)
+			}
+		default:
+			d = strings.TrimPrefix(d, ".")
 			rules = append(rules, "DOMAIN-SUFFIX,"+d+","+warpName)
 		}
 	}

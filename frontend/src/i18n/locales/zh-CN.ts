@@ -828,6 +828,7 @@ export default {
     "tplPrivateDirect": "GEOIP private → DIRECT，MATCH → DIRECT",
     "tplWarpAi": "AI 域名 → WARP（需名为 WARP 的出站）",
     "warpAiHint": "请先在设置注册 WARP，并将出站名称设为 WARP，再点生成并应用",
+    "applyPromptBodyServer": "生成并应用会把服务端出站（规则 + WARP 域名 + WARP 出站）写入面板 Mihomo 配置并重载核心。",
     "noServerTemplates": "服务端出站没有模板 — 请在下方填写 WARP 域名或编辑规则。",
     "warpDomains": "WARP 域名",
     "warpDomainsHintShort": "需先在设置中注册 WARP 账户",

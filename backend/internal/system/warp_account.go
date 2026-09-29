@@ -14,6 +14,9 @@ import (
 const warpAccountKey = "warp-account"
 const WARPProxyName = "WARP"
 
+// Cloudflare WARP WireGuard peer public key (shared by all consumer accounts).
+const warpCloudflarePublicKey = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
+
 // WARPAccount is the persisted Cloudflare WARP device .
 type WARPAccount struct {
 	DeviceID      string    `json:"device_id"`
@@ -113,13 +116,17 @@ func AccountFromRegister(res *WARPRegisterResult) *WARPAccount {
 	if epPort <= 0 {
 		epPort = 2408
 	}
+	peer := strings.TrimSpace(res.PeerPublicKey)
+	if peer == "" {
+		peer = warpCloudflarePublicKey
+	}
 	return &WARPAccount{
 		DeviceID:      res.DeviceID,
 		AccessToken:   res.AccessToken,
 		LicenseKey:    res.LicenseKey,
 		PrivateKey:    res.PrivateKey,
 		LocalPublic:   res.PublicKey,
-		PeerPublicKey: res.PeerPublicKey,
+		PeerPublicKey: peer,
 		EndpointHost:  epHost,
 		EndpointPort:  epPort,
 		AddressV4:     stripCIDR(res.Address),
@@ -157,11 +164,13 @@ func (a *WARPAccount) View() WARPAccountView {
 }
 
 // ProxyMap builds a Mihomo wireguard outbound map named WARP.
+// Always sets Cloudflare's peer public-key and allowed-ips so DOMAIN rules
+// can actually dial through the tunnel (matching WARPTemplate).
 func (a *WARPAccount) ProxyMap() (map[string]interface{}, error) {
 	if a == nil || strings.TrimSpace(a.PrivateKey) == "" {
 		return nil, fmt.Errorf("WARP account not configured")
 	}
-	host := a.EndpointHost
+	host := strings.TrimSpace(a.EndpointHost)
 	if host == "" {
 		host = "engage.cloudflareclient.com"
 	}
@@ -169,26 +178,37 @@ func (a *WARPAccount) ProxyMap() (map[string]interface{}, error) {
 	if port <= 0 {
 		port = 2408
 	}
+	pk := strings.TrimSpace(a.PeerPublicKey)
+	if pk == "" {
+		pk = warpCloudflarePublicKey
+	}
+	ip := stripCIDR(a.AddressV4)
+	if ip == "" {
+		ip = "172.16.0.2"
+	}
 	m := map[string]interface{}{
-		"name":        WARPProxyName,
-		"type":        "wireguard",
-		"server":      host,
-		"port":        port,
-		"private-key": a.PrivateKey,
-		"udp":         true,
-		"mtu":         1280,
+		"name":               WARPProxyName,
+		"type":               "wireguard",
+		"server":             host,
+		"port":               port,
+		"private-key":        a.PrivateKey,
+		"public-key":         pk,
+		"ip":                 ip,
+		"udp":                true,
+		"mtu":                1280,
+		"allowed-ips":        []string{"0.0.0.0/0", "::/0"},
+		"remote-dns-resolve": true,
 	}
-	if pk := strings.TrimSpace(a.PeerPublicKey); pk != "" {
-		m["public-key"] = pk
-	}
-	if a.AddressV4 != "" {
-		m["ip"] = a.AddressV4
-	}
-	if a.AddressV6 != "" {
-		m["ipv6"] = a.AddressV6
+	if v6 := stripCIDR(a.AddressV6); v6 != "" {
+		m["ipv6"] = v6
 	}
 	if len(a.Reserved) > 0 {
-		m["reserved"] = a.Reserved
+		// Mihomo expects up to 3 reserved bytes for WARP.
+		res := a.Reserved
+		if len(res) > 3 {
+			res = res[:3]
+		}
+		m["reserved"] = res
 	}
 	return m, nil
 }

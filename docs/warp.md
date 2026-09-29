@@ -34,3 +34,15 @@ The generator:
 ## Limits
 
 WARP does **not** guarantee Netflix / AI unlock. Domain list is operator-controlled (operator-controlled domain list).
+
+
+## Apply requirement
+
+WARP domains only take effect after **Generate & apply** (writes `proxies: WARP` + `DOMAIN-SUFFIX,…,WARP` into the serving Mihomo config).
+
+Troubleshooting:
+
+1. Settings shows WARP **Configured**
+2. Server egress has domains saved
+3. Apply succeeds (not cancelled)
+4. `config.yaml` contains `type: wireguard` name `WARP` and matching rules

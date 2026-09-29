@@ -75,13 +75,17 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		return "", fmt.Errorf("load server-routing: %w", srErr)
 	}
 	var warpProxy map[string]interface{}
-	if acc, _ := system.GetWARPAccount(ce.db); acc != nil {
-		if pm, err := acc.ProxyMap(); err == nil {
-			warpProxy = pm
+	if acc, err := system.GetWARPAccount(ce.db); err != nil {
+		return "", fmt.Errorf("load WARP account: %w", err)
+	} else if acc != nil {
+		pm, err := acc.ProxyMap()
+		if err != nil {
+			return "", fmt.Errorf("build WARP outbound: %w", err)
 		}
+		warpProxy = pm
 	}
 	if len(sr.WarpDomains) > 0 && warpProxy == nil {
-		return "", fmt.Errorf("WARP routing domains set but WARP account is not configured — register WARP in Settings or clear warpDomains")
+		return "", fmt.Errorf("WARP domains are set but no WARP account is saved — open Settings → Cloudflare WARP → Register, then Apply again")
 	}
 	applyServerRouting(merged, sr, warpProxy)
 	var listeners []models.Listener

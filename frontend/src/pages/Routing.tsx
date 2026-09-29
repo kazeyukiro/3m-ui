@@ -106,11 +106,15 @@ const RoutingPage: React.FC = () => {
   }, [load]);
 
   const offerApply = () => {
+    const body =
+      scope === 'server'
+        ? t('routing.applyPromptBodyServer') ||
+          'Generate & apply writes server egress (rules + WARP domains + WARP outbound) into the panel Mihomo config and reloads the core.'
+        : t('routing.applyPromptBody') ||
+          'Saved for client subscriptions. Generate & apply also refreshes the panel core. Update the subscription in your client to see new groups.';
     Modal.confirm({
       title: t('routing.applyPromptTitle') || 'Apply configuration?',
-      content:
-        t('routing.applyPromptBody') ||
-        'Saved for client subscriptions. Generate & apply only refreshes the panel core (server stays MATCH,DIRECT — no server-side split). Update the subscription in your client to see new groups.',
+      content: body,
       okText: t('routing.applyNow') || 'Generate & apply',
       cancelText: t('common.cancel') || 'Later',
       centered: true,
@@ -165,7 +169,10 @@ const RoutingPage: React.FC = () => {
           warpDomains: domains,
         });
         setServerRules(parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(current)).join('\n')));
-        message.success(t('routing.serverRulesSaved') || 'Server routing saved');
+        if (Array.isArray(saved?.warpDomains)) {
+          setWarpDomains(saved.warpDomains.join('\n'));
+        }
+        message.success(t('routing.serverRulesSaved') || 'Server routing saved — Apply to load WARP domains into Mihomo');
         offerApply();
       } else {
         const saved = await saveRules(serializeRules(current));

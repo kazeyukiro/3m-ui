@@ -100,7 +100,7 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 	}
 	// Persist account by default  so server egress can inject WARP.
 	if h.db != nil && c.Query("nosave") != "1" {
-		if acc := AccountFromRegister(res); acc != nil && strings.TrimSpace(acc.PeerPublicKey) != "" {
+		if acc := AccountFromRegister(res); acc != nil && strings.TrimSpace(acc.PrivateKey) != "" {
 			_ = SaveWARPAccount(h.db, acc)
 		}
 	}
@@ -613,11 +613,7 @@ func (h *Handler) WARPCreate(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "WARP registration returned incomplete account"})
 		return
 	}
-	// Peer public key is required for a usable Mihomo outbound.
-	if strings.TrimSpace(acc.PeerPublicKey) == "" {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "WARP registration returned no peer public key — retry later"})
-		return
-	}
+	// Peer public key defaults to Cloudflare's shared key when the API omits peers.
 	if err := SaveWARPAccount(h.db, acc); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
