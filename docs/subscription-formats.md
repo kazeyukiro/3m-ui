@@ -11,7 +11,7 @@ Public token URL (path may use `web_path` / custom sub base):
 | *(empty / clash / default)* | Mihomo / Clash Meta YAML |
 | `v2ray` / `base64` | **Always** standard Base64 of newline-separated share links (`vless://`, `vmess://`, `tuic://`, …). Independent of HTML page “encrypt URI list”. |
 | `uri` / `raw` | Same links; may be plaintext when encrypt is off |
-| `singbox` / `sing-box` | sing-box JSON with default **TUN** + **DNS** (remote via proxy) + `route.rules` sniff/hijack-dns + `route.final=proxy` (SFI/SFA mobile-friendly MTU) (SFI/SFM) and node outbounds |
+| `singbox` / `sing-box` | sing-box JSON with default **TUN** (no `stack`, `address` only) + **DNS** (typed servers, no legacy address filters) + `route.rules` sniff/hijack-dns + private→direct + `route.final=proxy` (aligned with sing-box migration 1.11–1.15) (SFI/SFM) and node outbounds |
 
 UA auto-detection may choose Clash vs v2ray-style when `target` is omitted.
 

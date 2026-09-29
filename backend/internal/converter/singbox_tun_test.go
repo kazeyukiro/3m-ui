@@ -41,6 +41,17 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if !ok || dns["final"] != "remote" {
 		t.Fatalf("dns: %#v", parsed["dns"])
 	}
+	// 1.14+: DNS rules must not use legacy address filters without match_response.
+	if rules, ok := dns["rules"].([]interface{}); ok {
+		for _, r := range rules {
+			m, _ := r.(map[string]interface{})
+			if _, has := m["ip_is_private"]; has {
+				if match, _ := m["match_response"].(bool); !match {
+					t.Fatalf("deprecated DNS ip_is_private without match_response: %#v", m)
+				}
+			}
+		}
+	}
 	route, ok := parsed["route"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("missing route")

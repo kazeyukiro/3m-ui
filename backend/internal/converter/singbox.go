@@ -95,10 +95,9 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 			defaultSingboxTUNInbound(),
 		},
 		"outbounds": outbounds,
-		// Route: private traffic stays local; DNS is hijacked into the dns module;
-		// everything else uses the proxy selector. Domain names of outbounds are
-		// resolved via local DNS so we do not create a DNS↔proxy dependency loop
-		// (a common cause of "works but extremely laggy" on SFA).
+		// Route uses rule actions (sniff / hijack-dns) instead of legacy inbound fields
+		// (removed in 1.13). ip_is_private on *route* rules is still valid; DNS rules
+		// must not use bare ip_is_private without match_response (deprecated 1.14).
 		"route": map[string]interface{}{
 			"rules": []map[string]interface{}{
 				{"action": "sniff"},
@@ -122,8 +121,10 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 	}
 }
 
-// defaultSingboxDNS: resolve outbound server names via local; general queries via
-// DoH through the proxy selector (after the outbound domain is known).
+// defaultSingboxDNS uses the post-1.12 server object format (type/tag/server)
+// and avoids deprecated DNS rule address filters (ip_is_private / ip_cidr without
+// match_response — removed path in 1.16). Private destinations are handled by
+// route rules instead. See https://sing-box.sagernet.org/migration/
 func defaultSingboxDNS() map[string]interface{} {
 	return map[string]interface{}{
 		"servers": []map[string]interface{}{
@@ -139,17 +140,17 @@ func defaultSingboxDNS() map[string]interface{} {
 				"detour": "proxy",
 			},
 		},
-		"rules": []map[string]interface{}{
-			// Prefer local for private reverse lookups / plain local names.
-			{"ip_is_private": true, "action": "route", "server": "local"},
-		},
 		"final":    "remote",
 		"strategy": "prefer_ipv4",
 	}
 }
 
-// defaultSingboxTUNInbound mirrors common SFA templates without stack/auto_redirect
-// (auto_redirect is Linux-oriented and often hurts mobile clients).
+// defaultSingboxTUNInbound follows current Tun schema:
+// - address (not inet4_address / inet6_address, removed in 1.12)
+// - no stack (deprecated 1.15, removed in 1.17 — client uses sing-tun default)
+// - no inbound sniff / domain_strategy (removed in 1.13; use route rule actions)
+// - dns_mode hijack (1.14+) with route hijack-dns rules
+// https://sing-box.sagernet.org/configuration/inbound/tun/
 func defaultSingboxTUNInbound() map[string]interface{} {
 	return map[string]interface{}{
 		"type":           "tun",
