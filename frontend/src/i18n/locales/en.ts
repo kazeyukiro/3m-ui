@@ -828,7 +828,7 @@ export default {
     "tplPrivateDirect": "GEOIP private → DIRECT, MATCH → DIRECT",
     "tplWarpAi": "AI domains → WARP (needs outbound named WARP)",
     "warpAiHint": "Register WARP in Settings (name the proxy WARP), then Generate & apply",
-    "applyPromptBodyServer": "Generate & apply writes server egress (rules + WARP domains + WARP outbound) into the panel Mihomo config and reloads the core.",
+    "applyPromptBodyServer": "Saves the current server egress (rules, WARP domains/global, rule-providers), then generates and reloads Mihomo.",
     "ruleProviders": "Rule providers (rule-set)",
     "rpHint": "Official Mihomo rule-providers. Save + Apply writes rule-providers into config. Hot update calls PUT /providers/rules/{name}. Use rules: RULE-SET,name,TARGET",
     "rpEmpty": "No rule providers yet",

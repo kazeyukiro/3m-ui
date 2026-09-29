@@ -828,7 +828,7 @@ export default {
     "tplPrivateDirect": "GEOIP private → DIRECT，MATCH → DIRECT",
     "tplWarpAi": "AI 域名 → WARP（需名为 WARP 的出站）",
     "warpAiHint": "请先在设置注册 WARP，并将出站名称设为 WARP，再点生成并应用",
-    "applyPromptBodyServer": "生成并应用会把服务端出站（规则 + WARP 域名 + WARP 出站）写入面板 Mihomo 配置并重载核心。",
+    "applyPromptBodyServer": "先保存当前服务端出站（规则、WARP 域名/全局、规则集），再生成并重载 Mihomo。",
     "ruleProviders": "规则集 (rule-providers)",
     "rpHint": "官方 Mihomo rule-providers。保存并应用后写入配置；热更新调用 PUT /providers/rules/{name}。规则写法：RULE-SET,名称,出站",
     "rpEmpty": "暂无规则集",
