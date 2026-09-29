@@ -5,7 +5,7 @@ The **Routing** page has two scopes:
 | Tab | Stored as | Affects |
 |-----|-----------|---------|
 | **Client subscription** | `visual-config` | Mihomo/Clash **subscription** YAML (`proxy-groups` / `rules`) only |
-| **Server egress** | `server-routing` | **Panel Mihomo process** after traffic hits listeners (like 3x-ui Xray outbounds + routing) |
+| **Server egress** | `server-routing` | **Panel Mihomo process** after traffic hits listeners (for panel Mihomo egress) |
 
 ## Client subscription
 
@@ -15,7 +15,7 @@ The **Routing** page has two scopes:
 
 ## Server egress
 
-Same idea as 3x-ui server-side routing: decide how traffic **leaves the VPS** after a user connects to a node.
+decide how traffic **leaves the VPS** after a user connects to a node.
 
 - Default: `MATCH,DIRECT` (historical behaviour — all egress direct from the host).
 - You can add Mihomo rules (e.g. `GEOIP,private,DIRECT`, domain rules) and optional `proxies` / `proxy-groups` (e.g. WARP outbound pasted from Settings).
@@ -36,7 +36,7 @@ Cloudflare WARP registration is under **Settings**. See [WARP](warp.md) for regi
 | 标签 | 作用 |
 |------|------|
 | **客户端订阅** | 只进 Clash/Mihomo 订阅，改完请在客户端更新订阅 |
-| **服务端出站** | 写入面板 Mihomo（用户流量进节点之后的出口），类似 3x-ui 服务端路由；默认 `MATCH,DIRECT`；保存后请「生成并应用」 |
+| **服务端出站** | 写入面板 Mihomo（用户流量进节点之后的出口），服务端出站；默认 `MATCH,DIRECT`；保存后请「生成并应用」 |
 
 WARP 在 **设置** 里一键注册，把 YAML 作为出站合并进服务端规则即可（不会自动注入）。
 

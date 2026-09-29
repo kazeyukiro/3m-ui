@@ -137,7 +137,7 @@ type hysteria2Listener struct {
 // hysteria2RealmConfig emits the client-side `realm-opts` block per
 // proxies-hysteria2 wiki. The `proxy` field is intentionally absent on the
 // client side (only listener configs document it under realm-opts); the
-// m-ui bridge path only ever emits the client YAML shape.
+// panel bridge path only ever emits the client YAML shape.
 type hysteria2RealmConfig struct {
 	Enable         bool     `yaml:"enable,omitempty"`
 	ServerURL      string   `yaml:"server-url,omitempty"`

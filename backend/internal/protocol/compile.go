@@ -31,7 +31,7 @@ type CompileInput struct {
 	HasCredentialState bool // true when creds map has this listener key (even if empty)
 }
 
-// Module is a protocol compiler (m-ui style).
+// Module is a protocol compiler .
 type Module interface {
 	Kind() string
 	Compile(in CompileInput) (map[string]interface{}, error)

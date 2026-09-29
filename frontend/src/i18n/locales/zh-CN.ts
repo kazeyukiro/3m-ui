@@ -823,7 +823,7 @@ export default {
     "groupSaved": "策略组已保存",
     "tabClient": "客户端订阅",
     "tabServer": "服务端出站",
-    "serverHint": "服务端出站：规则写入面板 Mihomo 进程（类似 3x-ui 的 Xray 路由），影响用户流量到达节点之后的出口。保存后请点应用。",
+    "serverHint": "服务端出站：规则写入面板 Mihomo 进程（用户流量到达节点后的出口），影响用户流量到达节点之后的出口。保存后请点应用。",
     "serverRulesSaved": "服务端路由已保存",
     "tplPrivateDirect": "GEOIP private → DIRECT，MATCH → DIRECT",
     "tplWarpAi": "AI 域名 → WARP（需名为 WARP 的出站）",

@@ -7,7 +7,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
 
-// ExportShares decodes a listener into the typed NodeModel and builds m-ui style shares.
+// ExportShares decodes a listener into the typed NodeModel and builds shares.
 func ExportShares(l models.Listener, publicHost string, users []UserCred) ([]Share, error) {
 	node, err := DecodeNodeModel(l, users)
 	if err != nil {

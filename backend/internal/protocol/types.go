@@ -132,7 +132,7 @@ type Hysteria2Spec struct {
 	ALPN         []string
 }
 
-// Share is the m-ui style share payload.
+// Share is the share payload.
 type Share struct {
 	URI        string
 	QRContent  string

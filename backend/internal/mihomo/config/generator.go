@@ -68,7 +68,7 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 	if CoreLowMemory() {
 		merged["geodata-loader"] = geodataLoaderMemConservative
 	}
-	// Server-side egress routing (3x-ui-style): proxies / groups / rules for the
+	// Server-side egress routing (): proxies / groups / rules for the
 	// serving Mihomo process. visual-config remains client-subscription only.
 	sr, srErr := GetServerRouting(ce.db)
 	if srErr != nil {

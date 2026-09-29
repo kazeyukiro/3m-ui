@@ -320,7 +320,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				copyOption(p, opts, key)
 			}
 			// Hysteria2 wiki-documented optional fields (proxies-hysteria2
-			// wiki block 0): port-hopping + obfs packet-size. Match m-ui
+			// wiki block 0): port-hopping + obfs packet-size. Match panel
 			// path (mui/protocol/hysteria2.go BuildShare + yaml:",omitempty"
 			// tags) so unset listeners don't pollute client YAML with
 			// zero-valued placeholders:
@@ -587,7 +587,7 @@ func applyClientWrappers(p map[string]interface{}, opts map[string]interface{}) 
 	// protocol that supports tlsmirror on the client side; the converter
 	// still forwards the block for VMess/VLESS/Trojan uniformly so a
 	// listener that later migrates its transport does not silently lose
-	// the operator-supplied tlsmirror config. Matches m-ui path's
+	// the operator-supplied tlsmirror config. Matches panel path's
 	// decodeTLSMirrorOpts helper (mui/bridge.go).
 	if value := tlsmirrorClientOptions(opts); value != nil {
 		p["tlsmirror-opts"] = value
@@ -613,7 +613,7 @@ func applySSPluginWrappers(p map[string]interface{}, src map[string]interface{})
 	// wiki block 6. It is mutually exclusive with the TLS-like wrappers
 	// below (the SS listener schema whitelists `kcp-tun` alongside
 	// `shadow-tls` / `res-tls` / `jls-config`, but only one `plugin` value
-	// is meaningful per SS outbound). Precedence matches the m-ui SS
+	// is meaningful per SS outbound). Precedence matches the panel SS
 	// module: kcptun is preferred over the TLS wrappers when both happen
 	// to be enabled.
 	if kcp, ok := src["kcp-tun"].(map[string]interface{}); ok {
@@ -676,7 +676,7 @@ func applySSPluginWrappers(p map[string]interface{}, src map[string]interface{})
 				opts["password"] = pwd
 			}
 			// version-hint is not in the listener config; default to tls13
-			// (matches the m-ui SS module and the restls proxy doc example).
+			// (matches the panel SS module and the restls proxy doc example).
 			opts["version-hint"] = "tls13"
 			if script, ok := restls["restls-script"].(string); ok && script != "" {
 				opts["restls-script"] = script
@@ -1192,7 +1192,7 @@ func resTLSClientOptions(src map[string]interface{}) map[string]interface{} {
 // structures are identical (primary-key + explicit-nonce-ciphersuites +
 // transport-layer-padding + connection-enrolment + sequence-watermarking-
 // enabled + embedded-traffic-generator). Returns nil when the listener has
-// no tlsmirror-config (matches m-ui path's decodeTLSMirrorOpts helper in
+// no tlsmirror-config (matches panel path's decodeTLSMirrorOpts helper in
 // mui/bridge.go).
 func tlsmirrorClientOptions(src map[string]interface{}) map[string]interface{} {
 	cfg, ok := src["tlsmirror-config"].(map[string]interface{})

@@ -27,7 +27,7 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	}
 	cfg["_listener-tls"] = listener.TLS
 	cfg["_listener-udp"] = listener.UDP
-	// m-ui style Access Profile overrides for share/subscription client links.
+	// Access Profile overrides for share/subscription client links.
 	if sni := strings.TrimSpace(listener.AccessSNI); sni != "" {
 		cfg["sni"] = sni
 		cfg["servername"] = sni
@@ -125,6 +125,6 @@ func addName(uri, name string) string {
 	if name == "" {
 		return uri
 	}
-	// Remark fragment; PathEscape matches common panel clients (incl. 3x-ui style).
+	// Remark fragment; PathEscape matches common panel clients (incl. ).
 	return uri + "#" + url.PathEscape(name)
 }

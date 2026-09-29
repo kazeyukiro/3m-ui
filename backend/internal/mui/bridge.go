@@ -17,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Cred is a panel-side credential used when adapting Listeners to m-ui nodes.
+// Cred is a panel-side credential used when adapting Listeners to panel nodes.
 type Cred struct {
 	Username string
 	Password string
@@ -25,7 +25,7 @@ type Cred struct {
 	Flow     string
 }
 
-// ListenerToNode adapts a 3m-ui Listener + credentials into an m-ui domain.Node.
+// ListenerToNode adapts a 3m-ui Listener + credentials into a panel domain.Node.
 func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
 	cfg := map[string]interface{}{}
 	if strings.TrimSpace(l.Config) != "" {
@@ -158,12 +158,12 @@ func ListenerToNode(l models.Listener, creds []Cred) (domain.Node, error) {
 	case domain.ProtocolHysteria2:
 		node.Hysteria2 = decodeHy2(cfg)
 	default:
-		return domain.Node{}, fmt.Errorf("protocol %q is not supported by m-ui port", proto)
+		return domain.Node{}, fmt.Errorf("protocol %q is not supported by panel port", proto)
 	}
 	return node, nil
 }
 
-// BuildShare adapts a listener and builds an m-ui share for the first/default user,
+// BuildShare adapts a listener and builds a panel share for the first/default user,
 // or for all users when building URI lists.
 func BuildShares(l models.Listener, publicHost string, creds []Cred) ([]muiprotocol.Share, error) {
 	node, err := ListenerToNode(l, creds)
@@ -210,7 +210,7 @@ func BuildShares(l models.Listener, publicHost string, creds []Cred) ([]muiproto
 	return out, nil
 }
 
-// CompileListener compiles a listener via m-ui protocol modules into a YAML-ready map.
+// CompileListener compiles a listener via panel protocol modules into a YAML-ready map.
 func CompileListener(l models.Listener, creds []Cred) (map[string]interface{}, error) {
 	node, err := ListenerToNode(l, creds)
 	if err != nil {
@@ -220,7 +220,7 @@ func CompileListener(l models.Listener, creds []Cred) (map[string]interface{}, e
 	if err != nil {
 		return nil, err
 	}
-	// m-ui listener structs use yaml tags; JSON would emit PascalCase field names.
+	// panel listener structs use yaml tags; JSON would emit PascalCase field names.
 	raw, err := yaml.Marshal(compiled)
 	if err != nil {
 		return nil, err
@@ -328,7 +328,7 @@ func decodeKCPTunConfig(cfg map[string]interface{}) *domain.KCPTunConfig {
 }
 
 // decodeSSSecurity decodes the SS listener wrapper blocks (shadow-tls /
-// res-tls / jls-config) into a VLESSSecuritySpec so the m-ui SS module's
+// res-tls / jls-config) into a VLESSSecuritySpec so the panel SS module's
 // shadowsocksPlugin emission code fires. SS listeners have no reality-config
 // or certificate path — only the three plugin-style wrappers.
 func decodeSSSecurity(cfg map[string]interface{}) domain.VLESSSecuritySpec {
@@ -354,7 +354,7 @@ func decodeSSSecurity(cfg map[string]interface{}) domain.VLESSSecuritySpec {
 }
 
 // decodeShadowTLSConfig maps the listener shadow-tls block into the domain
-// ShadowTLSConfig consumed by the m-ui SS and classic-stream modules.
+// ShadowTLSConfig consumed by the panel SS and classic-stream modules.
 func decodeShadowTLSConfig(src map[string]interface{}) *domain.ShadowTLSConfig {
 	cfg := &domain.ShadowTLSConfig{
 		Version:  int(uint32Cfg(src, "version")),
@@ -483,9 +483,9 @@ func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {
 		h.Type = domain.VMessHandlerMKCP
 		h.MKCP = decodeMKCPConfig(mkcp)
 	}
-	// mekya-config: the m-ui domain types do not yet model a Mekya handler.
+	// mekya-config: the panel domain types do not yet model a Mekya handler.
 	// The 3m-ui native converter (converter/client.go copyTransport) emits
-	// mekya-opts directly for the client YAML path; the m-ui bridge path
+	// mekya-opts directly for the client YAML path; the panel bridge path
 	// falls back to raw TCP here. Adding a Mekya handler type is tracked as
 	// a separate feature task.
 	return h
@@ -495,7 +495,7 @@ func decodeHandler(cfg map[string]interface{}) domain.VLESSHandlerSpec {
 // map[string]string of HTTP headers carried by vmess/vless/trojan listener
 // configs to populate the client-side `ws-opts.headers` block per
 // proxies-transport wiki block 3). Returns nil when no header entries are
-// present so the m-ui client YAML emitter omits the headers key entirely.
+// present so the panel client YAML emitter omits the headers key entirely.
 func decodeWSHeaders(cfg map[string]interface{}) map[string]string {
 	raw, ok := cfg["ws-headers"].(map[string]interface{})
 	if !ok || len(raw) == 0 {
@@ -518,7 +518,7 @@ func decodeWSHeaders(cfg map[string]interface{}) map[string]string {
 
 // decodeSMux reads the optional `smux` block from listener config JSON.
 // mihomo listener schemas (vmess/vless/trojan) whitelist `smux` as a nested
-// map so the m-ui bridge can surface it on the client YAML unchanged.
+// map so the panel bridge can surface it on the client YAML unchanged.
 func decodeSMux(cfg map[string]interface{}) domain.SMuxSpec {
 	src, ok := cfg["smux"].(map[string]interface{})
 	if !ok || len(src) == 0 {
@@ -554,7 +554,7 @@ func decodeTLSMirrorOpts(cfg map[string]interface{}) map[string]any {
 }
 
 // decodeECHOpts forwards the listener-side `ech-opts` block (a documented
-// client-side TLS field per proxies-tls wiki block 0) to the m-ui client YAML
+// client-side TLS field per proxies-tls wiki block 0) to the panel client YAML
 // emitter. The listener side carries `ech-key` (a raw key string) which would
 // require non-trivial derivation to expand into a `config` list — for the
 // LOW-priority path we forward the operator-supplied `ech-opts` block verbatim
@@ -576,7 +576,7 @@ func decodeECHOpts(cfg map[string]interface{}) map[string]any {
 // proxies-transport wiki block 2 (grpc-user-agent / ping-interval /
 // max-connections / min-streams / max-streams). The listener schema only
 // whitelists `grpc-service-name`; these extended fields can be set via the
-// panel's free-form JSON editor and are surfaced on the m-ui client YAML
+// panel's free-form JSON editor and are surfaced on the panel client YAML
 // verbatim when present.
 func decodeGRPCSpec(cfg map[string]interface{}) *domain.GRPCSpec {
 	g := &domain.GRPCSpec{ServiceName: strCfg(cfg, "grpc-service-name")}
@@ -616,7 +616,7 @@ func intCfg(m map[string]interface{}, key string) int {
 }
 
 // decodeMKCPConfig maps the listener mkcp-config block into the domain
-// MKCPConfig consumed by the m-ui VMess module's compileClassicClient.
+// MKCPConfig consumed by the panel VMess module's compileClassicClient.
 func decodeMKCPConfig(src map[string]interface{}) *domain.MKCPConfig {
 	return &domain.MKCPConfig{
 		MTU:              uint32Cfg(src, "mtu"),

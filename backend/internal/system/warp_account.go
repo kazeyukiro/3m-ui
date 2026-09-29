@@ -14,7 +14,7 @@ import (
 const warpAccountKey = "warp-account"
 const WARPProxyName = "WARP"
 
-// WARPAccount is the persisted Cloudflare WARP device (m-ui style).
+// WARPAccount is the persisted Cloudflare WARP device .
 type WARPAccount struct {
 	DeviceID      string    `json:"device_id"`
 	AccessToken   string    `json:"access_token"`

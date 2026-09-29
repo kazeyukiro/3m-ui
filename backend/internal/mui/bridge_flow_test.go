@@ -9,7 +9,7 @@ import (
 
 const flowTestUUID = "00000000-0000-0000-0000-000000000001"
 
-// The m-ui share path is what the node API serves first; it must not hand out a
+// The panel share path is what the node API serves first; it must not hand out a
 // Vision flow over a transport that cannot carry it.
 func TestBuildSharesOmitFlowForWebSocket(t *testing.T) {
 	cases := []struct {

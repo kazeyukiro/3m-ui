@@ -20,7 +20,7 @@ export interface Listener {
   config: string;
   status: string;
   created_at?: string;
-  /** Per-node Access Profile (m-ui) */
+  /** Per-node Access Profile (panel) */
   public_host?: string;
   traffic_multiplier?: number;
   public_port?: string;

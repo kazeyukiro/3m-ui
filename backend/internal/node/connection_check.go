@@ -82,7 +82,7 @@ func (s *Service) connectionClientYAML(l models.Listener) (string, error) {
 		muiCreds = append(muiCreds, mui.Cred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 		creds = append(creds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 	}
-	// Prefer m-ui then registry ClientYAML; fall through when a tier returns
+	// Prefer panel then registry ClientYAML; fall through when a tier returns
 	// shares without YAML so converter can still produce a probe profile.
 	if shares, err := mui.BuildShares(l, host, muiCreds); err == nil {
 		for _, s := range shares {

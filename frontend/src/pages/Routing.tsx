@@ -360,7 +360,7 @@ const RoutingPage: React.FC = () => {
         message={
           scope === 'server'
             ? (t('routing.serverHint') ||
-              'Server egress: rules applied to the panel Mihomo process (like 3x-ui Xray routing). Affects traffic after it hits your listeners. Save then Apply.')
+              'Server egress: rules applied to the panel Mihomo process (for panel Mihomo egress). Affects traffic after it hits your listeners. Save then Apply.')
             : (t('routing.pageHint') ||
               'Client subscription: proxy-groups and rules go into Mihomo/Clash subscription YAML only. Save, then refresh the subscription in the client.')
         }

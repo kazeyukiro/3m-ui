@@ -106,7 +106,7 @@ func (h *Handler) isTrustedHost(host string) bool {
 	return strings.EqualFold(host, "localhost")
 }
 
-// ExportNodeURI returns share links (m-ui style: uri / uris / qr / client_yaml).
+// ExportNodeURI returns share links (: uri / uris / qr / client_yaml).
 func (h *Handler) ExportNodeURI(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -180,13 +180,13 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 		credentials = byListener[listener.ID]
 	}
 
-	// Three-tier share export: m-ui protocol port -> 3m-ui registry -> legacy URIs.
+	// Three-tier share export: panel protocol port -> 3m-ui registry -> legacy URIs.
 	//
 	// Follow-up (P3-9 / X-MUI-2): the three tiers produce inconsistent output
-	// shapes (m-ui emits URIs + client YAML from the protocol port; the
+	// shapes (panel emits URIs + client YAML from the protocol port; the
 	// 3m-ui registry emits its own URI format; the legacy builder emits
 	// plain URIs only). When the first tier succeeds the client gets the
-	// m-ui shape, otherwise it silently degrades to a different shape for
+	// panel shape, otherwise it silently degrades to a different shape for
 	// the same listener. Unifying the output contract across tiers is
 	// tracked as a separate design task.
 	var uris []string
@@ -213,7 +213,7 @@ func (h *Handler) ExportNodeURI(c *gin.Context) {
 			primary = uris[0]
 		}
 	}
-	// Fall through tiers when m-ui produced neither a URI nor client YAML.
+	// Fall through tiers when panel produced neither a URI nor client YAML.
 	if primary == "" && clientYAML == "" {
 		if shares, err := protocol.ExportShares(*listener, host, creds); err == nil && len(shares) > 0 {
 			uris = make([]string, 0, len(shares))

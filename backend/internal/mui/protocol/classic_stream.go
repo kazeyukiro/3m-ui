@@ -314,7 +314,7 @@ type classicClientProxy struct {
 	TrojanShadowsocks   *trojanClientSS     `yaml:"ss-opts,omitempty"`
 }
 
-// smuxClient is the m-ui client YAML representation of the `smux` block
+// smuxClient is the panel client YAML representation of the `smux` block
 // documented on proxies-vmess/vless/trojan/ss (common optional field).
 type smuxClient struct {
 	Enabled bool          `yaml:"enabled,omitempty"`

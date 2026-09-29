@@ -100,7 +100,7 @@ type TrojanCredential struct {
 }
 
 // Mihomo's Shadowsocks listener has one password rather than a users array.
-// m-ui still models it as a credential for consistent lifecycle/share APIs,
+// panel still models it as a credential for consistent lifecycle/share APIs,
 // while validation permits only one effective Shadowsocks user at a time.
 type ShadowsocksCredential struct {
 	Password string `json:"password"`
@@ -202,7 +202,7 @@ type ShadowsocksSpec struct {
 	SMux              SMuxSpec          `json:"smux,omitempty"`
 }
 
-// KCPTunConfig mirrors the SS listener `kcp-tun` block. The m-ui SS module
+// KCPTunConfig mirrors the SS listener `kcp-tun` block. The panel SS module
 // emits it as `plugin: kcptun` + `plugin-opts: {key, crypt, mode, mtu, ...}`
 // per proxies-ss wiki block 6.
 type KCPTunConfig struct {
@@ -430,7 +430,7 @@ type Hysteria2Spec struct {
 	Mux                   MuxSpec               `json:"mux,omitempty"`
 	Realm                 *Hysteria2RealmConfig `json:"realm,omitempty"`
 	// Client-side fields (proxies-hysteria2 wiki). Populated by decodeHy2
-	// from the listener config JSON so the m-ui client YAML emitter can
+	// from the listener config JSON so the panel client YAML emitter can
 	// surface them on the outbound proxy entry.
 	Ports             string `json:"ports,omitempty"`
 	HopInterval       int    `json:"hop_interval,omitempty"`

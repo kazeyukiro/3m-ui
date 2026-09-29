@@ -6,7 +6,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/mui/domain"
 )
 
-// ProtocolCapability is retained for Module interface parity with m-ui.
+// ProtocolCapability is retained for Module interface parity with panel.
 // Full schema manifests can be expanded later; Compile/BuildShare do not depend on it.
 type ProtocolCapability struct {
 	Kind        domain.ProtocolKind `json:"kind"`

@@ -502,8 +502,8 @@ func compileWSClient(spec *domain.WebSocketSpec) *websocketClient {
 }
 
 // compileSMux converts the domain SMuxSpec (listener-decoded `smux` block)
-// into the m-ui client YAML `smux` representation. Returns nil when smux is
-// disabled and has no padding/brutal control plane (so the m-ui emitter omits
+// into the panel client YAML `smux` representation. Returns nil when smux is
+// disabled and has no padding/brutal control plane (so the panel emitter omits
 // the key entirely).
 func compileSMux(spec domain.SMuxSpec) *smuxClient {
 	if !spec.Enabled && !spec.Padding && !spec.Brutal.Enabled {

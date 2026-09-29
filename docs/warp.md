@@ -1,4 +1,4 @@
-# Cloudflare WARP (m-ui style)
+# Cloudflare WARP 
 
 3m-ui can **register and persist** a Cloudflare WARP account, inject a Mihomo outbound named **`WARP`**, and route selected domains through it on the **server**.
 
@@ -33,4 +33,4 @@ The generator:
 
 ## Limits
 
-WARP does **not** guarantee Netflix / AI unlock. Domain list is operator-controlled (same idea as m-ui `WarpDomains`).
+WARP does **not** guarantee Netflix / AI unlock. Domain list is operator-controlled (operator-controlled domain list).

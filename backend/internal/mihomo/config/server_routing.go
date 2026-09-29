@@ -17,7 +17,7 @@ import (
 const serverRoutingName = "server-routing"
 
 // ServerRoutingConfig controls how traffic leaves the VPS after hitting a
-// listener — the Mihomo equivalent of 3x-ui's Xray outbounds + routing rules.
+// listener — server-side Mihomo proxies, groups, and rules after traffic hits listeners.
 type ServerRoutingConfig struct {
 	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
 	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
@@ -145,7 +145,7 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 		merged["proxy-groups"] = []interface{}{}
 	}
 	rules := make([]interface{}, 0, len(sr.Rules)+len(sr.WarpDomains)+4)
-	// Managed WARP domain rules first (m-ui style).
+	// Managed WARP domain rules first .
 	warpName := "WARP"
 	if warpProxy != nil {
 		if n, _ := warpProxy["name"].(string); n != "" {

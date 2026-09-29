@@ -98,7 +98,7 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	// Persist account by default (m-ui style) so server egress can inject WARP.
+	// Persist account by default  so server egress can inject WARP.
 	if h.db != nil && c.Query("nosave") != "1" {
 		if acc := AccountFromRegister(res); acc != nil && strings.TrimSpace(acc.PeerPublicKey) != "" {
 			_ = SaveWARPAccount(h.db, acc)

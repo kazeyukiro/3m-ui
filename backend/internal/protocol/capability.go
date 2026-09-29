@@ -1,6 +1,6 @@
 package protocol
 
-// Capability schema aligned with m-ui (Aethersailor/m-ui) for panel-driven node editors.
+// Capability schema used by the panel node editor.
 // Mihomo Meta inbound fields remain the source of truth for actual config generation.
 
 const SchemaVersion = 1

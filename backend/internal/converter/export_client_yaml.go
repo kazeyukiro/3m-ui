@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ExportClientYAML builds an m-ui style single-document Mihomo client YAML
+// ExportClientYAML builds an single-document Mihomo client YAML
 // containing only the proxies for this listener (for share / QR tooling).
 func ExportClientYAML(l models.Listener, server string, credentials []user.Credential) (string, error) {
 	proxies, err := listenerToProxies(l, server, credentials)
