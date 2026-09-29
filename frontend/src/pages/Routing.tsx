@@ -89,7 +89,7 @@ const RoutingPage: React.FC = () => {
         fetchGroups(),
         fetchRules(),
         fetchProxies().catch(() => []),
-        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [] })),
+        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [], ruleProviders: [] })),
       ]);
       setGroups(Array.isArray(g) ? g : []);
       setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
