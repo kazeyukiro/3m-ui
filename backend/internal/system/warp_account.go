@@ -217,6 +217,7 @@ func (a *WARPAccount) ProxyMap() (map[string]interface{}, error) {
 		"mtu":                1280,
 		"allowed-ips":        []string{"0.0.0.0/0", "::/0"},
 		"remote-dns-resolve": true,
+		"dialer-proxy":       "DIRECT",
 	}
 	if v6 := stripCIDR(a.AddressV6); v6 != "" {
 		m["ipv6"] = v6

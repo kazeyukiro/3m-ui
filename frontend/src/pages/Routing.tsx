@@ -399,7 +399,7 @@ const RoutingPage: React.FC = () => {
           />
           <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
             {t('routing.warpDomainsHint') ||
-              'One domain per line (or GEOSITE:name). Traffic to these domains leaves via the WARP outbound after Apply. Register WARP under Settings first.'}
+              'One domain per line (or GEOSITE:name). After Apply, DOMAIN/DOMAIN-SUFFIX rules + TLS sniffer are enabled so SNI can match even when the client dials by IP. Register WARP under Settings first.'}
           </Typography.Paragraph>
         </Card>
       )}

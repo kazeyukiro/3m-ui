@@ -171,14 +171,19 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 	} else {
 		merged["proxy-groups"] = []interface{}{}
 	}
-	rules := make([]interface{}, 0, len(sr.Rules)+len(sr.WarpDomains)+4)
-	// Managed WARP domain rules first .
+	rules := make([]interface{}, 0, len(sr.Rules)+len(sr.WarpDomains)+8)
 	warpName := "WARP"
 	if warpProxy != nil {
 		if n, _ := warpProxy["name"].(string); n != "" {
 			warpName = n
 		}
+		// WireGuard control plane must stay DIRECT (avoid routing engage.* via WARP).
+		rules = append(rules,
+			"DOMAIN-SUFFIX,cloudflareclient.com,DIRECT",
+			"DOMAIN-SUFFIX,cloudflare.com,DIRECT",
+		)
 	}
+	// Managed WARP domain rules next.
 	for _, d := range sr.WarpDomains {
 		d = strings.TrimSpace(d)
 		if d == "" {
@@ -199,6 +204,8 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 			}
 		default:
 			d = strings.TrimPrefix(d, ".")
+			// Exact + suffix so both apex and subdomains match when host is present.
+			rules = append(rules, "DOMAIN,"+d+","+warpName)
 			rules = append(rules, "DOMAIN-SUFFIX,"+d+","+warpName)
 		}
 	}
@@ -213,6 +220,74 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 	}
 	merged["rules"] = rules
 	applyRuleProviders(merged, sr.RuleProviders)
+
+	// Domain-based WARP egress only matches when metadata has a host name.
+	// Many clients dial by IP after local DNS; enable sniffer (TLS SNI / HTTP Host)
+	// and a minimal DNS so DOMAIN-SUFFIX / GEOSITE rules can hit.
+	if len(sr.WarpDomains) > 0 && warpProxy != nil {
+		merged["mode"] = "rule"
+		if _, ok := merged["sniffer"]; !ok {
+			merged["sniffer"] = map[string]interface{}{
+				"enable":               true,
+				"override-destination": true,
+				"sniff": map[string]interface{}{
+					"TLS":  map[string]interface{}{"ports": []interface{}{443, 8443}},
+					"HTTP": map[string]interface{}{"ports": []interface{}{80, "8080-8880"}},
+				},
+			}
+		}
+		dns, _ := merged["dns"].(map[string]interface{})
+		if dns == nil {
+			dns = map[string]interface{}{}
+		}
+		// Force DNS on so GEOSITE / residual resolution can work on small hosts.
+		dns["enable"] = true
+		if dns["nameserver"] == nil {
+			dns["nameserver"] = []interface{}{"1.1.1.1", "8.8.8.8"}
+		}
+		if dns["enhanced-mode"] == nil || dns["enhanced-mode"] == "" {
+			// redir-host keeps real IPs (safer for inbound server than fake-ip).
+			dns["enhanced-mode"] = "redir-host"
+		}
+		merged["dns"] = dns
+	}
+}
+
+func ensureDirectBeforeMatch(merged map[string]interface{}, extra []string) {
+	raw, _ := merged["rules"].([]interface{})
+	if len(raw) == 0 {
+		return
+	}
+	have := map[string]bool{}
+	for _, r := range raw {
+		if s, ok := r.(string); ok {
+			have[strings.ToUpper(strings.TrimSpace(s))] = true
+		}
+	}
+	insert := make([]interface{}, 0, len(extra))
+	for _, e := range extra {
+		if have[strings.ToUpper(strings.TrimSpace(e))] {
+			continue
+		}
+		insert = append(insert, e)
+	}
+	if len(insert) == 0 {
+		return
+	}
+	out := make([]interface{}, 0, len(raw)+len(insert))
+	inserted := false
+	for _, r := range raw {
+		s, _ := r.(string)
+		if !inserted && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(s)), "MATCH,") {
+			out = append(out, insert...)
+			inserted = true
+		}
+		out = append(out, r)
+	}
+	if !inserted {
+		out = append(out, insert...)
+	}
+	merged["rules"] = out
 }
 
 // applyRuleProviders writes top-level rule-providers per MetaCubeX wiki.

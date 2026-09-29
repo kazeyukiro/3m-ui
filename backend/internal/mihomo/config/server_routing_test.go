@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -59,18 +60,25 @@ func TestApplyServerRoutingWarpDomains(t *testing.T) {
 		t.Fatalf("proxies: %#v", proxies)
 	}
 	rules, _ := merged["rules"].([]interface{})
-	// 3 domain rules + MATCH
 	if len(rules) < 4 {
 		t.Fatalf("rules: %#v", rules)
 	}
-	if rules[0] != "DOMAIN-SUFFIX,openai.com,WARP" {
-		t.Fatalf("rule0: %v", rules[0])
+	joined := fmt.Sprintf("%v", rules)
+	if !containsRule(rules, "DOMAIN-SUFFIX,openai.com,WARP") {
+		t.Fatalf("missing openai suffix: %s", joined)
 	}
-	if rules[1] != "GEOSITE,google,WARP" {
-		t.Fatalf("rule1: %v", rules[1])
+	if !containsRule(rules, "GEOSITE,google,WARP") {
+		t.Fatalf("missing geosite: %s", joined)
 	}
-	if rules[2] != "DOMAIN-SUFFIX,chatgpt.com,WARP" {
-		t.Fatalf("rule2: %v", rules[2])
+	if !containsRule(rules, "DOMAIN-SUFFIX,chatgpt.com,WARP") {
+		t.Fatalf("missing chatgpt: %s", joined)
+	}
+	if merged["sniffer"] == nil {
+		t.Fatalf("sniffer should be enabled for WARP domains")
+	}
+	dns, _ := merged["dns"].(map[string]interface{})
+	if dns == nil || dns["enable"] != true {
+		t.Fatalf("dns: %#v", dns)
 	}
 }
 
@@ -94,4 +102,13 @@ func TestApplyRuleProviders(t *testing.T) {
 	if entry["path"] == nil || entry["url"] != "https://example.com/gfw.mrs" {
 		t.Fatalf("path/url: %#v", entry)
 	}
+}
+
+func containsRule(rules []interface{}, want string) bool {
+	for _, r := range rules {
+		if s, ok := r.(string); ok && s == want {
+			return true
+		}
+	}
+	return false
 }
