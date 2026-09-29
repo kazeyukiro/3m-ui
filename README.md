@@ -42,7 +42,7 @@
 - [批量应用节点证书](docs/batch-certificate.md)
 - [订阅格式与 target](docs/subscription-formats.md)
 - [多机节点 / 推送](docs/cluster.md)
-- [路由与策略组](docs/routing.md)
+- [路由（客户端订阅 + 服务端出站）](docs/routing.md)
 - [Cloudflare WARP](docs/warp.md)
 
 前端：**React + Ant Design + Lucide Icons**（`frontend/`），构建后嵌入单一 Go 二进制。

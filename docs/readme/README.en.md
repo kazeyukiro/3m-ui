@@ -101,7 +101,7 @@ Static Linux binaries for multiple architectures are on [Releases](https://githu
 - [Batch node certificates](../batch-certificate.md)
 - [Subscription formats](../subscription-formats.md)
 - [Cluster / push nodes](../cluster.md)
-- [Routing & groups](../routing.md) · [Cloudflare WARP](../warp.md)
+- [Routing (client + server egress)](../routing.md) · [Cloudflare WARP](../warp.md)
 
 - Go, Node.js, and the open-source community
 
