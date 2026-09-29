@@ -36,7 +36,7 @@
 ### 补充说明
 
 - [用户限制：IP · 订阅拉取](../users-limits.md)
-- [路由与策略组](../routing.md)
+- [路由（客户端 + 服务端出站）](../routing.md)
 - [Cloudflare WARP](../warp.md)
 - [按节点流量与倍率](../node-traffic.md)
 - [面板 SSL / ACME（HTTP-01、DNS-01 通配符）](../panel-ssl.md)
