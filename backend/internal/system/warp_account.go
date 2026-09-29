@@ -73,6 +73,33 @@ func GetWARPAccount(db *gorm.DB) (*WARPAccount, error) {
 	return &acc, nil
 }
 
+// upsertPanelSetting writes key/value even if a soft-deleted row still occupies
+// UNIQUE(panel_settings.key). Soft-delete + unique index is a common SQLite
+// footgun: First() skips deleted rows, Create then hits constraint 2067.
+func upsertPanelSetting(db *gorm.DB, key, value string) error {
+	var row models.PanelSetting
+	err := db.Unscoped().Where("key = ?", key).First(&row).Error
+	if err == nil {
+		row.Value = value
+		row.DeletedAt = gorm.DeletedAt{}
+		return db.Unscoped().Save(&row).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if err := db.Create(&models.PanelSetting{Key: key, Value: value}).Error; err != nil {
+		// Concurrent create race: re-read and update.
+		var again models.PanelSetting
+		if e2 := db.Unscoped().Where("key = ?", key).First(&again).Error; e2 == nil {
+			again.Value = value
+			again.DeletedAt = gorm.DeletedAt{}
+			return db.Unscoped().Save(&again).Error
+		}
+		return err
+	}
+	return nil
+}
+
 func SaveWARPAccount(db *gorm.DB, acc *WARPAccount) error {
 	if db == nil {
 		return fmt.Errorf("database is not initialized")
@@ -85,23 +112,15 @@ func SaveWARPAccount(db *gorm.DB, acc *WARPAccount) error {
 	if err != nil {
 		return err
 	}
-	var row models.PanelSetting
-	err = db.Where("key = ?", warpAccountKey).First(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Create(&models.PanelSetting{Key: warpAccountKey, Value: string(raw)}).Error
-	}
-	if err != nil {
-		return err
-	}
-	row.Value = string(raw)
-	return db.Save(&row).Error
+	return upsertPanelSetting(db, warpAccountKey, string(raw))
 }
 
 func DeleteWARPAccount(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("database is not initialized")
 	}
-	return db.Where("key = ?", warpAccountKey).Delete(&models.PanelSetting{}).Error
+	// Hard-delete so UNIQUE(key) is freed (soft-delete would leave the constraint).
+	return db.Unscoped().Where("key = ?", warpAccountKey).Delete(&models.PanelSetting{}).Error
 }
 
 func AccountFromRegister(res *WARPRegisterResult) *WARPAccount {

@@ -91,15 +91,26 @@ func SaveServerRouting(db *gorm.DB, cfg ServerRoutingConfig) error {
 		return err
 	}
 	var row models.PanelSetting
-	err = db.Where("key = ?", serverRoutingName).First(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Create(&models.PanelSetting{Key: serverRoutingName, Value: string(raw)}).Error
+	// Soft-deleted rows still hold UNIQUE(key); must Unscoped.
+	err = db.Unscoped().Where("key = ?", serverRoutingName).First(&row).Error
+	if err == nil {
+		row.Value = string(raw)
+		row.DeletedAt = gorm.DeletedAt{}
+		return db.Unscoped().Save(&row).Error
 	}
-	if err != nil {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	row.Value = string(raw)
-	return db.Save(&row).Error
+	if err := db.Create(&models.PanelSetting{Key: serverRoutingName, Value: string(raw)}).Error; err != nil {
+		var again models.PanelSetting
+		if e2 := db.Unscoped().Where("key = ?", serverRoutingName).First(&again).Error; e2 == nil {
+			again.Value = string(raw)
+			again.DeletedAt = gorm.DeletedAt{}
+			return db.Unscoped().Save(&again).Error
+		}
+		return err
+	}
+	return nil
 }
 
 func normalizeServerRouting(cfg *ServerRoutingConfig) {

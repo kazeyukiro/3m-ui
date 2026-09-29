@@ -1,4 +1,4 @@
-# Cloudflare WARP 
+# Cloudflare WARP
 
 3m-ui can **register and persist** a Cloudflare WARP account, inject a Mihomo outbound named **`WARP`**, and route selected domains through it on the **server**.
 
@@ -7,42 +7,28 @@
 **Settings → Network → Cloudflare WARP**
 
 1. Choose WireGuard (recommended for server egress) or MASQUE  
-2. **Register / save WARP** — creates a device at Cloudflare, stores the account in panel settings, and builds outbound `WARP`  
-3. Optional: view YAML; **Delete WARP account** removes the stored device  
+2. **Register / save WARP** — creates a device at Cloudflare, stores the account, builds outbound `WARP`  
+3. Optional YAML preview; **Delete WARP account** **hard-deletes** the row (avoids SQLite `UNIQUE(panel_settings.key)` errors after soft-delete)
 
 API:
 
-- `GET /api/v1/system/warp` — account status (no secrets)  
-- `POST /api/v1/system/warp` — register + save account  
+- `GET /api/v1/system/warp` — status (no secrets)  
+- `POST /api/v1/system/warp` — register + save  
 - `DELETE /api/v1/system/warp` — delete account  
-- `POST /api/v1/system/templates/warp/register` — still available; **also saves** the account unless `?nosave=1`
+- `POST /api/v1/system/templates/warp/register` — legacy; also saves unless `?nosave=1`
 
-## Server egress (Routing)
+## Server egress
 
 **Routing → Server egress**
 
-1. **WARP domains**: one domain per line (e.g. `openai.com`) or `GEOSITE:openai`  
-2. Edit extra rules if needed (default `MATCH,DIRECT`)  
-3. **Save → Generate & apply**  
+1. **WARP domains**: one domain per line (or `GEOSITE:name`)  
+2. Extra rules if needed (default `MATCH,DIRECT`)  
+3. **Save → Generate & apply** (required for domains to appear in serving `config.yaml`)
 
-The generator:
+The generator injects WireGuard outbound `WARP` (Cloudflare peer public key + `allowed-ips`) and prepends `DOMAIN-SUFFIX,…,WARP` rules.
 
-- Injects the **WARP** WireGuard outbound from the saved account  
-- Prepends `DOMAIN-SUFFIX,<domain>,WARP` (or GEOSITE) for each WARP domain  
-- Fails apply if WARP domains are set but no account exists  
+If WARP domains are set but no account is saved, apply fails with a clear error.
 
 ## Limits
 
-WARP does **not** guarantee Netflix / AI unlock. Domain list is operator-controlled (operator-controlled domain list).
-
-
-## Apply requirement
-
-WARP domains only take effect after **Generate & apply** (writes `proxies: WARP` + `DOMAIN-SUFFIX,…,WARP` into the serving Mihomo config).
-
-Troubleshooting:
-
-1. Settings shows WARP **Configured**
-2. Server egress has domains saved
-3. Apply succeeds (not cancelled)
-4. `config.yaml` contains `type: wireguard` name `WARP` and matching rules
+WARP does **not** guarantee streaming / AI unlock. Domain list is operator-controlled.
