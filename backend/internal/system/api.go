@@ -98,10 +98,13 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	// Persist account by default  so server egress can inject WARP.
+	// Persist account by default so server egress can inject WARP.
 	if h.db != nil && c.Query("nosave") != "1" {
 		if acc := AccountFromRegister(res); acc != nil && strings.TrimSpace(acc.PrivateKey) != "" {
-			_ = SaveWARPAccount(h.db, acc)
+			if err := SaveWARPAccount(h.db, acc); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "save WARP account: " + err.Error()})
+				return
+			}
 		}
 	}
 	mode := strings.TrimSpace(c.Query("mode"))

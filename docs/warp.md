@@ -32,3 +32,15 @@ If WARP domains are set but no account is saved, apply fails with a clear error.
 ## Limits
 
 WARP does **not** guarantee streaming / AI unlock. Domain list is operator-controlled.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `UNIQUE constraint failed: panel_settings.key` | Soft-deleted row still held the unique key (fixed: Unscoped upsert + hard delete) |
+| Domains set but traffic still direct | Did not **Generate & apply** after save; or no WARP account |
+| Account shows configured, Apply fails | ProxyMap / core validation — check logs; ensure private key present |
+| MASQUE selected but config is WireGuard | **By design**: server egress always injects WireGuard `WARP`; MASQUE is preview YAML only |
+| After delete, still seeing WARP in core | Re-apply config so generator omits the outbound |
+
+Flow: **Settings → Register WARP** → **Routing → Server egress → WARP domains** → **Save → Generate & apply**.

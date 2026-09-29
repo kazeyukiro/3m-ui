@@ -1412,7 +1412,7 @@ const Settings: React.FC = () => {
 
               <Card title={t('settings.warp', 'Cloudflare WARP')} style={{ marginTop: 16 }}>
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                  <Text type="secondary">{t('settings.warpHint', 'One-click register a WARP WireGuard config (YAML for Mihomo outbound).')}</Text>
+                  <Text type="secondary">{t('settings.warpHint', 'Register a Cloudflare WARP device and save it for server egress. Server injection always uses WireGuard outbound named WARP; MASQUE only changes the preview YAML.')}</Text>
                   {warpAccount?.configured ? (
                     <div style={{ marginTop: 8 }}>
                       <Text>
@@ -1430,7 +1430,7 @@ const Settings: React.FC = () => {
                             try {
                               await deleteWarpAccount();
                               setWarpAccount({ configured: false });
-                              message.success(t('settings.warpDeleted', 'WARP account removed'));
+                              message.success(t('settings.warpDeleted', 'WARP account removed — open Routing and Generate & apply to drop WARP from the running core'));
                             } catch (e: any) {
                               message.error(e?.response?.data?.error || e.message);
                             } finally {
@@ -1456,6 +1456,12 @@ const Settings: React.FC = () => {
                       { label: t('settings.warpMasque', 'MASQUE'), value: 'masque' },
                     ]}
                   />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t(
+                      'settings.warpModeNote',
+                      'Server egress always injects WireGuard (name WARP). MASQUE only affects the YAML shown after register.',
+                    )}
+                  </Text>
                   <Button
                     loading={warpBusy}
                     onClick={async () => {
@@ -1467,7 +1473,7 @@ const Settings: React.FC = () => {
                         message.success(
                           t(
                             'settings.warpAccountSaved',
-                            'WARP account saved — use Routing → Server egress + WARP domains',
+                            'WARP account saved — set WARP domains under Routing → Server egress, then Generate & apply',
                           ),
                         );
                         if (yaml.trim()) {
