@@ -6,7 +6,7 @@ import (
 
 func TestApplyServerRoutingDefault(t *testing.T) {
 	merged := map[string]interface{}{}
-	applyServerRouting(merged, DefaultServerRouting())
+	applyServerRouting(merged, DefaultServerRouting(), nil)
 	rules, _ := merged["rules"].([]interface{})
 	if len(rules) != 1 || rules[0] != "MATCH,DIRECT" {
 		t.Fatalf("rules: %#v", rules)
@@ -21,7 +21,7 @@ func TestApplyServerRoutingCustom(t *testing.T) {
 			{Name: "WARP", Type: "wireguard", Server: "engage.cloudflareclient.com", Port: 2408},
 		},
 	}
-	applyServerRouting(merged, sr)
+	applyServerRouting(merged, sr, nil)
 	rules, _ := merged["rules"].([]interface{})
 	if len(rules) != 3 { // + MATCH,DIRECT auto
 		t.Fatalf("expected MATCH appended, got %#v", rules)

@@ -66,6 +66,7 @@ const RoutingPage: React.FC = () => {
   const [groupOpen, setGroupOpen] = useState(false);
   const [scope, setScope] = useState<'client' | 'server'>('client');
   const [serverRules, setServerRules] = useState<RuleRow[]>([]);
+  const [warpDomains, setWarpDomains] = useState<string>('');
   const [form] = Form.useForm();
 
   const targetOptions = useMemo(() => {
@@ -82,11 +83,12 @@ const RoutingPage: React.FC = () => {
         fetchGroups(),
         fetchRules(),
         fetchProxies().catch(() => []),
-        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [] })),
+        fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [] })),
       ]);
       setGroups(Array.isArray(g) ? g : []);
       setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
       setServerRules(parseRulesText((Array.isArray(sr?.rules) ? sr.rules : ['MATCH,DIRECT']).join('\n')));
+      setWarpDomains(Array.isArray(sr?.warpDomains) ? sr.warpDomains.join('\n') : '');
       setProxyNames(
         (Array.isArray(px) ? px : [])
           .map((p: any) => String(p?.name || '').trim())
@@ -152,10 +154,15 @@ const RoutingPage: React.FC = () => {
     setSaving(true);
     try {
       if (scope === 'server') {
+        const domains = warpDomains
+          .split(/[\n,，]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
         const saved = await saveServerRouting({
           proxies: [],
           proxyGroups: [],
           rules: serializeRules(current),
+          warpDomains: domains,
         });
         setServerRules(parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(current)).join('\n')));
         message.success(t('routing.serverRulesSaved') || 'Server routing saved');
@@ -242,44 +249,7 @@ const RoutingPage: React.FC = () => {
 
   const onTemplate = async (id: string) => {
     if (scope === 'server') {
-      const serverPresets: Record<string, RuleRow[]> = {
-        direct_only: [emptyRule({ type: 'MATCH', payload: '', target: 'DIRECT' })],
-        private_direct: [
-          emptyRule({ type: 'GEOIP', payload: 'private', target: 'DIRECT' }),
-          emptyRule({ type: 'MATCH', payload: '', target: 'DIRECT' }),
-        ],
-        warp_ai: [
-          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'openai.com', target: 'WARP' }),
-          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'chatgpt.com', target: 'WARP' }),
-          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'anthropic.com', target: 'WARP' }),
-          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'claude.ai', target: 'WARP' }),
-          emptyRule({ type: 'MATCH', payload: '', target: 'DIRECT' }),
-        ],
-      };
-      const next = serverPresets[id] || serverPresets.direct_only;
-      setServerRules(next);
-      setSaving(true);
-      try {
-        const saved = await saveServerRouting({
-          proxies: [],
-          proxyGroups: [],
-          rules: serializeRules(next),
-        });
-        setServerRules(
-          parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(next)).join('\n')),
-        );
-        message.success(
-          (t('routing.serverRulesSaved') || 'Server routing saved') +
-            (id === 'warp_ai'
-              ? ' — ' + (t('routing.warpAiHint') || 'Add WARP proxy named WARP (Settings → register) then Apply')
-              : ''),
-        );
-        offerApply();
-      } catch (e: any) {
-        message.error(errMsg(e));
-      } finally {
-        setSaving(false);
-      }
+      message.info(t('routing.noServerTemplates') || 'Server egress has no templates — set WARP domains below or edit rules.');
       return;
     }
     const tpl = applyTemplate(id, {
@@ -319,52 +289,41 @@ const RoutingPage: React.FC = () => {
   };
 
   const templateMenu = {
-    items:
-      scope === 'server'
-        ? [
-            { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
-            {
-              key: 'private_direct',
-              label: t('routing.tplPrivateDirect') || 'GEOIP private → DIRECT, MATCH → DIRECT',
-            },
-            {
-              key: 'warp_ai',
-              label: t('routing.tplWarpAi') || 'AI domains → WARP (needs proxy named WARP)',
-            },
-          ]
-        : [
-            { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
-            {
-              key: 'cn_direct',
-              label: t('routing.tplCnDirect') || 'GEOSITE/GEOIP CN → DIRECT, else group',
-            },
-            { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
-            {
-              key: 'via_group',
-              label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY',
-            },
-            { type: 'divider' as const },
-            {
-              key: 'community-yixuan',
-              label: t('routing.tplYixuan') || 'Community: YiXuanZX/rules (CN + GFW)',
-            },
-            {
-              key: 'community-echs',
-              label: t('routing.tplEchs') || 'Community: echs-top/proxy (ads + CN)',
-            },
-            {
-              key: 'community-aisouler',
-              label: t('routing.tplAisouler') || 'Community: AIsouler/MyClash lite',
-            },
-          ],
+    items: [
+      { key: 'direct_only', label: t('routing.tplDirect') || 'MATCH → DIRECT only' },
+      {
+        key: 'cn_direct',
+        label: t('routing.tplCnDirect') || 'GEOSITE/GEOIP CN → DIRECT, else group',
+      },
+      { key: 'reject_ads', label: t('routing.tplAds') || 'Sample ad domains → REJECT' },
+      {
+        key: 'via_group',
+        label: t('routing.tplViaGroup') || 'MATCH → first group / PROXY',
+      },
+      { type: 'divider' as const },
+      {
+        key: 'community-yixuan',
+        label: t('routing.tplYixuan') || 'Community: YiXuanZX/rules (CN + GFW)',
+      },
+      {
+        key: 'community-echs',
+        label: t('routing.tplEchs') || 'Community: echs-top/proxy (ads + CN)',
+      },
+      {
+        key: 'community-aisouler',
+        label: t('routing.tplAisouler') || 'Community: AIsouler/MyClash lite',
+      },
+    ],
     onClick: ({ key }: { key: string }) => onTemplate(key),
   };
 
   const ruleCardExtra = (
     <Space wrap size="small">
-      <Dropdown menu={templateMenu}>
-        <Button size="small">{t('routing.templates') || 'Templates'}</Button>
-      </Dropdown>
+      {scope === 'client' ? (
+        <Dropdown menu={templateMenu}>
+          <Button size="small">{t('routing.templates') || 'Templates'}</Button>
+        </Dropdown>
+      ) : null}
       <Button size="small" icon={<IconAddRule />} onClick={addRule}>
         {t('routing.addRule') || 'Add rule'}
       </Button>
@@ -406,6 +365,30 @@ const RoutingPage: React.FC = () => {
               'Client subscription: proxy-groups and rules go into Mihomo/Clash subscription YAML only. Save, then refresh the subscription in the client.')
         }
       />
+
+      {scope === 'server' && (
+        <Card
+          title={t('routing.warpDomains') || 'WARP domains'}
+          style={{ marginBottom: 16 }}
+          extra={
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('routing.warpDomainsHintShort') || 'Requires WARP account in Settings'}
+            </Typography.Text>
+          }
+        >
+          <Input.TextArea
+            rows={4}
+            value={warpDomains}
+            onChange={(e) => setWarpDomains(e.target.value)}
+            placeholder={'openai.com\nchatgpt.com\ngeosite:openai'}
+          />
+          <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+            {t('routing.warpDomainsHint') ||
+              'One domain per line (or GEOSITE:name). Traffic to these domains leaves via the WARP outbound after Apply. Register WARP under Settings first.'}
+          </Typography.Paragraph>
+        </Card>
+      )}
+
 
       {scope === 'client' && (
       <Card

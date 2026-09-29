@@ -49,7 +49,7 @@ import {
   IconInfo,
   IconRestart,
   IconUpdate,
-} from '../icons';;;
+} from '../icons';
 import {
   downloadBackup,
   restoreDatabase,
@@ -62,6 +62,9 @@ import {
   runUpdate,
   type LocalBackupItem,
   type UpdateInfo,
+  fetchWarpAccount,
+  createWarpAccount,
+  deleteWarpAccount,
 } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
 import client from '../api/client';
@@ -87,6 +90,8 @@ const Settings: React.FC = () => {
   const [section, setSection] = useState<SectionKey>('panel');
   const [warpMode, setWarpMode] = useState<'wireguard' | 'masque'>('wireguard');
   const [warpYamlOpen, setWarpYamlOpen] = useState(false);
+  const [warpAccount, setWarpAccount] = useState<{ configured?: boolean; device_id?: string; address_v4?: string; proxy_name?: string } | null>(null);
+  const [warpBusy, setWarpBusy] = useState(false);
   const [warpYaml, setWarpYaml] = useState('');
   const [warpYamlTitle, setWarpYamlTitle] = useState('');
   const [panelServer, setPanelServer] = useState<{
@@ -126,6 +131,12 @@ const Settings: React.FC = () => {
       setBackupsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchWarpAccount()
+      .then((a) => setWarpAccount(a))
+      .catch(() => setWarpAccount(null));
+  }, []);
 
   useEffect(() => {
     void loadLocalBackups();
@@ -1402,6 +1413,41 @@ const Settings: React.FC = () => {
               <Card title={t('settings.warp', 'Cloudflare WARP')} style={{ marginTop: 16 }}>
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
                   <Text type="secondary">{t('settings.warpHint', 'One-click register a WARP WireGuard config (YAML for Mihomo outbound).')}</Text>
+                  {warpAccount?.configured ? (
+                    <div style={{ marginTop: 8 }}>
+                      <Text>
+                        {t('settings.warpConfigured', 'Configured')}: {warpAccount.proxy_name || 'WARP'}
+                        {warpAccount.address_v4 ? ` · ${warpAccount.address_v4}` : ''}
+                        {warpAccount.device_id ? ` · device ${String(warpAccount.device_id).slice(0, 8)}…` : ''}
+                      </Text>
+                      <div style={{ marginTop: 8 }}>
+                        <Button
+                          danger
+                          size="small"
+                          loading={warpBusy}
+                          onClick={async () => {
+                            setWarpBusy(true);
+                            try {
+                              await deleteWarpAccount();
+                              setWarpAccount({ configured: false });
+                              message.success(t('settings.warpDeleted', 'WARP account removed'));
+                            } catch (e: any) {
+                              message.error(e?.response?.data?.error || e.message);
+                            } finally {
+                              setWarpBusy(false);
+                            }
+                          }}
+                        >
+                          {t('settings.warpDelete', 'Delete WARP account')}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                      {t('settings.warpNotConfigured', 'No WARP account yet — register to enable server egress via WARP.')}
+                    </Text>
+                  )}
+
                   <Segmented
                     value={warpMode}
                     onChange={(v) => setWarpMode(v as 'wireguard' | 'masque')}
@@ -1411,34 +1457,39 @@ const Settings: React.FC = () => {
                     ]}
                   />
                   <Button
+                    loading={warpBusy}
                     onClick={async () => {
+                      setWarpBusy(true);
                       try {
-                        const res = await client.post(`/system/templates/warp/register?mode=${warpMode}`);
-                        const yaml =
-                          (typeof res.data?.yaml === 'string' && res.data.yaml) ||
-                          (typeof res.data?.masque_yaml === 'string' && res.data.masque_yaml) ||
-                          '';
-                        if (!yaml.trim()) {
-                          message.error(t('settings.warpEmpty', 'WARP registration returned empty YAML'));
-                          return;
-                        }
-                        try {
-                          await copyText(yaml);
-                          message.success(t('settings.warpDone', 'WARP registered — YAML copied'));
-                        } catch {
-                          message.success(t('settings.warpDoneNoCopy', 'WARP registered (copy failed — select text in the dialog)'));
-                        }
-                        setWarpYamlTitle(
-                          warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
+                        const res = await createWarpAccount(warpMode);
+                        setWarpAccount(res?.account || { configured: true });
+                        const yaml = typeof res?.yaml === 'string' ? res.yaml : '';
+                        message.success(
+                          t(
+                            'settings.warpAccountSaved',
+                            'WARP account saved — use Routing → Server egress + WARP domains',
+                          ),
                         );
-                        setWarpYaml(yaml);
-                        setWarpYamlOpen(true);
+                        if (yaml.trim()) {
+                          try {
+                            await copyText(yaml);
+                          } catch {
+                            /* ignore */
+                          }
+                          setWarpYamlTitle(
+                            warpMode === 'masque' ? 'WARP MASQUE YAML' : 'WARP WireGuard YAML',
+                          );
+                          setWarpYaml(yaml);
+                          setWarpYamlOpen(true);
+                        }
                       } catch (e: any) {
                         message.error(e?.response?.data?.error || e.message || t('common.error'));
+                      } finally {
+                        setWarpBusy(false);
                       }
                     }}
                   >
-                    {t('settings.warpRegister', 'Register WARP')} ({warpMode === 'masque' ? 'MASQUE' : 'WireGuard'})
+                    {t('settings.warpRegister', 'Register / save WARP')} ({warpMode === 'masque' ? 'MASQUE' : 'WireGuard'})
                   </Button>
                 </Space>
               </Card>

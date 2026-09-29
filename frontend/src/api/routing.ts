@@ -21,6 +21,7 @@ export interface ServerRoutingConfig {
   proxies: Array<Record<string, unknown> & { name: string; type: string; server?: string; port?: number | string }>;
   proxyGroups: GroupEntry[];
   rules: string[];
+  warpDomains?: string[];
 }
 
 export const fetchServerRouting = () =>

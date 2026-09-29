@@ -15,12 +15,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/buildinfo"
+	"gorm.io/gorm"
 )
 
 const maxRestoreDatabaseBytes = 128 << 20
 
 type Handler struct {
 	svc       *Service
+	db        *gorm.DB
 	dbPath    string
 	mihomoCfg string
 }
@@ -32,6 +34,11 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) WithBackupPaths(dbPath, mihomoConfig string) *Handler {
 	h.dbPath = dbPath
 	h.mihomoCfg = mihomoConfig
+	return h
+}
+
+func (h *Handler) WithDB(db *gorm.DB) *Handler {
+	h.db = db
 	return h
 }
 
@@ -47,6 +54,9 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/geofiles/update", h.UpdateGeoFiles)
 	rg.POST("/templates/warp", h.WARP)
 	rg.POST("/templates/warp/register", h.WARPRegister)
+	rg.GET("/warp", h.WARPGet)
+	rg.POST("/warp", h.WARPCreate)
+	rg.DELETE("/warp", h.WARPDelete)
 	rg.POST("/restart", h.RestartPanel)
 	rg.GET("/update-info", h.UpdateInfo)
 	rg.POST("/update", h.RunUpdate)
@@ -87,6 +97,12 @@ func (h *Handler) WARPRegister(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
+	}
+	// Persist account by default (m-ui style) so server egress can inject WARP.
+	if h.db != nil && c.Query("nosave") != "1" {
+		if acc := AccountFromRegister(res); acc != nil && strings.TrimSpace(acc.PeerPublicKey) != "" {
+			_ = SaveWARPAccount(h.db, acc)
+		}
 	}
 	mode := strings.TrimSpace(c.Query("mode"))
 	switch mode {
@@ -571,4 +587,58 @@ func (h *Handler) CleanupLocalBackups(c *gin.Context) {
 		"kept":          kept,
 		"freed_bytes":   freed,
 	})
+}
+
+func (h *Handler) WARPGet(c *gin.Context) {
+	acc, err := GetWARPAccount(h.db)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if acc == nil {
+		c.JSON(http.StatusOK, WARPAccountView{Configured: false, ProxyName: WARPProxyName})
+		return
+	}
+	c.JSON(http.StatusOK, acc.View())
+}
+
+func (h *Handler) WARPCreate(c *gin.Context) {
+	res, err := RegisterWARP()
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	acc := AccountFromRegister(res)
+	if acc == nil || strings.TrimSpace(acc.PrivateKey) == "" {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "WARP registration returned incomplete account"})
+		return
+	}
+	// Peer public key is required for a usable Mihomo outbound.
+	if strings.TrimSpace(acc.PeerPublicKey) == "" {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "WARP registration returned no peer public key — retry later"})
+		return
+	}
+	if err := SaveWARPAccount(h.db, acc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	mode := strings.TrimSpace(c.Query("mode"))
+	yamlOut := res.YAML
+	if mode == "masque" && res.MasqueYAML != "" {
+		yamlOut = res.MasqueYAML
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"account":     acc.View(),
+		"yaml":        yamlOut,
+		"masque_yaml": res.MasqueYAML,
+		"proxy_name":  WARPProxyName,
+	})
+}
+
+func (h *Handler) WARPDelete(c *gin.Context) {
+	if err := DeleteWARPAccount(h.db); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

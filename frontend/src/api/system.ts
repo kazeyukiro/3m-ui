@@ -117,3 +117,27 @@ export const checkUpdate = () =>
 
 export const runUpdate = (channel?: 'stable' | 'pre') =>
   client.post('/system/update', channel ? { channel } : undefined).then((r) => r.data);
+
+export type WarpAccountView = {
+  configured: boolean;
+  device_id?: string;
+  license_key?: string;
+  address_v4?: string;
+  address_v6?: string;
+  endpoint_host?: string;
+  endpoint_port?: number;
+  peer_public_key?: string;
+  updated_at?: string;
+  proxy_name?: string;
+};
+
+export const fetchWarpAccount = () =>
+  client.get<WarpAccountView>('/system/warp').then((r) => r.data);
+export const createWarpAccount = (mode?: string) =>
+  client
+    .post<{ account: WarpAccountView; yaml?: string; proxy_name?: string }>(
+      `/system/warp${mode ? `?mode=${mode}` : ''}`,
+    )
+    .then((r) => r.data);
+export const deleteWarpAccount = () =>
+  client.delete('/system/warp').then((r) => r.data);

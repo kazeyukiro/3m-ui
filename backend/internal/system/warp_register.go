@@ -16,13 +16,20 @@ import (
 
 // WARPRegisterResult is the material needed to build a Mihomo WARP outbound.
 type WARPRegisterResult struct {
-	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
-	Address    string `json:"address"`               // IPv4 address (no CIDR)
-	IPv6       string `json:"ipv6,omitempty"`        // IPv6 address (no CIDR)
-	Reserved   []int  `json:"reserved,omitempty"`    // 3-byte reserved (decoded from client_id)
-	YAML       string `json:"yaml"`                  // WireGuard outbound YAML
-	MasqueYAML string `json:"masque_yaml,omitempty"` // MASQUE outbound YAML (WARP default protocol)
+	PrivateKey    string `json:"private_key"`
+	PublicKey     string `json:"public_key"` // local public key
+	Address       string `json:"address"`    // IPv4 (no CIDR)
+	IPv6          string `json:"ipv6,omitempty"`
+	Reserved      []int  `json:"reserved,omitempty"`
+	YAML          string `json:"yaml"`
+	MasqueYAML    string `json:"masque_yaml,omitempty"`
+	DeviceID      string `json:"device_id,omitempty"`
+	AccessToken   string `json:"access_token,omitempty"`
+	LicenseKey    string `json:"license_key,omitempty"`
+	PeerPublicKey string `json:"peer_public_key,omitempty"`
+	EndpointHost  string `json:"endpoint_host,omitempty"`
+	EndpointPort  int    `json:"endpoint_port,omitempty"`
+	ClientID      string `json:"client_id,omitempty"`
 }
 
 type cfRegRequest struct {
@@ -68,6 +75,7 @@ type cfRegResponse struct {
 		Token   string   `json:"token"`
 		Account struct {
 			AccountType string `json:"account_type"`
+			License     string `json:"license"`
 		} `json:"account"`
 	} `json:"result"`
 	// Current shape: {"id":..., "config": {...}, ...}
@@ -78,6 +86,7 @@ type cfRegResponse struct {
 	Token   string   `json:"token"`
 	Account struct {
 		AccountType string `json:"account_type"`
+		License     string `json:"license"`
 	} `json:"account"`
 }
 
@@ -161,18 +170,46 @@ func RegisterWARP() (*WARPRegisterResult, error) {
 	}
 	masqueYAML, err := WARPMasqueTemplate(priv, v4, v6, "")
 	if err != nil {
-		// Non-fatal: masque is a bonus; wireguard yaml already built.
-		// Log to stderr via fmt for now — production code should use log pkg.
 		masqueYAML = ""
 	}
+	deviceID := parsed.Result.ID
+	token := parsed.Result.Token
+	license := parsed.Result.Account.License
+	if deviceID == "" {
+		deviceID = parsed.ID
+		token = parsed.Token
+		license = parsed.Account.License
+	}
+	peerPub := ""
+	epHost := "engage.cloudflareclient.com"
+	epPort := 2408
+	if len(cfg.Peers) > 0 {
+		peerPub = strings.TrimSpace(cfg.Peers[0].PublicKey)
+		if h := strings.TrimSpace(cfg.Peers[0].Endpoint.Host); h != "" {
+			// host may be "engage.cloudflareclient.com:2408"
+			if i := strings.LastIndex(h, ":"); i > 0 {
+				epHost = h[:i]
+				fmt.Sscanf(h[i+1:], "%d", &epPort)
+			} else {
+				epHost = h
+			}
+		}
+	}
 	return &WARPRegisterResult{
-		PrivateKey: priv,
-		PublicKey:  pub,
-		Address:    v4,
-		IPv6:       v6,
-		Reserved:   reserved,
-		YAML:       yaml,
-		MasqueYAML: masqueYAML,
+		PrivateKey:    priv,
+		PublicKey:     pub,
+		Address:       v4,
+		IPv6:          v6,
+		Reserved:      reserved,
+		YAML:          yaml,
+		MasqueYAML:    masqueYAML,
+		DeviceID:      deviceID,
+		AccessToken:   token,
+		LicenseKey:    license,
+		PeerPublicKey: peerPub,
+		EndpointHost:  epHost,
+		EndpointPort:  epPort,
+		ClientID:      cfg.ClientID,
 	}, nil
 }
 

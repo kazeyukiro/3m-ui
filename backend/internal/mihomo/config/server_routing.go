@@ -19,9 +19,10 @@ const serverRoutingName = "server-routing"
 // ServerRoutingConfig controls how traffic leaves the VPS after hitting a
 // listener — the Mihomo equivalent of 3x-ui's Xray outbounds + routing rules.
 type ServerRoutingConfig struct {
-	Proxies []ProxyEntry `json:"proxies" yaml:"proxies"`
-	Groups  []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
-	Rules   []string     `json:"rules" yaml:"rules"`
+	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
+	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules       []string     `json:"rules" yaml:"rules"`
+	WarpDomains []string     `json:"warpDomains" yaml:"warp-domains,omitempty"`
 }
 
 // DefaultServerRouting is pure direct egress (historical 3m-ui behaviour).
@@ -106,17 +107,66 @@ func normalizeServerRouting(cfg *ServerRoutingConfig) {
 }
 
 // applyServerRouting writes proxies / groups / rules into the serving config map.
-func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig) {
+// warpProxy, when non-nil, is injected (or replaces same-name entry) as the WARP outbound.
+func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, warpProxy map[string]interface{}) {
 	normalizeServerRouting(&sr)
-	if len(sr.Proxies) > 0 {
-		merged["proxies"] = proxyEntriesToYAML(sr.Proxies)
+	proxies := proxyEntriesToYAML(sr.Proxies)
+	if warpProxy != nil {
+		name, _ := warpProxy["name"].(string)
+		if name == "" {
+			name = "WARP"
+			warpProxy["name"] = name
+		}
+		// Replace existing same-name proxy if present.
+		out := make([]interface{}, 0, len(proxies)+1)
+		replaced := false
+		for _, p := range proxies {
+			m, ok := p.(map[string]interface{})
+			if ok {
+				if n, _ := m["name"].(string); n == name {
+					out = append(out, warpProxy)
+					replaced = true
+					continue
+				}
+			}
+			out = append(out, p)
+		}
+		if !replaced {
+			out = append(out, warpProxy)
+		}
+		proxies = out
+	}
+	if len(proxies) > 0 {
+		merged["proxies"] = proxies
 	}
 	if len(sr.Groups) > 0 {
 		merged["proxy-groups"] = groupEntriesToYAML(sr.Groups)
 	} else {
 		merged["proxy-groups"] = []interface{}{}
 	}
-	rules := make([]interface{}, 0, len(sr.Rules))
+	rules := make([]interface{}, 0, len(sr.Rules)+len(sr.WarpDomains)+4)
+	// Managed WARP domain rules first (m-ui style).
+	warpName := "WARP"
+	if warpProxy != nil {
+		if n, _ := warpProxy["name"].(string); n != "" {
+			warpName = n
+		}
+	}
+	for _, d := range sr.WarpDomains {
+		d = strings.TrimSpace(d)
+		if d == "" {
+			continue
+		}
+		// Allow GEOSITE:xxx or DOMAIN-SUFFIX style payloads.
+		upper := strings.ToUpper(d)
+		if strings.HasPrefix(upper, "GEOSITE:") {
+			rules = append(rules, "GEOSITE,"+strings.TrimSpace(d[8:])+","+warpName)
+		} else if strings.HasPrefix(upper, "DOMAIN,") || strings.HasPrefix(upper, "DOMAIN-SUFFIX,") {
+			rules = append(rules, d+","+warpName)
+		} else {
+			rules = append(rules, "DOMAIN-SUFFIX,"+d+","+warpName)
+		}
+	}
 	for _, r := range sr.Rules {
 		r = strings.TrimSpace(r)
 		if r != "" {

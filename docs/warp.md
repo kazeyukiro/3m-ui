@@ -1,50 +1,36 @@
-# Cloudflare WARP
+# Cloudflare WARP (m-ui style)
 
-3m-ui can **register a Cloudflare WARP account** and return a Mihomo outbound YAML fragment (WireGuard or MASQUE).
+3m-ui can **register and persist** a Cloudflare WARP account, inject a Mihomo outbound named **`WARP`**, and route selected domains through it on the **server**.
 
-## Where
+## Settings
 
-**Settings → Network (Geo section) → Cloudflare WARP**
+**Settings → Network → Cloudflare WARP**
 
-1. Choose **WireGuard** or **MASQUE**
-2. Click **Register WARP**
-3. YAML is shown (and copied when clipboard allows)
+1. Choose WireGuard (recommended for server egress) or MASQUE  
+2. **Register / save WARP** — creates a device at Cloudflare, stores the account in panel settings, and builds outbound `WARP`  
+3. Optional: view YAML; **Delete WARP account** removes the stored device  
 
 API:
 
-- `POST /api/v1/system/templates/warp/register?mode=wireguard|masque|both`
-- `POST /api/v1/system/templates/warp` — build YAML from operator-supplied keys (advanced)
+- `GET /api/v1/system/warp` — account status (no secrets)  
+- `POST /api/v1/system/warp` — register + save account  
+- `DELETE /api/v1/system/warp` — delete account  
+- `POST /api/v1/system/templates/warp/register` — still available; **also saves** the account unless `?nosave=1`
 
-## What it is / is not
+## Server egress (Routing)
 
-| Yes | No |
-|-----|-----|
-| One-click register + YAML fragment | Automatic unlock of Netflix / ChatGPT / etc. |
-| Use as **client** proxy or **server egress** outbound | Guaranteed streaming/AI region unlock (depends on Cloudflare edge) |
-| Panel needs **outbound HTTPS** to Cloudflare | Auto-detect unlock status and rewrite routing without confirmation |
+**Routing → Server egress**
 
-## Using WARP on the server (egress)
+1. **WARP domains**: one domain per line (e.g. `openai.com`) or `GEOSITE:openai`  
+2. Edit extra rules if needed (default `MATCH,DIRECT`)  
+3. **Save → Generate & apply**  
 
-1. Register WARP and copy the `proxies:` entry (name is often `WARP` / `WARP-Masque`).
-2. Open **Routing → Server egress**.
-3. Add the proxy (or merge YAML into `server-routing` proxies via API), then rules such as:
+The generator:
 
-```text
-DOMAIN-SUFFIX,openai.com,WARP
-DOMAIN-SUFFIX,chatgpt.com,WARP
-MATCH,DIRECT
-```
+- Injects the **WARP** WireGuard outbound from the saved account  
+- Prepends `DOMAIN-SUFFIX,<domain>,WARP` (or GEOSITE) for each WARP domain  
+- Fails apply if WARP domains are set but no account exists  
 
-4. **Save → Generate & apply**.
+## Limits
 
-There is **no** fully automatic “probe AI/streaming then always wire WARP” path: unlock results change by IP/edge and site policy; false positives would hijack egress. Manual or one-click **register + optional rules** is the supported model.
-
-## 中文
-
-**设置 → 网络 → Cloudflare WARP**：一键注册，生成 WireGuard / MASQUE 出站 YAML。
-
-- 需要面板能访问 Cloudflare  
-- **不会**自动检测流媒体/AI 解锁，也**不会**在无确认时改写全局出口  
-- 用作客户端节点，或放到 **路由规则 → 服务端出站**（保存并应用）  
-
-流媒体/AI 是否解锁取决于 WARP 出口质量，**不保证**。
+WARP does **not** guarantee Netflix / AI unlock. Domain list is operator-controlled (same idea as m-ui `WarpDomains`).

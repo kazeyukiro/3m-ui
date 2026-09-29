@@ -13,6 +13,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
+	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
@@ -73,7 +74,16 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 	if srErr != nil {
 		return "", fmt.Errorf("load server-routing: %w", srErr)
 	}
-	applyServerRouting(merged, sr)
+	var warpProxy map[string]interface{}
+	if acc, _ := system.GetWARPAccount(ce.db); acc != nil {
+		if pm, err := acc.ProxyMap(); err == nil {
+			warpProxy = pm
+		}
+	}
+	if len(sr.WarpDomains) > 0 && warpProxy == nil {
+		return "", fmt.Errorf("WARP routing domains set but WARP account is not configured — register WARP in Settings or clear warpDomains")
+	}
+	applyServerRouting(merged, sr, warpProxy)
 	var listeners []models.Listener
 	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
 		return "", fmt.Errorf("load enabled listeners: %w", err)
