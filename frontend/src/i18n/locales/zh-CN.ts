@@ -828,6 +828,10 @@ export default {
     "tplPrivateDirect": "GEOIP private → DIRECT，MATCH → DIRECT",
     "tplWarpAi": "AI 域名 → WARP（需名为 WARP 的出站）",
     "warpAiHint": "请先在设置注册 WARP，并将出站名称设为 WARP，再点生成并应用",
+    "noServerTemplates": "服务端出站没有模板 — 请在下方填写 WARP 域名或编辑规则。",
+    "warpDomains": "WARP 域名",
+    "warpDomainsHintShort": "需先在设置中注册 WARP 账户",
+    "warpDomainsHint": "每行一个域名（或 GEOSITE:name）。保存并应用后，这些域名经 WARP 出站。请先在设置中注册 WARP。",
     "groupDeleted": "策略组已删除"
   },
   "settings": {
@@ -1014,6 +1018,11 @@ export default {
     "backupTime": "时间",
     "warp": "Cloudflare WARP",
     "warpHint": "一键注册 WARP WireGuard 配置（Mihomo 出站 YAML）。需要面板能访问 Cloudflare。",
+    "warpAccountSaved": "WARP 账户已保存 — 请到路由 → 服务端出站填写 WARP 域名",
+    "warpConfigured": "已配置",
+    "warpDelete": "删除 WARP 账户",
+    "warpDeleted": "WARP 账户已删除",
+    "warpNotConfigured": "尚未配置 WARP 账户 — 注册后可用于服务端出站。",
     "warpRegister": "注册 WARP",
     "warpWireguard": "WireGuard",
     "warpMasque": "MASQUE","navOps":"系统操作","restartPanel":"重启面板","restartPanelHint":"重启 3m-ui 面板进程。systemd 会自动重新启动。用于配置变更后需要重启的场景，或面板异常时。","restartNow":"立即重启","restartConfirmTitle":"重启面板？","restartConfirmHint":"面板将退出，systemd 会自动重启。你会短暂断开连接。","restarting":"正在重启…","panelUpdate":"面板更新","updateHint":"检查最新 3m-ui 版本并一键更新。面板会自动下载最新二进制、替换自身并重启。","checkUpdate":"检查更新","updateNow":"立即更新","updateConfirmTitle":"更新面板？","updateConfirmHint":"将下载最新版本并重启面板。过程需要 30-60 秒。","updating":"更新已启动，面板将自动重启。","updateTimeout":"更新超过 2 分钟仍未完成。请通过 SSH 检查：3m-ui logs","updateAvailable":"有新版本","upToDate":"已是最新","upToDateHint":"当前已是最新版本。稍后再检查或通过 SSH 更新：3m-ui update","updateCheckFailed":"无法检查更新（GitHub API 不可达）。通过 SSH 更新：3m-ui update","currentVersion":"当前版本","latestVersion":"最新版本","releaseNotes":"更新日志","unknown":"未知","stable":"稳定版","preRelease":"预发布版","channelSwitch":"切换渠道","publicHostHint":"客户端连接的公网域名/IP（如 cdn.example.com）。留空则使用绑定地址。","publicPortHint":"客户端连接的公网端口（如 CDN 的 443）。留空则使用面板端口。","accessSniHint":"客户端 TLS 握手时发送的 SNI。必须与证书匹配。留空则使用 public_host。","clientFingerprintHint":"客户端 TLS hello 的 uTLS 指纹。推荐用 chrome 增强伪装。","botTokenHint":"从 @BotFather 获取。格式：123456789:ABCdefGHIjklMNOpqrsTUVwxyz","cpuWarnPctHint":"0 = 禁用。面板 CPU 使用率超过此百分比时告警。","trafficWarnPctHint":"0 = 禁用。用户流量超过配额的此百分比时告警。","expiryWarnHoursHint":"用户到期前多少小时发送提醒通知。","tgProxyHint":"用于 Telegram API 的 SOCKS5/HTTP 代理（GitHub/Telegram 被墙时）。如 socks5://127.0.0.1:1080","tgApiServerHint":"自定义 Telegram API 服务器（用于 Bot API 实例）。留空使用默认 api.telegram.org","subTitleHint":"用户订阅信息页显示的标题。","subSupportUrlHint":"订阅页显示的可选链接（如 Telegram 客服链接）。",
