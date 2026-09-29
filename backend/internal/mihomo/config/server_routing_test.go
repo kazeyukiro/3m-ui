@@ -73,3 +73,25 @@ func TestApplyServerRoutingWarpDomains(t *testing.T) {
 		t.Fatalf("rule2: %v", rules[2])
 	}
 }
+
+func TestApplyRuleProviders(t *testing.T) {
+	merged := map[string]interface{}{}
+	sr := ServerRoutingConfig{
+		Rules: []string{"RULE-SET,gfw,DIRECT", "MATCH,DIRECT"},
+		RuleProviders: []RuleProvider{
+			{Name: "gfw", Type: "http", Behavior: "domain", Format: "mrs", URL: "https://example.com/gfw.mrs"},
+		},
+	}
+	applyServerRouting(merged, sr, nil)
+	rp, ok := merged["rule-providers"].(map[string]interface{})
+	if !ok || rp["gfw"] == nil {
+		t.Fatalf("rule-providers: %#v", merged["rule-providers"])
+	}
+	entry := rp["gfw"].(map[string]interface{})
+	if entry["type"] != "http" || entry["behavior"] != "domain" {
+		t.Fatalf("entry: %#v", entry)
+	}
+	if entry["path"] == nil || entry["url"] != "https://example.com/gfw.mrs" {
+		t.Fatalf("path/url: %#v", entry)
+	}
+}

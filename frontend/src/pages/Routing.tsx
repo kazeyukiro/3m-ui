@@ -35,7 +35,9 @@ import {
   saveRules,
   fetchServerRouting,
   saveServerRouting,
+  updateRuleProvider,
   type GroupEntry,
+  type RuleProvider,
 } from '../api/routing';
 import { generateConfig, applyConfigYAML, fetchProxies } from '../api/config';
 import PageHeader from '../components/PageHeader';
@@ -67,6 +69,10 @@ const RoutingPage: React.FC = () => {
   const [scope, setScope] = useState<'client' | 'server'>('client');
   const [serverRules, setServerRules] = useState<RuleRow[]>([]);
   const [warpDomains, setWarpDomains] = useState<string>('');
+  const [ruleProviders, setRuleProviders] = useState<import('../api/routing').RuleProvider[]>([]);
+  const [rpOpen, setRpOpen] = useState(false);
+  const [rpUpdating, setRpUpdating] = useState<string | null>(null);
+  const [rpForm] = Form.useForm();
   const [form] = Form.useForm();
 
   const targetOptions = useMemo(() => {
@@ -89,6 +95,7 @@ const RoutingPage: React.FC = () => {
       setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
       setServerRules(parseRulesText((Array.isArray(sr?.rules) ? sr.rules : ['MATCH,DIRECT']).join('\n')));
       setWarpDomains(Array.isArray(sr?.warpDomains) ? sr.warpDomains.join('\n') : '');
+      setRuleProviders(Array.isArray(sr?.ruleProviders) ? sr.ruleProviders : []);
       setProxyNames(
         (Array.isArray(px) ? px : [])
           .map((p: any) => String(p?.name || '').trim())
@@ -167,6 +174,7 @@ const RoutingPage: React.FC = () => {
           proxyGroups: [],
           rules: serializeRules(current),
           warpDomains: domains,
+          ruleProviders,
         });
         setServerRules(parseRulesText((Array.isArray(saved?.rules) ? saved.rules : serializeRules(current)).join('\n')));
         if (Array.isArray(saved?.warpDomains)) {
@@ -396,6 +404,177 @@ const RoutingPage: React.FC = () => {
         </Card>
       )}
 
+
+
+      {scope === 'server' && (
+        <Card
+          title={t('routing.ruleProviders') || 'Rule providers (rule-set)'}
+          style={{ marginBottom: 16 }}
+          extra={
+            <Space wrap size="small">
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  rpForm.resetFields();
+                  rpForm.setFieldsValue({ type: 'http', behavior: 'domain', format: 'mrs', interval: 86400, proxy: 'DIRECT' });
+                  setRpOpen(true);
+                }}
+              >
+                {t('routing.rpAdd') || 'Add'}
+              </Button>
+            </Space>
+          }
+        >
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 0 }}>
+            {t('routing.rpHint') ||
+              'Official Mihomo rule-providers. After Save + Apply, use Update to hot-reload a set (PUT /providers/rules/{name}) without full restart. Rules: RULE-SET,name,TARGET'}
+          </Typography.Paragraph>
+          {ruleProviders.length === 0 ? (
+            <Typography.Text type="secondary">{t('routing.rpEmpty') || 'No rule providers yet'}</Typography.Text>
+          ) : (
+            <Space direction="vertical" style={{ width: '100%' }} size="small">
+              {ruleProviders.map((rp) => (
+                <div
+                  key={rp.name}
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 0',
+                    borderBottom: '1px solid var(--ant-color-border-secondary, #f0f0f0)',
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Typography.Text strong>{rp.name}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                      {rp.type}/{rp.behavior}/{rp.format || 'yaml'}
+                      {rp.url ? ` · ${rp.url}` : ''}
+                    </Typography.Text>
+                  </div>
+                  <Space size="small" wrap>
+                    <Button
+                      size="small"
+                      loading={rpUpdating === rp.name}
+                      onClick={async () => {
+                        setRpUpdating(rp.name);
+                        try {
+                          await updateRuleProvider(rp.name);
+                          message.success(t('routing.rpUpdated') || `Updated ${rp.name}`);
+                        } catch (e: any) {
+                          message.error(errMsg(e));
+                        } finally {
+                          setRpUpdating(null);
+                        }
+                      }}
+                    >
+                      {t('routing.rpHotUpdate') || 'Hot update'}
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      onClick={() => {
+                        setRuleProviders((prev) => prev.filter((x) => x.name !== rp.name));
+                      }}
+                    >
+                      {t('common.delete') || 'Delete'}
+                    </Button>
+                  </Space>
+                </div>
+              ))}
+            </Space>
+          )}
+          <Modal
+            title={t('routing.rpAdd') || 'Add rule provider'}
+            open={rpOpen}
+            onCancel={() => setRpOpen(false)}
+            onOk={async () => {
+              try {
+                const v = await rpForm.validateFields();
+                const name = String(v.name || '').trim();
+                if (!name) return;
+                if (ruleProviders.some((x) => x.name === name)) {
+                  message.error(t('routing.rpDup') || 'Name already exists');
+                  return;
+                }
+                const entry: RuleProvider = {
+                  name,
+                  type: v.type || 'http',
+                  behavior: v.behavior || 'domain',
+                  format: v.format || 'yaml',
+                  url: v.url,
+                  path: v.path,
+                  interval: v.interval != null ? Number(v.interval) : 86400,
+                  proxy: v.proxy || 'DIRECT',
+                  payload:
+                    typeof v.payload === 'string'
+                      ? String(v.payload)
+                          .split(/\n/)
+                          .map((s: string) => s.trim())
+                          .filter(Boolean)
+                      : undefined,
+                };
+                setRuleProviders((prev) => [...prev, entry]);
+                setRpOpen(false);
+                message.info(t('routing.rpAddedHint') || 'Added — Save then Generate & apply so Mihomo loads rule-providers');
+              } catch {
+                /* validate */
+              }
+            }}
+            destroyOnHidden
+          >
+            <Form form={rpForm} layout="vertical" size="small">
+              <Form.Item name="name" label="name" rules={[{ required: true }]}>
+                <Input placeholder="gfw" />
+              </Form.Item>
+              <Form.Item name="type" label="type" initialValue="http">
+                <Select
+                  options={[
+                    { value: 'http', label: 'http' },
+                    { value: 'file', label: 'file' },
+                    { value: 'inline', label: 'inline' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="behavior" label="behavior" initialValue="domain">
+                <Select
+                  options={[
+                    { value: 'domain', label: 'domain' },
+                    { value: 'ipcidr', label: 'ipcidr' },
+                    { value: 'classical', label: 'classical' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="format" label="format" initialValue="mrs">
+                <Select
+                  options={[
+                    { value: 'mrs', label: 'mrs' },
+                    { value: 'yaml', label: 'yaml' },
+                    { value: 'text', label: 'text' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="url" label="url" extra="Required for type=http">
+                <Input placeholder="https://..." />
+              </Form.Item>
+              <Form.Item name="path" label="path" extra="Optional; default ./rule-providers/{name}.{format}">
+                <Input placeholder="./rule-providers/gfw.mrs" />
+              </Form.Item>
+              <Form.Item name="interval" label="interval (s)" initialValue={86400}>
+                <InputNumber min={60} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="proxy" label="proxy (download)" initialValue="DIRECT">
+                <Input placeholder="DIRECT" />
+              </Form.Item>
+              <Form.Item name="payload" label="payload (inline, one per line)">
+                <Input.TextArea rows={3} placeholder="DOMAIN-SUFFIX,example.com" />
+              </Form.Item>
+            </Form>
+          </Modal>
+        </Card>
+      )}
 
       {scope === 'client' && (
       <Card

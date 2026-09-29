@@ -2,8 +2,11 @@ package router
 
 import (
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	mihomo "github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
 	mihomoConfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"gorm.io/gorm"
 )
@@ -89,4 +92,39 @@ func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 		}
 		c.JSON(http.StatusOK, saved)
 	})
+
+	// Rule providers (rule-set) — stored in server-routing; hot-update via Mihomo API.
+	group.GET("/rule-providers/status", func(c *gin.Context) {
+		controller := strings.TrimSpace(os.Getenv("THREE_M_UI_MIHOMO_CONTROLLER"))
+		if controller == "" {
+			controller = "127.0.0.1:9090"
+		}
+		base := "http://" + controller
+		api := mihomo.NewExternalControllerAPI(base, mihomoConfig.ControllerSecret())
+		data, err := api.ListRuleProviders()
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "providers": map[string]interface{}{}})
+			return
+		}
+		c.JSON(http.StatusOK, data)
+	})
+	group.PUT("/rule-providers/:name/update", func(c *gin.Context) {
+		name := strings.TrimSpace(c.Param("name"))
+		if name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name required"})
+			return
+		}
+		controller := strings.TrimSpace(os.Getenv("THREE_M_UI_MIHOMO_CONTROLLER"))
+		if controller == "" {
+			controller = "127.0.0.1:9090"
+		}
+		base := "http://" + controller
+		api := mihomo.NewExternalControllerAPI(base, mihomoConfig.ControllerSecret())
+		if err := api.UpdateRuleProvider(name); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true, "name": name})
+	})
+
 }

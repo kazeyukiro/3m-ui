@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -82,5 +83,55 @@ func (api *ExternalControllerAPI) ReloadConfig(payload map[string]interface{}) e
 		return fmt.Errorf("failed to reload, status: %s", resp.Status)
 	}
 
+	return nil
+}
+
+// ListRuleProviders GET /providers/rules
+func (api *ExternalControllerAPI) ListRuleProviders() (map[string]interface{}, error) {
+	req, err := http.NewRequest(http.MethodGet, api.BaseURL+"/providers/rules", nil)
+	if err != nil {
+		return nil, err
+	}
+	if api.Secret != "" {
+		req.Header.Set("Authorization", "Bearer "+api.Secret)
+	}
+	resp, err := api.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("mihomo core API offline: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list rule providers: status %s", resp.Status)
+	}
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// UpdateRuleProvider PUT /providers/rules/{name} — hot-reload one rule-set (official Clash API).
+func (api *ExternalControllerAPI) UpdateRuleProvider(name string) error {
+	if name == "" {
+		return fmt.Errorf("rule provider name is empty")
+	}
+	req, err := http.NewRequest(http.MethodPut, api.BaseURL+"/providers/rules/"+url.PathEscape(name), nil)
+	if err != nil {
+		return err
+	}
+	if api.Secret != "" {
+		req.Header.Set("Authorization", "Bearer "+api.Secret)
+	}
+	// Rule-set download can be slow
+	client := *api.client
+	client.Timeout = 120 * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("mihomo core API offline: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("update rule provider %q: status %s", name, resp.Status)
+	}
 	return nil
 }

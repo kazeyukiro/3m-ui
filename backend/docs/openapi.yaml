@@ -1432,6 +1432,29 @@ security:
       responses:
         "200":
           description: Saved ServerRoutingConfig
+  /config/rule-providers/status:
+    get:
+      tags: [config]
+      summary: Live rule-provider status from Mihomo (GET /providers/rules)
+      responses:
+        "200":
+          description: providers object from core
+        "502":
+          description: core API unreachable
+  /config/rule-providers/{name}/update:
+    put:
+      tags: [config]
+      summary: Hot-update one rule-set (Mihomo PUT /providers/rules/{name})
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+        "502":
+          description: update failed
   /system/warp:
     get:
       tags: [system]

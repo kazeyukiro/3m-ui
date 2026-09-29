@@ -42,3 +42,19 @@ WARP 在 **设置** 里一键注册，把 YAML 作为出站合并进服务端规
 
 
 See embedded OpenAPI (`GET /api/v1/openapi.yaml`) for `/config/server-routing` and `/system/warp`.
+
+
+## Rule providers (rule-set)
+
+Server egress can declare Mihomo **`rule-providers`** ([official docs](https://wiki.metacubex.one/config/rule-providers/)).
+
+1. **Routing → Server egress → Rule providers → Add** (`http` / `file` / `inline`, behavior `domain` | `ipcidr` | `classical`, format `yaml` | `text` | `mrs`)
+2. **Save → Generate & apply** so `rule-providers:` is written into the serving config (path under Mihomo `-d` home, default `./rule-providers/{name}.{format}`)
+3. Add a rule: `RULE-SET,<name>,<TARGET>` (e.g. `RULE-SET,gfw,WARP`)
+4. **Hot update**: button calls Mihomo `PUT /providers/rules/{name}` (Clash API) to refresh that set without a full process restart for that provider payload
+
+API:
+
+- Stored in `GET/PUT /api/v1/config/server-routing` field `ruleProviders`
+- `PUT /api/v1/config/rule-providers/{name}/update` — hot reload
+- `GET /api/v1/config/rule-providers/status` — live status from core

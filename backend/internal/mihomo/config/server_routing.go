@@ -18,11 +18,27 @@ const serverRoutingName = "server-routing"
 
 // ServerRoutingConfig controls how traffic leaves the VPS after hitting a
 // listener — server-side Mihomo proxies, groups, and rules after traffic hits listeners.
+// RuleProvider is one Mihomo rule-providers entry
+// (https://wiki.metacubex.one/config/rule-providers/).
+type RuleProvider struct {
+	Name      string   `json:"name"`
+	Type      string   `json:"type"`                // http | file | inline
+	Behavior  string   `json:"behavior"`            // domain | ipcidr | classical
+	Format    string   `json:"format,omitempty"`    // yaml | text | mrs (default yaml)
+	URL       string   `json:"url,omitempty"`       // required when type=http
+	Path      string   `json:"path,omitempty"`      // under Mihomo -d home; auto if empty
+	Interval  int      `json:"interval,omitempty"`  // seconds; http update interval
+	Proxy     string   `json:"proxy,omitempty"`     // download via this outbound (e.g. DIRECT)
+	Payload   []string `json:"payload,omitempty"`   // inline only
+	SizeLimit int      `json:"sizeLimit,omitempty"` // bytes; 0 = unlimited
+}
+
 type ServerRoutingConfig struct {
-	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
-	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
-	Rules       []string     `json:"rules" yaml:"rules"`
-	WarpDomains []string     `json:"warpDomains" yaml:"warp-domains,omitempty"`
+	Proxies       []ProxyEntry   `json:"proxies" yaml:"proxies"`
+	Groups        []GroupEntry   `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules         []string       `json:"rules" yaml:"rules"`
+	WarpDomains   []string       `json:"warpDomains" yaml:"warp-domains,omitempty"`
+	RuleProviders []RuleProvider `json:"ruleProviders" yaml:"rule-providers,omitempty"`
 }
 
 // DefaultServerRouting is pure direct egress (historical 3m-ui behaviour).
@@ -185,6 +201,87 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 		rules = []interface{}{"MATCH,DIRECT"}
 	}
 	merged["rules"] = rules
+	applyRuleProviders(merged, sr.RuleProviders)
+}
+
+// applyRuleProviders writes top-level rule-providers per MetaCubeX wiki.
+func applyRuleProviders(merged map[string]interface{}, providers []RuleProvider) {
+	if len(providers) == 0 {
+		delete(merged, "rule-providers")
+		return
+	}
+	out := make(map[string]interface{}, len(providers))
+	for _, p := range providers {
+		name := strings.TrimSpace(p.Name)
+		if name == "" {
+			continue
+		}
+		typ := strings.ToLower(strings.TrimSpace(p.Type))
+		if typ == "" {
+			typ = "http"
+		}
+		behavior := strings.ToLower(strings.TrimSpace(p.Behavior))
+		if behavior == "" {
+			behavior = "classical"
+		}
+		format := strings.ToLower(strings.TrimSpace(p.Format))
+		if format == "" {
+			format = "yaml"
+		}
+		entry := map[string]interface{}{
+			"type":     typ,
+			"behavior": behavior,
+		}
+		if format != "yaml" || typ == "http" || typ == "file" {
+			entry["format"] = format
+		}
+		switch typ {
+		case "http":
+			if u := strings.TrimSpace(p.URL); u != "" {
+				entry["url"] = u
+			}
+			path := strings.TrimSpace(p.Path)
+			if path == "" {
+				// Relative to Mihomo -d home (SAFE_PATHS). Official docs allow omitting path
+				// (url MD5 filename); we pin a stable path for operators.
+				ext := format
+				if ext == "" {
+					ext = "yaml"
+				}
+				path = "./rule-providers/" + name + "." + ext
+			}
+			entry["path"] = path
+			if p.Interval > 0 {
+				entry["interval"] = p.Interval
+			} else {
+				entry["interval"] = 86400
+			}
+			if px := strings.TrimSpace(p.Proxy); px != "" {
+				entry["proxy"] = px
+			} else {
+				entry["proxy"] = "DIRECT"
+			}
+			if p.SizeLimit > 0 {
+				entry["size-limit"] = p.SizeLimit
+			}
+		case "file":
+			path := strings.TrimSpace(p.Path)
+			if path == "" {
+				path = "./rule-providers/" + name + ".yaml"
+			}
+			entry["path"] = path
+		case "inline":
+			if len(p.Payload) > 0 {
+				entry["payload"] = p.Payload
+			}
+		}
+		out[name] = entry
+	}
+	if len(out) == 0 {
+		delete(merged, "rule-providers")
+		return
+	}
+	merged["rule-providers"] = out
 }
 
 func proxyEntriesToYAML(entries []ProxyEntry) []interface{} {
