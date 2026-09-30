@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -27,22 +28,11 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	}
 	cfg["_listener-tls"] = listener.TLS
 	cfg["_listener-udp"] = listener.UDP
-	// Access Profile overrides for share/subscription client links.
-	if sni := strings.TrimSpace(listener.AccessSNI); sni != "" {
-		cfg["sni"] = sni
-		cfg["servername"] = sni
-	}
-	if fp := strings.TrimSpace(listener.ClientFingerprint); fp != "" {
-		cfg["client-fingerprint"] = fp
-		cfg["fingerprint"] = fp
-	}
-	if alpn := strings.TrimSpace(listener.AccessALPN); alpn != "" {
-		cfg["alpn"] = alpn
-	}
 	port := strings.TrimSpace(listener.PublicPort)
 	if port == "" {
 		port = strings.TrimSpace(listener.Port)
 	}
+	applyURIAccessProfile(cfg, listener, host, port)
 	if strings.ContainsAny(port, ",-") {
 		return nil, fmt.Errorf("URI export requires a single listener port; ranges and port lists are not representable in a share URI")
 	}
@@ -73,6 +63,72 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 		return trustTunnelURIs(listener.Name, host, port, cfg)
 	default:
 		return nil, fmt.Errorf("URI export is not supported for listener protocol %q", listener.Protocol)
+	}
+}
+
+// applyURIAccessProfile injects client-facing TLS/WS fields from the Listener
+// row (AccessSNI, PublicHost, fingerprint) into the config map used by URI builders.
+func applyURIAccessProfile(cfg map[string]interface{}, listener models.Listener, connectHost, port string) {
+	if cfg == nil {
+		return
+	}
+	hint := strings.TrimSpace(listener.AccessSNI)
+	if hint == "" {
+		hint = strings.TrimSpace(listener.PublicHost)
+	}
+	if hint == "" {
+		hint = strings.TrimSpace(connectHost)
+	}
+	hint = strings.Trim(hint, "[]")
+	domainHint := hint != "" && net.ParseIP(hint) == nil
+
+	sniEmpty := true
+	if v, ok := cfg["sni"].(string); ok && strings.TrimSpace(v) != "" {
+		sniEmpty = false
+	}
+	if v, ok := cfg["servername"].(string); ok && strings.TrimSpace(v) != "" {
+		sniEmpty = false
+	}
+	if sni := strings.TrimSpace(listener.AccessSNI); sni != "" {
+		cfg["sni"] = sni
+		cfg["servername"] = sni
+	} else if domainHint && sniEmpty {
+		cfg["sni"] = hint
+		cfg["servername"] = hint
+	}
+
+	if fp := strings.TrimSpace(listener.ClientFingerprint); fp != "" {
+		cfg["client-fingerprint"] = fp
+		cfg["fingerprint"] = fp
+	}
+	if alpn := strings.TrimSpace(listener.AccessALPN); alpn != "" {
+		cfg["alpn"] = alpn
+	}
+
+	hasWS := false
+	if wsPath, ok := cfg["ws-path"].(string); ok && strings.TrimSpace(wsPath) != "" {
+		hasWS = true
+	}
+	cdnPort := port == "443" || port == "8443" || port == "2053" || port == "2083" || port == "2087" || port == "2096"
+	if hasWS && domainHint && cdnPort {
+		cfg["_listener-tls"] = true
+	}
+	if cert, ok := cfg["certificate"].(string); ok && strings.TrimSpace(cert) != "" {
+		cfg["_listener-tls"] = true
+	}
+	if _, ok := cfg["reality-config"]; ok {
+		cfg["_listener-tls"] = true
+	}
+
+	if hasWS {
+		headers, _ := cfg["ws-headers"].(map[string]interface{})
+		if headers == nil {
+			headers = map[string]interface{}{}
+		}
+		if h, _ := headers["Host"].(string); strings.TrimSpace(h) == "" && domainHint {
+			headers["Host"] = hint
+			cfg["ws-headers"] = headers
+		}
 	}
 }
 

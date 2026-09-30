@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -129,10 +130,25 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 		if params["fp"] == "" {
 			params["fp"] = "chrome"
 		}
-	} else if in.Node.TLS {
-		// Non-Reality TLS: emit security=tls so clients don't fall back to
-		// plaintext VLESS (security=none) which the URI scheme defaults to.
+	} else if in.Node.TLS || shareNeedsClientTLS(in.Node, spec.Transport.Network, host, port) {
+		// Non-Reality TLS (listener cert or CDN edge): emit security=tls.
 		params["security"] = "tls"
+		if params["sni"] == "" {
+			if h := strings.TrimSpace(in.Node.AccessSNI); h != "" {
+				params["sni"] = h
+			} else if h := strings.TrimSpace(in.Node.PublicHost); h != "" {
+				params["sni"] = h
+			} else {
+				params["sni"] = host
+			}
+		}
+		if params["fp"] == "" {
+			if in.Node.Fingerprint != "" {
+				params["fp"] = in.Node.Fingerprint
+			} else {
+				params["fp"] = "chrome"
+			}
+		}
 	}
 	uri := shareName(
 		shareQuery("vless://"+url.PathEscape(uuid)+"@"+netutil.JoinHostPort(host, port), params),
@@ -176,13 +192,23 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 		} else {
 			p["client-fingerprint"] = "chrome"
 		}
-	} else if node.TLS {
+	} else if node.TLS || shareNeedsClientTLS(node, spec.Transport.Network, host, port) {
 		p["tls"] = true
 		if spec.SNI != "" {
 			p["servername"] = spec.SNI
+		} else if node.AccessSNI != "" {
+			p["servername"] = node.AccessSNI
+		} else if node.PublicHost != "" {
+			p["servername"] = node.PublicHost
+		} else {
+			p["servername"] = host
 		}
 		if spec.Fingerprint != "" {
 			p["client-fingerprint"] = spec.Fingerprint
+		} else if node.Fingerprint != "" {
+			p["client-fingerprint"] = node.Fingerprint
+		} else {
+			p["client-fingerprint"] = "chrome"
 		}
 	}
 	if spec.SkipCert {
@@ -789,6 +815,32 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 // effectiveWSHost picks the WebSocket Host header for client share/YAML.
 // CDN-fronted nodes almost always need Host; when the panel left ws-headers
 // empty, fall back to SNI then public host so exports match the access profile.
+
+// shareNeedsClientTLS is true when the client must speak TLS to the published
+// endpoint (CDN edge / domain on 443) even if the origin listener is plain WS.
+func shareNeedsClientTLS(node NodeModel, network, host, port string) bool {
+	netw := strings.ToLower(strings.TrimSpace(network))
+	if netw != "ws" && netw != "grpc" && netw != "xhttp" {
+		return false
+	}
+	p := strings.TrimSpace(port)
+	if p == "" {
+		p = strings.TrimSpace(node.PublicPort)
+	}
+	if p != "443" && p != "8443" && p != "2053" && p != "2083" && p != "2087" && p != "2096" {
+		return false
+	}
+	hint := strings.TrimSpace(node.AccessSNI)
+	if hint == "" {
+		hint = strings.TrimSpace(node.PublicHost)
+	}
+	if hint == "" {
+		hint = strings.TrimSpace(host)
+	}
+	hint = strings.Trim(hint, "[]")
+	return hint != "" && net.ParseIP(hint) == nil
+}
+
 func effectiveWSHost(t TransportSpec, node NodeModel, sni string) string {
 	if h := strings.TrimSpace(t.WSHost); h != "" {
 		return h

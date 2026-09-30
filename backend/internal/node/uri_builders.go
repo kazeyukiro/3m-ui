@@ -57,6 +57,10 @@ func tlsParams(cfg map[string]interface{}) map[string]string {
 	if certutil.ShouldSkipCertVerify(cfg) {
 		params["allowInsecure"] = "1"
 	}
+	// TLS without fingerprint is fragile against CDN / middleboxes.
+	if params["security"] == "tls" && params["fp"] == "" {
+		params["fp"] = "chrome"
+	}
 	return params
 }
 
