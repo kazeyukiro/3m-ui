@@ -285,7 +285,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			// the server-side wrapper shape into the client configuration.
 			if mux, ok := opts["mux-option"].(map[string]interface{}); ok {
 				smux := map[string]interface{}{"enabled": true}
-				if v, ok := mux["padding"]; ok { smux["padding"] = v }
+				if v, ok := mux["padding"]; ok {
+					smux["padding"] = v
+				}
 				if brutal, ok := mux["brutal"].(map[string]interface{}); ok {
 					smux["brutal-opts"] = brutal
 				}
