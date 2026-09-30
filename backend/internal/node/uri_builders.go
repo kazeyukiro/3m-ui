@@ -198,11 +198,12 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 					obj["host"] = h
 				}
 			}
+			// v2rayN's VmessQRCode schema has no "host" field. Only set it when
+			// the listener explicitly configured a ws Host header or SNI —
+			// never infer from the server address (that's what "add" is for).
 			if obj["host"] == "" {
 				if h := tlsOpts["sni"]; h != "" {
 					obj["host"] = h
-				} else if host != "" && !looksLikeIP(host) {
-					obj["host"] = host
 				}
 			}
 		}
