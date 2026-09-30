@@ -20,10 +20,7 @@ jobs:
           go-version-file: backend/go.mod
           cache: true
       - name: Go format check
-        run: |
-          echo "GOFMT_FILES:"
-          gofmt -l .
-          test -z "$(gofmt -l .)"
+        run: test -z "$(gofmt -l .)"
       - name: Go vet
         run: go vet ./...
       - name: Go tests
