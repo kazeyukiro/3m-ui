@@ -2,9 +2,9 @@ package node
 
 import (
 	"fmt"
-	"strings"
 	"net"
 	"net/url"
+	"strings"
 )
 
 // Extended Mihomo protocols use their documented/simple sharing forms where
