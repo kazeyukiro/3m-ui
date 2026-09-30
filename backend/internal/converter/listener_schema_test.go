@@ -9,14 +9,20 @@ import (
 
 func TestHysteria2ClientExportOmitsRealmOpts(t *testing.T) {
 	proxies, err := listenerToProxies(models.Listener{
-		Name: "hy2",
+		Name:     "hy2",
 		Protocol: "hysteria2",
-		Port: "443",
-		Config: `{"realm-opts":{"enable":true,"server-url":"https://realm.example"},"alpn":["h3"]}`,
+		Port:     "443",
+		Config:   `{"realm-opts":{"enable":true,"server-url":"https://realm.example"},"alpn":["h3"]}`,
 	}, "example.com", []user.Credential{{Password: "secret"}})
-	if err != nil { t.Fatal(err) }
-	if len(proxies) != 1 { t.Fatalf("expected one proxy, got %d", len(proxies)) }
-	if _, ok := proxies[0]["realm-opts"]; ok { t.Fatal("realm-opts must not be emitted into Hysteria2 client proxy config") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proxies) != 1 {
+		t.Fatalf("expected one proxy, got %d", len(proxies))
+	}
+	if _, ok := proxies[0]["realm-opts"]; ok {
+		t.Fatal("realm-opts must not be emitted into Hysteria2 client proxy config")
+	}
 }
 
 func TestListenerToProxiesDoesNotLeakServerTLSSecrets(t *testing.T) {
