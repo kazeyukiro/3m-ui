@@ -193,12 +193,16 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		if ws, ok := cfg["ws-path"].(string); ok && ws != "" {
 			obj["net"] = "ws"
 			obj["path"] = ws
-			// The Host header is carried separately from the path. Without it a
-			// ws listener that pins a Host is unreachable through the exported
-			// link, even though the same listener works from the client YAML.
 			if headers, ok := cfg["ws-headers"].(map[string]interface{}); ok {
 				if h, ok := headers["Host"].(string); ok && h != "" {
 					obj["host"] = h
+				}
+			}
+			if obj["host"] == "" {
+				if h := tlsOpts["sni"]; h != "" {
+					obj["host"] = h
+				} else if host != "" && !looksLikeIP(host) {
+					obj["host"] = host
 				}
 			}
 		}
@@ -478,6 +482,10 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		}
 		if v, ok := cfg["client-fingerprint"].(string); ok && v != "" {
 			params["fp"] = v
+		} else if v, ok := cfg["fingerprint"].(string); ok && v != "" {
+			params["fp"] = v
+		} else {
+			params["fp"] = "chrome"
 		}
 		if skip {
 			params["insecure"] = "1"

@@ -551,6 +551,11 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			result = append(result, p)
 		}
 	}
+	// Smart access fields for every exported proxy (all protocols).
+	for _, p := range result {
+		ensureClientAccessTLS(p, l, server)
+		applyClientSkipCertVerify(p, opts, server, l.ID)
+	}
 	return result, nil
 }
 
@@ -874,46 +879,75 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 	if hint == "" {
 		hint = strings.TrimSpace(server)
 	}
+	hint = strings.Trim(hint, "[]")
 	publicPort := strings.TrimSpace(l.PublicPort)
 	if publicPort == "" {
 		publicPort = strings.TrimSpace(l.Port)
 	}
 	network, _ := p["network"].(string)
+	network = strings.ToLower(strings.TrimSpace(network))
+	typ, _ := p["type"].(string)
+	typ = strings.ToLower(strings.TrimSpace(typ))
 	domainHint := hint != "" && net.ParseIP(hint) == nil
-	// WS + public domain (+ common CDN ports) ⇒ client talks TLS to the edge.
-	if network == "ws" && domainHint && (publicPort == "443" || publicPort == "8443" || publicPort == "2053" || publicPort == "2083" || publicPort == "2087" || publicPort == "2096") {
-		p["tls"] = true
+	cdnPort := publicPort == "443" || publicPort == "8443" || publicPort == "2053" || publicPort == "2083" || publicPort == "2087" || publicPort == "2096"
+
+	// Edge CDN: classic stream proxies over WS/gRPC/HTTP need client-side TLS
+	// even when the origin listener is allow-insecure (no certificate).
+	if domainHint && cdnPort {
+		switch network {
+		case "ws", "grpc", "http", "h2", "xhttp":
+			switch typ {
+			case "vless", "vmess", "trojan":
+				p["tls"] = true
+			}
+		}
 	}
-	tlsOn := false
+
+	// Protocols that always speak TLS/QUIC toward the published endpoint.
+	tlsNative := typ == "hysteria2" || typ == "tuic" || typ == "anytls" || typ == "shadowquic" || typ == "trusttunnel"
+	tlsOn := tlsNative
 	switch v := p["tls"].(type) {
 	case bool:
-		tlsOn = v
+		tlsOn = tlsOn || v
 	case string:
-		tlsOn = strings.EqualFold(v, "true")
+		tlsOn = tlsOn || strings.EqualFold(v, "true")
+	}
+	if _, ok := p["reality-opts"]; ok {
+		tlsOn = true
 	}
 	if !tlsOn {
 		return
 	}
+
 	if p["servername"] == nil && p["sni"] == nil && hint != "" {
 		p["servername"] = hint
 		p["sni"] = hint
 	} else if p["servername"] == nil {
 		if s, ok := p["sni"].(string); ok && strings.TrimSpace(s) != "" {
 			p["servername"] = strings.TrimSpace(s)
+		} else if hint != "" {
+			p["servername"] = hint
+			p["sni"] = hint
 		}
 	} else if p["sni"] == nil {
 		if s, ok := p["servername"].(string); ok && strings.TrimSpace(s) != "" {
 			p["sni"] = strings.TrimSpace(s)
 		}
 	}
-	if p["client-fingerprint"] == nil {
-		if fp, ok := p["fingerprint"].(string); ok && strings.TrimSpace(fp) != "" {
-			p["client-fingerprint"] = strings.TrimSpace(fp)
-		} else {
-			p["client-fingerprint"] = "chrome"
+
+	switch typ {
+	case "vless", "vmess", "trojan", "anytls", "trusttunnel":
+		if p["client-fingerprint"] == nil {
+			if fp := strings.TrimSpace(l.ClientFingerprint); fp != "" {
+				p["client-fingerprint"] = fp
+			} else if fp, ok := p["fingerprint"].(string); ok && strings.TrimSpace(fp) != "" {
+				p["client-fingerprint"] = strings.TrimSpace(fp)
+			} else {
+				p["client-fingerprint"] = "chrome"
+			}
 		}
 	}
-	// WS Host header for CDN when still empty.
+
 	if network == "ws" {
 		ws, _ := p["ws-opts"].(map[string]interface{})
 		if ws == nil {
@@ -924,7 +958,7 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 		if headers == nil {
 			headers = map[string]interface{}{}
 		}
-		if h, _ := headers["Host"].(string); strings.TrimSpace(h) == "" && hint != "" {
+		if h, _ := headers["Host"].(string); strings.TrimSpace(h) == "" && domainHint {
 			headers["Host"] = hint
 			ws["headers"] = headers
 		}
