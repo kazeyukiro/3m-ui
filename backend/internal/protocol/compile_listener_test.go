@@ -153,3 +153,24 @@ func TestVMessCompilerSetsUserNameForTracking(t *testing.T) {
 		t.Fatalf("expected username=bob, got %#v", users[0]["name"])
 	}
 }
+
+
+func TestVMessCompilerPreservesConfiguredPerUserAlterID(t *testing.T) {
+	result, err := (VMessCompiler{}).Compile(CompileInput{
+		Name: "vmess", Protocol: "vmess", Listen: "0.0.0.0", Port: 443,
+		Config: map[string]interface{}{
+			"users": []interface{}{
+				map[string]interface{}{"username": "bob", "uuid": "22222222-2222-4222-8222-222222222222", "alterId": 32},
+			},
+			"alterId": 0,
+		},
+		Users: []UserCred{{Username: "bob", UUID: "22222222-2222-4222-8222-222222222222"}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users := result["users"].([]map[string]interface{})
+	if users[0]["alterId"] != float64(32) && users[0]["alterId"] != 32 {
+		t.Fatalf("configured per-user alterId was lost: %#v", users[0]["alterId"])
+	}
+}
