@@ -154,17 +154,22 @@ func TestVMessCompilerSetsUserNameForTracking(t *testing.T) {
 	}
 }
 
-
 func TestVMessCompilerPreservesConfiguredPerUserAlterID(t *testing.T) {
 	result, err := (VMessCompiler{}).Compile(CompileInput{
-		Name: "vmess", Protocol: "vmess", Listen: "0.0.0.0", Port: 443,
+		Name: "vmess",
+		Protocol: "vmess",
+		Listen: "0.0.0.0",
+		Port: 443,
 		Config: map[string]interface{}{
 			"users": []interface{}{
 				map[string]interface{}{"username": "bob", "uuid": "22222222-2222-4222-8222-222222222222", "alterId": 32},
 			},
 			"alterId": 0,
 		},
-		Users: []UserCred{{Username: "bob", UUID: "22222222-2222-4222-8222-222222222222"}},
+		Users: []UserCred{{
+			Username: "bob",
+			UUID: "22222222-2222-4222-8222-222222222222",
+		}},
 	})
 	if err != nil {
 		t.Fatalf("compile failed: %v", err)
