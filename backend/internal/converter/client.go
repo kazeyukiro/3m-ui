@@ -281,6 +281,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				copyOption(p, opts, "alterId")
 			}
 			applyClientWrappers(p, opts)
+			ensureClientAccessTLS(p, l, server)
+			applyClientSkipCertVerify(p, opts, server, l.ID)
 			result = append(result, p)
 		}
 	case "trojan":
@@ -303,6 +305,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if value, ok := opts["ss-option"]; ok {
 				p["ss-opts"] = value
 			}
+			ensureClientAccessTLS(p, l, server)
+			applyClientSkipCertVerify(p, opts, server, l.ID)
 			result = append(result, p)
 		}
 	case "hysteria2":
@@ -852,6 +856,81 @@ func normalizeTUICToken(token interface{}) interface{} {
 
 // applyClientSkipCertVerify sets skip-cert-verify on a client proxy map using
 // smart cert detection (panel self-signed, host match, explicit override).
+
+// ensureClientAccessTLS fills TLS hostname / fingerprint for CDN and domain
+// access profiles. Listener config often omits sni (panel-only / stripped),
+// while clients still need servername when connecting via Cloudflare or a
+// public domain on 443.
+func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server string) {
+	if p == nil {
+		return
+	}
+	accessSNI := strings.TrimSpace(l.AccessSNI)
+	publicHost := netutil.NormalizeHost(l.PublicHost)
+	hint := accessSNI
+	if hint == "" {
+		hint = publicHost
+	}
+	if hint == "" {
+		hint = strings.TrimSpace(server)
+	}
+	publicPort := strings.TrimSpace(l.PublicPort)
+	if publicPort == "" {
+		publicPort = strings.TrimSpace(l.Port)
+	}
+	network, _ := p["network"].(string)
+	domainHint := hint != "" && net.ParseIP(hint) == nil
+	// WS + public domain (+ common CDN ports) ⇒ client talks TLS to the edge.
+	if network == "ws" && domainHint && (publicPort == "443" || publicPort == "8443" || publicPort == "2053" || publicPort == "2083" || publicPort == "2087" || publicPort == "2096") {
+		p["tls"] = true
+	}
+	tlsOn := false
+	switch v := p["tls"].(type) {
+	case bool:
+		tlsOn = v
+	case string:
+		tlsOn = strings.EqualFold(v, "true")
+	}
+	if !tlsOn {
+		return
+	}
+	if p["servername"] == nil && p["sni"] == nil && hint != "" {
+		p["servername"] = hint
+		p["sni"] = hint
+	} else if p["servername"] == nil {
+		if s, ok := p["sni"].(string); ok && strings.TrimSpace(s) != "" {
+			p["servername"] = strings.TrimSpace(s)
+		}
+	} else if p["sni"] == nil {
+		if s, ok := p["servername"].(string); ok && strings.TrimSpace(s) != "" {
+			p["sni"] = strings.TrimSpace(s)
+		}
+	}
+	if p["client-fingerprint"] == nil {
+		if fp, ok := p["fingerprint"].(string); ok && strings.TrimSpace(fp) != "" {
+			p["client-fingerprint"] = strings.TrimSpace(fp)
+		} else {
+			p["client-fingerprint"] = "chrome"
+		}
+	}
+	// WS Host header for CDN when still empty.
+	if network == "ws" {
+		ws, _ := p["ws-opts"].(map[string]interface{})
+		if ws == nil {
+			ws = map[string]interface{}{"path": "/"}
+			p["ws-opts"] = ws
+		}
+		headers, _ := ws["headers"].(map[string]interface{})
+		if headers == nil {
+			headers = map[string]interface{}{}
+		}
+		if h, _ := headers["Host"].(string); strings.TrimSpace(h) == "" && hint != "" {
+			headers["Host"] = hint
+			ws["headers"] = headers
+		}
+	}
+}
+
 func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost string, listenerID uint) {
 	if p == nil {
 		return
