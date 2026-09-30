@@ -155,7 +155,10 @@ func clientOnlyListenerKey(k string) bool {
 		"grpc-user-agent", "ping-interval", "max-connections", "min-streams", "max-streams",
 		// Client-only TUIC/Hy2 hints sometimes stored in panel JSON.
 		"udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval",
-		"fast-open", "max-open-streams", "disable-sni", "ip":
+		"fast-open", "max-open-streams", "disable-sni", "ip",
+		// Listener WS is only ws-path (wiki inbound VLESS/VMess). Headers belong on
+		// the client as ws-opts.headers / share URI — not on the serving listener.
+		"ws-headers", "ws-opts", "headers", "network":
 		return true
 	default:
 		return false
