@@ -96,13 +96,38 @@ func sudokuURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		return nil, fmt.Errorf("sudoku listener requires key for URI export")
 	}
 	params := map[string]string{"key": key}
-	for _, keyName := range []string{"aead-method", "padding-min", "padding-max", "table-type", "custom-table", "handshake-timeout", "httpmask"} {
+	for _, keyName := range []string{"aead-method", "padding-min", "padding-max", "table-type", "custom-table", "fallback", "handshake-timeout"} {
 		if v := stringValue(cfg[keyName], ""); v != "" {
 			params[keyName] = v
 		}
 	}
+	if tables, ok := cfg["custom-tables"].([]interface{}); ok && len(tables) > 0 {
+		values := make([]string, 0, len(tables))
+		for _, raw := range tables {
+			if v := stringValue(raw, ""); v != "" {
+				values = append(values, v)
+			}
+		}
+		if len(values) > 0 {
+			params["custom-tables"] = strings.Join(values, ",")
+		}
+	}
+	if tables, ok := cfg["custom-tables"].([]string); ok && len(tables) > 0 {
+		params["custom-tables"] = strings.Join(tables, ",")
+	}
 	if b, ok := cfg["enable-pure-downlink"].(bool); ok && b {
 		params["enable-pure-downlink"] = "1"
+	}
+	if hm, ok := cfg["httpmask"].(map[string]interface{}); ok {
+		if b, ok := hm["disable"].(bool); ok && b {
+			params["httpmask-disable"] = "1"
+		}
+		if v := stringValue(hm["mode"], ""); v != "" {
+			params["httpmask-mode"] = v
+		}
+		if v := stringValue(hm["path-root"], ""); v != "" {
+			params["httpmask-path-root"] = v
+		}
 	}
 	return []string{addName(query("sudoku://"+net.JoinHostPort(host, port), params), name)}, nil
 }
