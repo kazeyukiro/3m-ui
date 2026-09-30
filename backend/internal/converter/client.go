@@ -280,6 +280,17 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			} else {
 				copyOption(p, opts, "alterId")
 			}
+			// Listener mux-option maps to the VMess client-side smux block.
+			// The listener exposes padding/brutal; preserve both without leaking
+			// the server-side wrapper shape into the client configuration.
+			if mux, ok := opts["mux-option"].(map[string]interface{}); ok {
+				smux := map[string]interface{}{"enabled": true}
+				if v, ok := mux["padding"]; ok { smux["padding"] = v }
+				if brutal, ok := mux["brutal"].(map[string]interface{}); ok {
+					smux["brutal-opts"] = brutal
+				}
+				p["smux"] = smux
+			}
 			applyClientWrappers(p, opts)
 			ensureClientAccessTLS(p, l, server)
 			applyClientSkipCertVerify(p, opts, server, l.ID)
