@@ -66,13 +66,17 @@ func TestVMessURICarriesWebSocketHost(t *testing.T) {
 	}
 }
 
-func TestVMessURIOmitsWebSocketHostWhenUnset(t *testing.T) {
+func TestVMessURIFillsHostFromServerAddress(t *testing.T) {
+	// When no explicit ws-headers.Host or SNI is configured, the VMess URI
+	// should fall back to the server address as the WS Host. This is critical
+	// for CDN scenarios where the WS Host must match the CDN domain.
 	cfg := vmessCfg()
 	cfg["ws-path"] = "/ws"
 
 	obj := decodeVMess(t, vmessURI(t, cfg))
-	if _, present := obj["host"]; present {
-		t.Fatalf("host must stay absent when no Host header is configured: %#v", obj)
+	// vmessURI uses "example.com" as the host parameter.
+	if obj["host"] != "example.com" {
+		t.Fatalf("host should fall back to server address 'example.com', got: %#v", obj)
 	}
 }
 
