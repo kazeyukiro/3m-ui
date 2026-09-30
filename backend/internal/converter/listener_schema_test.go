@@ -90,3 +90,20 @@ func TestListenerToProxiesSupportsExtendedProtocols(t *testing.T) {
 		})
 	}
 }
+
+
+func TestVMessClientExportMapsListenerMuxToSmux(t *testing.T) {
+	proxies, err := listenerToProxies(models.Listener{
+		Name: "vmess-mux", Protocol: "vmess", Port: "443",
+		Config: `{"users":[{"username":"alice","uuid":"11111111-1111-4111-8111-111111111111"}],"mux-option":{"padding":true,"brutal":{"enabled":true,"up":100,"down":200}}}`,
+	}, "example.com", []user.Credential{{Username:"alice", UUID:"11111111-1111-4111-8111-111111111111"}})
+	if err != nil { t.Fatal(err) }
+	if len(proxies) != 1 { t.Fatalf("expected one proxy, got %d", len(proxies)) }
+	smux, ok := proxies[0]["smux"].(map[string]interface{})
+	if !ok || smux["enabled"] != true || smux["padding"] != true {
+		t.Fatalf("unexpected smux export: %#v", proxies[0]["smux"])
+	}
+	if _, ok := smux["brutal-opts"]; !ok {
+		t.Fatalf("missing brutal-opts in smux export: %#v", smux)
+	}
+}
