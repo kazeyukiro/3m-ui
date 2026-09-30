@@ -263,7 +263,13 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.realm_id = r['realm-id'];
     values.realm_stun = asStringList(r['stun-servers']);
     values.realm_proxy = r.proxy;
+    values.realm_sni = r.sni;
     values.realm_skip_cert = !!r['skip-cert-verify'];
+    values.realm_name_cert_verify = r['name-cert-verify'];
+    values.realm_fingerprint = r.fingerprint;
+    values.realm_certificate = r.certificate;
+    values.realm_private_key = r['private-key'];
+    values.realm_alpn = asStringList(r.alpn);
   }
 
   // sudoku extras
@@ -1737,8 +1743,26 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="realm_proxy" label={t('listeners.realmProxy')} tooltip={fieldTip(t, 'listeners.realm_proxyHint')}>
             <Input />
           </Form.Item>
+          <Form.Item name="realm_sni" label="Realm SNI">
+            <Input placeholder="example.com" />
+          </Form.Item>
           <Form.Item name="realm_skip_cert" label={t('listeners.realmSkipCert')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.realm_skip_certHint')}>
             <Switch />
+          </Form.Item>
+          <Form.Item name="realm_name_cert_verify" label="Realm certificate verification name">
+            <Input placeholder="example.com" />
+          </Form.Item>
+          <Form.Item name="realm_fingerprint" label="Realm TLS fingerprint">
+            <Input placeholder="chrome" />
+          </Form.Item>
+          <Form.Item name="realm_certificate" label="Realm client certificate">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="realm_private_key" label="Realm client private key">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="realm_alpn" label="Realm ALPN">
+            <Select mode="tags" tokenSeparators={[',']} />
           </Form.Item>
         </EnableSection>
       )}
