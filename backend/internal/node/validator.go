@@ -299,12 +299,6 @@ func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 				}
 			}
 		}
-	case "mieru":
-		if transport, ok := cfg["transport"].(string); ok && transport != "" {
-			if !strings.EqualFold(transport, "TCP") && !strings.EqualFold(transport, "UDP") {
-				return fmt.Errorf("mieru transport must be TCP or UDP")
-			}
-		}
 	case "trusttunnel":
 		if !hasCertificatePair(cfg) {
 			return fmt.Errorf("trusttunnel listener requires certificate and private-key")
