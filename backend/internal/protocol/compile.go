@@ -230,6 +230,33 @@ func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string
 	// Propagate top-level alterId to each user object. The official Mihomo
 	// schema for VMess expects alterId inside users[].alterId; without it,
 	// per-user alterId is silently dropped when panel credentials are bound.
+	// Preserve per-user VMess alterId from the listener config when panel
+	// credentials are injected. The official Listener schema stores alterId
+	// inside each users[] entry; replacing users from the credential store must
+	// not erase those per-user values.
+	if field == "uuid" {
+		if raw, ok := cfg["users"].([]interface{}); ok {
+			byUUID := make(map[string]map[string]interface{}, len(raw))
+			for _, item := range raw {
+				if row, ok := item.(map[string]interface{}); ok {
+					if uuid := strings.TrimSpace(fmt.Sprint(row["uuid"])); uuid != "" {
+						byUUID[uuid] = row
+					}
+				}
+			}
+			for _, user := range out {
+				uuid := strings.TrimSpace(fmt.Sprint(user["uuid"]))
+				if row, ok := byUUID[uuid]; ok {
+					for _, key := range []string{"alterId", "flow"} {
+						if value, exists := row[key]; exists && value != nil {
+							user[key] = value
+						}
+					}
+				}
+			}
+		}
+	}
+	// Backward-compatible panel-level alterId fallback.
 	if alterId, ok := cfg["alterId"]; ok && alterId != nil {
 		for _, user := range out {
 			if _, exists := user["alterId"]; !exists {
