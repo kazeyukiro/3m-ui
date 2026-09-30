@@ -242,6 +242,18 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.tlsmirror_dest = m.dest;
     values.tlsmirror_primary_key = m['primary-key'];
     values.tlsmirror_proxy = m.proxy;
+    const advanced: Record<string, any> = {};
+    for (const key of [
+      'explicit-nonce-ciphersuites',
+      'defer-instance-derived-write-time',
+      'transport-layer-padding',
+      'connection-enrolment',
+      'sequence-watermarking-enabled',
+      'embedded-traffic-generator',
+    ]) {
+      if (m[key] !== undefined) advanced[key] = m[key];
+    }
+    if (Object.keys(advanced).length) values.tlsmirror_advanced_json = JSON.stringify(advanced, null, 2);
   }
 
   // shadowquic jls-upstream
@@ -360,7 +372,7 @@ const FORM_OWNED_KEYS = new Set([
   'key', 'aead-method', 'padding-min', 'padding-max', 'table-type', 'enable-pure-downlink',
   'custom-table', 'custom-tables', 'fallback', 'httpmask',
   'certificate', 'private-key', 'client-auth-type', 'client-auth-cert', 'ech-key', 'allow-insecure',
-  'reality-config', 'users', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'tlsmirror-config', 'mux-option',
+  'reality-config', 'users', 'tlsmirror_advanced_json', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'tlsmirror-config', 'mux-option',
   'kcp-tun', 'xhttp-config', 'mkcp-config', 'mekya-config', 'obfs-opts', 'jls-upstream', 'realm-opts',
   'network', 'bbr-profile', 'quic-versions', 'cwnd', 'max-datagram-frame-size', 'recv-window-conn', 'recv-window', 'disable-mtu-discovery', 'traffic-pattern', 'user-hint-is-mandatory',
 ]);
@@ -744,7 +756,17 @@ export function formValuesToConfig(
     const dest = typeof values.tlsmirror_dest === 'string' ? values.tlsmirror_dest.trim() : '';
     const primaryKey = typeof values.tlsmirror_primary_key === 'string' ? values.tlsmirror_primary_key.trim() : '';
     if (dest && primaryKey) {
+      let advanced: Record<string, any> = {};
+      if (typeof values.tlsmirror_advanced_json === 'string' && values.tlsmirror_advanced_json.trim()) {
+        try {
+          const parsed = JSON.parse(values.tlsmirror_advanced_json);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) advanced = parsed;
+        } catch {
+          throw new Error('TLS Mirror advanced settings must be valid JSON');
+        }
+      }
       cfg['tlsmirror-config'] = cleanObj({
+        ...advanced,
         dest,
         'primary-key': primaryKey,
         proxy: values.tlsmirror_proxy,
@@ -1435,6 +1457,16 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           </Form.Item>
           <Form.Item name="tlsmirror_proxy" label={t('listeners.tlsMirrorProxy') || 'Proxy'} tooltip={fieldTip(t, 'listeners.tlsmirror_proxyHint')}>
             <Input />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_advanced_json"
+            label="TLS Mirror advanced options"
+            tooltip="JSON for explicit-nonce-ciphersuites, defer-instance-derived-write-time, transport-layer-padding, connection-enrolment, sequence-watermarking-enabled, and embedded-traffic-generator."
+          >
+            <Input.TextArea
+              rows={8}
+              placeholder={'{"explicit-nonce-ciphersuites":[...],"transport-layer-padding":{"enabled":true}}'}
+            />
           </Form.Item>
         </EnableSection>
       )}
