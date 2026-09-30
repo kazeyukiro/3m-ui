@@ -318,7 +318,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			p["password"] = cred.Password
 			for _, key := range []string{
 				"up", "down", "obfs", "obfs-password", "bbr-profile",
-				"realm-opts", "alpn", "sni", "skip-cert-verify", "name-cert-verify",
+				"alpn", "sni", "skip-cert-verify", "name-cert-verify",
 				"fingerprint", "handshake-timeout",
 			} {
 				copyOption(p, opts, key)
