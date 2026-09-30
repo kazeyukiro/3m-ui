@@ -855,7 +855,13 @@ export function formValuesToConfig(
       'realm-id': values.realm_id,
       'stun-servers': values.realm_stun,
       proxy: values.realm_proxy,
+      sni: values.realm_sni,
       'skip-cert-verify': values.realm_skip_cert === true ? true : undefined,
+      'name-cert-verify': values.realm_name_cert_verify,
+      fingerprint: values.realm_fingerprint,
+      certificate: values.realm_certificate,
+      'private-key': values.realm_private_key,
+      alpn: values.realm_alpn,
     }) || { enable: true };
   }
 
