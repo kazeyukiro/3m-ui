@@ -151,19 +151,19 @@ func TestValidateProtocolSpecificSudokuOfficialValues(t *testing.T) {
 }
 
 func TestValidateProtocolSpecificMieruAndTrustTunnel(t *testing.T) {
-	if err := validateProtocolSpecific("mieru", map[string]interface{}{"transport": "TCP"}); err != nil {
+	if err := validateProtocolSpecific("mieru", map[string]interface{}{"users": map[string]interface{}{"alice": "secret"}, "transport": "TCP"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateProtocolSpecific("mieru", map[string]interface{}{"transport": "udp"}); err != nil {
+	if err := validateProtocolSpecific("mieru", map[string]interface{}{"users": map[string]interface{}{"alice": "secret"}, "transport": "udp"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateProtocolSpecific("mieru", map[string]interface{}{"transport": "QUIC"}); err == nil {
+	if err := validateProtocolSpecific("mieru", map[string]interface{}{"users": map[string]interface{}{"alice": "secret"}, "transport": "QUIC"}); err == nil {
 		t.Fatal("expected invalid Mieru transport to be rejected")
 	}
-	if err := validateProtocolSpecific("trusttunnel", map[string]interface{}{"network": []interface{}{"tcp", "udp"}}); err != nil {
+	if err := validateProtocolSpecific("trusttunnel", map[string]interface{}{"certificate": "cert", "private-key": "key", "network": []interface{}{"tcp", "udp"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateProtocolSpecific("trusttunnel", map[string]interface{}{"network": []interface{}{"tcp", "quic"}}); err == nil {
+	if err := validateProtocolSpecific("trusttunnel", map[string]interface{}{"certificate": "cert", "private-key": "key", "network": []interface{}{"tcp", "quic"}}); err == nil {
 		t.Fatal("expected invalid TrustTunnel network to be rejected")
 	}
 }
