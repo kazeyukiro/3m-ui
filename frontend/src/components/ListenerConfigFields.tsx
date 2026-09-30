@@ -235,25 +235,32 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.obfs_opts_host = cfg['obfs-opts'].host;
   }
 
-  // tlsmirror-config (vmess)
+  // tlsmirror-config (vmess) — full official inbound fields
   if (cfg['tlsmirror-config'] && typeof cfg['tlsmirror-config'] === 'object') {
-    const m = cfg['tlsmirror-config'];
+    const m = cfg['tlsmirror-config'] as Record<string, any>;
     values.tlsmirror_enabled = true;
     values.tlsmirror_dest = m.dest;
     values.tlsmirror_primary_key = m['primary-key'];
     values.tlsmirror_proxy = m.proxy;
-    const advanced: Record<string, any> = {};
-    for (const key of [
-      'explicit-nonce-ciphersuites',
-      'defer-instance-derived-write-time',
-      'transport-layer-padding',
-      'connection-enrolment',
-      'sequence-watermarking-enabled',
-      'embedded-traffic-generator',
-    ]) {
-      if (m[key] !== undefined) advanced[key] = m[key];
+    if (Array.isArray(m['explicit-nonce-ciphersuites'])) {
+      values.tlsmirror_explicit_nonce_ciphersuites = m['explicit-nonce-ciphersuites'].map((x: any) => String(x));
     }
-    if (Object.keys(advanced).length) values.tlsmirror_advanced_json = JSON.stringify(advanced, null, 2);
+    const defer = m['defer-instance-derived-write-time'];
+    if (defer && typeof defer === 'object') {
+      values.tlsmirror_defer_base_ns = defer['base-nanoseconds'];
+      values.tlsmirror_defer_random_ns = defer['uniform-random-multiplier-nanoseconds'];
+    }
+    const pad = m['transport-layer-padding'];
+    if (pad && typeof pad === 'object') {
+      values.tlsmirror_padding_enabled = !!pad.enabled;
+    }
+    const enrol = m['connection-enrolment'];
+    if (enrol && typeof enrol === 'object') {
+      values.tlsmirror_enrolment_outbound = enrol['primary-ingress-outbound'];
+    }
+    if (m['sequence-watermarking-enabled'] !== undefined) {
+      values.tlsmirror_sequence_watermarking = !!m['sequence-watermarking-enabled'];
+    }
   }
 
   // shadowquic jls-upstream
@@ -372,7 +379,7 @@ const FORM_OWNED_KEYS = new Set([
   'key', 'aead-method', 'padding-min', 'padding-max', 'table-type', 'enable-pure-downlink',
   'custom-table', 'custom-tables', 'fallback', 'httpmask',
   'certificate', 'private-key', 'client-auth-type', 'client-auth-cert', 'ech-key', 'allow-insecure',
-  'reality-config', 'users', 'tlsmirror_advanced_json', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'tlsmirror-config', 'mux-option',
+  'reality-config', 'users', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'tlsmirror-config', 'mux-option',
   'kcp-tun', 'xhttp-config', 'mkcp-config', 'mekya-config', 'obfs-opts', 'jls-upstream', 'realm-opts',
   'network', 'bbr-profile', 'quic-versions', 'cwnd', 'max-datagram-frame-size', 'recv-window-conn', 'recv-window', 'disable-mtu-discovery', 'traffic-pattern', 'user-hint-is-mandatory',
 ]);
@@ -751,25 +758,40 @@ export function formValuesToConfig(
     }
   }
 
-  // tlsmirror-config (vmess) — require dest + primary-key
+  // tlsmirror-config (vmess) — official inbound shape only (wiki listeners/vmess)
   if (TLSMIRROR_PROTOCOLS.has(protocol) && values.tlsmirror_enabled) {
     const dest = typeof values.tlsmirror_dest === 'string' ? values.tlsmirror_dest.trim() : '';
     const primaryKey = typeof values.tlsmirror_primary_key === 'string' ? values.tlsmirror_primary_key.trim() : '';
     if (dest && primaryKey) {
-      let advanced: Record<string, any> = {};
-      if (typeof values.tlsmirror_advanced_json === 'string' && values.tlsmirror_advanced_json.trim()) {
-        try {
-          const parsed = JSON.parse(values.tlsmirror_advanced_json);
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) advanced = parsed;
-        } catch {
-          throw new Error('TLS Mirror advanced settings must be valid JSON');
-        }
+      const suitesRaw = values.tlsmirror_explicit_nonce_ciphersuites;
+      let suites: number[] | undefined;
+      if (Array.isArray(suitesRaw) && suitesRaw.length) {
+        suites = suitesRaw
+          .map((x) => (typeof x === 'number' ? x : parseInt(String(x).trim(), 10)))
+          .filter((n) => Number.isFinite(n));
+        if (!suites.length) suites = undefined;
       }
+      const deferBase = values.tlsmirror_defer_base_ns;
+      const deferRand = values.tlsmirror_defer_random_ns;
+      let defer: Record<string, number> | undefined;
+      if (deferBase != null && deferBase !== '' || deferRand != null && deferRand !== '') {
+        defer = {};
+        if (deferBase != null && deferBase !== '') defer['base-nanoseconds'] = Number(deferBase);
+        if (deferRand != null && deferRand !== '') defer['uniform-random-multiplier-nanoseconds'] = Number(deferRand);
+      }
+      const enrolOut =
+        typeof values.tlsmirror_enrolment_outbound === 'string'
+          ? values.tlsmirror_enrolment_outbound.trim()
+          : '';
       cfg['tlsmirror-config'] = cleanObj({
-        ...advanced,
         dest,
         'primary-key': primaryKey,
-        proxy: values.tlsmirror_proxy,
+        proxy: typeof values.tlsmirror_proxy === 'string' ? values.tlsmirror_proxy.trim() || undefined : values.tlsmirror_proxy,
+        'explicit-nonce-ciphersuites': suites,
+        'defer-instance-derived-write-time': defer && Object.keys(defer).length ? defer : undefined,
+        'transport-layer-padding': values.tlsmirror_padding_enabled ? { enabled: true } : undefined,
+        'connection-enrolment': enrolOut ? { 'primary-ingress-outbound': enrolOut } : undefined,
+        'sequence-watermarking-enabled': values.tlsmirror_sequence_watermarking === true ? true : undefined,
       });
     }
   }
@@ -1456,17 +1478,56 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
             <Input.Password />
           </Form.Item>
           <Form.Item name="tlsmirror_proxy" label={t('listeners.tlsMirrorProxy') || 'Proxy'} tooltip={fieldTip(t, 'listeners.tlsmirror_proxyHint')}>
-            <Input />
+            <Input placeholder="DIRECT" />
           </Form.Item>
           <Form.Item
-            name="tlsmirror_advanced_json"
-            label={t('listeners.tlsMirrorAdvanced') || 'TLS Mirror advanced options'}
-            tooltip={fieldTip(t, 'listeners.tlsMirrorAdvancedHint')}
+            name="tlsmirror_explicit_nonce_ciphersuites"
+            label={t('listeners.tlsMirrorCipherSuites') || 'Explicit nonce cipher suites'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorCipherSuitesHint')}
           >
-            <Input.TextArea
-              rows={8}
-              placeholder={'{"explicit-nonce-ciphersuites":[...],"transport-layer-padding":{"enabled":true}}'}
+            <Select
+              mode="tags"
+              tokenSeparators={[',', ' ']}
+              placeholder="156, 157, 49195, …"
+              style={{ width: '100%' }}
             />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_defer_base_ns"
+            label={t('listeners.tlsMirrorDeferBase') || 'Defer write base (ns)'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorDeferBaseHint')}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_defer_random_ns"
+            label={t('listeners.tlsMirrorDeferRandom') || 'Defer write random max (ns)'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorDeferRandomHint')}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_padding_enabled"
+            label={t('listeners.tlsMirrorPadding') || 'Transport layer padding'}
+            valuePropName="checked"
+            tooltip={fieldTip(t, 'listeners.tlsMirrorPaddingHint')}
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_enrolment_outbound"
+            label={t('listeners.tlsMirrorEnrolment') || 'Enrolment primary ingress outbound'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorEnrolmentHint')}
+          >
+            <Input placeholder="" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_sequence_watermarking"
+            label={t('listeners.tlsMirrorWatermark') || 'Sequence watermarking'}
+            valuePropName="checked"
+            tooltip={fieldTip(t, 'listeners.tlsMirrorWatermarkHint')}
+          >
+            <Switch />
           </Form.Item>
         </EnableSection>
       )}

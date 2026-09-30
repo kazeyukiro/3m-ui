@@ -1340,9 +1340,23 @@ func tlsmirrorClientOptions(src map[string]interface{}) map[string]interface{} {
 	if !ok || len(cfg) == 0 {
 		return nil
 	}
-	result := make(map[string]interface{}, len(cfg))
-	for k, v := range cfg {
-		result[k] = v
+	// Client tlsmirror-opts (proxies/tls): no dest/proxy (inbound-only).
+	result := map[string]interface{}{}
+	for _, key := range []string{
+		"primary-key",
+		"explicit-nonce-ciphersuites",
+		"defer-instance-derived-write-time",
+		"transport-layer-padding",
+		"connection-enrolment",
+		"sequence-watermarking-enabled",
+		"embedded-traffic-generator",
+	} {
+		if v, ok := cfg[key]; ok && v != nil {
+			result[key] = v
+		}
+	}
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }
