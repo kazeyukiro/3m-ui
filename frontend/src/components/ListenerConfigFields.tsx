@@ -557,7 +557,10 @@ export function formValuesToConfig(
       set('padding-max', values['padding-max']);
       set('table-type', values['table-type']);
       set('custom-table', values['custom-table']);
-      set('custom-tables', values['custom-tables']);
+      const customTables = typeof values['custom-tables'] === 'string'
+        ? values['custom-tables'].split(/[\\n,]+/).map((v: string) => v.trim()).filter(Boolean)
+        : values['custom-tables'];
+      if (Array.isArray(customTables) && customTables.length > 0) set('custom-tables', customTables);
       set('fallback', values['fallback']);
       set('handshake-timeout', values['handshake-timeout']);
       if (values['enable-pure-downlink'] === true) cfg['enable-pure-downlink'] = true;
@@ -1276,7 +1279,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="aead-method" label={t('listeners.aeadMethod')} tooltip={fieldTip(t, 'listeners.aead-methodHint')}>
             <Select
               allowClear
-              options={['chacha20-poly1305', 'aes-128-gcm', 'aes-256-gcm'].map((v) => ({ value: v, label: v }))}
+              options={['chacha20-poly1305', 'aes-128-gcm', 'none'].map((v) => ({ value: v, label: v }))}
             />
           </Form.Item>
           <Form.Item name="padding-min" label={t('listeners.paddingMin')} tooltip={fieldTip(t, 'listeners.padding-minHint')}>
