@@ -264,10 +264,54 @@ func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 			return fmt.Errorf("mieru listener requires at least one user")
 		}
 	case "sudoku":
+		if aead, ok := cfg["aead-method"].(string); ok && aead != "" {
+			switch aead {
+			case "chacha20-poly1305", "aes-128-gcm", "none":
+			default:
+				return fmt.Errorf("sudoku aead-method must be chacha20-poly1305, aes-128-gcm, or none")
+			}
+		}
+		if table, ok := cfg["table-type"].(string); ok && table != "" {
+			switch table {
+			case "prefer_ascii", "prefer_entropy", "up_ascii_down_entropy", "up_entropy_down_ascii":
+			default:
+				return fmt.Errorf("sudoku table-type is invalid")
+			}
+		}
 		min, minOK := numeric(cfg["padding-min"])
 		max, maxOK := numeric(cfg["padding-max"])
+		if minOK && (min < 0 || min > 100) {
+			return fmt.Errorf("sudoku padding-min must be between 0 and 100")
+		}
+		if maxOK && (max < 0 || max > 100) {
+			return fmt.Errorf("sudoku padding-max must be between 0 and 100")
+		}
 		if minOK && maxOK && max < min {
 			return fmt.Errorf("sudoku padding-max must be greater than or equal to padding-min")
+		}
+		if mode, ok := cfg["httpmask"].(map[string]interface{}); ok {
+			if v, ok := mode["mode"].(string); ok && v != "" {
+				switch v {
+				case "legacy", "stream", "poll", "auto", "ws":
+				default:
+					return fmt.Errorf("sudoku httpmask mode is invalid")
+				}
+			}
+		}
+	case "mieru":
+		if transport, ok := cfg["transport"].(string); ok && transport != "" {
+			if !strings.EqualFold(transport, "TCP") && !strings.EqualFold(transport, "UDP") {
+				return fmt.Errorf("mieru transport must be TCP or UDP")
+			}
+		}
+	case "trusttunnel":
+		if network, ok := cfg["network"].([]interface{}); ok {
+			for _, raw := range network {
+				v := strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
+				if v != "tcp" && v != "udp" {
+					return fmt.Errorf("trusttunnel network must contain only tcp or udp")
+				}
+			}
 		}
 	}
 	return nil
