@@ -188,10 +188,6 @@ func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 		if users, ok := cfg["users"].(map[string]interface{}); !ok || len(users) == 0 {
 			return fmt.Errorf("hysteria2 listener requires at least one user")
 		}
-	case "trusttunnel":
-		if !hasCertificatePair(cfg) {
-			return fmt.Errorf("trusttunnel listener requires certificate and private-key")
-		}
 	case "tuic", "tuic-v4", "tuic-v5":
 		// Panel uses tuic-v4 / tuic-v5; Mihomo YAML type is always "tuic".
 		users, token := hasNonEmpty(cfg["users"]), hasNonEmpty(cfg["token"])
@@ -263,6 +259,11 @@ func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 		if users, ok := cfg["users"].(map[string]interface{}); !ok || len(users) == 0 {
 			return fmt.Errorf("mieru listener requires at least one user")
 		}
+		if transport, ok := cfg["transport"].(string); ok && transport != "" {
+			if !strings.EqualFold(transport, "TCP") && !strings.EqualFold(transport, "UDP") {
+				return fmt.Errorf("mieru transport must be TCP or UDP")
+			}
+		}
 	case "sudoku":
 		if aead, ok := cfg["aead-method"].(string); ok && aead != "" {
 			switch aead {
@@ -305,6 +306,9 @@ func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 			}
 		}
 	case "trusttunnel":
+		if !hasCertificatePair(cfg) {
+			return fmt.Errorf("trusttunnel listener requires certificate and private-key")
+		}
 		if network, ok := cfg["network"].([]interface{}); ok {
 			for _, raw := range network {
 				v := strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
