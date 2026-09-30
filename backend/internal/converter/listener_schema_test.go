@@ -110,3 +110,17 @@ func TestVMessClientExportMapsListenerMuxToSmux(t *testing.T) {
 		t.Fatalf("missing brutal-opts in smux export: %#v", smux)
 	}
 }
+
+func TestListenerToProxiesEmptyMuxOptionSkipped(t *testing.T) {
+	l := models.Listener{
+		Name: "vmess-mux-empty", Protocol: "vmess", Port: "443", Enabled: true,
+		Config: `{"users":[{"username":"alice","uuid":"11111111-1111-4111-8111-111111111111"}],"mux-option":{}}`,
+	}
+	proxies, err := listenerToProxies(l, "example.com", []user.Credential{{UUID: "11111111-1111-4111-8111-111111111111", Username: "alice"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := proxies[0]["smux"]; ok {
+		t.Fatalf("empty mux-option must not export smux: %#v", proxies[0]["smux"])
+	}
+}

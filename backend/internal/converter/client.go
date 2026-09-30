@@ -280,19 +280,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			} else {
 				copyOption(p, opts, "alterId")
 			}
-			// Listener mux-option maps to the VMess client-side smux block.
-			// The listener exposes padding/brutal; preserve both without leaking
-			// the server-side wrapper shape into the client configuration.
-			if mux, ok := opts["mux-option"].(map[string]interface{}); ok {
-				smux := map[string]interface{}{"enabled": true}
-				if v, ok := mux["padding"]; ok {
-					smux["padding"] = v
-				}
-				if brutal, ok := mux["brutal"].(map[string]interface{}); ok {
-					smux["brutal-opts"] = brutal
-				}
-				p["smux"] = smux
-			}
+			applyMuxOptionAsSmux(p, opts)
 			applyClientWrappers(p, opts)
 			ensureClientAccessTLS(p, l, server)
 			applyClientSkipCertVerify(p, opts, server, l.ID)
@@ -314,6 +302,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if p["sni"] == nil && p["servername"] == nil {
 				p["sni"] = server
 			}
+			applyMuxOptionAsSmux(p, opts)
 			applyClientWrappers(p, opts)
 			if value, ok := opts["ss-option"]; ok {
 				p["ss-opts"] = value
@@ -879,6 +868,32 @@ func normalizeTUICToken(token interface{}) interface{} {
 // access profiles. Listener config often omits sni (panel-only / stripped),
 // while clients still need servername when connecting via Cloudflare or a
 // public domain on 443.
+
+// applyMuxOptionAsSmux maps listener mux-option to client smux.
+// Empty mux-option objects are ignored so we do not force enabled:true.
+func applyMuxOptionAsSmux(p, opts map[string]interface{}) {
+	if p == nil || opts == nil {
+		return
+	}
+	mux, ok := opts["mux-option"].(map[string]interface{})
+	if !ok || len(mux) == 0 {
+		return
+	}
+	smux := map[string]interface{}{}
+	if v, ok := mux["padding"]; ok {
+		smux["padding"] = v
+	}
+	if brutal, ok := mux["brutal"].(map[string]interface{}); ok && len(brutal) > 0 {
+		smux["brutal-opts"] = brutal
+	}
+	// Only emit when there is real content.
+	if len(smux) == 0 {
+		return
+	}
+	smux["enabled"] = true
+	p["smux"] = smux
+}
+
 func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server string) {
 	if p == nil {
 		return

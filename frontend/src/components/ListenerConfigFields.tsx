@@ -1460,8 +1460,8 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           </Form.Item>
           <Form.Item
             name="tlsmirror_advanced_json"
-            label="TLS Mirror advanced options"
-            tooltip="JSON for explicit-nonce-ciphersuites, defer-instance-derived-write-time, transport-layer-padding, connection-enrolment, sequence-watermarking-enabled, and embedded-traffic-generator."
+            label={t('listeners.tlsMirrorAdvanced') || 'TLS Mirror advanced options'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorAdvancedHint')}
           >
             <Input.TextArea
               rows={8}
@@ -1781,25 +1781,25 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="realm_proxy" label={t('listeners.realmProxy')} tooltip={fieldTip(t, 'listeners.realm_proxyHint')}>
             <Input />
           </Form.Item>
-          <Form.Item name="realm_sni" label="Realm SNI">
+          <Form.Item name="realm_sni" label={t('listeners.realmSni') || 'Realm SNI'} tooltip={fieldTip(t, 'listeners.realm_sniHint')}>
             <Input placeholder="example.com" />
           </Form.Item>
           <Form.Item name="realm_skip_cert" label={t('listeners.realmSkipCert')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.realm_skip_certHint')}>
             <Switch />
           </Form.Item>
-          <Form.Item name="realm_name_cert_verify" label="Realm certificate verification name">
+          <Form.Item name="realm_name_cert_verify" label={t('listeners.realmNameCertVerify') || 'Realm certificate verification name'} tooltip={fieldTip(t, 'listeners.realm_name_cert_verifyHint')}>
             <Input placeholder="example.com" />
           </Form.Item>
-          <Form.Item name="realm_fingerprint" label="Realm TLS fingerprint">
+          <Form.Item name="realm_fingerprint" label={t('listeners.realmFingerprint') || 'Realm TLS fingerprint'} tooltip={fieldTip(t, 'listeners.realm_fingerprintHint')}>
             <Input placeholder="chrome" />
           </Form.Item>
-          <Form.Item name="realm_certificate" label="Realm client certificate">
+          <Form.Item name="realm_certificate" label={t('listeners.realmCertificate') || 'Realm client certificate'} tooltip={fieldTip(t, 'listeners.realm_certificateHint')}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="realm_private_key" label="Realm client private key">
+          <Form.Item name="realm_private_key" label={t('listeners.realmPrivateKey') || 'Realm client private key'} tooltip={fieldTip(t, 'listeners.realm_private_keyHint')}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="realm_alpn" label="Realm ALPN">
+          <Form.Item name="realm_alpn" label={t('listeners.realmAlpn') || 'Realm ALPN'} tooltip={fieldTip(t, 'listeners.realm_alpnHint')}>
             <Select mode="tags" tokenSeparators={[',']} />
           </Form.Item>
         </EnableSection>
