@@ -136,156 +136,96 @@ function useFeatureItems(): FeatureItem[] {
     ];
 
     const nested: FeatureItem[] = [
-      // Settings sections
-      {
-        key: '/settings?section=panel',
-        group: settings,
-        label: t('settings.navPanel') || 'Panel / appearance',
-        icon: <IconNavSettings />,
-        keywords: ['theme', 'locale', 'language', '外观', '主题', '語言', '语言', 'テーマ'],
-      },
-      {
-        key: '/settings?section=access',
-        group: settings,
-        label: t('settings.navAccess') || 'Access profile',
-        icon: <IconNavSettings />,
-        keywords: ['sni', 'host', 'fingerprint', '访问', '档案', 'アクセス'],
-      },
-      {
-        key: '/settings?section=telegram',
-        group: settings,
-        label: t('settings.navTelegram') || 'Telegram',
-        icon: <IconNavSettings />,
-        keywords: ['bot', 'tg', 'telegram', '通知'],
-      },
-      {
-        key: '/settings?section=security',
-        group: settings,
-        label: t('settings.navSecurity') || 'Security & backup',
-        icon: <IconNavSettings />,
-        keywords: ['2fa', 'totp', 'backup', 'github', 'oauth', '安全', '备份', '備份', '密码', '密碼'],
-      },
-      {
-        key: '/settings?section=subscription',
-        group: settings,
-        label: t('settings.navSubscription') || 'Subscription page',
-        icon: <IconNavSettings />,
-        keywords: ['sub page', '订阅页', '訂閱頁', '模板'],
-      },
-      {
-        key: '/settings?section=ssl',
-        group: settings,
-        label: t('settings.navSSL') || 'Certificate / SSL',
-        icon: <IconNavSettings />,
-        keywords: ['tls', 'cert', 'acme', '证书', '證書', 'https', 'ssl'],
-      },
-      {
-        key: '/settings?section=network',
-        group: settings,
-        label: t('settings.navNetwork') || 'Proxy & Geo',
-        icon: <IconNavSettings />,
-        keywords: ['warp', 'geoip', 'geosite', 'reverse', '反代', '网络', '網路'],
-      },
-      {
-        key: '/settings?section=traffic',
-        group: settings,
-        label: t('settings.navTraffic') || 'Traffic reset',
-        icon: <IconNavSettings />,
-        keywords: ['reset', 'cycle', '流量重置', '月流量'],
-      },
-      {
-        key: '/settings?section=ops',
-        group: settings,
-        label: t('settings.navOps') || 'System ops',
-        icon: <IconNavSettings />,
-        keywords: ['restart', 'update', 'panel update', '系统操作', '升级', '升級'],
-      },
-      {
-        key: '/settings?section=about',
-        group: settings,
-        label: t('settings.navAbout') || 'About',
-        icon: <IconNavSettings />,
-        keywords: ['version', 'license', '关于', '關於'],
-      },
-      {
-        key: '/change-password',
-        group: settings,
-        label: t('settings.changePassword') || 'Change password',
-        icon: <IconNavSettings />,
-        keywords: ['password', 'passwd', '改密', '修改密码', '修改密碼'],
-      },
-      // Routing scopes
-      {
-        key: '/routing?scope=client',
-        group: routing,
-        label: t('routing.tabClient') || 'Client subscription rules',
-        icon: <IconNavRouting />,
-        keywords: ['proxy-groups', 'client rules', '订阅规则', '訂閱規則', '分流'],
-      },
-      {
-        key: '/routing?scope=server',
-        group: routing,
-        label: t('routing.tabServer') || 'Server egress rules',
-        icon: <IconNavRouting />,
-        keywords: ['egress', 'server rules', 'warp domains', '出口', '服务端规则', '服務端規則'],
-      },
-      // Config tabs
-      {
-        key: '/config?tab=visual',
-        group: config,
-        label: t('config.visual') || 'Visual proxies',
-        icon: <IconNavConfig />,
-        keywords: ['proxy', 'proxies', '可视化', '視覺化'],
-      },
-      {
-        key: '/config?tab=yaml',
-        group: config,
-        label: t('config.yaml') || 'YAML editor',
-        icon: <IconNavConfig />,
-        keywords: ['yaml', 'raw', '编辑器', '編輯器'],
-      },
-      // Core-related shortcuts (same page, different keywords)
-      {
-        key: '/core',
-        group: core,
-        label: t('core.updates.title') || 'Core updates',
-        icon: <IconNavCore />,
-        keywords: ['update core', 'rollback', '升级内核', '回滚', '回滾', 'mihomo update'],
-      },
-      {
-        key: '/listeners',
-        group: listeners,
-        label: t('listeners.create') || 'Create node',
-        icon: <IconNavListeners />,
-        keywords: ['add node', 'new inbound', '新建节点', '新建節點', '添加节点'],
-      },
-      {
-        key: '/users',
-        group: users,
-        label: t('users.create') || 'Create user',
-        icon: <IconNavUsers />,
-        keywords: ['add user', 'new client', '新建用户', '新建用戶', '添加用户'],
-      },
-      {
-        key: '/share',
-        group: share,
-        label: t('share.title') || share,
-        icon: <IconNavShare />,
-        keywords: ['qr', 'uri', 'clash', 'v2ray', '订阅链接', '訂閱連結'],
-      },
+      // Settings · panel
+      { key: '/settings?section=panel', group: settings, label: t('settings.navPanel') || 'Panel / appearance', icon: <IconNavSettings />, keywords: ['theme', 'locale', 'language', '外观', '主题', '語言', '语言', 'panel'] },
+      { key: '/settings?section=panel', group: settings, label: t('settings.panelPort') || 'Panel port', icon: <IconNavSettings />, keywords: ['port', 'listen', '8080', '面板端口', '监听', 'panel port'] },
+      { key: '/settings?section=panel', group: settings, label: t('settings.panelPublicURL') || 'Public URL', icon: <IconNavSettings />, keywords: ['public_url', '公网', '公網', '域名', 'public url'] },
+      { key: '/settings?section=panel', group: settings, label: t('settings.theme') || 'Theme', icon: <IconNavSettings />, keywords: ['dark', 'light', 'system', '暗色', '亮色', '主题', '主題'] },
+      { key: '/settings?section=panel', group: settings, label: t('settings.language') || 'Language', icon: <IconNavSettings />, keywords: ['i18n', 'locale', '中文', 'english', '语言', '語言'] },
+      // Settings · access
+      { key: '/settings?section=access', group: settings, label: t('settings.navAccess') || 'Access profile', icon: <IconNavSettings />, keywords: ['access', '访问档案', '訪問檔案'] },
+      { key: '/settings?section=access', group: settings, label: t('settings.publicHost') || 'Public host', icon: <IconNavSettings />, keywords: ['host', 'cdn', '公网域名', 'public host'] },
+      { key: '/settings?section=access', group: settings, label: t('settings.clientFingerprint') || 'Client fingerprint', icon: <IconNavSettings />, keywords: ['fingerprint', 'fp', 'chrome', 'firefox', '指纹', '指紋'] },
+      { key: '/settings?section=access', group: settings, label: t('listeners.sni') || 'Access SNI', icon: <IconNavSettings />, keywords: ['sni', 'server name', 'tls sni'] },
+      // Settings · telegram
+      { key: '/settings?section=telegram', group: settings, label: t('settings.navTelegram') || 'Telegram', icon: <IconNavSettings />, keywords: ['bot', 'tg', 'telegram', '通知'] },
+      { key: '/settings?section=telegram', group: settings, label: t('settings.botToken') || 'Bot token', icon: <IconNavSettings />, keywords: ['bot token', 'telegram token', '机器人', '機器人'] },
+      { key: '/settings?section=telegram', group: settings, label: t('settings.chatIds') || 'Chat IDs', icon: <IconNavSettings />, keywords: ['chat id', '群组', '群組'] },
+      { key: '/settings?section=telegram', group: settings, label: t('settings.notifyCPU') || 'CPU alert', icon: <IconNavSettings />, keywords: ['cpu warn', 'cpu alert', 'cpu通知', '负载'] },
+      { key: '/settings?section=telegram', group: settings, label: t('settings.notifyTraffic') || 'Traffic alert', icon: <IconNavSettings />, keywords: ['traffic warn', '流量告警', '流量通知'] },
+      { key: '/settings?section=telegram', group: settings, label: t('settings.notifyExpiry') || 'Expiry alert', icon: <IconNavSettings />, keywords: ['expire', '到期', '过期', '過期'] },
+      { key: '/settings?section=telegram', group: settings, label: t('settings.telegramTest') || 'Test Telegram', icon: <IconNavSettings />, keywords: ['test bot', '测试通知', '測試通知'] },
+      // Settings · security
+      { key: '/settings?section=security', group: settings, label: t('settings.navSecurity') || 'Security & backup', icon: <IconNavSettings />, keywords: ['security', '安全', '备份', '備份'] },
+      { key: '/change-password', group: settings, label: t('settings.changePassword') || 'Change password', icon: <IconNavSettings />, keywords: ['password', 'passwd', '改密', '修改密码', '修改密碼'] },
+      { key: '/settings?section=security', group: settings, label: t('settings.totp') || '2FA / TOTP', icon: <IconNavSettings />, keywords: ['2fa', 'totp', 'mfa', 'otp', '双因素', '二步验证', '二步驗證'] },
+      { key: '/settings?section=security', group: settings, label: t('settings.githubOAuth') || 'GitHub OAuth', icon: <IconNavSettings />, keywords: ['github', 'oauth', 'GitHub登录', 'GitHub登入'] },
+      { key: '/settings?section=security', group: settings, label: t('settings.backup') || 'Backup & restore', icon: <IconNavSettings />, keywords: ['backup', 'restore', 'snapshot', '备份', '備份', '恢复', '還原', '数据库'] },
+      { key: '/settings?section=security', group: settings, label: 'Web path prefix', icon: <IconNavSettings />, keywords: ['web_path', 'path prefix', '隐藏路径', '面板路径', 'secret path'] },
+      // Settings · subscription / ssl / network / traffic / ops
+      { key: '/settings?section=subscription', group: settings, label: t('settings.navSubscription') || 'Subscription page', icon: <IconNavSettings />, keywords: ['sub page', '订阅页', '訂閱頁', '模板'] },
+      { key: '/settings?section=ssl', group: settings, label: t('settings.navSSL') || 'Certificate / SSL', icon: <IconNavSettings />, keywords: ['tls', 'cert', 'acme', '证书', '證書', 'https', 'ssl', 'letsencrypt'] },
+      { key: '/settings?section=network', group: settings, label: t('settings.navNetwork') || 'Proxy & Geo', icon: <IconNavSettings />, keywords: ['network', '反代', 'geo', '网络', '網路'] },
+      { key: '/settings?section=network', group: settings, label: 'WARP', icon: <IconNavSettings />, keywords: ['warp', 'wireguard', 'masque', 'cloudflare', 'cf warp'] },
+      { key: '/settings?section=network', group: settings, label: 'GeoIP / GeoSite', icon: <IconNavSettings />, keywords: ['geoip', 'geosite', 'geo 数据', 'geo data', '规则集下载'] },
+      { key: '/settings?section=traffic', group: settings, label: t('settings.navTraffic') || 'Traffic reset', icon: <IconNavSettings />, keywords: ['reset', 'cycle', 'monthly', '流量重置', '月流量'] },
+      { key: '/settings?section=ops', group: settings, label: t('settings.navOps') || 'System ops', icon: <IconNavSettings />, keywords: ['ops', '系统操作', '维护'] },
+      { key: '/settings?section=ops', group: settings, label: t('settings.panelUpdate') || 'Panel update', icon: <IconNavSettings />, keywords: ['panel update', 'upgrade panel', '升级面板', '升級面板', 'pre', 'stable'] },
+      { key: '/settings?section=about', group: settings, label: t('settings.navAbout') || 'About', icon: <IconNavSettings />, keywords: ['version', 'license', '关于', '關於', 'about'] },
+      // Routing
+      { key: '/routing?scope=client', group: routing, label: t('routing.tabClient') || 'Client subscription rules', icon: <IconNavRouting />, keywords: ['proxy-groups', 'client rules', '订阅规则', '訂閱規則', '分流'] },
+      { key: '/routing?scope=server', group: routing, label: t('routing.tabServer') || 'Server egress rules', icon: <IconNavRouting />, keywords: ['egress', 'server rules', '出口', '服务端规则', '服務端規則'] },
+      { key: '/routing?scope=server', group: routing, label: t('routing.warpDomains') || 'WARP domains', icon: <IconNavRouting />, keywords: ['warp domain', 'warp 域名', '域名走warp'] },
+      { key: '/routing?scope=server', group: routing, label: t('routing.warpGlobal') || 'Global WARP', icon: <IconNavRouting />, keywords: ['global warp', '全局 warp', 'match warp', '全部走warp'] },
+      { key: '/routing?scope=client', group: routing, label: t('routing.ruleProviders') || 'Rule providers', icon: <IconNavRouting />, keywords: ['rule-provider', 'rule provider', '规则集', '規則集', 'mrs'] },
+      { key: '/routing?scope=client', group: routing, label: t('routing.templates') || 'Rule templates', icon: <IconNavRouting />, keywords: ['template', 'tpl', '社区规则', 'cn direct', 'ads', '模板'] },
+      { key: '/routing?scope=client', group: routing, label: t('routing.addRule') || 'Add rule', icon: <IconNavRouting />, keywords: ['add rule', '新建规则', '添加规则', 'domain', 'geosite'] },
+      // Config
+      { key: '/config?tab=visual', group: config, label: t('config.visual') || 'Visual proxies', icon: <IconNavConfig />, keywords: ['proxy', 'proxies', '可视化', '視覺化'] },
+      { key: '/config?tab=yaml', group: config, label: t('config.yaml') || 'YAML editor', icon: <IconNavConfig />, keywords: ['yaml', 'raw', '编辑器', '編輯器', 'config.yaml'] },
+      // Core
+      { key: '/core', group: core, label: t('core.updates.title') || 'Core updates', icon: <IconNavCore />, keywords: ['update core', 'rollback', '升级内核', '回滚', '回滾', 'mihomo update'] },
+      { key: '/core', group: core, label: t('dashboard.start') || 'Start core', icon: <IconNavCore />, keywords: ['start mihomo', '启动内核', '啟動核心'] },
+      { key: '/core', group: core, label: t('dashboard.stop') || 'Stop core', icon: <IconNavCore />, keywords: ['stop mihomo', '停止内核', '停止核心'] },
+      { key: '/core', group: core, label: t('dashboard.restart') || 'Restart core', icon: <IconNavCore />, keywords: ['restart mihomo', '重启内核', '重啟核心'] },
+      // Listeners
+      { key: '/listeners', group: listeners, label: t('listeners.create') || 'Create node', icon: <IconNavListeners />, keywords: ['add node', 'new inbound', '新建节点', '新建節點', 'create listener'] },
+      { key: '/listeners', group: listeners, label: t('listeners.quickCreate') || 'Quick create node', icon: <IconNavListeners />, keywords: ['quick create', '快速创建', '一键节点', '一鍵節點'] },
+      { key: '/listeners', group: listeners, label: t('listeners.applyCert') || 'Apply certificate', icon: <IconNavListeners />, keywords: ['apply cert', 'batch cert', '批量证书', '批量證書'] },
+      // Users
+      { key: '/users', group: users, label: t('users.create') || 'Create user', icon: <IconNavUsers />, keywords: ['add user', 'new client', '新建用户', '新建用戶'] },
+      { key: '/users', group: users, label: t('users.quickCreate') || 'Quick create user', icon: <IconNavUsers />, keywords: ['quick user', '快速开户', '快速開戶'] },
+      { key: '/users', group: users, label: t('users.resetTraffic') || 'Reset user traffic', icon: <IconNavUsers />, keywords: ['reset traffic', '清空流量', '重置流量'] },
+      // Share
+      { key: '/share', group: share, label: t('share.tabSub') || 'Subscription links', icon: <IconNavShare />, keywords: ['subscription url', '订阅链接', '訂閱連結', 'clash', 'sub link'] },
+      { key: '/share', group: share, label: t('share.tabUri') || 'Node URIs', icon: <IconNavShare />, keywords: ['uri', 'vless://', 'vmess://', '分享链接', 'qr'] },
+      { key: '/share', group: share, label: t('share.exportAll') || 'Export all subscriptions', icon: <IconNavShare />, keywords: ['export all', '导出全部', '匯出全部'] },
+      // Traffic
+      { key: '/traffic', group: t('nav.traffic'), label: t('traffic.byUser') || 'Traffic by user', icon: <IconNavTraffic />, keywords: ['by user', '用户流量', '用戶流量'] },
+      { key: '/traffic', group: t('nav.traffic'), label: t('traffic.connections') || 'Live connections', icon: <IconNavTraffic />, keywords: ['connections', '连接', '連線', 'sockets'] },
+      // Cluster
+      { key: '/cluster', group: t('nav.cluster'), label: t('cluster.add') || 'Add remote panel', icon: <IconNavCluster />, keywords: ['add remote', '远程面板', '遠端面版'] },
+      { key: '/cluster', group: t('nav.cluster'), label: t('cluster.health') || 'Health check', icon: <IconNavCluster />, keywords: ['health', '健康检查', '探活'] },
+      { key: '/cluster', group: t('nav.cluster'), label: t('cluster.syncNodes') || 'Sync nodes', icon: <IconNavCluster />, keywords: ['sync nodes', '同步节点', '同步節點'] },
+      { key: '/cluster', group: t('nav.cluster'), label: t('cluster.pushNode') || 'Push node', icon: <IconNavCluster />, keywords: ['push node', '推送节点', '推送節點'] },
+      { key: '/cluster', group: t('nav.cluster'), label: t('cluster.restartCore') || 'Restart remote core', icon: <IconNavCluster />, keywords: ['remote restart', '远程重启', '遠端重啟'] },
+      // Logs
+      { key: '/logs', group: t('nav.logs'), label: t('logs.clear') || 'Clear logs', icon: <IconNavLogs />, keywords: ['clear log', '清空日志', '清空日誌'] },
+      { key: '/logs', group: t('nav.logs'), label: t('logs.autoRefresh') || 'Auto-refresh logs', icon: <IconNavLogs />, keywords: ['auto refresh', '自动刷新', '自動重新整理'] },
+      // Dashboard
+      { key: '/', group: t('nav.dashboard'), label: t('dashboard.traffic') || 'Overview traffic', icon: <IconNavDashboard />, keywords: ['overview traffic', '总览流量', 'speed', '速率'] },
+      { key: '/', group: t('nav.dashboard'), label: t('dashboard.activeConnections') || 'Connection stats', icon: <IconNavDashboard />, keywords: ['tcp', 'udp', 'open sockets', '连接统计', '連線統計'] },
     ];
 
-    return [...top, ...nested];
+return [...top, ...nested];
   }, [t]);
 }
 
 function matchItem(item: FeatureItem, q: string): boolean {
-  if (!q) return true;
   const s = q.trim().toLowerCase();
   if (!s) return true;
-  if (item.label.toLowerCase().includes(s)) return true;
-  if (item.key.toLowerCase().includes(s)) return true;
-  return item.keywords.some((k) => k.toLowerCase().includes(s));
+  const hay = [item.label, item.key, item.group || '', ...(item.keywords || [])].join(' ').toLowerCase();
+  return s.split(/\s+/).every((tok) => Boolean(tok) && hay.includes(tok));
 }
 
 export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -401,7 +341,7 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
             style={{ fontSize: 15 }}
           />
         </div>
-        <div style={{ maxHeight: 360, overflowY: 'auto', padding: '6px 8px 10px' }}>
+        <div style={{ maxHeight: 420, overflowY: 'auto', padding: '6px 8px 10px' }}>
           {filtered.length === 0 ? (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('nav.searchEmpty')} style={{ margin: '24px 0' }} />
           ) : (

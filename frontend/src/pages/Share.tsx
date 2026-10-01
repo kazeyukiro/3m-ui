@@ -67,6 +67,11 @@ const SharePage: React.FC = () => {
   const [uriMap, setUriMap] = useState<Record<number, { uris: string[]; hint?: string; loading?: boolean; error?: string }>>({});
   const [loading, setLoading] = useState(false);
   const [subLoading, setSubLoading] = useState(false);
+  const [shareTab, setShareTab] = useState(searchParams.get('tab') === 'uri' ? 'uri' : 'sub');
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'uri' || tab === 'sub') setShareTab(tab);
+  }, [searchParams]);
 
   const selected = useMemo(() => users.find((u) => u.id === userId), [users, userId]);
 
@@ -269,6 +274,14 @@ const SharePage: React.FC = () => {
       </Card>
 
       <Tabs
+        activeKey={shareTab}
+        onChange={(k) => {
+          setShareTab(k);
+          const n = new URLSearchParams(searchParams);
+          if (k === 'sub') n.delete('tab');
+          else n.set('tab', k);
+          setSearchParams(n, { replace: true });
+        }}
         items={[
           { key: 'sub', label: t('share.tabSub') || 'Subscription links', children: subTab },
           { key: 'uri', label: t('share.tabUri') || 'Node URIs', children: uriTab },
