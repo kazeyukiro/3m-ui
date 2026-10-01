@@ -161,8 +161,7 @@ export default {
     "openSockets": "Açık soketler",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP",
-    "ipAddresses": "IP adresleri"
+    "udp": "UDP"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

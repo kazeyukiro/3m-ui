@@ -161,8 +161,7 @@ export default {
     "openSockets": "開啟連線",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP",
-    "ipAddresses": "IP 位址"
+    "udp": "UDP"
   },
   "listeners": {
     "subtitle": "建立与管理 Mihomo 入站節點。",

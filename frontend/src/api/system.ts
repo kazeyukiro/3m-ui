@@ -38,8 +38,6 @@ export interface DashboardResponse {
     tcpConnections?: number;
     udpConnections?: number;
   };
-  /** Host unicast IPs (non-loopback), IPv4 first then IPv6. */
-  addresses?: string[];
 }
 
 export const fetchDashboard = (signal?: AbortSignal) =>

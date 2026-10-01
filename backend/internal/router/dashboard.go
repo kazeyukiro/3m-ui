@@ -72,14 +72,11 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 			corePID = mihomoStatus.PID
 		}
 		panelUsage, coreUsage := system.SampleProcessUsagePair(os.Getpid(), corePID)
-		hostAddrs := system.HostAddresses()
-
 		c.JSON(http.StatusOK, gin.H{
-			"mihomo":    mihomoStatus,
-			"system":    sysStatus,
-			"panel":     panelUsage,
-			"core":      coreUsage,
-			"addresses": hostAddrs,
+			"mihomo": mihomoStatus,
+			"system": sysStatus,
+			"panel":  panelUsage,
+			"core":   coreUsage,
 			"listeners": gin.H{
 				"total":    listenerTotal,
 				"enabled":  listenerEnabled,
