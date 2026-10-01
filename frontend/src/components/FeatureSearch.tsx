@@ -210,7 +210,7 @@ function useFeatureItems(): FeatureItem[] {
       {
         key: '/change-password',
         group: settings,
-        label: t('settings.changePassword') || t('nav.changePassword') || 'Change password',
+        label: t('settings.changePassword') || 'Change password',
         icon: <IconNavSettings />,
         keywords: ['password', 'passwd', '改密', '修改密码', '修改密碼'],
       },
