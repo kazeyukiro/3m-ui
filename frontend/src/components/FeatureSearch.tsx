@@ -202,7 +202,7 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
         destroyOnClose
         styles={{
           body: { padding: 0 },
-          content: { padding: 0, overflow: 'hidden', borderRadius: 12 },
+          container: { padding: 0, overflow: 'hidden', borderRadius: 12 },
         }}
       >
         <div style={{ padding: '12px 12px 8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
