@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Card,
@@ -69,7 +70,24 @@ const RoutingPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
-  const [scope, setScope] = useState<'client' | 'server'>('client');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scopeFromUrl = searchParams.get('scope');
+  const [scope, setScope] = useState<'client' | 'server'>(scopeFromUrl === 'server' ? 'server' : 'client');
+  useEffect(() => {
+    const s = searchParams.get('scope');
+    if (s === 'client' || s === 'server') setScope(s);
+  }, [searchParams]);
+  const selectScope = (k: string) => {
+    const next = k as 'client' | 'server';
+    setScope(next);
+    if (next === 'client') {
+      const p = new URLSearchParams(searchParams);
+      p.delete('scope');
+      setSearchParams(p, { replace: true });
+    } else {
+      setSearchParams({ scope: next }, { replace: true });
+    }
+  };
   const [serverRules, setServerRules] = useState<RuleRow[]>([]);
   const [warpDomains, setWarpDomains] = useState<string>('');
   const [warpGlobal, setWarpGlobal] = useState(false);
@@ -401,7 +419,7 @@ const RoutingPage: React.FC = () => {
       <PageHeader title={t('routing.title')} subtitle={t('routing.subtitle')} />
       <Tabs
         activeKey={scope}
-        onChange={(k) => setScope(k as 'client' | 'server')}
+        onChange={selectScope}
         style={{ marginBottom: 8 }}
         items={[
           { key: 'client', label: t('routing.tabClient') || 'Client subscription' },

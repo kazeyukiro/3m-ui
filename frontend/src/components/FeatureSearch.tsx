@@ -24,6 +24,10 @@ export type FeatureItem = {
   label: string;
   keywords: string[];
   icon: React.ReactNode;
+  /** When set, shown as a secondary group label (e.g. Settings). */
+  group?: string;
+  /** Top-level nav entry; shown when the query is empty. */
+  top?: boolean;
 };
 
 type Ctx = {
@@ -42,77 +46,237 @@ export function useFeatureSearch() {
 
 function useFeatureItems(): FeatureItem[] {
   const { t } = useI18n();
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    const settings = t('nav.settings');
+    const routing = t('nav.routing');
+    const config = t('nav.config');
+    const core = t('nav.core');
+    const users = t('nav.users');
+    const listeners = t('nav.listeners');
+    const share = t('nav.share');
+
+    const top: FeatureItem[] = [
       {
         key: '/',
+        top: true,
         label: t('nav.dashboard'),
         icon: <IconNavDashboard />,
         keywords: ['overview', 'home', 'status', '概览', '仪表盘', '首頁', 'ホーム'],
       },
       {
         key: '/listeners',
-        label: t('nav.listeners'),
+        top: true,
+        label: listeners,
         icon: <IconNavListeners />,
         keywords: ['nodes', 'inbound', 'node', '节点', '節點', '监听', '監聽', 'インバウンド'],
       },
       {
         key: '/users',
-        label: t('nav.users'),
+        top: true,
+        label: users,
         icon: <IconNavUsers />,
         keywords: ['client', 'account', '用户', '用戶', '客户端', 'クライアント'],
       },
       {
         key: '/share',
-        label: t('nav.share'),
+        top: true,
+        label: share,
         icon: <IconNavShare />,
         keywords: ['subscription', 'sub', '订阅', '訂閱', '分享', '共有'],
       },
       {
         key: '/traffic',
+        top: true,
         label: t('nav.traffic'),
         icon: <IconNavTraffic />,
         keywords: ['usage', 'stats', '流量', '统计', '統計', 'トラフィック'],
       },
       {
         key: '/cluster',
+        top: true,
         label: t('nav.cluster'),
         icon: <IconNavCluster />,
         keywords: ['remote', 'node', '集群', '远程', '遠端', 'クラスター'],
       },
       {
         key: '/routing',
-        label: t('nav.routing'),
+        top: true,
+        label: routing,
         icon: <IconNavRouting />,
         keywords: ['rules', 'dns', 'warp', '规则', '規則', '路由', 'ルーティング'],
       },
       {
         key: '/core',
-        label: t('nav.core'),
+        top: true,
+        label: core,
         icon: <IconNavCore />,
         keywords: ['mihomo', 'clash', '内核', '核心', 'コア'],
       },
       {
         key: '/logs',
+        top: true,
         label: t('nav.logs'),
         icon: <IconNavLogs />,
         keywords: ['log', 'debug', '日志', '日誌', 'ログ'],
       },
       {
         key: '/config',
-        label: t('nav.config'),
+        top: true,
+        label: config,
         icon: <IconNavConfig />,
         keywords: ['yaml', 'json', '配置', '設定', 'コンフィグ'],
       },
       {
         key: '/settings',
-        label: t('nav.settings'),
+        top: true,
+        label: settings,
         icon: <IconNavSettings />,
         keywords: ['panel', 'preference', '设置', '設定', 'パネル'],
       },
-    ],
-    [t],
-  );
+    ];
+
+    const nested: FeatureItem[] = [
+      // Settings sections
+      {
+        key: '/settings?section=panel',
+        group: settings,
+        label: t('settings.navPanel') || 'Panel / appearance',
+        icon: <IconNavSettings />,
+        keywords: ['theme', 'locale', 'language', '外观', '主题', '語言', '语言', 'テーマ'],
+      },
+      {
+        key: '/settings?section=access',
+        group: settings,
+        label: t('settings.navAccess') || 'Access profile',
+        icon: <IconNavSettings />,
+        keywords: ['sni', 'host', 'fingerprint', '访问', '档案', 'アクセス'],
+      },
+      {
+        key: '/settings?section=telegram',
+        group: settings,
+        label: t('settings.navTelegram') || 'Telegram',
+        icon: <IconNavSettings />,
+        keywords: ['bot', 'tg', 'telegram', '通知'],
+      },
+      {
+        key: '/settings?section=security',
+        group: settings,
+        label: t('settings.navSecurity') || 'Security & backup',
+        icon: <IconNavSettings />,
+        keywords: ['2fa', 'totp', 'backup', 'github', 'oauth', '安全', '备份', '備份', '密码', '密碼'],
+      },
+      {
+        key: '/settings?section=subscription',
+        group: settings,
+        label: t('settings.navSubscription') || 'Subscription page',
+        icon: <IconNavSettings />,
+        keywords: ['sub page', '订阅页', '訂閱頁', '模板'],
+      },
+      {
+        key: '/settings?section=ssl',
+        group: settings,
+        label: t('settings.navSSL') || 'Certificate / SSL',
+        icon: <IconNavSettings />,
+        keywords: ['tls', 'cert', 'acme', '证书', '證書', 'https', 'ssl'],
+      },
+      {
+        key: '/settings?section=network',
+        group: settings,
+        label: t('settings.navNetwork') || 'Proxy & Geo',
+        icon: <IconNavSettings />,
+        keywords: ['warp', 'geoip', 'geosite', 'reverse', '反代', '网络', '網路'],
+      },
+      {
+        key: '/settings?section=traffic',
+        group: settings,
+        label: t('settings.navTraffic') || 'Traffic reset',
+        icon: <IconNavSettings />,
+        keywords: ['reset', 'cycle', '流量重置', '月流量'],
+      },
+      {
+        key: '/settings?section=ops',
+        group: settings,
+        label: t('settings.navOps') || 'System ops',
+        icon: <IconNavSettings />,
+        keywords: ['restart', 'update', 'panel update', '系统操作', '升级', '升級'],
+      },
+      {
+        key: '/settings?section=about',
+        group: settings,
+        label: t('settings.navAbout') || 'About',
+        icon: <IconNavSettings />,
+        keywords: ['version', 'license', '关于', '關於'],
+      },
+      {
+        key: '/change-password',
+        group: settings,
+        label: t('settings.changePassword') || t('nav.changePassword') || 'Change password',
+        icon: <IconNavSettings />,
+        keywords: ['password', 'passwd', '改密', '修改密码', '修改密碼'],
+      },
+      // Routing scopes
+      {
+        key: '/routing?scope=client',
+        group: routing,
+        label: t('routing.tabClient') || 'Client subscription rules',
+        icon: <IconNavRouting />,
+        keywords: ['proxy-groups', 'client rules', '订阅规则', '訂閱規則', '分流'],
+      },
+      {
+        key: '/routing?scope=server',
+        group: routing,
+        label: t('routing.tabServer') || 'Server egress rules',
+        icon: <IconNavRouting />,
+        keywords: ['egress', 'server rules', 'warp domains', '出口', '服务端规则', '服務端規則'],
+      },
+      // Config tabs
+      {
+        key: '/config?tab=visual',
+        group: config,
+        label: t('config.visual') || 'Visual proxies',
+        icon: <IconNavConfig />,
+        keywords: ['proxy', 'proxies', '可视化', '視覺化'],
+      },
+      {
+        key: '/config?tab=yaml',
+        group: config,
+        label: t('config.yaml') || 'YAML editor',
+        icon: <IconNavConfig />,
+        keywords: ['yaml', 'raw', '编辑器', '編輯器'],
+      },
+      // Core-related shortcuts (same page, different keywords)
+      {
+        key: '/core',
+        group: core,
+        label: t('core.updates.title') || 'Core updates',
+        icon: <IconNavCore />,
+        keywords: ['update core', 'rollback', '升级内核', '回滚', '回滾', 'mihomo update'],
+      },
+      {
+        key: '/listeners',
+        group: listeners,
+        label: t('listeners.create') || 'Create node',
+        icon: <IconNavListeners />,
+        keywords: ['add node', 'new inbound', '新建节点', '新建節點', '添加节点'],
+      },
+      {
+        key: '/users',
+        group: users,
+        label: t('users.create') || 'Create user',
+        icon: <IconNavUsers />,
+        keywords: ['add user', 'new client', '新建用户', '新建用戶', '添加用户'],
+      },
+      {
+        key: '/share',
+        group: share,
+        label: t('share.title') || share,
+        icon: <IconNavShare />,
+        keywords: ['qr', 'uri', 'clash', 'v2ray', '订阅链接', '訂閱連結'],
+      },
+    ];
+
+    return [...top, ...nested];
+  }, [t]);
 }
 
 function matchItem(item: FeatureItem, q: string): boolean {
@@ -135,7 +299,21 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<any>(null);
 
-  const filtered = useMemo(() => items.filter((it) => matchItem(it, query)), [items, query]);
+  const filtered = useMemo(() => {
+    const q = query.trim();
+    if (!q) return items.filter((it) => it.top);
+    // Prefer unique keys; keep first occurrence order
+    const seen = new Set<string>();
+    const out: FeatureItem[] = [];
+    for (const it of items) {
+      if (!matchItem(it, q)) continue;
+      const id = `${it.key}::${it.label}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(it);
+    }
+    return out;
+  }, [items, query]);
 
   useEffect(() => {
     if (open) {
@@ -165,9 +343,13 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
   const go = useCallback(
     (key: string) => {
       setOpen(false);
-      if (location.pathname !== key) navigate(key);
+      const [path, qs] = key.split('?');
+      const target = qs ? `${path}?${qs}` : path;
+      const current = location.pathname + (location.search || '');
+      if (current !== target && current !== path) navigate(target);
+      else if (location.pathname !== path || (qs && location.search !== `?${qs}`)) navigate(target);
     },
-    [navigate, location.pathname],
+    [navigate, location.pathname, location.search],
   );
 
   const onInputKeyDown = (e: React.KeyboardEvent) => {
@@ -225,7 +407,8 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
           ) : (
             filtered.map((it, idx) => {
               const active = idx === activeIdx;
-              const current = location.pathname === it.key || (it.key !== '/' && location.pathname.startsWith(it.key));
+              const [p, qs] = it.key.split('?');
+              const current = location.pathname === p && (qs ? location.search === `?${qs}` : it.top ? true : !location.search);
               return (
                 <button
                   key={it.key}
@@ -247,7 +430,14 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
                   }}
                 >
                   <span style={{ display: 'inline-flex', opacity: 0.75, fontSize: 16 }}>{it.icon}</span>
-                  <span style={{ flex: 1, fontWeight: current ? 600 : 500 }}>{it.label}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: current ? 600 : 500 }}>{it.label}</span>
+                    {it.group ? (
+                      <span style={{ display: 'block', fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
+                        {it.group}
+                      </span>
+                    ) : null}
+                  </span>
                   {current ? (
                     <Text type="secondary" style={{ fontSize: 11 }}>
                       {t('nav.searchCurrent')}
@@ -356,7 +546,7 @@ export const SidebarFeatureSearch: React.FC<{ collapsed?: boolean }> = ({ collap
                 type="button"
                 onClick={() => {
                   setQ('');
-                  if (location.pathname !== it.key) navigate(it.key);
+                  navigate(it.key);
                 }}
                 style={{
                   display: 'flex',

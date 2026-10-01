@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs } from 'antd';
 import { IconAddGeneric, IconDelete, IconEdit, IconDownload, IconCheck, IconFile } from '../icons';
@@ -24,7 +25,23 @@ const ConfigPage: React.FC = () => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [yaml, setYaml] = useState('');
-  const [activeTab, setActiveTab] = useState('visual');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabFromUrl === 'yaml' ? 'yaml' : 'visual');
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'yaml' || tab === 'visual') setActiveTab(tab);
+  }, [searchParams]);
+  const selectTab = (key: string) => {
+    setActiveTab(key);
+    if (key === 'visual') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    } else {
+      setSearchParams({ tab: key }, { replace: true });
+    }
+  };
   const [yamlLoading, setYamlLoading] = useState(false);
 
   const load = async () => {
@@ -176,7 +193,7 @@ const ConfigPage: React.FC = () => {
   return (
     <div>
       <PageHeader title={t('config.title')} subtitle={t('config.subtitle')} />
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+      <Tabs activeKey={activeTab} onChange={selectTab}>
         <TabPane tab={t('config.visual') || 'Visual'} key="visual">
           <Card
             title={t('config.proxies') || 'Proxies'}

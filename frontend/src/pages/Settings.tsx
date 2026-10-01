@@ -22,7 +22,7 @@ import {
   Tooltip,
   theme,
 } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useI18n, LOCALE_OPTIONS, type Locale , fieldTip} from '../i18n';
 import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
@@ -87,7 +87,30 @@ type SectionKey =
   | 'about';
 
 const Settings: React.FC = () => {
-  const [section, setSection] = useState<SectionKey>('panel');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionFromUrl = searchParams.get('section') as SectionKey | null;
+  const validSections: SectionKey[] = [
+    'panel', 'access', 'telegram', 'security', 'subscription', 'ssl', 'network', 'traffic', 'ops', 'about',
+  ];
+  const [section, setSection] = useState<SectionKey>(
+    sectionFromUrl && validSections.includes(sectionFromUrl) ? sectionFromUrl : 'panel',
+  );
+  useEffect(() => {
+    const s = searchParams.get('section') as SectionKey | null;
+    if (s && validSections.includes(s) && s !== section) setSection(s);
+  }, [searchParams]);
+  const selectSection = (key: SectionKey) => {
+    setSection(key);
+    if (key === 'panel') {
+      if (searchParams.has('section')) {
+        const next = new URLSearchParams(searchParams);
+        next.delete('section');
+        setSearchParams(next, { replace: true });
+      }
+    } else {
+      setSearchParams({ section: key }, { replace: true });
+    }
+  };
   const [warpMode, setWarpMode] = useState<'wireguard' | 'masque'>('wireguard');
   const [warpYamlOpen, setWarpYamlOpen] = useState(false);
   const [warpAccount, setWarpAccount] = useState<{ configured?: boolean; device_id?: string; address_v4?: string; proxy_name?: string } | null>(null);
@@ -338,7 +361,7 @@ const Settings: React.FC = () => {
         <Select
           className="settings-section-select"
           value={section}
-          onChange={(v) => setSection(v as SectionKey)}
+          onChange={(v) => selectSection(v as SectionKey)}
           options={menuItems.map((it: any) => ({
             value: it.key,
             label: (
@@ -378,7 +401,7 @@ const Settings: React.FC = () => {
             mode="inline"
             selectedKeys={[section]}
             items={menuItems}
-            onClick={({ key }) => setSection(key as SectionKey)}
+            onClick={({ key }) => selectSection(key as SectionKey)}
             style={{ border: 'none' }}
           />
         </Sider>
