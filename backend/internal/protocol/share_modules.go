@@ -299,12 +299,24 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	if pass == "" {
 		return Share{}, fmt.Errorf("hysteria2 share requires password")
 	}
-	params := map[string]string{}
-	if spec.SNI != "" {
-		params["sni"] = spec.SNI
+	// SNI: listener field → access profile → public host / dial host when not an IP.
+	// Loon and similar clients fail TLS handshake on bare-IP HY2 links without sni.
+	sni := strings.TrimSpace(spec.SNI)
+	if sni == "" {
+		sni = strings.TrimSpace(in.Node.AccessSNI)
 	}
-	if spec.SkipCert {
+	if sni == "" {
+		sni = shareTLSServerName(host, in.Node.PublicHost)
+	}
+	skipCert := spec.SkipCert || shareHostLooksLikeIP(host)
+	params := map[string]string{}
+	if sni != "" {
+		params["sni"] = sni
+	}
+	if skipCert {
+		// insecure = Meta/Clash; allowInsecure = Loon / some mobile parsers
 		params["insecure"] = "1"
+		params["allowInsecure"] = "1"
 	}
 	if spec.Obfs != "" {
 		params["obfs"] = spec.Obfs
@@ -319,15 +331,17 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 		params["down"] = spec.Down
 	}
 	applyALPNParams(params, spec.ALPN)
+	// url.User encodes userinfo correctly (PathEscape alone breaks special passwords).
+	userinfo := url.User(pass).String()
 	uri := shareName(
-		shareQuery("hysteria2://"+url.PathEscape(pass)+"@"+netutil.JoinHostPort(host, port), params),
+		shareQuery("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params),
 		in.Node.Name,
 	)
 	extra := map[string]interface{}{"password": pass}
-	if spec.SNI != "" {
-		extra["sni"] = spec.SNI
+	if sni != "" {
+		extra["sni"] = sni
 	}
-	if spec.SkipCert {
+	if skipCert {
 		extra["skip-cert-verify"] = true
 	}
 	if spec.Obfs != "" {
@@ -878,6 +892,27 @@ func applyTransportParams(params map[string]string, t TransportSpec) {
 			params["path"] = t.XHTTPPath
 		}
 	}
+}
+
+// shareTLSServerName picks a hostname suitable for TLS SNI on share links.
+// Prefers non-IP candidates so clients (Loon, etc.) can complete the handshake
+// when the published endpoint is a raw address.
+func shareTLSServerName(candidates ...string) string {
+	for _, c := range candidates {
+		c = strings.TrimSpace(c)
+		c = strings.Trim(c, "[]")
+		if c == "" || net.ParseIP(c) != nil {
+			continue
+		}
+		return c
+	}
+	return ""
+}
+
+func shareHostLooksLikeIP(host string) bool {
+	h := strings.TrimSpace(host)
+	h = strings.Trim(h, "[]")
+	return h != "" && net.ParseIP(h) != nil
 }
 
 func applyALPNParams(params map[string]string, alpn []string) {

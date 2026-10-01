@@ -297,6 +297,11 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := cfg["sni"].(string); ok && v != "" {
 				params["sni"] = v
 			}
+			if params["sni"] == "" {
+				if s := uriTLSServerName(host); s != "" {
+					params["sni"] = s
+				}
+			}
 			// Matches the config-embedded users branch below: same listener must
 			// produce the same link whichever way its users are stored.
 			if clientSkipCert(cfg, host) {
@@ -318,7 +323,8 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := cfg["down"].(string); ok && v != "" {
 				params["down"] = v
 			}
-			result = append(result, addName(query("hysteria2://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
+			userinfo := url.User(password).String()
+			result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name))
 		}
 		if len(result) > 0 {
 			return result, nil
@@ -338,6 +344,11 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		if v, ok := cfg["sni"].(string); ok && v != "" {
 			params["sni"] = v
 		}
+		if params["sni"] == "" {
+			if s := uriTLSServerName(host); s != "" {
+				params["sni"] = s
+			}
+		}
 		if clientSkipCert(cfg, host) {
 			params["insecure"] = "1"
 			params["allowInsecure"] = "1"
@@ -355,7 +366,8 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			params["down"] = v
 		}
 		_ = username
-		result = append(result, addName(query("hysteria2://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
+		userinfo := url.User(password).String()
+		result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
@@ -593,4 +605,17 @@ func stringValue(v interface{}, fallback string) string {
 		return s
 	}
 	return fallback
+}
+
+// uriTLSServerName returns the first non-IP hostname among candidates (for SNI).
+func uriTLSServerName(candidates ...string) string {
+	for _, c := range candidates {
+		c = strings.TrimSpace(c)
+		c = strings.Trim(c, "[]")
+		if c == "" || net.ParseIP(c) != nil {
+			continue
+		}
+		return c
+	}
+	return ""
 }

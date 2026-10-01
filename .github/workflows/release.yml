@@ -159,32 +159,57 @@ jobs:
           SHA: ${{ needs.metadata.outputs.sha }}
         run: |
           set -euo pipefail
-          # Previous formal SemVer tag (ignore pre / the tag we are publishing).
-          PREV="$(git tag -l 'v*' --sort=-version:refname | grep -E '^v[0-9]' | grep -vxF "$TAG" | head -n1 || true)"
+          # Previous *stable* SemVer only (vMAJOR.MINOR.PATCH). Ignore RC tags and
+          # the tag we are publishing. version:refname can otherwise pair a new
+          # release with a divergent or pre-release tip and dump the whole history.
+          PREV="$(git tag -l 'v*' --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -vxF "$TAG" \
+            | head -n1 || true)"
           {
-            if [ -n "${PREV}" ]; then
+            if [ -n "${PREV}" ] && git rev-parse "${PREV}^{commit}" >/dev/null 2>&1; then
               echo "## Changes since ${PREV}"
               echo
-              RANGE="${PREV}..${SHA}"
+              # Use merge-base so rewritten / non-linear history does not list
+              # every commit reachable from SHA but not from the tag tip alone.
+              MB="$(git merge-base "${PREV}^{commit}" "$SHA" 2>/dev/null || true)"
+              if [ -n "$MB" ]; then
+                RANGE="${MB}..${SHA}"
+              else
+                RANGE="${PREV}..${SHA}"
+              fi
             else
               echo "## Changes"
               echo
               RANGE="${SHA}"
             fi
-            # Categorize conventional commits (same shape as v1.3.7 notes).
-            feats=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- feat' || true)
-            fixes=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- fix' || true)
-            perfs=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- perf' || true)
-            docs=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- docs' || true)
-            chores=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -E '^- (chore|ci|build|refactor|style|test)' || true)
-            other=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges | grep -Ev '^- (feat|fix|perf|docs|chore|ci|build|refactor|style|test)' || true)
-            if [ -n "$feats" ]; then echo "### Features"; echo "$feats"; echo; fi
-            if [ -n "$fixes" ]; then echo "### Fixes"; echo "$fixes"; echo; fi
-            if [ -n "$perfs" ]; then echo "### Performance"; echo "$perfs"; echo; fi
-            if [ -n "$docs" ]; then echo "### Docs"; echo "$docs"; echo; fi
-            if [ -n "$chores" ]; then echo "### Chore / CI"; echo "$chores"; echo; fi
+            # Conventional commits on the first-parent path only; drop pure
+            # formatting / CI noise that bloats notes (as seen on v1.3.9).
+            log_lines() {
+              git log "$RANGE" --first-parent --pretty=format:'- %s (%h)' --no-merges \
+                | grep -Ev '^- (style:|style\(|chore: gofmt|ci: |test: format|test: provide|test: cover|test: preserve)' \
+                || true
+            }
+            ALL="$(log_lines)"
+            # Cap each section so a large range stays readable in the GitHub UI.
+            section() {
+              local title="$1" pattern="$2"
+              local body
+              body="$(printf '%s\n' "$ALL" | grep -E "$pattern" | head -n 40 || true)"
+              if [ -n "$body" ]; then
+                echo "### ${title}"
+                echo "$body"
+                echo
+              fi
+            }
+            section "Features" '^- feat'
+            section "Fixes" '^- fix'
+            section "Performance" '^- perf'
+            section "Docs" '^- docs'
+            section "Chore / CI" '^- (chore|ci|build|refactor|test)'
+            other="$(printf '%s\n' "$ALL" | grep -Ev '^- (feat|fix|perf|docs|chore|ci|build|refactor|style|test)' | head -n 20 || true)"
             if [ -n "$other" ]; then echo "### Other"; echo "$other"; echo; fi
-            if [ -z "$feats$fixes$perfs$docs$chores$other" ]; then
+            if [ -z "$(printf '%s' "$ALL" | tr -d '[:space:]')" ]; then
               echo "_No conventional commits in range._"
               echo
             fi
