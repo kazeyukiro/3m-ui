@@ -14,10 +14,20 @@ export interface MihomoStatus {
   uptime: string;
 }
 
+export interface ProcessUsageSample {
+  pid?: number;
+  cpu_percent?: number;
+  memory_used?: number;
+  memory_percent?: number;
+}
+
 export interface DashboardResponse {
   mihomo: MihomoStatus;
   system: SystemStatus;
+  panel?: ProcessUsageSample;
+  core?: ProcessUsageSample;
   listeners: { total: number; enabled: number; disabled: number };
+  users?: { total: number; enabled: number; online: number };
   traffic: {
     uploadRate: number;
     downloadRate: number;
