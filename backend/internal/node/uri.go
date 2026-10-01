@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
@@ -90,19 +91,25 @@ func applyURIAccessProfile(cfg map[string]interface{}, listener models.Listener,
 	hint = strings.Trim(hint, "[]")
 	domainHint := hint != "" && net.ParseIP(hint) == nil
 
-	sniEmpty := true
-	if v, ok := cfg["sni"].(string); ok && strings.TrimSpace(v) != "" {
-		sniEmpty = false
+	// Resolve SNI against the actual certificate. Never inject AccessSNI when it
+	// does not match the leaf (e.g. AccessSNI=www.bing.com on a LE IP cert for
+	// the server address) — that forces clients into skip-cert-verify or TLS failure.
+	certPEM, _ := cfg["certificate"].(string)
+	if strings.TrimSpace(certPEM) == "" {
+		if c, _, ok := certstore.Load(listener.ID); ok {
+			certPEM = c
+			cfg["certificate"] = c
+		}
 	}
-	if v, ok := cfg["servername"].(string); ok && strings.TrimSpace(v) != "" {
-		sniEmpty = false
-	}
-	if sni := strings.TrimSpace(listener.AccessSNI); sni != "" {
-		cfg["sni"] = sni
-		cfg["servername"] = sni
-	} else if domainHint && sniEmpty {
-		cfg["sni"] = hint
-		cfg["servername"] = hint
+	resolved := certutil.ResolveClientSNI(
+		strings.TrimSpace(listener.AccessSNI),
+		strings.TrimSpace(listener.PublicHost),
+		connectHost,
+		certPEM,
+	)
+	if resolved != "" {
+		cfg["sni"] = resolved
+		cfg["servername"] = resolved
 	}
 
 	if fp := strings.TrimSpace(listener.ClientFingerprint); fp != "" {

@@ -43,8 +43,8 @@ func ShouldSkipCertVerify(cfg map[string]interface{}) bool {
 }
 
 // PreferredSNIFromCert returns the best TLS ServerName from a certificate PEM:
-// first DNS SAN, else non-empty CN. Empty when no usable name (e.g. IP-only cert).
-// Used when the operator has a formal cert but left Access SNI blank.
+// first DNS SAN, else non-empty DNS-like CN, else first IP SAN (Let's Encrypt IP certs).
+// Empty only when the certificate has no usable identity at all.
 func PreferredSNIFromCert(certPEM string) string {
 	cert := firstCertificate(certPEM)
 	if cert == nil {
@@ -60,13 +60,42 @@ func PreferredSNIFromCert(certPEM string) string {
 	if cn != "" && net.ParseIP(cn) == nil {
 		return cn
 	}
+	// IP-only certificates (e.g. LE shortlived IP certs): use the IP as SNI/identity.
+	for _, ip := range cert.IPAddresses {
+		if ip != nil {
+			return ip.String()
+		}
+	}
 	return ""
 }
 
 // ResolveClientSNI picks SNI for subscription/share clients.
-// Order: explicit config → public host (if not IP) → connect host (if not IP) →
-// certificate DNS/CN (formal cert without panel SNI) → connect host as last resort.
+//
+// When certificate PEM is available, only names that match the certificate are
+// accepted. A panel AccessSNI of "www.bing.com" must not override a Let's Encrypt
+// IP certificate for 85.x.x.x — that mismatch forced clients to either fail TLS
+// or set skip-cert-verify.
+//
+// Order with cert: configured (if matches) → publicHost (if matches) →
+// connectHost (if matches) → PreferredSNIFromCert (DNS or IP SAN) → connectHost.
+// Order without cert: configured domain → publicHost domain → connectHost.
 func ResolveClientSNI(configured, publicHost, connectHost, certPEM string) string {
+	cert := firstCertificate(certPEM)
+	if cert != nil {
+		for _, cand := range []string{configured, publicHost, connectHost} {
+			cand = normalizeVerifyHost(cand)
+			if cand == "" {
+				continue
+			}
+			if certMatchesHost(cert, cand) {
+				return cand
+			}
+		}
+		if sni := PreferredSNIFromCert(certPEM); sni != "" {
+			return sni
+		}
+		return normalizeVerifyHost(connectHost)
+	}
 	for _, cand := range []string{configured, publicHost, connectHost} {
 		cand = normalizeVerifyHost(cand)
 		if cand == "" {
@@ -76,10 +105,6 @@ func ResolveClientSNI(configured, publicHost, connectHost, certPEM string) strin
 			return cand
 		}
 	}
-	if sni := PreferredSNIFromCert(certPEM); sni != "" {
-		return sni
-	}
-	// IP-only connect with no cert names: still return host for completeness.
 	return normalizeVerifyHost(connectHost)
 }
 

@@ -62,3 +62,24 @@ func TestHostHintsFromConfig(t *testing.T) {
 		t.Fatalf("hints=%v", h)
 	}
 }
+
+func TestResolveClientSNIIgnoresMismatchedAccessSNI(t *testing.T) {
+	// Simulate LE IP cert: only IP SAN, AccessSNI points at an unrelated domain.
+	cert, _, err := GenerateSelfSigned("127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Panel self-signed for IP still self-signed — PreferredSNI may return 127.0.0.1.
+	// For mismatch test we only need certMatchesHost behavior via ResolveClientSNI.
+	sni := ResolveClientSNI("www.bing.com", "", "127.0.0.1", cert)
+	// Self-signed panel cert: PreferredSNIFromCert returns 127.0.0.1 after our IP SAN support.
+	if sni != "127.0.0.1" && sni != "localhost" {
+		// GenerateSelfSigned may use CN=primary
+		if sni == "www.bing.com" {
+			t.Fatalf("mismatched AccessSNI must not win, got %q", sni)
+		}
+	}
+	if sni == "www.bing.com" {
+		t.Fatal("AccessSNI www.bing.com must not override cert identity")
+	}
+}
