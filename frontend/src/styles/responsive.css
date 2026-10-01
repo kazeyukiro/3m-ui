@@ -1357,3 +1357,19 @@ html.dark .app-header-bar,
     padding: 8px 10px !important;
   }
 }
+
+
+/* Desktop: page content is transparent; cards float on layout gray (3X-UI-like) */
+@media (min-width: 768px) {
+  .app-shell.ant-layout,
+  .app-shell > .app-main.ant-layout {
+    background: var(--ant-color-bg-layout, #f5f5f5) !important;
+  }
+  .app-page-content.ant-layout-content {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .app-page-content .ant-card {
+    border-radius: 12px;
+  }
+}

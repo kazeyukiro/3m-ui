@@ -231,3 +231,5 @@ Missing `/assets/` files return an uncached 404 rather than the SPA HTML fallbac
 ## Frontend stack (panel UI)
 
 The embedded web UI is **React + Ant Design**, with icons from **Lucide** (`lucide-react`, adapted in `frontend/src/icons.tsx`). Building the panel binary runs `npm ci` / `npm install` and `npm run build` under `frontend/`.
+
+The Overview (dashboard) uses a layout-gray canvas with floating cards (resource metrics, traffic, connections), 2-second polling, and TCP/UDP connection breakdown. Feature search is available from the sidebar (desktop), the mobile header, and the **Ctrl/Cmd+K** shortcut. Bundled Mihomo version is pinned in `distribution/mihomo.env` (currently **v1.19.32**).

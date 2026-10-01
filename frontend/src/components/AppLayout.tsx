@@ -12,7 +12,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const isMobile = useIsMobile();
   const {
-    token: { colorBgContainer, borderRadiusLG, colorBgLayout },
+    token: { colorBgLayout },
   } = theme.useToken();
 
   useEffect(() => {
@@ -23,7 +23,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <FeatureSearchProvider>
     <Layout
       className={isMobile ? 'app-shell app-shell-mobile' : 'app-shell'}
-      style={{ minHeight: '100dvh', background: isMobile ? colorBgLayout : undefined }}
+      style={{ minHeight: '100dvh', background: colorBgLayout }}
     >
       {!isMobile && <Sidebar collapsed={collapsed} />}
 
@@ -31,7 +31,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         className="app-main"
         style={{
           minWidth: 0,
-          background: isMobile ? colorBgLayout : undefined,
+          background: colorBgLayout,
           paddingBottom: isMobile ? 'calc(56px + env(safe-area-inset-bottom, 0px))' : 0,
         }}
       >
@@ -55,14 +55,16 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   alignSelf: 'stretch',
                 }
               : {
-                  margin: 16,
-                  padding: 20,
-                  background: colorBgContainer,
-                  borderRadius: borderRadiusLG,
+                  // 3X-UI style: layout gray shows through; cards sit as floating surfaces
+                  margin: 0,
+                  padding: '12px 20px 24px',
+                  background: 'transparent',
+                  borderRadius: 0,
+                  boxShadow: 'none',
                   overflow: 'auto',
                   minWidth: 0,
                   maxWidth: 1400,
-                  width: 'calc(100% - 48px)',
+                  width: '100%',
                   alignSelf: 'center',
                 }
           }
