@@ -28,7 +28,13 @@ export default {
     "share": "Поділитися / Підписка",
     "settings": "Налаштування",
     "logout": "Вийти",
-    "more": "Ще"
+    "more": "Ще",
+    "search": "Пошук",
+    "searchPlaceholder": "Пошук функцій…",
+    "searchEmpty": "Нічого не знайдено",
+    "searchCurrent": "Поточна",
+    "searchNavigate": "Навігація",
+    "searchSelect": "Відкрити"
   },
   "common": {
     "advanced": "Advanced",

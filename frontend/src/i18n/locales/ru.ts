@@ -28,7 +28,13 @@ export default {
     "share": "Поделиться / Подписка",
     "settings": "Настройки",
     "logout": "Выход",
-    "more": "Ещё"
+    "more": "Ещё",
+    "search": "Поиск",
+    "searchPlaceholder": "Поиск функций…",
+    "searchEmpty": "Ничего не найдено",
+    "searchCurrent": "Текущий",
+    "searchNavigate": "Навигация",
+    "searchSelect": "Открыть"
   },
   "common": {
     "advanced": "Дополнительно",

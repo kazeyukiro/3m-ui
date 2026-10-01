@@ -18,6 +18,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n } from '../i18n';
 import { useThemeStore } from '../stores/themeStore';
+import { SidebarFeatureSearch } from './FeatureSearch';
 
 const { Sider } = Layout;
 
@@ -70,6 +71,7 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
         <img src="/logo.png" alt="" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} />
         {!collapsed && <span>3M-UI</span>}
       </div>
+      <SidebarFeatureSearch collapsed={collapsed} />
       <Menu
         mode="inline"
         inlineCollapsed={!!collapsed}

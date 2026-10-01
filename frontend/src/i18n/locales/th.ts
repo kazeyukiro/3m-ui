@@ -28,7 +28,13 @@ export default {
     "share": "แชร์ / สมัครสมาชิก",
     "settings": "ตั้งค่า",
     "logout": "ออกจากระบบ",
-    "more": "เพิ่มเติม"
+    "more": "เพิ่มเติม",
+    "search": "ค้นหา",
+    "searchPlaceholder": "ค้นหาฟีเจอร์…",
+    "searchEmpty": "ไม่พบรายการ",
+    "searchCurrent": "ปัจจุบัน",
+    "searchNavigate": "นำทาง",
+    "searchSelect": "เปิด"
   },
   "common": {
     "advanced": "Advanced",

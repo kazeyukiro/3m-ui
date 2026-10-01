@@ -28,7 +28,13 @@ export default {
     "share": "Paylaş / Abonelik",
     "settings": "Ayarlar",
     "logout": "Çıkış",
-    "more": "Daha fazla"
+    "more": "Daha fazla",
+    "search": "Ara",
+    "searchPlaceholder": "Özellik ara…",
+    "searchEmpty": "Eşleşme yok",
+    "searchCurrent": "Geçerli",
+    "searchNavigate": "Gezin",
+    "searchSelect": "Aç"
   },
   "common": {
     "advanced": "Advanced",

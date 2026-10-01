@@ -28,7 +28,13 @@ export default {
     "share": "Chia sẻ / Đăng ký",
     "settings": "Cài đặt",
     "logout": "Đăng xuất",
-    "more": "Thêm"
+    "more": "Thêm",
+    "search": "Tìm kiếm",
+    "searchPlaceholder": "Tìm tính năng…",
+    "searchEmpty": "Không có kết quả",
+    "searchCurrent": "Hiện tại",
+    "searchNavigate": "Điều hướng",
+    "searchSelect": "Mở"
   },
   "common": {
     "advanced": "Advanced",

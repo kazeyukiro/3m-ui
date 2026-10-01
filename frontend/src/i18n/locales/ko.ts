@@ -28,7 +28,13 @@ export default {
     "share": "공유 / 구독",
     "settings": "시스템 설정",
     "logout": "로그아웃",
-    "more": "더보기"
+    "more": "더보기",
+    "search": "검색",
+    "searchPlaceholder": "기능 검색…",
+    "searchEmpty": "일치하는 기능 없음",
+    "searchCurrent": "현재",
+    "searchNavigate": "이동",
+    "searchSelect": "열기"
   },
   "common": {
     "advanced": "고급",

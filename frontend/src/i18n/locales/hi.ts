@@ -28,7 +28,13 @@ export default {
     "share": "शेयर / सब्सक्रिप्शन",
     "settings": "सेटिंग्स",
     "logout": "लॉग आउट",
-    "more": "और"
+    "more": "और",
+    "search": "खोजें",
+    "searchPlaceholder": "सुविधा खोजें…",
+    "searchEmpty": "कोई परिणाम नहीं",
+    "searchCurrent": "वर्तमान",
+    "searchNavigate": "नेविगेट",
+    "searchSelect": "खोलें"
   },
   "common": {
     "advanced": "Advanced",

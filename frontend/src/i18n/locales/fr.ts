@@ -28,7 +28,13 @@ export default {
     "share": "Partage / Abonnement",
     "settings": "Paramètres système",
     "logout": "Déconnexion",
-    "more": "Plus"
+    "more": "Plus",
+    "search": "Rechercher",
+    "searchPlaceholder": "Rechercher une fonction…",
+    "searchEmpty": "Aucune correspondance",
+    "searchCurrent": "Actuel",
+    "searchNavigate": "Naviguer",
+    "searchSelect": "Ouvrir"
   },
   "common": {
     "advanced": "Avancé",

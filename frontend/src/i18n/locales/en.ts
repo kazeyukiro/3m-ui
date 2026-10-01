@@ -28,7 +28,13 @@ export default {
     "share": "Share",
     "settings": "Settings",
     "logout": "Logout",
-    "more": "More"
+    "more": "More",
+    "search": "Search",
+    "searchPlaceholder": "Search features…",
+    "searchEmpty": "No matching features",
+    "searchCurrent": "Current",
+    "searchNavigate": "Navigate",
+    "searchSelect": "Select"
   },
   "common": {
     "advanced": "Advanced",

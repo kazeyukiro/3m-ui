@@ -28,7 +28,13 @@ export default {
     "share": "Udostępnij / Subskrypcja",
     "settings": "Ustawienia",
     "logout": "Wyloguj",
-    "more": "Więcej"
+    "more": "Więcej",
+    "search": "Szukaj",
+    "searchPlaceholder": "Szukaj funkcji…",
+    "searchEmpty": "Brak wyników",
+    "searchCurrent": "Bieżąca",
+    "searchNavigate": "Nawiguj",
+    "searchSelect": "Otwórz"
   },
   "common": {
     "advanced": "Advanced",

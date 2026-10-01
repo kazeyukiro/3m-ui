@@ -11,6 +11,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useThemeStore, ThemeMode } from '../stores/themeStore';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
+import { HeaderFeatureSearchButton } from './FeatureSearch';
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -96,6 +97,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
           flexWrap: 'nowrap',
         }}
       >
+        {isMobile ? <HeaderFeatureSearchButton /> : null}
         <Dropdown
           menu={{
             items: themeItems,

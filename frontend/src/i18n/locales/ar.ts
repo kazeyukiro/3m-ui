@@ -28,7 +28,13 @@ export default {
     "share": "مشاركة / اشتراك",
     "settings": "الإعدادات",
     "logout": "خروج",
-    "more": "المزيد"
+    "more": "المزيد",
+    "search": "بحث",
+    "searchPlaceholder": "البحث عن الميزات…",
+    "searchEmpty": "لا توجد نتائج",
+    "searchCurrent": "الحالي",
+    "searchNavigate": "تنقل",
+    "searchSelect": "فتح"
   },
   "common": {
     "advanced": "Advanced",

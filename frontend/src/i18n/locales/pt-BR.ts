@@ -28,7 +28,13 @@ export default {
     "share": "Compartilhar / Assinatura",
     "settings": "Configurações",
     "logout": "Sair",
-    "more": "Mais"
+    "more": "Mais",
+    "search": "Pesquisar",
+    "searchPlaceholder": "Pesquisar recursos…",
+    "searchEmpty": "Nenhuma correspondência",
+    "searchCurrent": "Atual",
+    "searchNavigate": "Navegar",
+    "searchSelect": "Abrir"
   },
   "common": {
     "advanced": "Advanced",

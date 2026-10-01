@@ -28,7 +28,13 @@ export default {
     "share": "Bagikan / Langganan",
     "settings": "Pengaturan",
     "logout": "Keluar",
-    "more": "Lainnya"
+    "more": "Lainnya",
+    "search": "Cari",
+    "searchPlaceholder": "Cari fitur…",
+    "searchEmpty": "Tidak ada yang cocok",
+    "searchCurrent": "Saat ini",
+    "searchNavigate": "Navigasi",
+    "searchSelect": "Buka"
   },
   "common": {
     "advanced": "Advanced",

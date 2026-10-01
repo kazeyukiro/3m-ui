@@ -28,7 +28,13 @@ export default {
     "share": "分享/訂閱",
     "settings": "系統設定",
     "logout": "登出登入",
-    "more": "更多"
+    "more": "更多",
+    "search": "搜尋",
+    "searchPlaceholder": "搜尋功能…",
+    "searchEmpty": "沒有符合的功能",
+    "searchCurrent": "目前",
+    "searchNavigate": "切換",
+    "searchSelect": "開啟"
   },
   "common": {
     "advanced": "進階選項",

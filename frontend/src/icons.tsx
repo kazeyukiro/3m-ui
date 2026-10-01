@@ -90,6 +90,7 @@ import {
   ListRestart,
   Ban,
   CircleX,
+  Search,
 } from 'lucide-react';
 
 type IconProps = LucideProps & {
@@ -191,6 +192,7 @@ export const IconLock = wrap(Lock, 'IconLock');
 export const IconGlobe = wrap(Globe, 'IconGlobe');
 export const IconTheme = wrap(Palette, 'IconTheme');
 export const IconMenuOpen = wrap(PanelLeftOpen, 'IconMenuOpen');
+export const IconSearch = wrap(Search, 'IconSearch');
 export const IconMenuClose = wrap(PanelLeftClose, 'IconMenuClose');
 export const IconBack = wrap(ArrowLeft, 'IconBack');
 export const IconUndo = wrap(Undo2, 'IconUndo');

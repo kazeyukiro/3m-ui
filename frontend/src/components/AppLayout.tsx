@@ -3,6 +3,7 @@ import { Layout, theme } from 'antd';
 import Sidebar from './Sidebar';
 import HeaderBar from './Header';
 import MobileBottomNav from './MobileBottomNav';
+import { FeatureSearchProvider } from './FeatureSearch';
 import useIsMobile from '../hooks/useIsMobile';
 
 const { Content } = Layout;
@@ -19,6 +20,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [isMobile]);
 
   return (
+    <FeatureSearchProvider>
     <Layout
       className={isMobile ? 'app-shell app-shell-mobile' : 'app-shell'}
       style={{ minHeight: '100dvh', background: isMobile ? colorBgLayout : undefined }}
@@ -71,6 +73,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {isMobile && <MobileBottomNav />}
     </Layout>
+    </FeatureSearchProvider>
   );
 };
 

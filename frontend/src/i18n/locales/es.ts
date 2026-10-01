@@ -28,7 +28,13 @@ export default {
     "share": "Compartir / Suscripción",
     "settings": "Ajustes del sistema",
     "logout": "Cerrar sesión",
-    "more": "Más"
+    "more": "Más",
+    "search": "Buscar",
+    "searchPlaceholder": "Buscar funciones…",
+    "searchEmpty": "Sin coincidencias",
+    "searchCurrent": "Actual",
+    "searchNavigate": "Navegar",
+    "searchSelect": "Abrir"
   },
   "common": {
     "advanced": "Avanzado",

@@ -28,7 +28,13 @@ export default {
     "share": "共有 / 購読",
     "settings": "システム設定",
     "logout": "ログアウト",
-    "more": "その他"
+    "more": "その他",
+    "search": "検索",
+    "searchPlaceholder": "機能を検索…",
+    "searchEmpty": "一致する機能がありません",
+    "searchCurrent": "現在",
+    "searchNavigate": "移動",
+    "searchSelect": "開く"
   },
   "common": {
     "advanced": "詳細設定",

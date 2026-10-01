@@ -28,7 +28,13 @@ export default {
     "share": "分享/订阅",
     "settings": "系统设置",
     "logout": "退出登录",
-    "more": "更多"
+    "more": "更多",
+    "search": "搜索",
+    "searchPlaceholder": "搜索功能…",
+    "searchEmpty": "没有匹配的功能",
+    "searchCurrent": "当前",
+    "searchNavigate": "切换",
+    "searchSelect": "打开"
   },
   "common": {
     "advanced": "高级选项",
