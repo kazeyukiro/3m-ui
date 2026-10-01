@@ -241,12 +241,19 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const filtered = useMemo(() => {
     const q = query.trim();
-    if (!q) return items.filter((it) => it.top);
-    // Prefer unique keys; keep first occurrence order
     const seen = new Set<string>();
     const out: FeatureItem[] = [];
     for (const it of items) {
+      // Empty query: only primary nav entries, once per route key
+      if (!q) {
+        if (!it.top) continue;
+        if (seen.has(it.key)) continue;
+        seen.add(it.key);
+        out.push(it);
+        continue;
+      }
       if (!matchItem(it, q)) continue;
+      // Deduplicate by route + label (same destination may appear once per distinct label)
       const id = `${it.key}::${it.label}`;
       if (seen.has(id)) continue;
       seen.add(id);
@@ -348,10 +355,13 @@ export const FeatureSearchProvider: React.FC<{ children: React.ReactNode }> = ({
             filtered.map((it, idx) => {
               const active = idx === activeIdx;
               const [p, qs] = it.key.split('?');
-              const current = location.pathname === p && (qs ? location.search === `?${qs}` : it.top ? true : !location.search);
+              // Only mark current for exact query match, or the primary top-level entry for a bare path
+              const current =
+                location.pathname === p &&
+                (qs ? location.search === `?${qs}` : Boolean(it.top) && !location.search);
               return (
                 <button
-                  key={it.key}
+                  key={`${it.key}::${it.label}::${idx}`}
                   type="button"
                   onMouseEnter={() => setActiveIdx(idx)}
                   onClick={() => go(it.key)}
@@ -480,9 +490,9 @@ export const SidebarFeatureSearch: React.FC<{ collapsed?: boolean }> = ({ collap
           {filtered.length === 0 ? (
             <div style={{ padding: 12, fontSize: 12, color: token.colorTextSecondary }}>{t('nav.searchEmpty')}</div>
           ) : (
-            filtered.map((it) => (
+            filtered.map((it, idx) => (
               <button
-                key={it.key}
+                key={`${it.key}::${it.label}::${idx}`}
                 type="button"
                 onClick={() => {
                   setQ('');
