@@ -1,8 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
 import { Link } from 'react-router-dom';
 import { IconPlay, IconStop, IconRestart } from '../icons';
-import { fetchDashboard, startMihomo, stopMihomo, restartMihomo, isTransientNetworkError } from '../api/system';
+import {
+  fetchDashboard,
+  startMihomo,
+  stopMihomo,
+  restartMihomo,
+  isTransientNetworkError,
+  type DashboardResponse,
+  type ProcessUsageSample,
+} from '../api/system';
 import { isCanceledError } from '../api/client';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
@@ -22,13 +30,6 @@ const clampPct = (v: unknown) => {
   if (!Number.isFinite(n) || n < 0) return 0;
   if (n > 100) return 100;
   return Math.round(n * 10) / 10;
-};
-
-type ProcSample = {
-  pid?: number;
-  cpu_percent?: number;
-  memory_used?: number;
-  memory_percent?: number;
 };
 
 function pushHistory(buf: number[], value: number, max = HISTORY_LEN): number[] {
@@ -176,46 +177,55 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit, detail, pea
   );
 };
 
+type HistoryState = {
+  cpu: number[];
+  mem: number[];
+  disk: number[];
+  up: number[];
+  down: number[];
+  conns: number[];
+};
+
+const emptyHistory = (): HistoryState => ({
+  cpu: [],
+  mem: [],
+  disk: [],
+  up: [],
+  down: [],
+  conns: [],
+});
+
 const Dashboard: React.FC = () => {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const { token } = theme.useToken();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DashboardResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [hist, setHist] = useState<HistoryState>(emptyHistory);
 
-  const hist = useRef({
-    cpu: [] as number[],
-    mem: [] as number[],
-    disk: [] as number[],
-    up: [] as number[],
-    down: [] as number[],
-    conns: [] as number[],
-  });
-  const [tick, setTick] = useState(0);
-
-  const load = async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const d = await fetchDashboard(signal);
       if (signal?.aborted) return;
       setData(d);
-      const sys = d?.system || {};
-      const tr = d?.traffic || {};
-      hist.current = {
-        cpu: pushHistory(hist.current.cpu, clampPct(sys.cpu?.percent)),
-        mem: pushHistory(hist.current.mem, clampPct(sys.memory?.percent)),
-        disk: pushHistory(hist.current.disk, clampPct(sys.disk?.percent)),
-        up: pushHistory(hist.current.up, Number(tr.uploadRate) || 0),
-        down: pushHistory(hist.current.down, Number(tr.downloadRate) || 0),
-        conns: pushHistory(hist.current.conns, Number(tr.activeConnections) || 0),
-      };
-      setTick((x) => x + 1);
-    } catch (e: any) {
+      const sys = d.system;
+      const tr = d.traffic;
+      setHist((prev) => ({
+        cpu: pushHistory(prev.cpu, clampPct(sys?.cpu?.percent)),
+        mem: pushHistory(prev.mem, clampPct(sys?.memory?.percent)),
+        disk: pushHistory(prev.disk, clampPct(sys?.disk?.percent)),
+        up: pushHistory(prev.up, Number(tr?.uploadRate) || 0),
+        down: pushHistory(prev.down, Number(tr?.downloadRate) || 0),
+        conns: pushHistory(prev.conns, Number(tr?.activeConnections) || 0),
+      }));
+    } catch (e: unknown) {
       if (signal?.aborted || isCanceledError(e)) return;
-      message.error(e.message || t('dashboard.unavailable'));
+      const msg = e instanceof Error ? e.message : t('dashboard.unavailable');
+      message.error(msg || t('dashboard.unavailable'));
     }
-  };
+  }, [t]);
 
-  useEffect(() => startVisiblePolling((signal) => load(signal), DASHBOARD_POLL_MS), []);
+  useEffect(() => startVisiblePolling((signal) => load(signal), DASHBOARD_POLL_MS), [load]);
 
   const act = async (a: 'start' | 'stop' | 'restart') => {
     setBusy(true);
@@ -224,8 +234,8 @@ const Dashboard: React.FC = () => {
       else if (a === 'stop') await stopMihomo();
       else await restartMihomo();
       message.success(t(`dashboard.${a === 'start' ? 'started' : a === 'stop' ? 'stopped' : 'restarted'}`));
-      load();
-    } catch (e: any) {
+      await load();
+    } catch (e: unknown) {
       if (a === 'restart' && isTransientNetworkError(e)) {
         await new Promise((r) => setTimeout(r, 1500));
         try {
@@ -236,28 +246,29 @@ const Dashboard: React.FC = () => {
           /* fall through */
         }
       }
-      message.error(e.message || t('dashboard.operationFailed'));
+      const msg = e instanceof Error ? e.message : t('dashboard.operationFailed');
+      message.error(msg || t('dashboard.operationFailed'));
     } finally {
       setBusy(false);
     }
   };
 
-  const sys = data?.system || {};
-  const users = data?.users || {};
-  const traffic = data?.traffic || {};
-  const panel = data?.panel as ProcSample | undefined;
-  const core = data?.core as ProcSample | undefined;
+  const sys = data?.system;
+  const users = data?.users;
+  const traffic = data?.traffic;
+  const panel: ProcessUsageSample | undefined = data?.panel;
+  const core: ProcessUsageSample | undefined = data?.core;
   const coreRunning = !!data?.mihomo?.running;
 
-  const cpuPct = clampPct(sys.cpu?.percent);
-  const memPct = clampPct(sys.memory?.percent);
-  const diskPct = clampPct(sys.disk?.percent);
-  const online = users.online ?? traffic.onlineUsers ?? 0;
-  const conns = traffic.activeConnections ?? 0;
-  const upRate = traffic.uploadRate || 0;
-  const downRate = traffic.downloadRate || 0;
-  const peakUp = useMemo(() => Math.max(0, ...(hist.current.up.length ? hist.current.up : [0])), [tick]);
-  const peakDown = useMemo(() => Math.max(0, ...(hist.current.down.length ? hist.current.down : [0])), [tick]);
+  const cpuPct = clampPct(sys?.cpu?.percent);
+  const memPct = clampPct(sys?.memory?.percent);
+  const diskPct = clampPct(sys?.disk?.percent);
+  const online = users?.online ?? traffic?.onlineUsers ?? 0;
+  const conns = traffic?.activeConnections ?? 0;
+  const upRate = traffic?.uploadRate || 0;
+  const downRate = traffic?.downloadRate || 0;
+  const peakUp = hist.up.length ? Math.max(0, ...hist.up) : 0;
+  const peakDown = hist.down.length ? Math.max(0, ...hist.down) : 0;
 
   const accent = token.colorPrimary;
   const success = token.colorSuccess;
@@ -335,8 +346,8 @@ const Dashboard: React.FC = () => {
             value={String(cpuPct)}
             unit="%"
             detail={undefined}
-            peak={hist.current.cpu.length ? `PEAK ${Math.max(...hist.current.cpu)}%` : undefined}
-            series={hist.current.cpu}
+            peak={hist.cpu.length ? `PEAK ${Math.max(...hist.cpu)}%` : undefined}
+            series={hist.cpu}
             color={cpuPct >= 80 ? token.colorError : accent}
             isMobile={isMobile}
           />
@@ -346,9 +357,9 @@ const Dashboard: React.FC = () => {
             title={t('dashboard.memory')}
             value={String(memPct)}
             unit="%"
-            detail={`${formatBytes(sys.memory?.used || 0)} / ${formatBytes(sys.memory?.total || 0)}`}
-            peak={hist.current.mem.length ? `AVG ${Math.round((hist.current.mem.reduce((a, b) => a + b, 0) / hist.current.mem.length) * 10) / 10}%` : undefined}
-            series={hist.current.mem}
+            detail={`${formatBytes(sys?.memory?.used || 0)} / ${formatBytes(sys?.memory?.total || 0)}`}
+            peak={hist.mem.length ? `AVG ${Math.round((hist.mem.reduce((a, b) => a + b, 0) / hist.mem.length) * 10) / 10}%` : undefined}
+            series={hist.mem}
             color={memPct >= 80 ? token.colorError : accent}
             isMobile={isMobile}
           />
@@ -358,9 +369,9 @@ const Dashboard: React.FC = () => {
             title={t('dashboard.disk')}
             value={String(diskPct)}
             unit="%"
-            detail={`${formatBytes(sys.disk?.used || 0)} / ${formatBytes(sys.disk?.total || 0)}`}
-            peak={sys.disk?.total ? `FREE ${formatBytes(Math.max(0, (sys.disk.total || 0) - (sys.disk.used || 0)))}` : undefined}
-            series={hist.current.disk}
+            detail={`${formatBytes(sys?.disk?.used || 0)} / ${formatBytes(sys?.disk?.total || 0)}`}
+            peak={sys?.disk?.total ? `FREE ${formatBytes(Math.max(0, (sys?.disk?.total || 0) - (sys?.disk?.used || 0)))}` : undefined}
+            series={hist.disk}
             color={diskPct >= 90 ? token.colorError : accent}
             isMobile={isMobile}
           />
@@ -370,9 +381,9 @@ const Dashboard: React.FC = () => {
             title={t('dashboard.users')}
             value={String(online)}
             unit=""
-            detail={`${t('dashboard.totalUsers')}: ${users.total ?? 0} · ${t('dashboard.enabledUsers')}: ${users.enabled ?? 0}`}
+            detail={`${t('dashboard.totalUsers')}: ${users?.total ?? 0} · ${t('dashboard.enabledUsers')}: ${users?.enabled ?? 0}`}
             peak={`${t('dashboard.listeners')}: ${data?.listeners?.enabled ?? 0}/${data?.listeners?.total ?? 0}`}
-            series={hist.current.conns.length ? hist.current.conns : [0, online]}
+            series={hist.conns.length ? hist.conns : [0, online]}
             color={success}
             isMobile={isMobile}
           />
@@ -413,8 +424,8 @@ const Dashboard: React.FC = () => {
               </Space>
             </div>
             <SpeedChart
-              up={hist.current.up}
-              down={hist.current.down}
+              up={hist.up}
+              down={hist.down}
               upColor={accent}
               downColor={warning}
               height={isMobile ? 120 : 168}
@@ -424,13 +435,13 @@ const Dashboard: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 11 }}>
                   {t('dashboard.totalUpload')}
                 </Text>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatBytes(traffic.totalUpload || 0)}</div>
+                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatBytes(traffic?.totalUpload || 0)}</div>
               </Col>
               <Col span={8}>
                 <Text type="secondary" style={{ fontSize: 11 }}>
                   {t('dashboard.totalDownload')}
                 </Text>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatBytes(traffic.totalDownload || 0)}</div>
+                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatBytes(traffic?.totalDownload || 0)}</div>
               </Col>
               <Col span={8}>
                 <Text type="secondary" style={{ fontSize: 11 }}>
@@ -466,7 +477,7 @@ const Dashboard: React.FC = () => {
               open sockets
             </Text>
             <div style={{ marginTop: 12 }}>
-              <Sparkline data={hist.current.conns} color={accent} height={isMobile ? 48 : 64} fillOpacity={0.15} />
+              <Sparkline data={hist.conns} color={accent} height={isMobile ? 48 : 64} fillOpacity={0.15} />
             </div>
             <div
               style={{
@@ -548,11 +559,11 @@ const Dashboard: React.FC = () => {
             <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: isMobile ? 13 : 14 }}>
               {online}
               <Text type="secondary" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                / {users.total ?? 0}
+                / {users?.total ?? 0}
               </Text>
             </div>
             <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.enabledUsers')}: {users.enabled ?? 0}
+              {t('dashboard.enabledUsers')}: {users?.enabled ?? 0}
             </Text>
           </Col>
           <Col xs={24} sm={24} md={5}>
