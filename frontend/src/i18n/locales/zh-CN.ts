@@ -161,7 +161,10 @@ export default {
     "avg": "平均",
     "free": "可用",
     "openSockets": "打开连接",
-    "coreName": "Mihomo"
+    "coreName": "Mihomo",
+    "tcp": "TCP",
+    "udp": "UDP",
+    "ipAddresses": "IP 地址"
   },
   "listeners": {
     "subtitle": "创建与管理 Mihomo 入站节点。",

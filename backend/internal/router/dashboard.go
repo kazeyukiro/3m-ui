@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -52,8 +53,18 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 			db.Model(&models.ProxyUser{}).Where("enabled = ?", true).Count(&userEnabled)
 		}
 		activeConnections := trafficSnapshot.Connections
+		tcpConnections, udpConnections := 0, 0
 		if col := d.trafficCollector(); col != nil {
-			activeConnections = len(col.CurrentConnections())
+			views := col.CurrentConnections()
+			activeConnections = len(views)
+			for _, v := range views {
+				switch strings.ToLower(strings.TrimSpace(v.Network)) {
+				case "tcp":
+					tcpConnections++
+				case "udp":
+					udpConnections++
+				}
+			}
 		}
 
 		corePID := 0
@@ -61,12 +72,14 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 			corePID = mihomoStatus.PID
 		}
 		panelUsage, coreUsage := system.SampleProcessUsagePair(os.Getpid(), corePID)
+		hostAddrs := system.HostAddresses()
 
 		c.JSON(http.StatusOK, gin.H{
 			"mihomo": mihomoStatus,
 			"system": sysStatus,
 			"panel":  panelUsage,
 			"core":   coreUsage,
+			"addresses": hostAddrs,
 			"listeners": gin.H{
 				"total":    listenerTotal,
 				"enabled":  listenerEnabled,
@@ -84,6 +97,8 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 				"totalDownload":     trafficSnapshot.DownloadBytes,
 				"onlineUsers":       onlineUsers,
 				"activeConnections": activeConnections,
+				"tcpConnections":    tcpConnections,
+				"udpConnections":    udpConnections,
 			},
 		})
 	})

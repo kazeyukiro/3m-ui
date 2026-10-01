@@ -159,7 +159,10 @@ export default {
     "avg": "TB",
     "free": "Còn trống",
     "openSockets": "Kết nối đang mở",
-    "coreName": "Mihomo"
+    "coreName": "Mihomo",
+    "tcp": "TCP",
+    "udp": "UDP",
+    "ipAddresses": "Địa chỉ IP"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

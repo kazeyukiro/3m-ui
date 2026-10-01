@@ -265,6 +265,9 @@ const Dashboard: React.FC = () => {
   const diskPct = clampPct(sys?.disk?.percent);
   const online = users?.online ?? traffic?.onlineUsers ?? 0;
   const conns = traffic?.activeConnections ?? 0;
+  const tcpConns = traffic?.tcpConnections ?? 0;
+  const udpConns = traffic?.udpConnections ?? 0;
+  const addresses = data?.addresses ?? [];
   const upRate = traffic?.uploadRate || 0;
   const downRate = traffic?.downloadRate || 0;
   const peakUp = hist.up.length ? Math.max(0, ...hist.up) : 0;
@@ -476,6 +479,26 @@ const Dashboard: React.FC = () => {
             <Text type="secondary" style={{ fontSize: 12 }}>
               {t('dashboard.openSockets')}
             </Text>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: isMobile ? 12 : 16,
+                marginTop: 10,
+                fontSize: 12,
+              }}
+            >
+              <span>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: accent, marginRight: 6 }} />
+                <Text type="secondary">{t('dashboard.tcp')} </Text>
+                <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{tcpConns}</Text>
+              </span>
+              <span>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: warning, marginRight: 6 }} />
+                <Text type="secondary">{t('dashboard.udp')} </Text>
+                <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{udpConns}</Text>
+              </span>
+            </div>
             <div style={{ marginTop: 12 }}>
               <Sparkline data={hist.conns} color={accent} height={isMobile ? 48 : 64} fillOpacity={0.15} />
             </div>
@@ -566,7 +589,7 @@ const Dashboard: React.FC = () => {
               {t('dashboard.enabledUsers')}: {users?.enabled ?? 0}
             </Text>
           </Col>
-          <Col xs={24} sm={24} md={5}>
+          <Col xs={12} sm={12} md={5}>
             <Text type="secondary" style={{ fontSize: 11 }}>
               {t('dashboard.version')}
             </Text>
@@ -576,6 +599,23 @@ const Dashboard: React.FC = () => {
             <Text type="secondary" style={{ fontSize: 11 }}>
               {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
             </Text>
+          </Col>
+          <Col xs={24} sm={24} md={24} lg={24}>
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              {t('dashboard.ipAddresses')}
+            </Text>
+            <div
+              style={{
+                fontWeight: 500,
+                fontSize: isMobile ? 12 : 13,
+                fontVariantNumeric: 'tabular-nums',
+                wordBreak: 'break-all',
+                marginTop: 2,
+                lineHeight: 1.45,
+              }}
+            >
+              {addresses.length > 0 ? addresses.join(' · ') : '—'}
+            </div>
           </Col>
         </Row>
       </Card>

@@ -159,7 +159,10 @@ export default {
     "avg": "Méd.",
     "free": "Livre",
     "openSockets": "Sockets abertos",
-    "coreName": "Mihomo"
+    "coreName": "Mihomo",
+    "tcp": "TCP",
+    "udp": "UDP",
+    "ipAddresses": "Endereços IP"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",
