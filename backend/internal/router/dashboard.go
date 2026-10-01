@@ -75,10 +75,10 @@ func registerDashboardRoute(api *gin.RouterGroup, d Deps) {
 		hostAddrs := system.HostAddresses()
 
 		c.JSON(http.StatusOK, gin.H{
-			"mihomo": mihomoStatus,
-			"system": sysStatus,
-			"panel":  panelUsage,
-			"core":   coreUsage,
+			"mihomo":    mihomoStatus,
+			"system":    sysStatus,
+			"panel":     panelUsage,
+			"core":      coreUsage,
 			"addresses": hostAddrs,
 			"listeners": gin.H{
 				"total":    listenerTotal,
