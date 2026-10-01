@@ -305,7 +305,7 @@ const Dashboard: React.FC = () => {
               }}
             />
             <Text strong style={{ fontSize: isMobile ? 13 : 14 }}>
-              Mihomo · {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
+              {t('dashboard.coreName')} · {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
             </Text>
             {data?.mihomo?.version ? (
               <Tag style={{ margin: 0, borderRadius: 999 }}>{data.mihomo.version}</Tag>
@@ -346,7 +346,7 @@ const Dashboard: React.FC = () => {
             value={String(cpuPct)}
             unit="%"
             detail={undefined}
-            peak={hist.cpu.length ? `PEAK ${Math.max(...hist.cpu)}%` : undefined}
+            peak={hist.cpu.length ? `${t('dashboard.peak')} ${Math.max(...hist.cpu)}%` : undefined}
             series={hist.cpu}
             color={cpuPct >= 80 ? token.colorError : accent}
             isMobile={isMobile}
@@ -358,7 +358,7 @@ const Dashboard: React.FC = () => {
             value={String(memPct)}
             unit="%"
             detail={`${formatBytes(sys?.memory?.used || 0)} / ${formatBytes(sys?.memory?.total || 0)}`}
-            peak={hist.mem.length ? `AVG ${Math.round((hist.mem.reduce((a, b) => a + b, 0) / hist.mem.length) * 10) / 10}%` : undefined}
+            peak={hist.mem.length ? `${t('dashboard.avg')} ${Math.round((hist.mem.reduce((a, b) => a + b, 0) / hist.mem.length) * 10) / 10}%` : undefined}
             series={hist.mem}
             color={memPct >= 80 ? token.colorError : accent}
             isMobile={isMobile}
@@ -370,7 +370,7 @@ const Dashboard: React.FC = () => {
             value={String(diskPct)}
             unit="%"
             detail={`${formatBytes(sys?.disk?.used || 0)} / ${formatBytes(sys?.disk?.total || 0)}`}
-            peak={sys?.disk?.total ? `FREE ${formatBytes(Math.max(0, (sys?.disk?.total || 0) - (sys?.disk?.used || 0)))}` : undefined}
+            peak={sys?.disk?.total ? `${t('dashboard.free')} ${formatBytes(Math.max(0, (sys?.disk?.total || 0) - (sys?.disk?.used || 0)))}` : undefined}
             series={hist.disk}
             color={diskPct >= 90 ? token.colorError : accent}
             isMobile={isMobile}
@@ -404,7 +404,7 @@ const Dashboard: React.FC = () => {
                   {t('dashboard.traffic')}
                 </Text>
                 <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
-                  {t('dashboard.uploadRate')} peak {formatRate(peakUp)} · {t('dashboard.downloadRate')} peak{' '}
+                  {t('dashboard.uploadRate')} · {t('dashboard.peak')} {formatRate(peakUp)} · {t('dashboard.downloadRate')} · {t('dashboard.peak')}{' '}
                   {formatRate(peakDown)}
                 </div>
               </div>
@@ -474,7 +474,7 @@ const Dashboard: React.FC = () => {
               {conns}
             </div>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              open sockets
+              {t('dashboard.openSockets')}
             </Text>
             <div style={{ marginTop: 12 }}>
               <Sparkline data={hist.conns} color={accent} height={isMobile ? 48 : 64} fillOpacity={0.15} />
@@ -517,7 +517,7 @@ const Dashboard: React.FC = () => {
             </Text>
             <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14 }}>{data?.mihomo?.uptime || '—'}</div>
             <Text type="secondary" style={{ fontSize: 11 }}>
-              Mihomo
+              {t('dashboard.coreName')}
             </Text>
           </Col>
           <Col xs={12} sm={6} md={5}>
@@ -528,7 +528,7 @@ const Dashboard: React.FC = () => {
               {panel?.memory_used != null ? formatBytes(panel.memory_used) : '—'}
               {panel?.cpu_percent != null ? (
                 <Text type="secondary" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                  CPU {clampPct(panel.cpu_percent)}%
+                  {t('dashboard.cpu')} {clampPct(panel.cpu_percent)}%
                 </Text>
               ) : null}
             </div>
@@ -544,7 +544,7 @@ const Dashboard: React.FC = () => {
               {coreRunning && core?.memory_used != null ? formatBytes(core.memory_used) : '—'}
               {coreRunning && core?.cpu_percent != null ? (
                 <Text type="secondary" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                  CPU {clampPct(core.cpu_percent)}%
+                  {t('dashboard.cpu')} {clampPct(core.cpu_percent)}%
                 </Text>
               ) : null}
             </div>

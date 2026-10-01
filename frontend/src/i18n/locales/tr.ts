@@ -154,7 +154,12 @@ export default {
     "unavailable": "Durum yok",
     "users": "Kullanıcılar",
     "totalUsers": "Toplam kullanıcı",
-    "enabledUsers": "Aktif kullanıcılar"
+    "enabledUsers": "Aktif kullanıcılar",
+    "peak": "Zirve",
+    "avg": "Ort.",
+    "free": "Boş",
+    "openSockets": "Açık soketler",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

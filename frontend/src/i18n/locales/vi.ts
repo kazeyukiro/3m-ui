@@ -154,7 +154,12 @@ export default {
     "unavailable": "Không có trạng thái",
     "users": "Người dùng",
     "totalUsers": "Tổng người dùng",
-    "enabledUsers": "Người dùng đã bật"
+    "enabledUsers": "Người dùng đã bật",
+    "peak": "Đỉnh",
+    "avg": "TB",
+    "free": "Còn trống",
+    "openSockets": "Kết nối đang mở",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

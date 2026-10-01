@@ -154,7 +154,12 @@ export default {
     "unavailable": "الحالة غير متاحة",
     "users": "المستخدمون",
     "totalUsers": "إجمالي المستخدمين",
-    "enabledUsers": "المستخدمون النشطون"
+    "enabledUsers": "المستخدمون النشطون",
+    "peak": "الذروة",
+    "avg": "المتوسط",
+    "free": "متاح",
+    "openSockets": "مقابس مفتوحة",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

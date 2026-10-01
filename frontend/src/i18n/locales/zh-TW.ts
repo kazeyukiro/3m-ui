@@ -154,7 +154,12 @@ export default {
     "unavailable": "無法获取狀態",
     "users": "使用者",
     "totalUsers": "使用者總数",
-    "enabledUsers": "啟用使用者"
+    "enabledUsers": "啟用使用者",
+    "peak": "峰值",
+    "avg": "平均",
+    "free": "可用",
+    "openSockets": "開啟連線",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "建立与管理 Mihomo 入站節點。",

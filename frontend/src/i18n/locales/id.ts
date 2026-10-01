@@ -154,7 +154,12 @@ export default {
     "unavailable": "Status tidak tersedia",
     "users": "Pengguna",
     "totalUsers": "Total pengguna",
-    "enabledUsers": "Pengguna aktif"
+    "enabledUsers": "Pengguna aktif",
+    "peak": "Puncak",
+    "avg": "Rata-rata",
+    "free": "Tersedia",
+    "openSockets": "Socket terbuka",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

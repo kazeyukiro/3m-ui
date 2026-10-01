@@ -154,7 +154,12 @@ export default {
     "unavailable": "Статус недоступний",
     "users": "Користувачі",
     "totalUsers": "Всього користувачів",
-    "enabledUsers": "Активні користувачі"
+    "enabledUsers": "Активні користувачі",
+    "peak": "Пік",
+    "avg": "Сер.",
+    "free": "Вільно",
+    "openSockets": "Відкриті сокети",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

@@ -154,7 +154,12 @@ export default {
     "unavailable": "स्थिति उपलब्ध नहीं",
     "users": "उपयोगकर्ता",
     "totalUsers": "कुल उपयोगकर्ता",
-    "enabledUsers": "सक्रिय उपयोगकर्ता"
+    "enabledUsers": "सक्रिय उपयोगकर्ता",
+    "peak": "शिखर",
+    "avg": "औसत",
+    "free": "खाली",
+    "openSockets": "खुले सॉकेट",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",

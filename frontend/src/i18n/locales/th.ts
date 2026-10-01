@@ -154,7 +154,12 @@ export default {
     "unavailable": "ไม่มีสถานะ",
     "users": "ผู้ใช้",
     "totalUsers": "ผู้ใช้ทั้งหมด",
-    "enabledUsers": "ผู้ใช้ที่เปิดใช้"
+    "enabledUsers": "ผู้ใช้ที่เปิดใช้",
+    "peak": "สูงสุด",
+    "avg": "เฉลี่ย",
+    "free": "ว่าง",
+    "openSockets": "การเชื่อมต่อที่เปิด",
+    "coreName": "Mihomo"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",
