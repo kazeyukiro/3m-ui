@@ -88,11 +88,15 @@ func ResolveClientSNI(configured, publicHost, connectHost, certPEM string) strin
 // Priority:
 //  1. Explicit skip-cert-verify in config (operator override)
 //  2. Panel-generated PEM (O=3m-ui / legacy localhost) → skip
-//  3. Certificate present and connectHost matches CN/SAN → do not skip (formal cert)
-//  4. Certificate is self-signed (Issuer == Subject) → skip
-//  5. Certificate present but connectHost matches none of the names → skip
-//     (strict verify would fail on hostname)
-//  6. No certificate material → skip (panel default: TLS without a published CA)
+//  3. Other self-signed PEM (Issuer signs itself) → skip
+//  4. Formal / CA-signed PEM → never skip (client verifies via system trust;
+//     callers must emit the correct SNI via ResolveClientSNI)
+//  5. No PEM + connect host is a domain name → do not skip (public CA / CDN edge)
+//  6. No PEM + IP-only or empty host → skip (nothing to verify against)
+//
+// Previously (5)/(6) always skipped when PEM was missing, and formal certs whose
+// SAN did not match a bare IP connect host were also forced to skip — so operators
+// with real certificates still saw insecure=1 / skip-cert-verify in URIs.
 func DecideClientSkipCertVerify(certPEM, connectHost string, explicitSkip *bool) bool {
 	if explicitSkip != nil {
 		return *explicitSkip
@@ -102,22 +106,16 @@ func DecideClientSkipCertVerify(certPEM, connectHost string, explicitSkip *bool)
 	}
 	cert := firstCertificate(certPEM)
 	if cert == nil {
-		// No PEM available (may live only on the server disk). Panel installs
-		// almost always use self-signed; formal-cert operators keep PEM in Config.
+		host := normalizeVerifyHost(connectHost)
+		if host != "" && net.ParseIP(host) == nil {
+			return false
+		}
 		return true
-	}
-	host := normalizeVerifyHost(connectHost)
-	if host != "" && certMatchesHost(cert, host) {
-		// Public host is covered by the certificate → verify normally.
-		return false
 	}
 	if isSelfSignedCert(cert) {
 		return true
 	}
-	if host != "" {
-		// Host not on certificate → verify would fail; skip so the client can connect.
-		return true
-	}
+	// Non-self-signed certificate material: trust system CAs; do not force insecure.
 	return false
 }
 

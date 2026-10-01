@@ -24,14 +24,22 @@ func looksLikeIP(host string) bool {
 
 func clientSkipCert(cfg map[string]interface{}, connectHost string) bool {
 	if cfg == nil {
-		return true
+		cfg = map[string]interface{}{}
 	}
 	var explicit *bool
 	if b, ok := cfg["skip-cert-verify"].(bool); ok {
 		explicit = &b
 	}
 	cert, _ := cfg["certificate"].(string)
-	return certutil.DecideClientSkipCertVerify(cert, connectHost, explicit)
+	// Prefer SNI / servername as the identity the client will actually verify.
+	verify := connectHost
+	for _, key := range []string{"sni", "servername"} {
+		if v, ok := cfg[key].(string); ok && strings.TrimSpace(v) != "" {
+			verify = strings.TrimSpace(v)
+			break
+		}
+	}
+	return certutil.DecideClientSkipCertVerify(cert, verify, explicit)
 }
 
 func tlsParams(cfg map[string]interface{}) map[string]string {
@@ -54,7 +62,11 @@ func tlsParams(cfg map[string]interface{}) map[string]string {
 	if v, ok := cfg["fingerprint"].(string); ok && v != "" {
 		params["fp"] = v
 	}
+	// URI allowInsecure: panel self-signed or explicit skip only.
+	// Formal certificates must NOT force insecure (Loon/v2rayNG would otherwise
+	// ignore system CAs even when the operator installed a real cert).
 	if certutil.ShouldSkipCertVerify(cfg) {
+		params["insecure"] = "1"
 		params["allowInsecure"] = "1"
 	}
 	// TLS without fingerprint is fragile against CDN / middleboxes.

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
@@ -28,6 +29,13 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	}
 	cfg["_listener-tls"] = listener.TLS
 	cfg["_listener-udp"] = listener.UDP
+	// Prefer durable certstore PEM when Config has no certificate blob so
+	// formal certs (ACME / uploaded) drive skip-cert decisions correctly.
+	if cert, _, ok := certstore.Load(listener.ID); ok {
+		if s, _ := cfg["certificate"].(string); strings.TrimSpace(s) == "" {
+			cfg["certificate"] = cert
+		}
+	}
 	port := strings.TrimSpace(listener.PublicPort)
 	if port == "" {
 		port = strings.TrimSpace(listener.Port)

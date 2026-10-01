@@ -29,6 +29,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 		UDP:         l.UDP,
 		TLS:         l.TLS,
 		Users:       users,
+		Certificate: strFrom(cfg, "certificate"),
 	}
 	if n.Port == "" {
 		n.Port = strings.TrimSpace(l.Port)

@@ -28,13 +28,12 @@ func TestGenerateSelfSignedAndDetect(t *testing.T) {
 }
 
 func TestDecideClientSkipCertVerify(t *testing.T) {
-	cert, _, err := GenerateSelfSigned("localhost")
+	cert, _, err := GenerateSelfSigned("dzx.qzz.io")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Panel self-signed → skip even when connecting via public host
 	if !DecideClientSkipCertVerify(cert, "dzx.qzz.io", nil) {
-		t.Fatal("panel cert should skip for public host")
+		t.Fatal("panel self-signed must skip")
 	}
 	f := false
 	if DecideClientSkipCertVerify(cert, "dzx.qzz.io", &f) {
@@ -44,9 +43,13 @@ func TestDecideClientSkipCertVerify(t *testing.T) {
 	if !DecideClientSkipCertVerify(cert, "dzx.qzz.io", &tr) {
 		t.Fatal("explicit true must win")
 	}
-	// No PEM → skip (panel default)
-	if !DecideClientSkipCertVerify("", "dzx.qzz.io", nil) {
-		t.Fatal("empty cert should skip")
+	// Domain connect without embedded PEM: assume public CA (do not force insecure).
+	if DecideClientSkipCertVerify("", "dzx.qzz.io", nil) {
+		t.Fatal("empty PEM + domain must NOT skip")
+	}
+	// IP-only without PEM: still skip.
+	if !DecideClientSkipCertVerify("", "1.2.3.4", nil) {
+		t.Fatal("empty PEM + IP must skip")
 	}
 }
 

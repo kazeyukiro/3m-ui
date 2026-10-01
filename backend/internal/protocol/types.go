@@ -17,6 +17,8 @@ type NodeModel struct {
 	Enabled     bool
 	UDP         bool
 	TLS         bool
+	// Certificate is optional PEM from listener Config (formal or panel-issued).
+	Certificate string
 
 	Users []UserCred
 

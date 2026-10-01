@@ -211,7 +211,7 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 			p["client-fingerprint"] = "chrome"
 		}
 	}
-	if spec.SkipCert {
+	if shareSkipCert(ShareInput{Node: node}, spec.SNI, host, spec.SkipCert) {
 		p["skip-cert-verify"] = true
 	}
 	if len(spec.ALPN) > 0 {
@@ -308,7 +308,18 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	if sni == "" {
 		sni = shareTLSServerName(host, in.Node.PublicHost)
 	}
-	skipCert := spec.SkipCert || shareHostLooksLikeIP(host)
+	// Verify identity: prefer resolved SNI over dial host so formal certs are not
+	// forced to insecure just because PublicHost is an IP.
+	verifyHost := sni
+	if verifyHost == "" {
+		verifyHost = host
+	}
+	var explicit *bool
+	if spec.SkipCert {
+		t := true
+		explicit = &t
+	}
+	skipCert := certutil.DecideClientSkipCertVerify(in.Node.Certificate, verifyHost, explicit)
 	params := map[string]string{}
 	if sni != "" {
 		params["sni"] = sni
@@ -913,6 +924,25 @@ func shareHostLooksLikeIP(host string) bool {
 	h := strings.TrimSpace(host)
 	h = strings.Trim(h, "[]")
 	return h != "" && net.ParseIP(h) != nil
+}
+
+func shareSkipCert(in ShareInput, configuredSNI string, host string, explicit bool) bool {
+	var exp *bool
+	if explicit {
+		v := true
+		exp = &v
+	}
+	verify := strings.TrimSpace(configuredSNI)
+	if verify == "" {
+		verify = strings.TrimSpace(in.Node.AccessSNI)
+	}
+	if verify == "" {
+		verify = shareTLSServerName(host, in.Node.PublicHost)
+	}
+	if verify == "" {
+		verify = host
+	}
+	return certutil.DecideClientSkipCertVerify(in.Node.Certificate, verify, exp)
 }
 
 func applyALPNParams(params map[string]string, alpn []string) {

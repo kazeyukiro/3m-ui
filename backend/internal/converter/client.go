@@ -1009,7 +1009,14 @@ func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost strin
 			explicit = &v
 		}
 	}
-	if certutil.DecideClientSkipCertVerify(cert, connectHost, explicit) {
+	verify := connectHost
+	for _, key := range []string{"sni", "servername"} {
+		if v, ok := p[key].(string); ok && strings.TrimSpace(v) != "" {
+			verify = strings.TrimSpace(v)
+			break
+		}
+	}
+	if certutil.DecideClientSkipCertVerify(cert, verify, explicit) {
 		p["skip-cert-verify"] = true
 	} else {
 		delete(p, "skip-cert-verify")
