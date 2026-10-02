@@ -47,7 +47,16 @@ func shadowQUICURIs(name, host, port string, cfg map[string]interface{}) ([]stri
 			return nil, fmt.Errorf("shadowquic user %q has empty password", username)
 		}
 		params := map[string]string{}
-		for _, key := range []string{"sni", "alpn", "quic-versions", "congestion-controller", "up", "down", "cwnd", "bbr-profile", "max-datagram-frame-size", "max-open-streams", "recv-window-conn", "recv-window"} {
+		sni, skip := resolveURITLS(cfg, host)
+		if sni != "" {
+			params["sni"] = sni
+		}
+		if skip {
+			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
+			params["skip-cert-verify"] = "1"
+		}
+		for _, key := range []string{"alpn", "quic-versions", "congestion-controller", "up", "down", "cwnd", "bbr-profile", "max-datagram-frame-size", "max-open-streams", "recv-window-conn", "recv-window"} {
 			if v := stringValue(cfg[key], ""); v != "" {
 				params[key] = v
 			}
@@ -147,12 +156,21 @@ func trustTunnelURIs(name, host, port string, cfg map[string]interface{}) ([]str
 			return nil, fmt.Errorf("trusttunnel user %q has empty password", username)
 		}
 		params := map[string]string{}
-		for _, key := range []string{"client-fingerprint", "health-check", "sni", "alpn", "congestion-controller", "bbr-profile", "max-connections", "min-streams", "max-streams"} {
+		sni, skip := resolveURITLS(cfg, host)
+		if sni != "" {
+			params["sni"] = sni
+		}
+		if skip {
+			params["skip-cert-verify"] = "1"
+			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
+		}
+		for _, key := range []string{"client-fingerprint", "health-check", "alpn", "congestion-controller", "bbr-profile", "max-connections", "min-streams", "max-streams"} {
 			if v := stringValue(cfg[key], ""); v != "" {
 				params[key] = v
 			}
 		}
-		for _, key := range []string{"udp", "quic", "skip-cert-verify", "name-cert-verify"} {
+		for _, key := range []string{"udp", "quic", "name-cert-verify"} {
 			if b, ok := cfg[key].(bool); ok && b {
 				params[key] = "1"
 			}

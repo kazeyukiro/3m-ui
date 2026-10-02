@@ -71,19 +71,13 @@ func resolveURITLS(cfg map[string]interface{}, host string) (sni string, skip bo
 	return sni, skip
 }
 
-func tlsParams(cfg map[string]interface{}) map[string]string {
+func tlsParams(cfg map[string]interface{}, connectHost string) map[string]string {
 	params := map[string]string{}
 	if enabled, ok := cfg["_listener-tls"].(bool); ok && enabled {
 		params["security"] = "tls"
 	}
 	if certificate, ok := cfg["certificate"].(string); ok && strings.TrimSpace(certificate) != "" {
 		params["security"] = "tls"
-	}
-	if v, ok := cfg["servername"].(string); ok && v != "" {
-		params["sni"] = v
-	}
-	if v, ok := cfg["sni"].(string); ok && v != "" {
-		params["sni"] = v
 	}
 	if v, ok := cfg["client-fingerprint"].(string); ok && v != "" {
 		params["fp"] = v
@@ -95,15 +89,21 @@ func tlsParams(cfg map[string]interface{}) map[string]string {
 	// Formal certificates must NOT force insecure. Reality uses its own path
 	// and must not inherit panel-certificate skip flags into the query string.
 	if _, isReality := cfg["reality-config"]; !isReality {
-		sni := params["sni"]
-		certPEM := loadCertPEMFromCfg(cfg)
-		var explicit *bool
-		if b, ok := cfg["skip-cert-verify"].(bool); ok {
-			explicit = &b
+		sni, skip := resolveURITLS(cfg, connectHost)
+		if sni != "" {
+			params["sni"] = sni
 		}
-		if certutil.DecideClientSkipCertVerify(certPEM, sni, explicit) {
+		if skip {
 			params["insecure"] = "1"
 			params["allowInsecure"] = "1"
+		}
+	} else {
+		// Reality: still surface configured camouflage SNI when present.
+		for _, key := range []string{"sni", "servername"} {
+			if v, ok := cfg[key].(string); ok && strings.TrimSpace(v) != "" {
+				params["sni"] = strings.TrimSpace(v)
+				break
+			}
 		}
 	}
 	// TLS without fingerprint is fragile against CDN / middleboxes.
@@ -166,7 +166,7 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		if uuid == "" {
 			return nil, fmt.Errorf("vless user uuid is required")
 		}
-		params := tlsParams(cfg)
+		params := tlsParams(cfg, host)
 		params["type"] = "tcp"
 		// Resolve the transport before deciding anything that depends on it.
 		for k, v := range transportParams(cfg) {
@@ -222,7 +222,7 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 		aid := stringValue(cfg["alterId"], "0")
 		cipher := stringValue(cfg["cipher"], "auto")
 		obj := map[string]string{"v": "2", "ps": name, "add": host, "port": port, "id": uuid, "aid": aid, "scy": cipher, "net": "tcp", "type": "none"}
-		tlsOpts := tlsParams(cfg)
+		tlsOpts := tlsParams(cfg, host)
 		if tlsOpts["security"] == "tls" {
 			obj["tls"] = "tls"
 		}
@@ -298,7 +298,7 @@ func trojanURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		if password == "" {
 			return nil, fmt.Errorf("trojan user password is required")
 		}
-		params := tlsParams(cfg)
+		params := tlsParams(cfg, host)
 		for k, v := range transportParams(cfg) {
 			params[k] = v
 		}

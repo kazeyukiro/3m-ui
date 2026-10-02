@@ -32,14 +32,8 @@ func (TrojanCompiler) BuildShare(in ShareInput) (Share, error) {
 		return Share{}, fmt.Errorf("trojan share requires password")
 	}
 	params := map[string]string{"type": strOr(spec.Transport.Network, "tcp")}
-	if spec.SNI != "" {
-		params["sni"] = spec.SNI
-	}
 	if spec.Fingerprint != "" {
 		params["fp"] = spec.Fingerprint
-	}
-	if spec.SkipCert {
-		params["allowInsecure"] = "1"
 	}
 	applyTransportParams(params, spec.Transport)
 	applyALPNParams(params, spec.ALPN)
@@ -58,8 +52,23 @@ func (TrojanCompiler) BuildShare(in ShareInput) (Share, error) {
 		if spec.Reality.ShortID != "" {
 			params["sid"] = spec.Reality.ShortID
 		}
-		if params["sni"] == "" {
-			params["sni"] = spec.Reality.ServerName
+		if sni := strOr(spec.SNI, spec.Reality.ServerName); sni != "" {
+			params["sni"] = sni
+		}
+		if params["fp"] == "" {
+			params["fp"] = "chrome"
+		}
+		// Reality camouflage cert is not the real endpoint identity.
+		params["allowInsecure"] = "1"
+		params["insecure"] = "1"
+	} else {
+		sni, skip := resolveShareTLS(in, spec.SNI, host, spec.SkipCert)
+		if sni != "" {
+			params["sni"] = sni
+		}
+		if skip {
+			params["allowInsecure"] = "1"
+			params["insecure"] = "1"
 		}
 		if params["fp"] == "" {
 			params["fp"] = "chrome"
@@ -96,19 +105,11 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if spec.Flow != "" && spec.Transport.CarriesFlow() {
 		params["flow"] = spec.Flow
 	}
-	if spec.SNI != "" {
-		params["sni"] = spec.SNI
-	}
 	if spec.Fingerprint != "" {
 		params["fp"] = spec.Fingerprint
 	}
-	if spec.SkipCert {
-		params["allowInsecure"] = "1"
-	}
 	applyTransportParams(params, spec.Transport)
 	applyALPNParams(params, spec.ALPN)
-	// CDN: when ws-headers Host was not set on the listener, fill share URI host
-	// from SNI / public host so clients send the correct Host header.
 	if params["type"] == "ws" && params["host"] == "" {
 		if h := effectiveWSHost(spec.Transport, in.Node, spec.SNI); h != "" {
 			params["host"] = h
@@ -124,30 +125,26 @@ func (VLESSCompiler) BuildShare(in ShareInput) (Share, error) {
 		if spec.Reality.ShortID != "" {
 			params["sid"] = spec.Reality.ShortID
 		}
-		if params["sni"] == "" {
-			params["sni"] = spec.Reality.ServerName
+		if sni := strOr(spec.SNI, spec.Reality.ServerName); sni != "" {
+			params["sni"] = sni
 		}
 		if params["fp"] == "" {
 			params["fp"] = "chrome"
 		}
-	} else if in.Node.TLS || shareNeedsClientTLS(in.Node, spec.Transport.Network, host, port) {
-		// Non-Reality TLS (listener cert or CDN edge): emit security=tls.
+		params["allowInsecure"] = "1"
+		params["insecure"] = "1"
+	} else if in.Node.TLS || shareNeedsClientTLS(in.Node, spec.Transport.Network, host, port) || strings.TrimSpace(in.Node.Certificate) != "" {
 		params["security"] = "tls"
-		if params["sni"] == "" {
-			if h := strings.TrimSpace(in.Node.AccessSNI); h != "" {
-				params["sni"] = h
-			} else if h := strings.TrimSpace(in.Node.PublicHost); h != "" {
-				params["sni"] = h
-			} else {
-				params["sni"] = host
-			}
+		sni, skip := resolveShareTLS(in, spec.SNI, host, spec.SkipCert)
+		if sni != "" {
+			params["sni"] = sni
+		}
+		if skip {
+			params["allowInsecure"] = "1"
+			params["insecure"] = "1"
 		}
 		if params["fp"] == "" {
-			if in.Node.Fingerprint != "" {
-				params["fp"] = in.Node.Fingerprint
-			} else {
-				params["fp"] = "chrome"
-			}
+			params["fp"] = strOr(in.Node.Fingerprint, "chrome")
 		}
 	}
 	uri := shareName(
@@ -192,26 +189,23 @@ func vlessClientYAML(node NodeModel, host, port, uuid string, spec *VLESSSpec) (
 		} else {
 			p["client-fingerprint"] = "chrome"
 		}
-	} else if node.TLS || shareNeedsClientTLS(node, spec.Transport.Network, host, port) {
+	} else if node.TLS || shareNeedsClientTLS(node, spec.Transport.Network, host, port) || strings.TrimSpace(node.Certificate) != "" {
 		p["tls"] = true
-		if spec.SNI != "" {
-			p["servername"] = spec.SNI
-		} else if node.AccessSNI != "" {
-			p["servername"] = node.AccessSNI
-		} else if node.PublicHost != "" {
-			p["servername"] = node.PublicHost
-		} else {
-			p["servername"] = host
+		sni, skip := resolveShareTLS(ShareInput{Node: node}, spec.SNI, host, spec.SkipCert)
+		if sni != "" {
+			p["servername"] = sni
+			p["sni"] = sni
+		}
+		if skip {
+			p["skip-cert-verify"] = true
 		}
 		if spec.Fingerprint != "" {
 			p["client-fingerprint"] = spec.Fingerprint
-		} else if node.Fingerprint != "" {
-			p["client-fingerprint"] = node.Fingerprint
 		} else {
-			p["client-fingerprint"] = "chrome"
+			p["client-fingerprint"] = strOr(node.Fingerprint, "chrome")
 		}
 	}
-	if shareSkipCert(ShareInput{Node: node}, spec.SNI, host, spec.SkipCert) {
+	if _, isReality := p["reality-opts"]; isReality {
 		p["skip-cert-verify"] = true
 	}
 	if len(spec.ALPN) > 0 {
@@ -299,29 +293,11 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	if pass == "" {
 		return Share{}, fmt.Errorf("hysteria2 share requires password")
 	}
-	// Align with uri_builders.resolveURITLS: formal LE IP certs must emit
-	// sni=<IP> (shareTLSServerName deliberately skips IPs and left query empty).
-	certPEM := strings.TrimSpace(in.Node.Certificate)
-	if certPEM == "" && in.Node.Generic != nil {
-		if c, ok := in.Node.Generic["certificate"].(string); ok {
-			certPEM = strings.TrimSpace(c)
-		}
-	}
 	configured := strings.TrimSpace(spec.SNI)
 	if configured == "" {
 		configured = strings.TrimSpace(in.Node.AccessSNI)
 	}
-	sni := certutil.ResolveClientSNI(configured, in.Node.PublicHost, host, certPEM)
-	var explicit *bool
-	if spec.SkipCert {
-		v := true
-		explicit = &v
-	}
-	verifyHost := sni
-	if verifyHost == "" {
-		verifyHost = host
-	}
-	skipCert := certutil.DecideClientSkipCertVerify(certPEM, verifyHost, explicit)
+	sni, skipCert := resolveShareTLS(in, configured, host, spec.SkipCert)
 	params := map[string]string{}
 	if sni != "" {
 		params["sni"] = sni
@@ -413,24 +389,22 @@ func (VMessCompiler) BuildShare(in ShareInput) (Share, error) {
 		if opts := realityOptsYAML(spec.Reality); opts != nil {
 			extra["reality-opts"] = opts
 		}
-		if spec.SNI != "" {
-			extra["servername"] = spec.SNI
-		} else if spec.Reality.ServerName != "" {
-			extra["servername"] = spec.Reality.ServerName
+		if sni := strOr(spec.SNI, spec.Reality.ServerName); sni != "" {
+			extra["servername"] = sni
 		}
-		fp := strOr(spec.Fingerprint, "chrome")
-		extra["client-fingerprint"] = fp
-	} else if in.Node.TLS || spec.SkipCert || spec.SNI != "" {
+		extra["client-fingerprint"] = strOr(spec.Fingerprint, "chrome")
+		extra["skip-cert-verify"] = true
+	} else if in.Node.TLS || spec.SkipCert || spec.SNI != "" || strings.TrimSpace(in.Node.Certificate) != "" {
 		extra["tls"] = true
-		if spec.SNI != "" {
-			extra["servername"] = spec.SNI
+		sni, skip := resolveShareTLS(in, spec.SNI, host, spec.SkipCert)
+		if sni != "" {
+			extra["servername"] = sni
+			extra["sni"] = sni
 		}
-		if spec.SkipCert {
+		if skip {
 			extra["skip-cert-verify"] = true
 		}
-		if spec.Fingerprint != "" {
-			extra["client-fingerprint"] = spec.Fingerprint
-		}
+		extra["client-fingerprint"] = strOr(spec.Fingerprint, strOr(in.Node.Fingerprint, "chrome"))
 	}
 	if len(spec.ALPN) > 0 {
 		extra["alpn"] = spec.ALPN
@@ -535,15 +509,11 @@ func (AnyTLSCompiler) BuildShare(in ShareInput) (Share, error) {
 	if v, ok := cfg["skip-cert-verify"].(bool); ok {
 		explicitSkip = &v
 	}
-	certPEM := resolveShareCertPEM(cfg)
-	// Formal cert + blank SNI: derive from certificate SAN/CN (same idea as TUIC).
-	sni := certutil.ResolveClientSNI(
-		strOr(strings.TrimSpace(in.Node.AccessSNI), strFrom(cfg, "sni", "servername")),
-		in.Node.PublicHost,
-		host,
-		certPEM,
-	)
-	skipCert := certutil.DecideClientSkipCertVerify(certPEM, sni, explicitSkip)
+	exp := false
+	if explicitSkip != nil {
+		exp = *explicitSkip
+	}
+	sni, skipCert := resolveShareTLS(in, strOr(strings.TrimSpace(in.Node.AccessSNI), strFrom(cfg, "sni", "servername")), host, exp)
 
 	params := map[string]string{}
 	if sni != "" {
@@ -620,10 +590,12 @@ func (ShadowQUICCompiler) BuildShare(in ShareInput) (Share, error) {
 		return Share{}, fmt.Errorf("shadowquic share requires username and password")
 	}
 	extra := map[string]interface{}{"username": user, "password": pass}
-	if sni := strFrom(cfg, "sni"); sni != "" {
+	sni, skip := resolveShareTLS(in, strOr(strFrom(cfg, "sni"), in.Node.AccessSNI), host, false)
+	if sni != "" {
 		extra["sni"] = sni
-	} else if in.Node.AccessSNI != "" {
-		extra["sni"] = in.Node.AccessSNI
+	}
+	if skip {
+		extra["skip-cert-verify"] = true
 	}
 	if alpn := stringListFrom(cfg, "alpn"); len(alpn) > 0 {
 		extra["alpn"] = alpn
@@ -690,17 +662,15 @@ func (TrustTunnelCompiler) BuildShare(in ShareInput) (Share, error) {
 	if pass == "" {
 		return Share{}, fmt.Errorf("trusttunnel share requires password")
 	}
-	extra := map[string]interface{}{"password": pass, "skip-cert-verify": true}
+	extra := map[string]interface{}{"password": pass}
 	if user != "" {
 		extra["username"] = user
 	}
-	sni := strings.TrimSpace(in.Node.AccessSNI)
-	if sni == "" {
-		sni = strFrom(cfg, "sni")
-	}
+	sni, skip := resolveShareTLS(in, strOr(in.Node.AccessSNI, strFrom(cfg, "sni")), host, false)
 	if sni != "" {
 		extra["sni"] = sni
 	}
+	extra["skip-cert-verify"] = skip
 	yamlOut, err := clientYAMLProxy("trusttunnel", host, port, in, extra)
 	if err != nil {
 		return Share{}, err
@@ -735,14 +705,11 @@ func (t TUICCompiler) BuildShare(in ShareInput) (Share, error) {
 	if v, ok := cfg["skip-cert-verify"].(bool); ok {
 		explicitSkip = &v
 	}
-	certPEM := resolveShareCertPEM(cfg)
-	sni := certutil.ResolveClientSNI(
-		strOr(strings.TrimSpace(in.Node.AccessSNI), strFrom(cfg, "sni", "servername")),
-		in.Node.PublicHost,
-		host,
-		certPEM,
-	)
-	skipCert := certutil.DecideClientSkipCertVerify(certPEM, sni, explicitSkip)
+	exp := false
+	if explicitSkip != nil {
+		exp = *explicitSkip
+	}
+	sni, skipCert := resolveShareTLS(in, strOr(strings.TrimSpace(in.Node.AccessSNI), strFrom(cfg, "sni", "servername")), host, exp)
 
 	isV4 := kind == "tuic-v4"
 	if kind == "tuic-v5" {
@@ -907,6 +874,37 @@ func applyTransportParams(params map[string]string, t TransportSpec) {
 	}
 }
 
+// resolveShareTLS is the single source of truth for share/subscription SNI and
+// skip-cert: same rules as node.resolveURITLS / certutil.ResolveClientSNI.
+// IP connect hosts with formal (e.g. LE IP SAN) certificates emit sni=<IP>.
+func resolveShareTLS(in ShareInput, configuredSNI, host string, explicitSkip bool) (sni string, skip bool) {
+	certPEM := strings.TrimSpace(in.Node.Certificate)
+	if certPEM == "" && in.Node.Generic != nil {
+		if c, ok := in.Node.Generic["certificate"].(string); ok {
+			certPEM = strings.TrimSpace(c)
+		}
+	}
+	if certPEM == "" {
+		certPEM = resolveShareCertPEM(in.Node.Generic)
+	}
+	sni = certutil.ResolveClientSNI(strings.TrimSpace(configuredSNI), in.Node.PublicHost, host, certPEM)
+	var exp *bool
+	if explicitSkip {
+		v := true
+		exp = &v
+	} else if in.Node.Generic != nil {
+		if b, ok := in.Node.Generic["skip-cert-verify"].(bool); ok {
+			exp = &b
+		}
+	}
+	verify := sni
+	if verify == "" {
+		verify = host
+	}
+	skip = certutil.DecideClientSkipCertVerify(certPEM, verify, exp)
+	return sni, skip
+}
+
 // shareTLSServerName picks a hostname suitable for TLS SNI on share links.
 // Prefers non-IP candidates so clients (Loon, etc.) can complete the handshake
 // when the published endpoint is a raw address.
@@ -929,22 +927,8 @@ func shareHostLooksLikeIP(host string) bool {
 }
 
 func shareSkipCert(in ShareInput, configuredSNI string, host string, explicit bool) bool {
-	var exp *bool
-	if explicit {
-		v := true
-		exp = &v
-	}
-	verify := strings.TrimSpace(configuredSNI)
-	if verify == "" {
-		verify = strings.TrimSpace(in.Node.AccessSNI)
-	}
-	if verify == "" {
-		verify = shareTLSServerName(host, in.Node.PublicHost)
-	}
-	if verify == "" {
-		verify = host
-	}
-	return certutil.DecideClientSkipCertVerify(in.Node.Certificate, verify, exp)
+	_, skip := resolveShareTLS(in, configuredSNI, host, explicit)
+	return skip
 }
 
 func applyALPNParams(params map[string]string, alpn []string) {
