@@ -299,27 +299,29 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 	if pass == "" {
 		return Share{}, fmt.Errorf("hysteria2 share requires password")
 	}
-	// SNI: listener field → access profile → public host / dial host when not an IP.
-	// Loon and similar clients fail TLS handshake on bare-IP HY2 links without sni.
-	sni := strings.TrimSpace(spec.SNI)
-	if sni == "" {
-		sni = strings.TrimSpace(in.Node.AccessSNI)
+	// Align with uri_builders.resolveURITLS: formal LE IP certs must emit
+	// sni=<IP> (shareTLSServerName deliberately skips IPs and left query empty).
+	certPEM := strings.TrimSpace(in.Node.Certificate)
+	if certPEM == "" && in.Node.Generic != nil {
+		if c, ok := in.Node.Generic["certificate"].(string); ok {
+			certPEM = strings.TrimSpace(c)
+		}
 	}
-	if sni == "" {
-		sni = shareTLSServerName(host, in.Node.PublicHost)
+	configured := strings.TrimSpace(spec.SNI)
+	if configured == "" {
+		configured = strings.TrimSpace(in.Node.AccessSNI)
 	}
-	// Verify identity: prefer resolved SNI over dial host so formal certs are not
-	// forced to insecure just because PublicHost is an IP.
+	sni := certutil.ResolveClientSNI(configured, in.Node.PublicHost, host, certPEM)
+	var explicit *bool
+	if spec.SkipCert {
+		v := true
+		explicit = &v
+	}
 	verifyHost := sni
 	if verifyHost == "" {
 		verifyHost = host
 	}
-	var explicit *bool
-	if spec.SkipCert {
-		t := true
-		explicit = &t
-	}
-	skipCert := certutil.DecideClientSkipCertVerify(in.Node.Certificate, verifyHost, explicit)
+	skipCert := certutil.DecideClientSkipCertVerify(certPEM, verifyHost, explicit)
 	params := map[string]string{}
 	if sni != "" {
 		params["sni"] = sni
