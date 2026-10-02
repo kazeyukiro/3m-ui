@@ -410,12 +410,14 @@ const Dashboard: React.FC = () => {
                   <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatRate(upRate)}
                   </Text>
+                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(···)</Text>
                 </span>
                 <span style={{ fontSize: isMobile ? 12 : 13 }}>
                   <Text type="secondary">↓ {t('dashboard.download')} </Text>
                   <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatRate(downRate)}
                   </Text>
+                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(—)</Text>
                 </span>
               </Space>
             </div>
