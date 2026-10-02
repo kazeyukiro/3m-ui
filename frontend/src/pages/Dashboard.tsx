@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
+import { Button, Card, Col, Row, Space, Typography, message, theme } from 'antd';
 import { Link } from 'react-router-dom';
 import { IconPlay, IconStop, IconRestart } from '../icons';
 import {
@@ -77,6 +77,7 @@ const Sparkline: React.FC<{
 };
 
 /** Single-series total rate chart — one muted stroke, plain grid. */
+/** Up/down rate chart — same muted color; down solid, up dashed. */
 const SpeedChart: React.FC<{
   up: number[];
   down: number[];
@@ -86,20 +87,19 @@ const SpeedChart: React.FC<{
   const w = 480;
   const h = height;
   const n = Math.max(up.length, down.length, 2);
-  const total: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const u = up[up.length - n + i] ?? 0;
-    const d = down[down.length - n + i] ?? 0;
-    total.push(Math.max(0, u) + Math.max(0, d));
-  }
-  const max = Math.max(...total, 1);
-  const line = total
-    .map((v, i) => {
-      const x = (i / (n - 1)) * w;
-      const y = h - (v / max) * (h - 12) - 6;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
+  const pad = (series: number[]) =>
+    series.length < n ? Array(n - series.length).fill(0).concat(series) : series.slice(-n);
+  const upS = pad(up);
+  const downS = pad(down);
+  const max = Math.max(...upS, ...downS, 1);
+  const toPts = (series: number[]) =>
+    series
+      .map((v, i) => {
+        const x = (i / (n - 1)) * w;
+        const y = h - (Math.max(0, v) / max) * (h - 12) - 6;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
       {[0, 0.5, 1].map((p) => (
@@ -115,10 +115,21 @@ const SpeedChart: React.FC<{
         />
       ))}
       <polyline
-        points={line}
+        points={toPts(downS)}
         fill="none"
         stroke={color}
         strokeWidth={1.25}
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+        vectorEffect="non-scaling-stroke"
+      />
+      <polyline
+        points={toPts(upS)}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.15}
+        strokeOpacity={0.55}
+        strokeDasharray="4 3"
         strokeLinejoin="miter"
         strokeLinecap="square"
         vectorEffect="non-scaling-stroke"
@@ -306,29 +317,6 @@ const Dashboard: React.FC = () => {
           }}
         >
           <Space size={8} wrap>
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: coreRunning ? success : token.colorTextQuaternary,
-                display: 'inline-block',
-                boxShadow: coreRunning ? `0 0 0 3px ${success}33` : undefined,
-              }}
-            />
-            <Text strong style={{ fontSize: isMobile ? 13 : 14 }}>
-              {t('dashboard.coreName')} · {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
-            </Text>
-            {data?.mihomo?.version ? (
-              <Tag style={{ margin: 0, borderRadius: 999 }}>{data.mihomo.version}</Tag>
-            ) : null}
-            {data?.mihomo?.uptime ? (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t('dashboard.uptime')}: {data.mihomo.uptime}
-              </Text>
-            ) : null}
-          </Space>
-          <Space size={8} wrap>
             {!coreRunning ? (
               <Button type="primary" icon={<IconPlay />} onClick={() => act('start')} loading={busy} size={isMobile ? 'middle' : 'middle'}>
                 {t('dashboard.start')}
@@ -423,15 +411,17 @@ const Dashboard: React.FC = () => {
               <Space size={16} wrap>
                 <span style={{ fontSize: isMobile ? 12 : 13 }}>
                   <Text type="secondary">↑ {t('dashboard.upload')} </Text>
-                  <Text strong style={{ color: accent, fontVariantNumeric: 'tabular-nums' }}>
+                  <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatRate(upRate)}
                   </Text>
+                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(···)</Text>
                 </span>
                 <span style={{ fontSize: isMobile ? 12 : 13 }}>
                   <Text type="secondary">↓ {t('dashboard.download')} </Text>
-                  <Text strong style={{ color: warning, fontVariantNumeric: 'tabular-nums' }}>
+                  <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatRate(downRate)}
                   </Text>
+                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(—)</Text>
                 </span>
               </Space>
             </div>
