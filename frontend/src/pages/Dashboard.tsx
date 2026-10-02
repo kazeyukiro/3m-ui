@@ -293,10 +293,6 @@ const Dashboard: React.FC = () => {
   const peakUp = hist.up.length ? Math.max(0, ...hist.up) : 0;
   const peakDown = hist.down.length ? Math.max(0, ...hist.down) : 0;
 
-  const accent = token.colorPrimary;
-  const success = token.colorSuccess;
-  const warning = token.colorWarning;
-
   const gutter: [number, number] = isMobile ? [8, 8] : [12, 12];
 
   return (
@@ -414,14 +410,12 @@ const Dashboard: React.FC = () => {
                   <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatRate(upRate)}
                   </Text>
-                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(···)</Text>
                 </span>
                 <span style={{ fontSize: isMobile ? 12 : 13 }}>
                   <Text type="secondary">↓ {t('dashboard.download')} </Text>
                   <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatRate(downRate)}
                   </Text>
-                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(—)</Text>
                 </span>
               </Space>
             </div>
@@ -464,12 +458,11 @@ const Dashboard: React.FC = () => {
             </Text>
             <div
               style={{
-                fontSize: isMobile ? 36 : 44,
-                fontWeight: 700,
-                lineHeight: 1.15,
+                fontSize: isMobile ? 28 : 32,
+                fontWeight: 600,
+                lineHeight: 1.2,
                 fontVariantNumeric: 'tabular-nums',
-                letterSpacing: '-0.02em',
-                margin: '8px 0 4px',
+                margin: '6px 0 4px',
               }}
             >
               {conns}
@@ -487,12 +480,10 @@ const Dashboard: React.FC = () => {
               }}
             >
               <span>
-                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: accent, marginRight: 6 }} />
                 <Text type="secondary">{t('dashboard.tcp')} </Text>
                 <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{tcpConns}</Text>
               </span>
               <span>
-                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: warning, marginRight: 6 }} />
                 <Text type="secondary">{t('dashboard.udp')} </Text>
                 <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{udpConns}</Text>
               </span>
@@ -515,7 +506,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div>
                 <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('dashboard.enabled')}</div>
-                <div style={{ fontWeight: 600, color: success }}>{data?.listeners?.enabled ?? 0}</div>
+                <div style={{ fontWeight: 600 }}>{data?.listeners?.enabled ?? 0}</div>
               </div>
               <div>
                 <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('dashboard.disabled')}</div>
