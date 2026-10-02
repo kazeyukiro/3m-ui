@@ -20,9 +20,9 @@ import { startVisiblePolling } from '../utils/visiblePolling';
 const { Text } = Typography;
 
 /** Dashboard refresh cadence — CPU, memory and traffic rates read as live. */
-const DASHBOARD_POLL_MS = 2000;
-/** Ring buffer length for sparklines / speed chart (~2 min at 0.5 Hz). */
-const HISTORY_LEN = 60;
+const DASHBOARD_POLL_MS = 1000;
+/** Ring buffer length for sparklines / speed chart (~2 min at 1 Hz). */
+const HISTORY_LEN = 120;
 
 const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
 const clampPct = (v: unknown) => {
@@ -38,81 +38,101 @@ function pushHistory(buf: number[], value: number, max = HISTORY_LEN): number[] 
   return next;
 }
 
-/** Minimal SVG sparkline — no chart library dependency. */
+/** Compact metric sparkline — thin stroke, no soft blob fill. */
 const Sparkline: React.FC<{
   data: number[];
   color: string;
   height?: number;
-  fillOpacity?: number;
-}> = ({ data, color, height = 36, fillOpacity = 0.12 }) => {
-  const w = 120;
+}> = ({ data, color, height = 32 }) => {
+  const w = 160;
   const h = height;
   if (data.length < 2) {
-    return <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" />;
+    return <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden />;
   }
   const min = Math.min(...data);
   const max = Math.max(...data);
   const span = max - min || 1;
-  const pts = data.map((v, i) => {
+  const coords = data.map((v, i) => {
     const x = (i / (data.length - 1)) * w;
-    const y = h - ((v - min) / span) * (h - 4) - 2;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
+    const y = h - ((v - min) / span) * (h - 6) - 3;
+    return [x, y] as const;
   });
-  const line = pts.join(' ');
-  const area = `0,${h} ${line} ${w},${h}`;
+  // Straight segments only (no smooth curve) — reads like a real counter strip.
+  const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const baseline = coords.map(([x]) => `${x.toFixed(1)},${(h - 1).toFixed(1)}`).join(' ');
+  const last = coords[coords.length - 1];
   return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-      <polygon points={area} fill={color} opacity={fillOpacity} />
-      <polyline points={line} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
+      <polyline points={baseline} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />
+      <polyline
+        points={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.25}
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={last[0]} cy={last[1]} r={2} fill={color} />
     </svg>
   );
 };
 
-/** Dual-series area chart for upload / download rates. */
+/** Dual-series rate chart — solid grid, hairline strokes, no gradient wash. */
 const SpeedChart: React.FC<{
   up: number[];
   down: number[];
   upColor: string;
   downColor: string;
   height?: number;
-}> = ({ up, down, upColor, downColor, height = 160 }) => {
-  const w = 400;
+}> = ({ up, down, upColor, downColor, height = 168 }) => {
+  const w = 480;
   const h = height;
   const n = Math.max(up.length, down.length, 2);
   const all = [...up, ...down];
   const max = Math.max(...all, 1);
   const toPts = (series: number[]) => {
-    const pad = series.length < n ? Array(n - series.length).fill(0).concat(series) : series;
-    return pad
-      .map((v, i) => {
-        const x = (i / (n - 1)) * w;
-        const y = h - (v / max) * (h - 8) - 4;
-        return `${x.toFixed(2)},${y.toFixed(2)}`;
-      })
-      .join(' ');
+    const pad = series.length < n ? Array(n - series.length).fill(0).concat(series) : series.slice(-n);
+    return pad.map((v, i) => {
+      const x = (i / (n - 1)) * w;
+      const y = h - (Math.max(0, v) / max) * (h - 12) - 6;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
   };
   const upLine = toPts(up);
   const downLine = toPts(down);
-  const upArea = `0,${h} ${upLine} ${w},${h}`;
-  const downArea = `0,${h} ${downLine} ${w},${h}`;
   return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-      {[0.25, 0.5, 0.75].map((p) => (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
+      {[0, 0.25, 0.5, 0.75, 1].map((p) => (
         <line
           key={p}
           x1={0}
           x2={w}
-          y1={h * p}
-          y2={h * p}
+          y1={6 + (h - 12) * p}
+          y2={6 + (h - 12) * p}
           stroke="currentColor"
-          strokeOpacity={0.08}
-          strokeDasharray="4 4"
+          strokeOpacity={p === 0 || p === 1 ? 0.14 : 0.06}
+          strokeWidth={1}
         />
       ))}
-      <polygon points={downArea} fill={downColor} opacity={0.1} />
-      <polyline points={downLine} fill="none" stroke={downColor} strokeWidth={2} strokeLinejoin="round" />
-      <polygon points={upArea} fill={upColor} opacity={0.1} />
-      <polyline points={upLine} fill="none" stroke={upColor} strokeWidth={2} strokeLinejoin="round" />
+      <polyline
+        points={downLine}
+        fill="none"
+        stroke={downColor}
+        strokeWidth={1.5}
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+        vectorEffect="non-scaling-stroke"
+      />
+      <polyline
+        points={upLine}
+        fill="none"
+        stroke={upColor}
+        strokeWidth={1.5}
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 };
@@ -139,7 +159,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit, detail, pea
       style={{ height: '100%', borderRadius: 12 }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.02em' }}>
+        <Text type="secondary" style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.04em' }}>
           {title}
         </Text>
         {peak ? (
@@ -151,8 +171,8 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit, detail, pea
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
         <span
           style={{
-            fontSize: isMobile ? 28 : 34,
-            fontWeight: 700,
+            fontSize: isMobile ? 24 : 28,
+            fontWeight: 600,
             lineHeight: 1.1,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '-0.02em',
@@ -172,7 +192,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit, detail, pea
       ) : (
         <div style={{ height: 14, marginBottom: 6 }} />
       )}
-      <Sparkline data={series} color={color} height={isMobile ? 28 : 36} />
+      <Sparkline data={series} color={color} height={isMobile ? 26 : 30} />
     </Card>
   );
 };
@@ -402,7 +422,7 @@ const Dashboard: React.FC = () => {
           >
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
               <div>
-                <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.02em' }}>
+                <Text type="secondary" style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.04em' }}>
                   {t('dashboard.traffic')}
                 </Text>
                 <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
@@ -460,7 +480,7 @@ const Dashboard: React.FC = () => {
             styles={{ body: { padding: isMobile ? 12 : 16 } }}
             style={{ height: '100%', borderRadius: 12 }}
           >
-            <Text type="secondary" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.02em' }}>
+            <Text type="secondary" style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.04em' }}>
               {t('dashboard.activeConnections')}
             </Text>
             <div
@@ -499,7 +519,7 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
             <div style={{ marginTop: 12 }}>
-              <Sparkline data={hist.conns} color={accent} height={isMobile ? 48 : 64} fillOpacity={0.15} />
+              <Sparkline data={hist.conns} color={accent} height={isMobile ? 48 : 64} />
             </div>
             <div
               style={{
