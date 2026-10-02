@@ -428,7 +428,6 @@ func RequireAuth(db *gorm.DB, secret string) gin.HandlerFunc {
 		}
 
 		var user models.User
-		var err error
 		for attempt := 0; attempt < 4; attempt++ {
 			err = db.First(&user, claims.UserID).Error
 			if err == nil {
