@@ -70,8 +70,14 @@ func TestHysteria2ClientExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := proxies[0]
-	if p["password"] != "password1" || p["sni"] != "custom.example.com" || p["fingerprint"] != "AA:BB" {
-		t.Fatalf("%#v", p)
+	if p["password"] != "password1" {
+		t.Fatalf("password: %#v", p)
+	}
+	if p["sni"] != "custom.example.com" && p["servername"] != "custom.example.com" {
+		t.Fatalf("sni want custom.example.com, got %#v", p)
+	}
+	if p["fingerprint"] != "AA:BB" {
+		t.Fatalf("fingerprint: %#v", p)
 	}
 }
 
@@ -86,8 +92,11 @@ func TestShadowQUICClientExport(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := proxies[0]
-	if p["username"] != "u" || p["password"] != "p" || p["sni"] != "test.com" || p["udp"] != true {
+	if p["username"] != "u" || p["password"] != "p" || p["udp"] != true {
 		t.Fatalf("base fields mismatch: %#v", p)
+	}
+	if p["sni"] != "test.com" && p["servername"] != "test.com" {
+		t.Fatalf("sni want test.com, got %#v", p)
 	}
 	// quic-versions / congestion-controller must pass through unchanged.
 	if p["quic-versions"] == nil || fmt.Sprint(p["quic-versions"]) != "[v2]" {

@@ -3,11 +3,14 @@ package system
 import (
 	"archive/zip"
 	"bytes"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 // BackupPaths holds filesystem locations needed to export a panel snapshot.
@@ -18,7 +21,25 @@ type BackupPaths struct {
 
 // WriteZip creates a zip archive containing the SQLite database and Mihomo config
 // when present. The caller owns closing the writer.
+
+// flushSQLiteWAL checkpoints the WAL into the main database file so a plain
+// file copy of dbPath contains recent writes (listener↔user bindings, etc.).
+// Without this, ExportBackup can miss rows that only lived in the -wal file.
+func flushSQLiteWAL(dbPath string) {
+	if dbPath == "" {
+		return
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	_, _ = db.Exec(`PRAGMA busy_timeout=5000`)
+	_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+}
+
 func WriteZip(w io.Writer, paths BackupPaths) error {
+	flushSQLiteWAL(paths.DatabasePath)
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 
@@ -58,6 +79,9 @@ func WriteZip(w io.Writer, paths BackupPaths) error {
 	if err := addFile("3m-ui.db", paths.DatabasePath); err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
+	// Best-effort: if checkpoint could not run, keep sidecars so restore can replay.
+	_ = addFile("3m-ui.db-wal", paths.DatabasePath+"-wal")
+	_ = addFile("3m-ui.db-shm", paths.DatabasePath+"-shm")
 	if err := addFile("mihomo-config.yaml", paths.MihomoConfig); err != nil {
 		return fmt.Errorf("mihomo config: %w", err)
 	}

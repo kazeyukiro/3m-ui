@@ -903,13 +903,26 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 
 	// Certificate-aware SNI (same rules as URI export). Never inject AccessSNI
 	// that does not match the leaf (e.g. www.bing.com on a LE IP certificate).
+	// Prefer SNI already copied from listener Config (hy2/tuic/shadowquic).
+	configured := ""
+	if s, ok := p["sni"].(string); ok {
+		configured = strings.TrimSpace(s)
+	}
+	if configured == "" {
+		if s, ok := p["servername"].(string); ok {
+			configured = strings.TrimSpace(s)
+		}
+	}
+	if configured == "" {
+		configured = accessSNI
+	}
 	certPEM := certPEMFromOpts(opts)
 	if strings.TrimSpace(certPEM) == "" {
 		if c, _, ok := certstore.Load(l.ID); ok {
 			certPEM = c
 		}
 	}
-	resolved := certutil.ResolveClientSNI(accessSNI, publicHost, server, certPEM)
+	resolved := certutil.ResolveClientSNI(configured, publicHost, server, certPEM)
 	hint := resolved
 	if hint == "" {
 		hint = accessSNI
@@ -1030,6 +1043,10 @@ func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost strin
 	if _, isReality := p["reality-opts"]; isReality {
 		// Reality presents a certificate for the camouflage SNI, not the real
 		// endpoint — clients must skip verification (standard Clash/Mihomo practice).
+		p["skip-cert-verify"] = true
+		return
+	}
+	if _, isReality := p["reality-opts"]; isReality {
 		p["skip-cert-verify"] = true
 		return
 	}
