@@ -42,6 +42,35 @@ func clientSkipCert(cfg map[string]interface{}, connectHost string) bool {
 	return certutil.DecideClientSkipCertVerify(cert, verify, explicit)
 }
 
+// resolveURITLS picks client SNI and skip-cert for share/subscription URIs.
+// Uses certutil.ResolveClientSNI so AccessSNI cannot override a formal cert's SANs
+// (e.g. www.bing.com must not win over a Let's Encrypt IP certificate).
+func resolveURITLS(cfg map[string]interface{}, host string) (sni string, skip bool) {
+	certPEM := loadCertPEMFromCfg(cfg)
+	configured := ""
+	if cfg != nil {
+		for _, key := range []string{"sni", "servername"} {
+			if v, ok := cfg[key].(string); ok && strings.TrimSpace(v) != "" {
+				configured = strings.TrimSpace(v)
+				break
+			}
+		}
+	}
+	sni = certutil.ResolveClientSNI(configured, "", host, certPEM)
+	var explicit *bool
+	if cfg != nil {
+		if b, ok := cfg["skip-cert-verify"].(bool); ok {
+			explicit = &b
+		}
+	}
+	verify := sni
+	if verify == "" {
+		verify = host
+	}
+	skip = certutil.DecideClientSkipCertVerify(certPEM, verify, explicit)
+	return sni, skip
+}
+
 func tlsParams(cfg map[string]interface{}) map[string]string {
 	params := map[string]string{}
 	if enabled, ok := cfg["_listener-tls"].(bool); ok && enabled {
@@ -63,11 +92,19 @@ func tlsParams(cfg map[string]interface{}) map[string]string {
 		params["fp"] = v
 	}
 	// URI allowInsecure: panel self-signed or explicit skip only.
-	// Formal certificates must NOT force insecure (Loon/v2rayNG would otherwise
-	// ignore system CAs even when the operator installed a real cert).
-	if certutil.ShouldSkipCertVerify(cfg) {
-		params["insecure"] = "1"
-		params["allowInsecure"] = "1"
+	// Formal certificates must NOT force insecure. Reality uses its own path
+	// and must not inherit panel-certificate skip flags into the query string.
+	if _, isReality := cfg["reality-config"]; !isReality {
+		sni := params["sni"]
+		certPEM := loadCertPEMFromCfg(cfg)
+		var explicit *bool
+		if b, ok := cfg["skip-cert-verify"].(bool); ok {
+			explicit = &b
+		}
+		if certutil.DecideClientSkipCertVerify(certPEM, sni, explicit) {
+			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
+		}
 	}
 	// TLS without fingerprint is fragile against CDN / middleboxes.
 	if params["security"] == "tls" && params["fp"] == "" {
@@ -306,19 +343,16 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 				continue
 			}
 			params := map[string]string{}
-			if v, ok := cfg["sni"].(string); ok && v != "" {
-				params["sni"] = v
+			sni, skip := resolveURITLS(cfg, host)
+			if sni != "" {
+				params["sni"] = sni
 			}
-			if params["sni"] == "" {
-				if s := uriTLSServerName(host); s != "" {
-					params["sni"] = s
-				}
-			}
-			// Matches the config-embedded users branch below: same listener must
-			// produce the same link whichever way its users are stored.
-			if clientSkipCert(cfg, host) {
+			if skip {
 				params["insecure"] = "1"
 				params["allowInsecure"] = "1"
+			}
+			if v, ok := firstString(cfg["alpn"]); ok {
+				params["alpn"] = v
 			}
 			if v, ok := cfg["obfs"].(string); ok && v != "" {
 				params["obfs"] = v
@@ -353,17 +387,16 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			return nil, fmt.Errorf("hysteria2 user %q has empty password", username)
 		}
 		params := map[string]string{}
-		if v, ok := cfg["sni"].(string); ok && v != "" {
-			params["sni"] = v
+		sni, skip := resolveURITLS(cfg, host)
+		if sni != "" {
+			params["sni"] = sni
 		}
-		if params["sni"] == "" {
-			if s := uriTLSServerName(host); s != "" {
-				params["sni"] = s
-			}
-		}
-		if clientSkipCert(cfg, host) {
+		if skip {
 			params["insecure"] = "1"
 			params["allowInsecure"] = "1"
+		}
+		if v, ok := firstString(cfg["alpn"]); ok {
+			params["alpn"] = v
 		}
 		if v, ok := cfg["obfs"].(string); ok && v != "" {
 			params["obfs"] = v
@@ -377,9 +410,12 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		if v, ok := cfg["down"].(string); ok && v != "" {
 			params["down"] = v
 		}
-		_ = username
+		display := name
+		if username != "" && username != name {
+			display = name + " - " + username
+		}
 		userinfo := url.User(password).String()
-		result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name))
+		result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), display))
 	}
 	return result, nil
 }
@@ -413,17 +449,11 @@ func tuicURIs(name, host, port string, cfg map[string]interface{}) ([]string, er
 	if params["alpn"] == "" {
 		params["alpn"] = "h3"
 	}
-	if v, ok := cfg["sni"].(string); ok && v != "" {
-		params["sni"] = v
+	sni, skip := resolveURITLS(cfg, host)
+	if sni != "" {
+		params["sni"] = sni
 	}
-	if v, ok := cfg["servername"].(string); ok && v != "" {
-		params["sni"] = v
-	}
-	// When connecting by domain name, default SNI to that host so formal certs verify.
-	if params["sni"] == "" && host != "" && !looksLikeIP(host) {
-		params["sni"] = host
-	}
-	if clientSkipCert(cfg, host) {
+	if skip {
 		params["allow_insecure"] = "1"
 		params["allowInsecure"] = "1"
 	}
@@ -483,19 +513,7 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 	if len(users) == 0 {
 		return nil, fmt.Errorf("anytls listener requires at least one user for URI export")
 	}
-	certPEM := loadCertPEMFromCfg(cfg)
-	configured := ""
-	if v, ok := cfg["sni"].(string); ok {
-		configured = strings.TrimSpace(v)
-	}
-	if configured == "" {
-		if v, ok := cfg["servername"].(string); ok {
-			configured = strings.TrimSpace(v)
-		}
-	}
-	sni := certutil.ResolveClientSNI(configured, "", host, certPEM)
-	// Re-evaluate skip against resolved SNI so formal certs verify when SAN matches.
-	skip := clientSkipCertWithPEM(cfg, certPEM, sni)
+	sni, skip := resolveURITLS(cfg, host)
 	result := make([]string, 0, len(users))
 	for username, raw := range users {
 		password, ok := raw.(string)
@@ -526,8 +544,11 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		if v, ok := cfg["min-idle-session"].(string); ok && v != "" {
 			params["min_idle_session"] = v
 		}
-		_ = username
-		result = append(result, addName(query("anytls://"+url.PathEscape(password)+"@"+netutil.JoinHostPort(host, port), params), name))
+		display := name
+		if username != "" && username != name {
+			display = name + " - " + username
+		}
+		result = append(result, addName(query("anytls://"+url.User(password).String()+"@"+netutil.JoinHostPort(host, port), params), display))
 	}
 	return result, nil
 }
