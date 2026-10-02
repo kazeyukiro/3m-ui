@@ -410,12 +410,9 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		if v, ok := cfg["down"].(string); ok && v != "" {
 			params["down"] = v
 		}
-		display := name
-		if username != "" && username != name {
-			display = name + " - " + username
-		}
+		_ = username
 		userinfo := url.User(password).String()
-		result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), display))
+		result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
@@ -544,11 +541,8 @@ func anytlsURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 		if v, ok := cfg["min-idle-session"].(string); ok && v != "" {
 			params["min_idle_session"] = v
 		}
-		display := name
-		if username != "" && username != name {
-			display = name + " - " + username
-		}
-		result = append(result, addName(query("anytls://"+url.User(password).String()+"@"+netutil.JoinHostPort(host, port), params), display))
+		_ = username
+		result = append(result, addName(query("anytls://"+url.User(password).String()+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }

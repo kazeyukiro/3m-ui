@@ -60,50 +60,49 @@ const Sparkline: React.FC<{
   // Straight segments only (no smooth curve) — reads like a real counter strip.
   const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   const baseline = coords.map(([x]) => `${x.toFixed(1)},${(h - 1).toFixed(1)}`).join(' ');
-  const last = coords[coords.length - 1];
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
-      <polyline points={baseline} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />
+      <polyline points={baseline} fill="none" stroke={color} strokeOpacity={0.1} strokeWidth={1} />
       <polyline
         points={line}
         fill="none"
         stroke={color}
-        strokeWidth={1.25}
+        strokeWidth={1.15}
         strokeLinejoin="miter"
         strokeLinecap="square"
         vectorEffect="non-scaling-stroke"
       />
-      <circle cx={last[0]} cy={last[1]} r={2} fill={color} />
     </svg>
   );
 };
 
-/** Dual-series rate chart — solid grid, hairline strokes, no gradient wash. */
+/** Single-series total rate chart — one muted stroke, plain grid. */
 const SpeedChart: React.FC<{
   up: number[];
   down: number[];
-  upColor: string;
-  downColor: string;
+  color: string;
   height?: number;
-}> = ({ up, down, upColor, downColor, height = 168 }) => {
+}> = ({ up, down, color, height = 160 }) => {
   const w = 480;
   const h = height;
   const n = Math.max(up.length, down.length, 2);
-  const all = [...up, ...down];
-  const max = Math.max(...all, 1);
-  const toPts = (series: number[]) => {
-    const pad = series.length < n ? Array(n - series.length).fill(0).concat(series) : series.slice(-n);
-    return pad.map((v, i) => {
+  const total: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const u = up[up.length - n + i] ?? 0;
+    const d = down[down.length - n + i] ?? 0;
+    total.push(Math.max(0, u) + Math.max(0, d));
+  }
+  const max = Math.max(...total, 1);
+  const line = total
+    .map((v, i) => {
       const x = (i / (n - 1)) * w;
-      const y = h - (Math.max(0, v) / max) * (h - 12) - 6;
+      const y = h - (v / max) * (h - 12) - 6;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-  };
-  const upLine = toPts(up);
-  const downLine = toPts(down);
+    })
+    .join(' ');
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
-      {[0, 0.25, 0.5, 0.75, 1].map((p) => (
+      {[0, 0.5, 1].map((p) => (
         <line
           key={p}
           x1={0}
@@ -111,24 +110,15 @@ const SpeedChart: React.FC<{
           y1={6 + (h - 12) * p}
           y2={6 + (h - 12) * p}
           stroke="currentColor"
-          strokeOpacity={p === 0 || p === 1 ? 0.14 : 0.06}
+          strokeOpacity={0.1}
           strokeWidth={1}
         />
       ))}
       <polyline
-        points={downLine}
+        points={line}
         fill="none"
-        stroke={downColor}
-        strokeWidth={1.5}
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-        vectorEffect="non-scaling-stroke"
-      />
-      <polyline
-        points={upLine}
-        fill="none"
-        stroke={upColor}
-        strokeWidth={1.5}
+        stroke={color}
+        strokeWidth={1.25}
         strokeLinejoin="miter"
         strokeLinecap="square"
         vectorEffect="non-scaling-stroke"
@@ -370,7 +360,7 @@ const Dashboard: React.FC = () => {
             detail={undefined}
             peak={hist.cpu.length ? `${t('dashboard.peak')} ${Math.max(...hist.cpu)}%` : undefined}
             series={hist.cpu}
-            color={cpuPct >= 80 ? token.colorError : accent}
+            color={token.colorTextSecondary}
             isMobile={isMobile}
           />
         </Col>
@@ -382,7 +372,7 @@ const Dashboard: React.FC = () => {
             detail={`${formatBytes(sys?.memory?.used || 0)} / ${formatBytes(sys?.memory?.total || 0)}`}
             peak={hist.mem.length ? `${t('dashboard.avg')} ${Math.round((hist.mem.reduce((a, b) => a + b, 0) / hist.mem.length) * 10) / 10}%` : undefined}
             series={hist.mem}
-            color={memPct >= 80 ? token.colorError : accent}
+            color={token.colorTextSecondary}
             isMobile={isMobile}
           />
         </Col>
@@ -394,7 +384,7 @@ const Dashboard: React.FC = () => {
             detail={`${formatBytes(sys?.disk?.used || 0)} / ${formatBytes(sys?.disk?.total || 0)}`}
             peak={sys?.disk?.total ? `${t('dashboard.free')} ${formatBytes(Math.max(0, (sys?.disk?.total || 0) - (sys?.disk?.used || 0)))}` : undefined}
             series={hist.disk}
-            color={diskPct >= 90 ? token.colorError : accent}
+            color={token.colorTextSecondary}
             isMobile={isMobile}
           />
         </Col>
@@ -406,7 +396,7 @@ const Dashboard: React.FC = () => {
             detail={`${t('dashboard.totalUsers')}: ${users?.total ?? 0} · ${t('dashboard.enabledUsers')}: ${users?.enabled ?? 0}`}
             peak={`${t('dashboard.listeners')}: ${data?.listeners?.enabled ?? 0}/${data?.listeners?.total ?? 0}`}
             series={hist.conns.length ? hist.conns : [0, online]}
-            color={success}
+            color={token.colorTextSecondary}
             isMobile={isMobile}
           />
         </Col>
@@ -448,9 +438,8 @@ const Dashboard: React.FC = () => {
             <SpeedChart
               up={hist.up}
               down={hist.down}
-              upColor={accent}
-              downColor={warning}
-              height={isMobile ? 120 : 168}
+              color={token.colorTextSecondary}
+              height={isMobile ? 120 : 160}
             />
             <Row gutter={8} style={{ marginTop: 12 }}>
               <Col span={8}>
@@ -519,7 +508,7 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
             <div style={{ marginTop: 12 }}>
-              <Sparkline data={hist.conns} color={accent} height={isMobile ? 48 : 64} />
+              <Sparkline data={hist.conns} color={token.colorTextSecondary} height={isMobile ? 48 : 64} />
             </div>
             <div
               style={{
