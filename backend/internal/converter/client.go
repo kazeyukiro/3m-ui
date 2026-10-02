@@ -282,7 +282,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			}
 			applyMuxOptionAsSmux(p, opts)
 			applyClientWrappers(p, opts)
-			ensureClientAccessTLS(p, l, server)
+			ensureClientAccessTLS(p, l, server, opts)
 			applyClientSkipCertVerify(p, opts, server, l.ID)
 			result = append(result, p)
 		}
@@ -307,7 +307,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if value, ok := opts["ss-option"]; ok {
 				p["ss-opts"] = value
 			}
-			ensureClientAccessTLS(p, l, server)
+			ensureClientAccessTLS(p, l, server, opts)
 			applyClientSkipCertVerify(p, opts, server, l.ID)
 			result = append(result, p)
 		}
@@ -356,17 +356,10 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				}
 			}
 			// SNI fallback: use server host when not set.
-			if p["sni"] == nil && p["servername"] == nil {
-				p["sni"] = server
-			}
 			if p["alpn"] == nil {
 				p["alpn"] = []string{"h3"}
 			}
-			if p["sni"] == nil {
-				if sn, ok := p["servername"].(string); ok && sn != "" {
-					p["sni"] = sn
-				}
-			}
+			ensureClientAccessTLS(p, l, server, opts)
 			applyClientSkipCertVerify(p, opts, server, l.ID)
 			if value, ok := opts["ech-opts"]; ok {
 				p["ech-opts"] = value
@@ -404,9 +397,8 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 			if p["udp-relay-mode"] == nil {
 				p["udp-relay-mode"] = "native"
 			}
-			if p["sni"] == nil && p["servername"] == nil && server != "" {
-				p["sni"] = server
-			}
+			// SNI resolved in ensureClientAccessTLS against certificate SANs.
+			ensureClientAccessTLS(p, l, server, opts)
 			// Always decide last so v4 (token) and v5 (uuid) both get the flag.
 			applyClientSkipCertVerify(p, opts, server, l.ID)
 		}
@@ -555,7 +547,7 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	}
 	// Smart access fields for every exported proxy (all protocols).
 	for _, p := range result {
-		ensureClientAccessTLS(p, l, server)
+		ensureClientAccessTLS(p, l, server, opts)
 		applyClientSkipCertVerify(p, opts, server, l.ID)
 	}
 	return result, nil
@@ -894,20 +886,12 @@ func applyMuxOptionAsSmux(p, opts map[string]interface{}) {
 	p["smux"] = smux
 }
 
-func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server string) {
+func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server string, opts map[string]interface{}) {
 	if p == nil {
 		return
 	}
 	accessSNI := strings.TrimSpace(l.AccessSNI)
 	publicHost := netutil.NormalizeHost(l.PublicHost)
-	hint := accessSNI
-	if hint == "" {
-		hint = publicHost
-	}
-	if hint == "" {
-		hint = strings.TrimSpace(server)
-	}
-	hint = strings.Trim(hint, "[]")
 	publicPort := strings.TrimSpace(l.PublicPort)
 	if publicPort == "" {
 		publicPort = strings.TrimSpace(l.Port)
@@ -916,6 +900,27 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 	network = strings.ToLower(strings.TrimSpace(network))
 	typ, _ := p["type"].(string)
 	typ = strings.ToLower(strings.TrimSpace(typ))
+
+	// Certificate-aware SNI (same rules as URI export). Never inject AccessSNI
+	// that does not match the leaf (e.g. www.bing.com on a LE IP certificate).
+	certPEM := certPEMFromOpts(opts)
+	if strings.TrimSpace(certPEM) == "" {
+		if c, _, ok := certstore.Load(l.ID); ok {
+			certPEM = c
+		}
+	}
+	resolved := certutil.ResolveClientSNI(accessSNI, publicHost, server, certPEM)
+	hint := resolved
+	if hint == "" {
+		hint = accessSNI
+	}
+	if hint == "" {
+		hint = publicHost
+	}
+	if hint == "" {
+		hint = strings.TrimSpace(server)
+	}
+	hint = strings.Trim(hint, "[]")
 	domainHint := hint != "" && net.ParseIP(hint) == nil
 	cdnPort := publicPort == "443" || publicPort == "8443" || publicPort == "2053" || publicPort == "2083" || publicPort == "2087" || publicPort == "2096"
 
@@ -947,19 +952,25 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 		return
 	}
 
-	if p["servername"] == nil && p["sni"] == nil && hint != "" {
-		p["servername"] = hint
-		p["sni"] = hint
-	} else if p["servername"] == nil {
-		if s, ok := p["sni"].(string); ok && strings.TrimSpace(s) != "" {
-			p["servername"] = strings.TrimSpace(s)
-		} else if hint != "" {
+	// Reality keeps servername from reality-config.server-names — do not overwrite.
+	if _, isReality := p["reality-opts"]; !isReality {
+		if resolved != "" {
+			p["sni"] = resolved
+			p["servername"] = resolved
+		} else if p["servername"] == nil && p["sni"] == nil && hint != "" {
 			p["servername"] = hint
 			p["sni"] = hint
-		}
-	} else if p["sni"] == nil {
-		if s, ok := p["servername"].(string); ok && strings.TrimSpace(s) != "" {
-			p["sni"] = strings.TrimSpace(s)
+		} else if p["servername"] == nil {
+			if s, ok := p["sni"].(string); ok && strings.TrimSpace(s) != "" {
+				p["servername"] = strings.TrimSpace(s)
+			} else if hint != "" {
+				p["servername"] = hint
+				p["sni"] = hint
+			}
+		} else if p["sni"] == nil {
+			if s, ok := p["servername"].(string); ok && strings.TrimSpace(s) != "" {
+				p["sni"] = strings.TrimSpace(s)
+			}
 		}
 	}
 
@@ -1015,6 +1026,12 @@ func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost strin
 			verify = strings.TrimSpace(v)
 			break
 		}
+	}
+	if _, isReality := p["reality-opts"]; isReality {
+		// Reality presents a certificate for the camouflage SNI, not the real
+		// endpoint — clients must skip verification (standard Clash/Mihomo practice).
+		p["skip-cert-verify"] = true
+		return
 	}
 	if certutil.DecideClientSkipCertVerify(cert, verify, explicit) {
 		p["skip-cert-verify"] = true
