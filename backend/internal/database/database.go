@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/driver/sqlite"
@@ -24,13 +25,27 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// tokens. Do not leave it readable by other local users.
 	_ = os.Chmod(dir, 0700)
 
-	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: dbPath}), &gorm.Config{
+	dsn := dbPath
+	if dsn != "" && dsn != ":memory:" {
+		if strings.Contains(dsn, "?") {
+			dsn += "&_busy_timeout=8000"
+		} else {
+			dsn += "?_busy_timeout=8000"
+		}
+	}
+	db, err := gorm.Open(sqlite.New(sqlite.Config{DriverName: sqliteDriverName, DSN: dsn}), &gorm.Config{
 		// Info logs every ErrRecordNotFound (e.g. optional panel_settings keys).
 		// Warn keeps real SQL failures without flooding journald every tick.
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to sqlite database: %w", err)
+	}
+	if sqlDB, sqErr := db.DB(); sqErr == nil {
+		// Serialize SQLite access; wait up to 8s when config apply holds the lock.
+		sqlDB.SetMaxOpenConns(1)
+		sqlDB.SetMaxIdleConns(1)
+		_, _ = sqlDB.Exec("PRAGMA busy_timeout = 8000")
 	}
 	// Best-effort: file may not exist yet on brand-new installs until first write.
 	if _, statErr := os.Stat(dbPath); statErr == nil {

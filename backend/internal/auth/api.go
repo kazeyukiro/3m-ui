@@ -428,14 +428,21 @@ func RequireAuth(db *gorm.DB, secret string) gin.HandlerFunc {
 		}
 
 		var user models.User
-		if err := db.First(&user, claims.UserID).Error; err != nil {
-			// SQLite can be briefly busy while listener Create/Delete holds the DB
-			// under a long config apply. That is not "session invalid" — do not
-			// force the client to log out (frontend maps any 401 → /login).
+		var err error
+		for attempt := 0; attempt < 4; attempt++ {
+			err = db.First(&user, claims.UserID).Error
+			if err == nil {
+				break
+			}
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 				return
 			}
+			// SQLite busy during long config apply — wait and retry instead of
+			// failing the whole admin session with 503.
+			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
+		}
+		if err != nil {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "auth temporarily unavailable; retry shortly"})
 			return
 		}

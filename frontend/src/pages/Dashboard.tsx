@@ -204,7 +204,8 @@ type HistoryState = {
   disk: number[];
   up: number[];
   down: number[];
-  conns: number[];
+  tcp: number[];
+  udp: number[];
 };
 
 const emptyHistory = (): HistoryState => ({
@@ -213,7 +214,8 @@ const emptyHistory = (): HistoryState => ({
   disk: [],
   up: [],
   down: [],
-  conns: [],
+  tcp: [],
+  udp: [],
 });
 
 const Dashboard: React.FC = () => {
@@ -237,7 +239,8 @@ const Dashboard: React.FC = () => {
         disk: pushHistory(prev.disk, clampPct(sys?.disk?.percent)),
         up: pushHistory(prev.up, Number(tr?.uploadRate) || 0),
         down: pushHistory(prev.down, Number(tr?.downloadRate) || 0),
-        conns: pushHistory(prev.conns, Number(tr?.activeConnections) || 0),
+        tcp: pushHistory(prev.tcp, Number(tr?.tcpConnections) || 0),
+        udp: pushHistory(prev.udp, Number(tr?.udpConnections) || 0),
       }));
     } catch (e: unknown) {
       if (signal?.aborted || isCanceledError(e)) return;
@@ -379,7 +382,7 @@ const Dashboard: React.FC = () => {
             unit=""
             detail={`${t('dashboard.totalUsers')}: ${users?.total ?? 0} · ${t('dashboard.enabledUsers')}: ${users?.enabled ?? 0}`}
             peak={`${t('dashboard.listeners')}: ${data?.listeners?.enabled ?? 0}/${data?.listeners?.total ?? 0}`}
-            series={hist.conns.length ? hist.conns : [0, online]}
+            series={hist.tcp.length ? hist.tcp.map((v, i) => v + (hist.udp[i] || 0)) : [0, online]}
             color={token.colorTextSecondary}
             isMobile={isMobile}
           />
@@ -484,14 +487,21 @@ const Dashboard: React.FC = () => {
               <span>
                 <Text type="secondary">{t('dashboard.tcp')} </Text>
                 <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{tcpConns}</Text>
+                <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(—)</Text>
               </span>
               <span>
                 <Text type="secondary">{t('dashboard.udp')} </Text>
                 <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{udpConns}</Text>
+                <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(···)</Text>
               </span>
             </div>
             <div style={{ marginTop: 12 }}>
-              <Sparkline data={hist.conns} color={token.colorTextSecondary} height={isMobile ? 48 : 64} />
+              <SpeedChart
+                up={hist.udp}
+                down={hist.tcp}
+                color={token.colorTextSecondary}
+                height={isMobile ? 48 : 64}
+              />
             </div>
             <div
               style={{
