@@ -354,56 +354,7 @@ func trojanURIs(name, host, port string, cfg map[string]interface{}) ([]string, 
 	return result, nil
 }
 
-// hysteria2URIParams builds query params for official hy2 / hysteria2 URIs.
-// Loon accepts both schemes and expects sni + insecure=1 when skipping verify;
-// allowInsecure is kept for Meta/Clash-style parsers.
-func hysteria2URIParams(cfg map[string]interface{}, host string) map[string]string {
-	params := map[string]string{}
-	sni, skip := resolveURITLS(cfg, host)
-	if sni == "" && host != "" {
-		sni = strings.Trim(host, "[]")
-	}
-	if sni != "" {
-		params["sni"] = sni
-	}
-	if skip {
-		params["insecure"] = "1"
-		params["allowInsecure"] = "1"
-	}
-	if v, ok := firstString(cfg["alpn"]); ok {
-		params["alpn"] = v
-	}
-	if params["alpn"] == "" {
-		params["alpn"] = "h3"
-	}
-	if v, ok := cfg["obfs"].(string); ok && v != "" {
-		params["obfs"] = v
-	}
-	if v, ok := cfg["obfs-password"].(string); ok && v != "" {
-		params["obfs-password"] = v
-	}
-	if v, ok := cfg["up"].(string); ok && v != "" {
-		params["up"] = v
-	}
-	if v, ok := cfg["down"].(string); ok && v != "" {
-		params["down"] = v
-	}
-	for _, key := range []string{"mport", "ports", "port-range"} {
-		if v, ok := firstString(cfg[key]); ok {
-			params["mport"] = v
-			break
-		}
-	}
-	return params
-}
-
 func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]string, error) {
-	build := func(password string) string {
-		params := hysteria2URIParams(cfg, host)
-		userinfo := url.User(password).String()
-		return addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name)
-	}
-
 	if rows := userRows(cfg); len(rows) > 0 {
 		result := make([]string, 0, len(rows))
 		for _, row := range rows {
@@ -411,7 +362,41 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if password == "" {
 				continue
 			}
-			result = append(result, build(password))
+			params := map[string]string{}
+			sni, skip := resolveURITLS(cfg, host)
+			if sni != "" {
+				params["sni"] = sni
+			}
+			if skip {
+				params["insecure"] = "1"
+				params["allowInsecure"] = "1"
+			}
+			if v, ok := firstString(cfg["alpn"]); ok {
+				params["alpn"] = v
+			}
+			if params["alpn"] == "" {
+				params["alpn"] = "h3"
+			}
+			if params["sni"] == "" && host != "" {
+				params["sni"] = strings.Trim(host, "[]")
+			}
+			if v, ok := cfg["obfs"].(string); ok && v != "" {
+				params["obfs"] = v
+			}
+			if v, ok := cfg["obfs-password"].(string); ok && v != "" {
+				params["obfs-password"] = v
+			}
+			// up/down are bandwidth hints; include them when set so the panel
+			// credential-row branch stays consistent with the config-embedded map
+			// users branch below (P3-6).
+			if v, ok := cfg["up"].(string); ok && v != "" {
+				params["up"] = v
+			}
+			if v, ok := cfg["down"].(string); ok && v != "" {
+				params["down"] = v
+			}
+			userinfo := url.User(password).String()
+			result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name))
 		}
 		if len(result) > 0 {
 			return result, nil
@@ -419,6 +404,7 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 	}
 	users := userMap(cfg)
 	if len(users) == 0 {
+		// Single password / auth string (common for panel-managed HY2).
 		pass := ""
 		if v, ok := cfg["password"].(string); ok {
 			pass = strings.TrimSpace(v)
@@ -436,15 +422,44 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		return nil, fmt.Errorf("hysteria2 listener requires at least one user/password for URI export")
 	}
 	result := make([]string, 0, len(users))
-	for _, raw := range users {
+	for username, raw := range users {
 		password, ok := raw.(string)
 		if !ok || password == "" {
-			continue
+			return nil, fmt.Errorf("hysteria2 user %q has empty password", username)
 		}
-		result = append(result, build(password))
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("hysteria2 listener requires at least one user/password for URI export")
+		params := map[string]string{}
+		sni, skip := resolveURITLS(cfg, host)
+		if sni != "" {
+			params["sni"] = sni
+		}
+		if skip {
+			params["insecure"] = "1"
+			params["allowInsecure"] = "1"
+		}
+		if v, ok := firstString(cfg["alpn"]); ok {
+			params["alpn"] = v
+		}
+		if params["alpn"] == "" {
+			params["alpn"] = "h3"
+		}
+		if params["sni"] == "" && host != "" {
+			params["sni"] = strings.Trim(host, "[]")
+		}
+		if v, ok := cfg["obfs"].(string); ok && v != "" {
+			params["obfs"] = v
+		}
+		if v, ok := cfg["obfs-password"].(string); ok && v != "" {
+			params["obfs-password"] = v
+		}
+		if v, ok := cfg["up"].(string); ok && v != "" {
+			params["up"] = v
+		}
+		if v, ok := cfg["down"].(string); ok && v != "" {
+			params["down"] = v
+		}
+		_ = username
+		userinfo := url.User(password).String()
+		result = append(result, addName(query("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params), name))
 	}
 	return result, nil
 }
