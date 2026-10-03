@@ -173,7 +173,7 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 	}
 }
 
-// defaultSingboxCNRuleSets downloads official binary rule-sets (sing-box 1.8+).
+// defaultSingboxCNRuleSets uses jsDelivr (fastly) mirrors of official rule-sets.
 // download_detour=direct so first fetch works before proxy is up.
 func defaultSingboxCNRuleSets() []map[string]interface{} {
 	return []map[string]interface{}{
@@ -181,14 +181,14 @@ func defaultSingboxCNRuleSets() []map[string]interface{} {
 			"tag":             "geosite-cn",
 			"type":            "remote",
 			"format":          "binary",
-			"url":             "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+			"url":             "https://fastly.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
 			"download_detour": "direct",
 		},
 		{
 			"tag":             "geoip-cn",
 			"type":            "remote",
 			"format":          "binary",
-			"url":             "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+			"url":             "https://fastly.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
 			"download_detour": "direct",
 		},
 	}
