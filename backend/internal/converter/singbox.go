@@ -148,22 +148,7 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 		},
 		"outbounds": outbounds,
 		"route": map[string]interface{}{
-			"rules": []map[string]interface{}{
-				{"action": "sniff"},
-				{
-					"type":   "logical",
-					"mode":   "or",
-					"action": "hijack-dns",
-					"rules": []map[string]interface{}{
-						{"protocol": "dns"},
-						{"port": 53},
-					},
-				},
-				{"ip_is_private": true, "action": "route", "outbound": "direct"},
-				{"rule_set": "geosite-cn", "action": "route", "outbound": "direct"},
-				{"rule_set": "geoip-cn", "action": "route", "outbound": "direct"},
-			},
-			"rule_set":              defaultSingboxCNRuleSets(),
+			"rules":                 defaultSingboxRouteRules(),
 			"final":                 "proxy",
 			"auto_detect_interface": true,
 			"default_domain_resolver": map[string]interface{}{
@@ -173,24 +158,54 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 	}
 }
 
-// defaultSingboxCNRuleSets uses jsDelivr (fastly) mirrors of official rule-sets.
-// download_detour=direct so first fetch works before proxy is up.
-func defaultSingboxCNRuleSets() []map[string]interface{} {
+// defaultSingboxRouteRules keeps private + CN domain suffixes on direct.
+// Remote rule-set downloads (GitHub / jsDelivr) block SFI/SFM startup when
+// the device cannot reach those hosts — so we never require them here.
+func defaultSingboxRouteRules() []map[string]interface{} {
 	return []map[string]interface{}{
+		{"action": "sniff"},
 		{
-			"tag":             "geosite-cn",
-			"type":            "remote",
-			"format":          "binary",
-			"url":             "https://fastly.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-cn.srs",
-			"download_detour": "direct",
+			"type":   "logical",
+			"mode":   "or",
+			"action": "hijack-dns",
+			"rules": []map[string]interface{}{
+				{"protocol": "dns"},
+				{"port": 53},
+			},
 		},
+		{"ip_is_private": true, "action": "route", "outbound": "direct"},
 		{
-			"tag":             "geoip-cn",
-			"type":            "remote",
-			"format":          "binary",
-			"url":             "https://fastly.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
-			"download_detour": "direct",
+			"domain_suffix": defaultSingboxCNDomainSuffixes(),
+			"action":        "route",
+			"outbound":      "direct",
 		},
+	}
+}
+
+// defaultSingboxCNDomainSuffixes is an offline CN-direct list (no network).
+func defaultSingboxCNDomainSuffixes() []string {
+	return []string{
+		"cn",
+		"baidu.com", "qq.com", "weixin.qq.com", "gtimg.com", "qpic.cn",
+		"aliyun.com", "alipay.com", "taobao.com", "tmall.com", "alicdn.com",
+		"jd.com", "360buyimg.com",
+		"bilibili.com", "hdslb.com",
+		"zhihu.com", "zhimg.com",
+		"weibo.com", "sina.com.cn", "sinaimg.cn",
+		"163.com", "126.net", "netease.com",
+		"iqiyi.com", "youku.com",
+		"douyin.com", "bytedance.com", "byteimg.com",
+		"mi.com", "xiaomi.com", "miui.com",
+		"huawei.com", "hicloud.com",
+		"csdn.net", "gitee.com",
+		"meituan.com", "dianping.com",
+		"ctrip.com", "12306.cn",
+		"gov.cn", "edu.cn",
+		"tencent.com",
+		"apple.com.cn", "icloud.com.cn",
+		"pinduoduo.com", "yangkeduo.com",
+		"ele.me", "amap.com", "autonavi.com",
+		"kuaishou.com",
 	}
 }
 
