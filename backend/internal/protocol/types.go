@@ -5,6 +5,8 @@ import "strings"
 // NodeModel is the strongly-typed node view used by the protocol registry.
 // Listener.Config remains JSON on disk; DecodeNodeModel maps it into this shape.
 type NodeModel struct {
+	// ID is the panel listener primary key (certstore lookup for share/URI).
+	ID          uint
 	Name        string
 	Protocol    string
 	Listen      string
