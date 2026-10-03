@@ -320,7 +320,13 @@ func (Hysteria2Compiler) BuildShare(in ShareInput) (Share, error) {
 		params["down"] = spec.Down
 	}
 	applyALPNParams(params, spec.ALPN)
-	// url.User encodes userinfo correctly (PathEscape alone breaks special passwords).
+	if params["alpn"] == "" {
+		params["alpn"] = "h3"
+	}
+	// Always emit sni for HY2 (IP formal certs previously produced bare host:port).
+	if params["sni"] == "" && host != "" {
+		params["sni"] = strings.Trim(host, "[]")
+	}
 	userinfo := url.User(pass).String()
 	uri := shareName(
 		shareQuery("hysteria2://"+userinfo+"@"+netutil.JoinHostPort(host, port), params),
@@ -878,16 +884,22 @@ func applyTransportParams(params map[string]string, t TransportSpec) {
 // skip-cert: same rules as node.resolveURITLS / certutil.ResolveClientSNI.
 // IP connect hosts with formal (e.g. LE IP SAN) certificates emit sni=<IP>.
 func resolveShareTLS(in ShareInput, configuredSNI, host string, explicitSkip bool) (sni string, skip bool) {
-	certPEM := strings.TrimSpace(in.Node.Certificate)
-	if certPEM == "" && in.Node.Generic != nil {
-		if c, ok := in.Node.Generic["certificate"].(string); ok {
-			certPEM = strings.TrimSpace(c)
+	certPEM := materializeListenerCertPEM(strings.TrimSpace(in.Node.Certificate), in.Node.ID)
+	if !strings.Contains(certPEM, "BEGIN CERTIFICATE") {
+		if in.Node.Generic != nil {
+			if c, ok := in.Node.Generic["certificate"].(string); ok {
+				certPEM = materializeListenerCertPEM(c, in.Node.ID)
+			}
 		}
 	}
-	if certPEM == "" {
-		certPEM = resolveShareCertPEM(in.Node.Generic)
+	if !strings.Contains(certPEM, "BEGIN CERTIFICATE") {
+		certPEM = materializeListenerCertPEM(resolveShareCertPEM(in.Node.Generic), in.Node.ID)
 	}
 	sni = certutil.ResolveClientSNI(strings.TrimSpace(configuredSNI), in.Node.PublicHost, host, certPEM)
+	// QUIC/TLS clients (Loon HY2, TUIC, …) need an explicit sni on IP endpoints.
+	if strings.TrimSpace(sni) == "" {
+		sni = strings.Trim(strings.TrimSpace(host), "[]")
+	}
 	var exp *bool
 	if explicitSkip {
 		v := true

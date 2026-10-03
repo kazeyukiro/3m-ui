@@ -2,8 +2,10 @@ package protocol
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
@@ -16,6 +18,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 		return NodeModel{}, err
 	}
 	n := NodeModel{
+		ID:          l.ID,
 		Name:        l.Name,
 		Protocol:    strings.ToLower(strings.TrimSpace(l.Protocol)),
 		Listen:      firstNonEmpty(l.Listen, l.BindAddress, "0.0.0.0"),
@@ -29,7 +32,7 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 		UDP:         l.UDP,
 		TLS:         l.TLS,
 		Users:       users,
-		Certificate: strFrom(cfg, "certificate"),
+		Certificate: materializeListenerCertPEM(strFrom(cfg, "certificate"), l.ID),
 	}
 	if n.Port == "" {
 		n.Port = strings.TrimSpace(l.Port)
@@ -333,4 +336,27 @@ func stringListFrom(cfg map[string]interface{}, key string) []string {
 	default:
 		return nil
 	}
+}
+
+// materializeListenerCertPEM turns a config certificate field (inline PEM or
+// path) into PEM text, falling back to certstore for this listener.
+func materializeListenerCertPEM(raw string, listenerID uint) string {
+	raw = strings.TrimSpace(raw)
+	if strings.Contains(raw, "BEGIN CERTIFICATE") {
+		return raw
+	}
+	if raw != "" && (strings.HasPrefix(raw, "/") || strings.HasSuffix(raw, ".pem") || strings.HasSuffix(raw, ".crt") || strings.HasSuffix(raw, ".cer")) {
+		if b, err := os.ReadFile(raw); err == nil {
+			s := string(b)
+			if strings.Contains(s, "BEGIN CERTIFICATE") {
+				return s
+			}
+		}
+	}
+	if listenerID != 0 {
+		if c, _, ok := certstore.Load(listenerID); ok {
+			return c
+		}
+	}
+	return raw
 }

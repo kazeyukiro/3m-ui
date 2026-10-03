@@ -57,6 +57,9 @@ func resolveURITLS(cfg map[string]interface{}, host string) (sni string, skip bo
 		}
 	}
 	sni = certutil.ResolveClientSNI(configured, "", host, certPEM)
+	if strings.TrimSpace(sni) == "" {
+		sni = strings.Trim(strings.TrimSpace(host), "[]")
+	}
 	var explicit *bool
 	if cfg != nil {
 		if b, ok := cfg["skip-cert-verify"].(bool); ok {
@@ -354,6 +357,12 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 			if v, ok := firstString(cfg["alpn"]); ok {
 				params["alpn"] = v
 			}
+			if params["alpn"] == "" {
+				params["alpn"] = "h3"
+			}
+			if params["sni"] == "" && host != "" {
+				params["sni"] = strings.Trim(host, "[]")
+			}
 			if v, ok := cfg["obfs"].(string); ok && v != "" {
 				params["obfs"] = v
 			}
@@ -397,6 +406,12 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 		}
 		if v, ok := firstString(cfg["alpn"]); ok {
 			params["alpn"] = v
+		}
+		if params["alpn"] == "" {
+			params["alpn"] = "h3"
+		}
+		if params["sni"] == "" && host != "" {
+			params["sni"] = strings.Trim(host, "[]")
 		}
 		if v, ok := cfg["obfs"].(string); ok && v != "" {
 			params["obfs"] = v
