@@ -183,15 +183,22 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 		if host == "" {
 			host = serverHost
 		}
+		// Primary: ClientURIsWithCredentials (export profile). Fallback: protocol
+		// ExportShareURIs which resolves TLS via the same export package.
 		uris, err := gen(listener, host, creds)
 		if err != nil || len(uris) == 0 {
 			pcreds := make([]protocol.UserCred, 0, len(creds))
 			for _, c := range creds {
 				pcreds = append(pcreds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
 			}
-			if shares, err2 := protocol.ExportShareURIs(listener, host, pcreds); err2 == nil && len(shares) > 0 {
+			shares, err2 := protocol.ExportShareURIs(listener, host, pcreds)
+			if err2 == nil && len(shares) > 0 {
 				uris = shares
 				err = nil
+			} else if len(uris) == 0 {
+				if err == nil {
+					err = err2
+				}
 			}
 		}
 		if err != nil {

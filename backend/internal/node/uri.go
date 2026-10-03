@@ -3,13 +3,11 @@ package node
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 
-	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
-	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/export"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
 
@@ -28,22 +26,17 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg["_listener-tls"] = listener.TLS
-	cfg["_listener-udp"] = listener.UDP
-	// Prefer durable certstore PEM when Config has no certificate blob so
-	// formal certs (ACME / uploaded) drive skip-cert decisions correctly.
-	if cert, _, ok := certstore.Load(listener.ID); ok {
-		if s, _ := cfg["certificate"].(string); strings.TrimSpace(s) == "" {
-			cfg["certificate"] = cert
-		}
+	profile := export.BuildProfileFromConfig(listener, host, cfg)
+	if profile.Host != "" {
+		host = profile.Host
 	}
-	port := strings.TrimSpace(listener.PublicPort)
-	if port == "" {
-		port = strings.TrimSpace(listener.Port)
-	}
-	applyURIAccessProfile(cfg, listener, host, port)
+	port := profile.Port
+	export.ApplyToConfig(cfg, listener, profile)
 	if strings.ContainsAny(port, ",-") {
 		return nil, fmt.Errorf("URI export requires a single listener port; ranges and port lists are not representable in a share URI")
+	}
+	if port == "" {
+		return nil, fmt.Errorf("URI export requires a listener port")
 	}
 	switch strings.ToLower(listener.Protocol) {
 	case "shadowsocks":
@@ -75,76 +68,16 @@ func ClientURIs(listener models.Listener, host string) ([]string, error) {
 	}
 }
 
-// applyURIAccessProfile injects client-facing TLS/WS fields from the Listener
-// row (AccessSNI, PublicHost, fingerprint) into the config map used by URI builders.
+// applyURIAccessProfile remains for tests/legacy callers; delegates to export.
 func applyURIAccessProfile(cfg map[string]interface{}, listener models.Listener, connectHost, port string) {
 	if cfg == nil {
 		return
 	}
-	hint := strings.TrimSpace(listener.AccessSNI)
-	if hint == "" {
-		hint = strings.TrimSpace(listener.PublicHost)
+	p := export.BuildProfileFromConfig(listener, connectHost, cfg)
+	if port != "" {
+		p.Port = port
 	}
-	if hint == "" {
-		hint = strings.TrimSpace(connectHost)
-	}
-	hint = strings.Trim(hint, "[]")
-	domainHint := hint != "" && net.ParseIP(hint) == nil
-
-	// Resolve SNI against the actual certificate. Never inject AccessSNI when it
-	// does not match the leaf (e.g. AccessSNI=www.bing.com on a LE IP cert for
-	// the server address) — that forces clients into skip-cert-verify or TLS failure.
-	certPEM, _ := cfg["certificate"].(string)
-	if strings.TrimSpace(certPEM) == "" {
-		if c, _, ok := certstore.Load(listener.ID); ok {
-			certPEM = c
-			cfg["certificate"] = c
-		}
-	}
-	resolved := certutil.ResolveClientSNI(
-		strings.TrimSpace(listener.AccessSNI),
-		strings.TrimSpace(listener.PublicHost),
-		connectHost,
-		certPEM,
-	)
-	if resolved != "" {
-		cfg["sni"] = resolved
-		cfg["servername"] = resolved
-	}
-
-	if fp := strings.TrimSpace(listener.ClientFingerprint); fp != "" {
-		cfg["client-fingerprint"] = fp
-		cfg["fingerprint"] = fp
-	}
-	if alpn := strings.TrimSpace(listener.AccessALPN); alpn != "" {
-		cfg["alpn"] = alpn
-	}
-
-	hasWS := false
-	if wsPath, ok := cfg["ws-path"].(string); ok && strings.TrimSpace(wsPath) != "" {
-		hasWS = true
-	}
-	cdnPort := port == "443" || port == "8443" || port == "2053" || port == "2083" || port == "2087" || port == "2096"
-	if hasWS && domainHint && cdnPort {
-		cfg["_listener-tls"] = true
-	}
-	if cert, ok := cfg["certificate"].(string); ok && strings.TrimSpace(cert) != "" {
-		cfg["_listener-tls"] = true
-	}
-	if _, ok := cfg["reality-config"]; ok {
-		cfg["_listener-tls"] = true
-	}
-
-	if hasWS {
-		headers, _ := cfg["ws-headers"].(map[string]interface{})
-		if headers == nil {
-			headers = map[string]interface{}{}
-		}
-		if h, _ := headers["Host"].(string); strings.TrimSpace(h) == "" && domainHint {
-			headers["Host"] = hint
-			cfg["ws-headers"] = headers
-		}
-	}
+	export.ApplyToConfig(cfg, listener, p)
 }
 
 func decodeURIConfig(raw string) (map[string]interface{}, error) {

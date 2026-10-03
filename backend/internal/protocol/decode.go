@@ -2,12 +2,11 @@ package protocol
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
-	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/export"
 )
 
 // DecodeNodeModel builds a strongly-typed NodeModel from a persisted Listener
@@ -32,14 +31,24 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 		UDP:         l.UDP,
 		TLS:         l.TLS,
 		Users:       users,
-		Certificate: materializeListenerCertPEM(strFrom(cfg, "certificate"), l.ID),
+		Certificate: export.MaterializeCertPEM(strFrom(cfg, "certificate"), l.ID),
 	}
 	if n.Port == "" {
 		n.Port = strings.TrimSpace(l.Port)
 	}
 
-	// Prefer access profile SNI/fp over config when set.
-	sni := n.AccessSNI
+	// Certificate-aware SNI (same as URI/subscription export).
+	profile := export.BuildProfileFromConfig(l, n.PublicHost, cfg)
+	if profile.Host != "" && n.PublicHost == "" {
+		n.PublicHost = profile.Host
+	}
+	if profile.CertPEM != "" {
+		n.Certificate = profile.CertPEM
+	}
+	sni := profile.SNI
+	if sni == "" {
+		sni = n.AccessSNI
+	}
 	if sni == "" {
 		sni = strFrom(cfg, "sni", "servername")
 	}
@@ -336,27 +345,4 @@ func stringListFrom(cfg map[string]interface{}, key string) []string {
 	default:
 		return nil
 	}
-}
-
-// materializeListenerCertPEM turns a config certificate field (inline PEM or
-// path) into PEM text, falling back to certstore for this listener.
-func materializeListenerCertPEM(raw string, listenerID uint) string {
-	raw = strings.TrimSpace(raw)
-	if strings.Contains(raw, "BEGIN CERTIFICATE") {
-		return raw
-	}
-	if raw != "" && (strings.HasPrefix(raw, "/") || strings.HasSuffix(raw, ".pem") || strings.HasSuffix(raw, ".crt") || strings.HasSuffix(raw, ".cer")) {
-		if b, err := os.ReadFile(raw); err == nil {
-			s := string(b)
-			if strings.Contains(s, "BEGIN CERTIFICATE") {
-				return s
-			}
-		}
-	}
-	if listenerID != 0 {
-		if c, _, ok := certstore.Load(listenerID); ok {
-			return c
-		}
-	}
-	return raw
 }

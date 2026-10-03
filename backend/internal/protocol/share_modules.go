@@ -13,6 +13,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/export"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 )
 
@@ -884,22 +886,6 @@ func applyTransportParams(params map[string]string, t TransportSpec) {
 // skip-cert: same rules as node.resolveURITLS / certutil.ResolveClientSNI.
 // IP connect hosts with formal (e.g. LE IP SAN) certificates emit sni=<IP>.
 func resolveShareTLS(in ShareInput, configuredSNI, host string, explicitSkip bool) (sni string, skip bool) {
-	certPEM := materializeListenerCertPEM(strings.TrimSpace(in.Node.Certificate), in.Node.ID)
-	if !strings.Contains(certPEM, "BEGIN CERTIFICATE") {
-		if in.Node.Generic != nil {
-			if c, ok := in.Node.Generic["certificate"].(string); ok {
-				certPEM = materializeListenerCertPEM(c, in.Node.ID)
-			}
-		}
-	}
-	if !strings.Contains(certPEM, "BEGIN CERTIFICATE") {
-		certPEM = materializeListenerCertPEM(resolveShareCertPEM(in.Node.Generic), in.Node.ID)
-	}
-	sni = certutil.ResolveClientSNI(strings.TrimSpace(configuredSNI), in.Node.PublicHost, host, certPEM)
-	// QUIC/TLS clients (Loon HY2, TUIC, …) need an explicit sni on IP endpoints.
-	if strings.TrimSpace(sni) == "" {
-		sni = strings.Trim(strings.TrimSpace(host), "[]")
-	}
 	var exp *bool
 	if explicitSkip {
 		v := true
@@ -909,12 +895,34 @@ func resolveShareTLS(in ShareInput, configuredSNI, host string, explicitSkip boo
 			exp = &b
 		}
 	}
-	verify := sni
-	if verify == "" {
-		verify = host
+	// Rebuild a minimal listener view so export.BuildProfile owns certstore + path PEM.
+	l := models.Listener{
+		ID:                in.Node.ID,
+		PublicHost:        in.Node.PublicHost,
+		PublicPort:        in.Node.PublicPort,
+		Port:              in.Node.Port,
+		AccessSNI:         in.Node.AccessSNI,
+		ClientFingerprint: in.Node.Fingerprint,
+		AccessALPN:        in.Node.AccessALPN,
+		TLS:               in.Node.TLS,
 	}
-	skip = certutil.DecideClientSkipCertVerify(certPEM, verify, exp)
-	return sni, skip
+	cfg := map[string]interface{}{}
+	if in.Node.Generic != nil {
+		for k, v := range in.Node.Generic {
+			cfg[k] = v
+		}
+	}
+	if strings.TrimSpace(in.Node.Certificate) != "" {
+		cfg["certificate"] = in.Node.Certificate
+	}
+	if strings.TrimSpace(configuredSNI) != "" {
+		cfg["sni"] = strings.TrimSpace(configuredSNI)
+	}
+	if exp != nil {
+		cfg["skip-cert-verify"] = *exp
+	}
+	p := export.BuildProfileFromConfig(l, host, cfg)
+	return p.SNI, p.SkipCert
 }
 
 // shareTLSServerName picks a hostname suitable for TLS SNI on share links.

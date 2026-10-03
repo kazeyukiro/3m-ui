@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
 	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/export"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"golang.org/x/crypto/curve25519"
@@ -901,28 +901,22 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 	typ, _ := p["type"].(string)
 	typ = strings.ToLower(strings.TrimSpace(typ))
 
-	// Certificate-aware SNI (same rules as URI export). Never inject AccessSNI
-	// that does not match the leaf (e.g. www.bing.com on a LE IP certificate).
-	// Prefer SNI already copied from listener Config (hy2/tuic/shadowquic).
-	configured := ""
-	if s, ok := p["sni"].(string); ok {
-		configured = strings.TrimSpace(s)
-	}
-	if configured == "" {
-		if s, ok := p["servername"].(string); ok {
-			configured = strings.TrimSpace(s)
+	cfg := map[string]interface{}{}
+	if opts != nil {
+		for k, v := range opts {
+			cfg[k] = v
 		}
 	}
-	if configured == "" {
-		configured = accessSNI
+	if s, ok := p["sni"].(string); ok && strings.TrimSpace(s) != "" {
+		cfg["sni"] = strings.TrimSpace(s)
+	} else if s, ok := p["servername"].(string); ok && strings.TrimSpace(s) != "" {
+		cfg["sni"] = strings.TrimSpace(s)
 	}
-	certPEM := certPEMFromOpts(opts)
-	if strings.TrimSpace(certPEM) == "" {
-		if c, _, ok := certstore.Load(l.ID); ok {
-			certPEM = c
-		}
+	if certPEMFromOpts(opts) != "" {
+		cfg["certificate"] = certPEMFromOpts(opts)
 	}
-	resolved := certutil.ResolveClientSNI(configured, publicHost, server, certPEM)
+	profile := export.BuildProfileFromConfig(l, server, cfg)
+	resolved := profile.SNI
 	hint := resolved
 	if hint == "" {
 		hint = accessSNI
@@ -1021,36 +1015,25 @@ func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost strin
 	if p == nil {
 		return
 	}
-	cert := certPEMFromOpts(opts)
-	if strings.TrimSpace(cert) == "" && listenerID != 0 {
-		if c, _, ok := certstore.Load(listenerID); ok {
-			cert = c
-		}
+	if _, isReality := p["reality-opts"]; isReality {
+		p["skip-cert-verify"] = true
+		return
 	}
-	var explicit *bool
+	cfg := map[string]interface{}{}
 	if opts != nil {
-		if v, ok := opts["skip-cert-verify"].(bool); ok {
-			explicit = &v
+		for k, v := range opts {
+			cfg[k] = v
 		}
 	}
-	verify := connectHost
 	for _, key := range []string{"sni", "servername"} {
 		if v, ok := p[key].(string); ok && strings.TrimSpace(v) != "" {
-			verify = strings.TrimSpace(v)
+			cfg["sni"] = strings.TrimSpace(v)
 			break
 		}
 	}
-	if _, isReality := p["reality-opts"]; isReality {
-		// Reality presents a certificate for the camouflage SNI, not the real
-		// endpoint — clients must skip verification (standard Clash/Mihomo practice).
-		p["skip-cert-verify"] = true
-		return
-	}
-	if _, isReality := p["reality-opts"]; isReality {
-		p["skip-cert-verify"] = true
-		return
-	}
-	if certutil.DecideClientSkipCertVerify(cert, verify, explicit) {
+	l := models.Listener{ID: listenerID}
+	profile := export.BuildProfileFromConfig(l, connectHost, cfg)
+	if profile.SkipCert {
 		p["skip-cert-verify"] = true
 	} else {
 		delete(p, "skip-cert-verify")
