@@ -8,7 +8,6 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	mihomocfg "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/security"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gopkg.in/yaml.v3"
@@ -102,28 +101,16 @@ func GenerateUserRawConfig(db *gorm.DB, pu models.ProxyUser, req *http.Request) 
 		if host == "" {
 			host = serverHost
 		}
+		// Single path: listenerToProxies → ensureClientAccessTLS / applyClientSkipCertVerify
+		// (both use export.BuildProfileFromConfig). No silent Share/YAML alternate SNI path.
 		proxies, err := listenerToProxies(listener, host, creds)
-		if err != nil || len(proxies) == 0 {
-			// Fallback: protocol registry ClientYAML (same path as node URI share).
-			pcreds := make([]protocol.UserCred, 0, len(creds))
-			for _, c := range creds {
-				pcreds = append(pcreds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
-			}
-			if shares, err2 := protocol.ExportShares(listener, host, pcreds); err2 == nil {
-				for _, sh := range shares {
-					if maps := proxiesFromClientYAML(sh.ClientYAML, listener.Name, 0); len(maps) > 0 {
-						proxies = append(proxies, maps...)
-					}
-				}
-			}
-			if len(proxies) == 0 {
-				if err != nil {
-					skipReasons = append(skipReasons, fmt.Sprintf("%s: %v", listener.Name, err))
-				} else {
-					skipReasons = append(skipReasons, fmt.Sprintf("%s: empty export", listener.Name))
-				}
-				continue
-			}
+		if err != nil {
+			skipReasons = append(skipReasons, fmt.Sprintf("%s: %v", listener.Name, err))
+			continue
+		}
+		if len(proxies) == 0 {
+			skipReasons = append(skipReasons, fmt.Sprintf("%s: empty export", listener.Name))
+			continue
 		}
 		for _, p := range proxies {
 			if name, ok := p["name"].(string); ok {
@@ -183,24 +170,10 @@ func GenerateUserBase64Subscription(db *gorm.DB, pu models.ProxyUser, req *http.
 		if host == "" {
 			host = serverHost
 		}
-		// Primary: ClientURIsWithCredentials (export profile). Fallback: protocol
-		// ExportShareURIs which resolves TLS via the same export package.
+		// Single path only: gen is node.ClientURIsWithCredentials (router wiring).
+		// TLS identity comes solely from export.BuildProfileFromConfig — no
+		// alternate encoder and no silent SNI/skip-cert divergence.
 		uris, err := gen(listener, host, creds)
-		if err != nil || len(uris) == 0 {
-			pcreds := make([]protocol.UserCred, 0, len(creds))
-			for _, c := range creds {
-				pcreds = append(pcreds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
-			}
-			shares, err2 := protocol.ExportShareURIs(listener, host, pcreds)
-			if err2 == nil && len(shares) > 0 {
-				uris = shares
-				err = nil
-			} else if len(uris) == 0 {
-				if err == nil {
-					err = err2
-				}
-			}
-		}
 		if err != nil {
 			skipReasons = append(skipReasons, fmt.Sprintf("%s: %v", listener.Name, err))
 			continue
