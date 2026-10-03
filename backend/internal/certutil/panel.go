@@ -96,13 +96,10 @@ func ResolveClientSNI(configured, publicHost, connectHost, certPEM string) strin
 		}
 		return normalizeVerifyHost(connectHost)
 	}
-	// No certificate material: an IP connect host cannot use a domain AccessSNI
-	// (e.g. www.bing.com) for verification — clients dial the IP and would fail
-	// or force insecure inconsistently. Prefer the IP as SNI; Decide* will skip.
-	connect := normalizeVerifyHost(connectHost)
-	if connect != "" && net.ParseIP(connect) != nil {
-		return connect
-	}
+	// No certificate material: prefer a domain SNI (config / AccessSNI / public
+	// host) so QUIC/TLS clients can present the name the server expects even when
+	// dialling a raw IP (common for HY2/TUIC with allowInsecure). Fall back to
+	// the connect host (including IP) when nothing else is set.
 	for _, cand := range []string{configured, publicHost, connectHost} {
 		cand = normalizeVerifyHost(cand)
 		if cand == "" {
@@ -112,7 +109,7 @@ func ResolveClientSNI(configured, publicHost, connectHost, certPEM string) strin
 			return cand
 		}
 	}
-	return connect
+	return normalizeVerifyHost(connectHost)
 }
 
 // DecideClientSkipCertVerify chooses skip-cert-verify for client subscription/share.

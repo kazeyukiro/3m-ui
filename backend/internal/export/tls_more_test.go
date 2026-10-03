@@ -6,18 +6,31 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
 
-func TestIPHostWithoutPEMUsesIPAndSkips(t *testing.T) {
+func TestIPHostWithoutPEMKeepsAccessSNIAndSkips(t *testing.T) {
+	// Without PEM, domain AccessSNI is still the SNI clients should send (HY2-style);
+	// skip-cert must be true because the dial target is a bare IP.
 	l := models.Listener{
 		AccessSNI: "www.bing.com",
 		Port:      "443",
 	}
 	cfg := map[string]interface{}{}
 	p := BuildProfileFromConfig(l, "85.149.212.214", cfg)
-	if p.SNI != "85.149.212.214" {
-		t.Fatalf("SNI=%q want IP (not AccessSNI domain)", p.SNI)
+	if p.SNI != "www.bing.com" {
+		t.Fatalf("SNI=%q want AccessSNI domain", p.SNI)
 	}
 	if !p.SkipCert {
 		t.Fatal("expected skip-cert on IP without PEM")
+	}
+}
+
+func TestIPHostWithoutPEMFallsBackToIP(t *testing.T) {
+	l := models.Listener{Port: "443"}
+	p := BuildProfileFromConfig(l, "85.149.212.214", nil)
+	if p.SNI != "85.149.212.214" {
+		t.Fatalf("SNI=%q want connect IP", p.SNI)
+	}
+	if !p.SkipCert {
+		t.Fatal("expected skip-cert")
 	}
 }
 
