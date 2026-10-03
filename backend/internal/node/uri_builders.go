@@ -17,6 +17,23 @@ import (
 
 // clientSkipCert decides skip-cert-verify for share/subscription URIs using
 // the connect host (IP vs domain vs certificate SAN).
+// rowUUID returns the user UUID from a credential row, accepting username when
+// the panel stored the UUID only in the username field.
+func rowUUID(row map[string]interface{}) string {
+	if row == nil {
+		return ""
+	}
+	for _, key := range []string{"uuid", "id", "username"} {
+		if v, ok := row[key].(string); ok {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
 func looksLikeIP(host string) bool {
 	h := strings.Trim(host, "[]")
 	return net.ParseIP(h) != nil
@@ -165,7 +182,7 @@ func vlessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 	}
 	result := make([]string, 0, len(rows))
 	for _, row := range rows {
-		uuid, _ := row["uuid"].(string)
+		uuid := rowUUID(row)
 		if uuid == "" {
 			return nil, fmt.Errorf("vless user uuid is required")
 		}
@@ -218,7 +235,7 @@ func vmessURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 	}
 	result := make([]string, 0, len(rows))
 	for _, row := range rows {
-		uuid, _ := row["uuid"].(string)
+		uuid := rowUUID(row)
 		if uuid == "" {
 			return nil, fmt.Errorf("vmess user uuid is required")
 		}

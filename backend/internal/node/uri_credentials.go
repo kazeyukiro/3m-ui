@@ -99,10 +99,14 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 			// VLESS / VMess / Trojan / ShadowQUIC / TrustTunnel: array users.
 			users := make([]interface{}, 0, len(credentials))
 			for _, credential := range credentials {
+				uid := strings.TrimSpace(credential.UUID)
+				if uid == "" {
+					uid = strings.TrimSpace(credential.Username)
+				}
 				row := map[string]interface{}{
 					"username": credential.Username,
 					"password": credential.Password,
-					"uuid":     credential.UUID,
+					"uuid":     uid,
 				}
 				if flow != "" && protocol.TransportCarriesFlow(cfg) &&
 					(proto == "vless" || proto == "vmess") {

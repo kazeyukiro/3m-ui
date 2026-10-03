@@ -81,6 +81,11 @@ func BuildProfile(l models.Listener, connectHost, configuredSNI string, explicit
 		verify = host
 	}
 	skip := certutil.DecideClientSkipCertVerify(certPEM, verify, explicitSkip)
+	if explicitSkip == nil && (certPEM == "" || !strings.Contains(certPEM, "BEGIN CERTIFICATE")) {
+		if h := strings.Trim(host, "[]"); h != "" && net.ParseIP(h) != nil {
+			skip = true
+		}
+	}
 
 	fp := strings.TrimSpace(l.ClientFingerprint)
 	alpn := strings.TrimSpace(l.AccessALPN)
@@ -103,24 +108,32 @@ func ApplyToConfig(cfg map[string]interface{}, l models.Listener, p Profile) {
 	}
 	cfg["_listener-tls"] = l.TLS
 	cfg["_listener-udp"] = l.UDP
-	if p.CertPEM != "" {
+	_, isReality := cfg["reality-config"]
+	if p.CertPEM != "" && !isReality {
+		// Reality presents a camouflage cert; panel leaf PEM must not drive client SNI.
 		cfg["certificate"] = p.CertPEM
 	}
-	if p.SNI != "" {
-		cfg["sni"] = p.SNI
-		cfg["servername"] = p.SNI
+	if isReality {
+		// Keep reality-config server-names as the only SNI source. Clients always skip verify.
+		cfg["skip-cert-verify"] = true
+		cfg["_listener-tls"] = true
+	} else {
+		if p.SNI != "" {
+			cfg["sni"] = p.SNI
+			cfg["servername"] = p.SNI
+		}
+		if p.SkipCert {
+			cfg["skip-cert-verify"] = true
+		} else {
+			delete(cfg, "skip-cert-verify")
+		}
 	}
 	if p.Fingerprint != "" {
 		cfg["client-fingerprint"] = p.Fingerprint
 		cfg["fingerprint"] = p.Fingerprint
 	}
-	if p.ALPN != "" {
+	if p.ALPN != "" && !isReality {
 		cfg["alpn"] = p.ALPN
-	}
-	if p.SkipCert {
-		cfg["skip-cert-verify"] = true
-	} else {
-		delete(cfg, "skip-cert-verify")
 	}
 
 	// WS Host header for CDN edges when missing.
@@ -266,6 +279,12 @@ func BuildProfileFromConfig(l models.Listener, connectHost string, cfg map[strin
 		verify = host
 	}
 	skip := certutil.DecideClientSkipCertVerify(certPEM, verify, explicit)
+	// Belt-and-suspenders: IP dial target with no usable PEM always skips verify.
+	if explicit == nil && (certPEM == "" || !strings.Contains(certPEM, "BEGIN CERTIFICATE")) {
+		if h := strings.Trim(host, "[]"); h != "" && net.ParseIP(h) != nil {
+			skip = true
+		}
+	}
 	fp := strings.TrimSpace(l.ClientFingerprint)
 	if fp == "" && cfg != nil {
 		for _, key := range []string{"client-fingerprint", "fingerprint"} {
