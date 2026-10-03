@@ -134,6 +134,9 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 // buildSingboxSubscriptionDoc wraps outbounds with a default TUN inbound and
 // route so official SFI/SFM clients create a system VPN interface. Without
 // inbounds, outbounds alone never capture traffic (issue #88).
+//
+// Default split: private + geosite-cn + geoip-cn → direct; everything else →
+// selector "proxy" (same idea as Clash GEOSITE,cn / GEOIP,CN).
 func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"log": map[string]interface{}{
@@ -144,9 +147,6 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 			defaultSingboxTUNInbound(),
 		},
 		"outbounds": outbounds,
-		// Route uses rule actions (sniff / hijack-dns) instead of legacy inbound fields
-		// (removed in 1.13). ip_is_private on *route* rules is still valid; DNS rules
-		// must not use bare ip_is_private without match_response (deprecated 1.14).
 		"route": map[string]interface{}{
 			"rules": []map[string]interface{}{
 				{"action": "sniff"},
@@ -160,12 +160,36 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 					},
 				},
 				{"ip_is_private": true, "action": "route", "outbound": "direct"},
+				{"rule_set": "geosite-cn", "action": "route", "outbound": "direct"},
+				{"rule_set": "geoip-cn", "action": "route", "outbound": "direct"},
 			},
+			"rule_set":              defaultSingboxCNRuleSets(),
 			"final":                 "proxy",
 			"auto_detect_interface": true,
 			"default_domain_resolver": map[string]interface{}{
 				"server": "local",
 			},
+		},
+	}
+}
+
+// defaultSingboxCNRuleSets downloads official binary rule-sets (sing-box 1.8+).
+// download_detour=direct so first fetch works before proxy is up.
+func defaultSingboxCNRuleSets() []map[string]interface{} {
+	return []map[string]interface{}{
+		{
+			"tag":             "geosite-cn",
+			"type":            "remote",
+			"format":          "binary",
+			"url":             "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+			"download_detour": "direct",
+		},
+		{
+			"tag":             "geoip-cn",
+			"type":            "remote",
+			"format":          "binary",
+			"url":             "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+			"download_detour": "direct",
 		},
 	}
 }
