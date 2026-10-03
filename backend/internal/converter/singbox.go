@@ -148,22 +148,7 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 		},
 		"outbounds": outbounds,
 		"route": map[string]interface{}{
-			"rules": []map[string]interface{}{
-				{"action": "sniff"},
-				{
-					"type":   "logical",
-					"mode":   "or",
-					"action": "hijack-dns",
-					"rules": []map[string]interface{}{
-						{"protocol": "dns"},
-						{"port": 53},
-					},
-				},
-				{"ip_is_private": true, "action": "route", "outbound": "direct"},
-				{"rule_set": "geosite-cn", "action": "route", "outbound": "direct"},
-				{"rule_set": "geoip-cn", "action": "route", "outbound": "direct"},
-			},
-			"rule_set":              defaultSingboxCNRuleSets(),
+			"rules":                 defaultSingboxRouteRules(),
 			"final":                 "proxy",
 			"auto_detect_interface": true,
 			"default_domain_resolver": map[string]interface{}{
@@ -173,24 +158,69 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 	}
 }
 
-// defaultSingboxCNRuleSets downloads official binary rule-sets (sing-box 1.8+).
-// download_detour=direct so first fetch works before proxy is up.
-func defaultSingboxCNRuleSets() []map[string]interface{} {
+// defaultSingboxRouteRules: private + common CN domains → direct, else proxy.
+// No remote rule-set: GitHub raw downloads often fail in CN and block SFI/SFM
+// from starting (connection refused / 0.0.0.0:443).
+func defaultSingboxRouteRules() []map[string]interface{} {
 	return []map[string]interface{}{
+		{"action": "sniff"},
 		{
-			"tag":             "geosite-cn",
-			"type":            "remote",
-			"format":          "binary",
-			"url":             "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-			"download_detour": "direct",
+			"type":   "logical",
+			"mode":   "or",
+			"action": "hijack-dns",
+			"rules": []map[string]interface{}{
+				{"protocol": "dns"},
+				{"port": 53},
+			},
 		},
+		{"ip_is_private": true, "action": "route", "outbound": "direct"},
 		{
-			"tag":             "geoip-cn",
-			"type":            "remote",
-			"format":          "binary",
-			"url":             "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-			"download_detour": "direct",
+			"domain_suffix": defaultSingboxCNDomainSuffixes(),
+			"action":        "route",
+			"outbound":      "direct",
 		},
+	}
+}
+
+// defaultSingboxCNDomainSuffixes is a compact offline CN direct list (no geo download).
+func defaultSingboxCNDomainSuffixes() []string {
+	return []string{
+		"cn", "中国",
+		"baidu.com", "qq.com", "weixin.qq.com", "gtimg.com", "qpic.cn",
+		"aliyun.com", "alipay.com", "taobao.com", "tmall.com", "alicdn.com",
+		"jd.com", "360buyimg.com",
+		"bilibili.com", "hdslb.com",
+		"zhihu.com", "zhimg.com",
+		"weibo.com", "sina.com.cn", "sinaimg.cn",
+		"163.com", "126.net", "netease.com",
+		"iqiyi.com", "youku.com", "iqiyipic.com",
+		"douyin.com", "tiktok.com", "bytedance.com", "byteimg.com",
+		"mi.com", "xiaomi.com", "miui.com",
+		"huawei.com", "hicloud.com",
+		"csdn.net", "gitee.com", "oschina.net",
+		"suning.com", "meituan.com", "dianping.com",
+		"ctrip.com", "12306.cn",
+		"gov.cn", "edu.cn", "ac.cn",
+		"tencent.com", "wechat.com",
+		"apple.com.cn", "icloud.com.cn", "mzstatic.com",
+		"microsoft.com", "office.com", "live.com", "msn.cn",
+		"cn.bing.com", "bing.com.cn",
+		"qqmail.com", "foxmail.com",
+		"douban.com", "doubanio.com",
+		"kuaishou.com", "yximgs.com",
+		"pinduoduo.com", "yangkeduo.com",
+		"ximalaya.com",
+		"sohu.com", "sohucs.com",
+		"ifeng.com",
+		"cctv.com", "cntv.cn",
+		"china.com", "china.com.cn",
+		"people.com.cn", "xinhuanet.com",
+		"sm.cn", "uc.cn", "ucweb.com",
+		"sogou.com",
+		"ele.me", "elemecdn.com",
+		"amap.com", "autonavi.com",
+		"gaode.com",
+		"upyun.com", "qiniucdn.com", "qiniudn.com",
 	}
 }
 
