@@ -9,6 +9,7 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"gorm.io/gorm"
 )
@@ -31,6 +32,26 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 	outbounds := make([]map[string]interface{}, 0)
 	tagNames := make([]string, 0)
 	var skipped []string
+	usedTags := map[string]int{}
+	appendProxy := func(p map[string]interface{}, source string) {
+		ob, tag := mihomoProxyToSingbox(p)
+		if ob == nil {
+			typ, _ := p["type"].(string)
+			skipped = append(skipped, fmt.Sprintf("%s: unsupported or incomplete type %q", source, typ))
+			return
+		}
+		// sing-box tags must be unique within the document.
+		if n, ok := usedTags[tag]; ok {
+			usedTags[tag] = n + 1
+			tag = fmt.Sprintf("%s-%d", tag, n+1)
+			ob["tag"] = tag
+		} else {
+			usedTags[tag] = 1
+		}
+		outbounds = append(outbounds, ob)
+		tagNames = append(tagNames, tag)
+	}
+
 	for _, listener := range listeners {
 		creds := filtered[listener.ID]
 		host := ResolveListenerServer(config.GlobalConfig, req, listener)
@@ -38,27 +59,55 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 			host = serverHost
 		}
 		proxies, err := listenerToProxies(listener, host, creds)
-		if err != nil {
-			skipped = append(skipped, fmt.Sprintf("%s: %v", listener.Name, err))
-			continue
-		}
-		if len(proxies) == 0 {
-			skipped = append(skipped, fmt.Sprintf("%s: empty mihomo export", listener.Name))
-			continue
-		}
-		for _, p := range proxies {
-			ob, tag := mihomoProxyToSingbox(p)
-			if ob == nil {
-				typ, _ := p["type"].(string)
-				skipped = append(skipped, fmt.Sprintf("%s: unsupported or incomplete type %q", listener.Name, typ))
+		if err != nil || len(proxies) == 0 {
+			// Same recovery as Clash YAML: Share ClientYAML uses export TLS profile.
+			pcreds := make([]protocol.UserCred, 0, len(creds))
+			for _, c := range creds {
+				pcreds = append(pcreds, protocol.UserCred{Username: c.Username, Password: c.Password, UUID: c.UUID})
+			}
+			if shares, err2 := protocol.ExportShares(listener, host, pcreds); err2 == nil {
+				for _, sh := range shares {
+					proxies = append(proxies, proxiesFromClientYAML(sh.ClientYAML, listener.Name, 0)...)
+				}
+			}
+			if len(proxies) == 0 {
+				if err != nil {
+					skipped = append(skipped, fmt.Sprintf("%s: %v", listener.Name, err))
+				} else {
+					skipped = append(skipped, fmt.Sprintf("%s: empty mihomo export", listener.Name))
+				}
 				continue
 			}
-			outbounds = append(outbounds, ob)
-			if tag != "" {
-				tagNames = append(tagNames, tag)
-			}
+		}
+		for _, p := range proxies {
+			appendProxy(p, listener.Name)
 		}
 	}
+
+	// Parity with Clash/v2ray subscriptions: remote mirrors + external links.
+	if mirrors, mErr := loadBoundRemoteMirrors(db, pu.ID); mErr == nil && len(mirrors) > 0 {
+		var remoteProxies []map[string]interface{}
+		remoteProxies, _ = appendRemoteProxyMaps(mirrors, remoteProxies, nil)
+		for _, p := range remoteProxies {
+			name, _ := p["name"].(string)
+			if name == "" {
+				name = "remote"
+			}
+			appendProxy(p, name)
+		}
+	}
+	if strings.TrimSpace(pu.ExternalLinks) != "" {
+		var ext []map[string]interface{}
+		ext, _ = mergeExternalSubscriptionLinks(pu.ExternalLinks, ext, nil)
+		for _, p := range ext {
+			name, _ := p["name"].(string)
+			if name == "" {
+				name = "external"
+			}
+			appendProxy(p, name)
+		}
+	}
+
 	if len(outbounds) == 0 || len(tagNames) == 0 {
 		if len(skipped) > 0 {
 			return nil, fmt.Errorf("no exportable sing-box outbounds for user (%s)", strings.Join(skipped, "; "))
@@ -223,7 +272,11 @@ func mihomoProxyToSingbox(p map[string]interface{}) (map[string]interface{}, str
 	case "trojan":
 		ob["password"] = p["password"]
 	case "hysteria2":
-		ob["password"] = p["password"]
+		if pw := firstString(p["password"], p["auth"]); pw != "" {
+			ob["password"] = pw
+		} else if p["password"] != nil {
+			ob["password"] = p["password"]
+		}
 		if up, ok := p["up"].(string); ok {
 			if n := parseMbps(up); n > 0 {
 				ob["up_mbps"] = n
@@ -426,14 +479,28 @@ func toInt(v interface{}) int {
 	switch n := v.(type) {
 	case int:
 		return n
+	case int32:
+		return int(n)
 	case int64:
 		return int(n)
 	case float64:
 		return int(n)
+	case float32:
+		return int(n)
 	case string:
 		var x int
-		fmt.Sscanf(n, "%d", &x)
+		fmt.Sscanf(strings.TrimSpace(n), "%d", &x)
 		return x
+	case json.Number:
+		i, err := n.Int64()
+		if err == nil {
+			return int(i)
+		}
+		f, err := n.Float64()
+		if err == nil {
+			return int(f)
+		}
+		return 0
 	default:
 		return 0
 	}
