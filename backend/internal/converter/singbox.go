@@ -179,6 +179,11 @@ func defaultSingboxRouteRules() []map[string]interface{} {
 			"action":        "route",
 			"outbound":      "direct",
 		},
+		{
+			"ip_cidr":  defaultSingboxCNIPCIDRs(),
+			"action":   "route",
+			"outbound": "direct",
+		},
 	}
 }
 
