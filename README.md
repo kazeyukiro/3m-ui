@@ -8,7 +8,7 @@
 
 **Mihomo 服务端 Web 管理面板**
 
-> **稳定版优先：** 默认安装和更新只使用正式 Release。预发布需要主动选择。完整安装包及 Docker 镜像包含固定版本的 Mihomo；详见 [安装、升级与恢复](docs/installation.md)。
+> **稳定版优先：** 默认安装和更新只使用正式 Release。预发布需要主动选择。完整安装包及 Docker 镜像包含固定版本的 Mihomo；详见 [安装、升级与恢复](https://3m-ui.top/docs/guide/install)。
 
 轻量、自托管，用于在 Linux 上管理 [Mihomo](https://github.com/MetaCubeX/mihomo) Listener、用户、订阅与运行状态。
 
@@ -36,14 +36,14 @@
 
 ### 补充说明（用户限制 / 证书 / 订阅）
 
-- [用户限制：IP · 订阅拉取](docs/users-limits.md)
-- [按节点流量与倍率](docs/node-traffic.md)
-- [面板 SSL / ACME（HTTP-01、DNS-01 通配符）](docs/panel-ssl.md)
-- [批量应用节点证书](docs/batch-certificate.md)
-- [订阅格式与 target](docs/subscription-formats.md)
-- [多机节点 / 推送](docs/cluster.md)
-- [路由（客户端订阅 + 服务端出站）](docs/routing.md)
-- [Cloudflare WARP](docs/warp.md)
+- [用户限制：IP · 订阅拉取](https://3m-ui.top/docs/guide/users-limits)
+- [按节点流量与倍率](https://3m-ui.top/docs/guide/node-traffic)
+- [面板 SSL / ACME（HTTP-01、DNS-01 通配符）](https://3m-ui.top/docs/guide/ssl-cert)
+- [批量应用节点证书](https://3m-ui.top/docs/guide/batch-certificate)
+- [订阅格式与 target](https://3m-ui.top/docs/guide/subscription-formats)
+- [多机节点 / 推送](https://3m-ui.top/docs/guide/cluster)
+- [路由（客户端订阅 + 服务端出站）](https://3m-ui.top/docs/guide/routing)
+- [Cloudflare WARP](https://3m-ui.top/docs/guide/warp)
 
 前端：**React + Ant Design + Lucide Icons**（`frontend/`），构建后嵌入单一 Go 二进制。
 
@@ -59,7 +59,7 @@
 curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
 ```
 
-完整安装支持 Linux amd64 / arm64，自动安装面板、配套 Mihomo 和系统服务。首次配置和管理员密码由程序统一生成；配置已存在时保持原值。其他架构可使用独立二进制和自行准备的内核，见 [详细安装说明](docs/installation.md)。
+完整安装支持 Linux amd64 / arm64，自动安装面板、配套 Mihomo 和系统服务。首次配置和管理员密码由程序统一生成；配置已存在时保持原值。其他架构可使用独立二进制和自行准备的内核，见 [详细安装说明](https://3m-ui.top/docs/guide/install)。
 
 安装完成后：
 
@@ -116,7 +116,7 @@ docker compose up -d
 docker compose logs 3m-ui
 ```
 
-镜像为 `ghcr.io/kazeyukiro/3m-ui:latest`，包含面板及固定版本的 Mihomo；`latest` 只跟随稳定版。配置、随机密钥和管理员会自动初始化，首次密码只在首次启动输出一次。默认 host 网络，新增节点后放行实际使用的 TCP/UDP 端口。另提供 `docker-compose.bridge.yml`，以及版本固定、证书配置和持久化恢复说明，见 [安装文档](docs/installation.md)。
+镜像为 `ghcr.io/kazeyukiro/3m-ui:latest`，包含面板及固定版本的 Mihomo；`latest` 只跟随稳定版。配置、随机密钥和管理员会自动初始化，首次密码只在首次启动输出一次。默认 host 网络，新增节点后放行实际使用的 TCP/UDP 端口。另提供 `docker-compose.bridge.yml`，以及版本固定、证书配置和持久化恢复说明，见 [安装文档](https://3m-ui.top/docs/guide/install)。
 
 ---
 
