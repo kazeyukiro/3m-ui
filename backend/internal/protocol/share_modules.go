@@ -12,7 +12,6 @@ import (
 	"golang.org/x/crypto/curve25519"
 	"gopkg.in/yaml.v3"
 
-	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/export"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
@@ -897,7 +896,7 @@ func resolveShareTLS(in ShareInput, configuredSNI, host string, explicitSkip boo
 	}
 	// Rebuild a minimal listener view so export.BuildProfile owns certstore + path PEM.
 	l := models.Listener{
-		ID:                in.Node.ID,
+		BaseModel:         models.BaseModel{ID: in.Node.ID},
 		PublicHost:        in.Node.PublicHost,
 		PublicPort:        in.Node.PublicPort,
 		Port:              in.Node.Port,

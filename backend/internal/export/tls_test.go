@@ -43,7 +43,7 @@ func TestBuildProfileFromConfigEmitsIPSNI(t *testing.T) {
 	ip := "85.149.212.214"
 	pem := testIPCertPEM(t, ip)
 	l := models.Listener{
-		ID:        1,
+		BaseModel: models.BaseModel{ID: 1},
 		AccessSNI: "www.bing.com", // must NOT win over IP SAN
 		Port:      "43829",
 	}

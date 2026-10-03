@@ -1031,7 +1031,7 @@ func applyClientSkipCertVerify(p, opts map[string]interface{}, connectHost strin
 			break
 		}
 	}
-	l := models.Listener{ID: listenerID}
+	l := models.Listener{BaseModel: models.BaseModel{ID: listenerID}}
 	profile := export.BuildProfileFromConfig(l, connectHost, cfg)
 	if profile.SkipCert {
 		p["skip-cert-verify"] = true
