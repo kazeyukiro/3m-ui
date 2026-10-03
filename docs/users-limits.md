@@ -1,42 +1,8 @@
-# User limits: IP and subscription pulls
+# 用户限制
 
-Panel fields on each **ProxyUser** (Users page / API).
+> 本文已迁移至官方文档站（中英双语）。
 
-## IP limit (`ip_limit`)
+- 中文：<https://3m-ui.top/docs/guide/users-limits>
+- English: <https://3m-ui.top/docs/en/guide/users-limits>
 
-| Value | Meaning |
-|-------|---------|
-| `0` | Unlimited concurrent source IPs |
-| `N ≥ 1` | At most **N** distinct client source IPs online at once |
-
-**How it works:** the traffic collector polls Mihomo connections about every **5 seconds**. Connections that cannot be attributed to a user are ignored. When a user exceeds `N` source IPs, excess IPs’ connections are closed (not blocked at handshake time).
-
-## Subscription pull limit (`sub_pull_limit`)
-
-| Value | Meaning |
-|-------|---------|
-| `0` | Unlimited successful subscription fetches |
-| `N ≥ 1` | At most **N** successful pulls per **rolling 24 hours** |
-
-Exceeded → **HTTP 429** with `Retry-After` and JSON `error: subscription pull limit reached (per 24h)`.
-
-HTML subscription pages and client downloads both count.
-
-## Related APIs
-
-- User CRUD: `ip_limit`, `sub_pull_limit` on create/update
-- Subscription: public `/api/v1/client/sub/{token}` (and aliases)
-
-## Related
-
-- [Per-node traffic & multiplier](node-traffic.md)
-
-## Quick create (one-click)
-
-Panel **Users → Quick create** (or `POST /api/v1/users/quick`):
-
-- Username optional (`u` + random if empty)
-- Password and UUID auto-generated; returned **once** in the response / UI dialog
-- Optional **bind all local nodes**
-
-Full form create remains `POST /api/v1/users`. OpenAPI: `GET /api/v1/openapi.yaml`.
+多语言项目介绍仍见 [`docs/readme/`](./readme/)。

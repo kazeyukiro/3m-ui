@@ -1,29 +1,8 @@
-# Batch apply TLS certificate to nodes
+# 批量应用节点证书
 
-Apply one certificate + private key to many listeners in a single request (Users → Nodes: select rows → **Apply cert**).
+> 本文已迁移至官方文档站（中英双语）。
 
-## API
+- 中文：<https://3m-ui.top/docs/guide/batch-certificate>
+- English: <https://3m-ui.top/docs/en/guide/batch-certificate>
 
-`POST /api/v1/nodes/batch/certificate` (admin JWT)
-
-```json
-{
-  "ids": [1, 2, 3],
-  "certificate": "-----BEGIN CERTIFICATE-----...",
-  "private_key": "-----BEGIN PRIVATE KEY-----...",
-  "cert_file": "/etc/letsencrypt/live/example.com/fullchain.pem",
-  "key_file": "/etc/letsencrypt/live/example.com/privkey.pem",
-  "from_panel_ssl": false
-}
-```
-
-Provide **either** PEM strings, **or** both file paths (allowlisted directories such as `/etc/letsencrypt/`, `/var/lib/3m-ui/`), **or** `from_panel_ssl: true` (panel SSL manual `cert_file` / `key_file`).
-
-Response: `{ "updated": [1, 2], "failed": [{ "id": 3, "name": "...", "error": "..." }] }`.
-
-Writes `certificate` and `private-key` into each listener’s config JSON and schedules a Mihomo reload. Protocols that reject certificate mode (e.g. pure Reality) appear under `failed`.
-
-## Panel SSL
-
-See [Panel SSL / ACME](./panel-ssl.md) for HTTP-01, DNS-01 wildcards (`*.example.com` + Cloudflare), IP certs, and manual PEMs.
-
+多语言项目介绍仍见 [`docs/readme/`](./readme/)。

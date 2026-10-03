@@ -1,20 +1,8 @@
-# Subscription formats
+# 订阅格式与 target
 
-Public token URL (path may use `web_path` / custom sub base):
+> 本文已迁移至官方文档站（中英双语）。
 
-`/api/v1/client/sub/{token}` or configured subscription base + token.
+- 中文：<https://3m-ui.top/docs/guide/subscription-formats>
+- English: <https://3m-ui.top/docs/en/guide/subscription-formats>
 
-## `?target=`
-
-| target | Body |
-|--------|------|
-| *(empty / clash / default)* | Mihomo / Clash Meta YAML |
-| `v2ray` / `base64` | **Always** standard Base64 of newline-separated share links (`vless://`, `vmess://`, `tuic://`, …). Independent of HTML page “encrypt URI list”. |
-| `uri` / `raw` | Same links; may be plaintext when encrypt is off |
-| `singbox` / `sing-box` | sing-box JSON with default **TUN** (no `stack`, `address` only) + **DNS** (typed servers, no legacy address filters) + `route.rules` sniff/hijack-dns + private→direct + `route.final=proxy` (aligned with sing-box migration 1.11–1.15) (SFI/SFM) and node outbounds |
-
-UA auto-detection may choose Clash vs v2ray-style when `target` is omitted.
-
-## TUIC / Hysteria2 share links
-
-Exported URIs include client-oriented params (`sni`, `alpn`, `congestion_control`, `allow_insecure` / `allowInsecure`, etc.). Classic v2rayNG may list `tuic://` but not dial QUIC; prefer Clash Meta / NekoBox / Hiddify for those protocols.
+多语言项目介绍仍见 [`docs/readme/`](./readme/)。
