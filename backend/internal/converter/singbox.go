@@ -187,33 +187,6 @@ func defaultSingboxRouteRules() []map[string]interface{} {
 	}
 }
 
-// defaultSingboxCNDomainSuffixes is an offline CN-direct list (no network).
-func defaultSingboxCNDomainSuffixes() []string {
-	return []string{
-		"cn",
-		"baidu.com", "qq.com", "weixin.qq.com", "gtimg.com", "qpic.cn",
-		"aliyun.com", "alipay.com", "taobao.com", "tmall.com", "alicdn.com",
-		"jd.com", "360buyimg.com",
-		"bilibili.com", "hdslb.com",
-		"zhihu.com", "zhimg.com",
-		"weibo.com", "sina.com.cn", "sinaimg.cn",
-		"163.com", "126.net", "netease.com",
-		"iqiyi.com", "youku.com",
-		"douyin.com", "bytedance.com", "byteimg.com",
-		"mi.com", "xiaomi.com", "miui.com",
-		"huawei.com", "hicloud.com",
-		"csdn.net", "gitee.com",
-		"meituan.com", "dianping.com",
-		"ctrip.com", "12306.cn",
-		"gov.cn", "edu.cn",
-		"tencent.com",
-		"apple.com.cn", "icloud.com.cn",
-		"pinduoduo.com", "yangkeduo.com",
-		"ele.me", "amap.com", "autonavi.com",
-		"kuaishou.com",
-	}
-}
-
 // defaultSingboxDNS uses the post-1.12 server object format (type/tag/server)
 // and avoids deprecated DNS rule address filters (ip_is_private / ip_cidr without
 // match_response — removed path in 1.16). Private destinations are handled by
