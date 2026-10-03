@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
@@ -12,6 +13,9 @@ import (
 // ClientURIsWithCredentials bridges node URI export with the canonical
 // credential service. Listener.Config is server configuration and is not the
 // source of truth for users managed by 3m-ui.
+//
+// Critical: never write an empty users/password blob over Config — that wiped
+// HY2/AnyTLS passwords and made whole protocols vanish from subscriptions.
 func ClientURIsWithCredentials(listener models.Listener, host string, credentials []user.Credential) ([]string, error) {
 	var cfg map[string]interface{}
 	if listener.Config != "" {
@@ -22,18 +26,16 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 	if cfg == nil {
 		cfg = map[string]interface{}{}
 	}
-	// Prefer panel credentials; merge server-side flow for Vision when present.
 	flow, _ := cfg["flow"].(string)
-	proto := listener.Protocol
+	proto := strings.ToLower(strings.TrimSpace(listener.Protocol))
+
 	if len(credentials) > 0 {
 		switch proto {
 		case "tuic", "tuic-v4", "tuic-v5":
-			// v4 auth is token[]; keep existing token from config when present.
-			// v5 uses users map UUID→password (wiki proxies/tuic).
 			hasToken := false
 			switch tok := cfg["token"].(type) {
 			case string:
-				hasToken = tok != ""
+				hasToken = strings.TrimSpace(tok) != ""
 			case []interface{}:
 				hasToken = len(tok) > 0
 			case []string:
@@ -44,9 +46,9 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 			} else {
 				users := make(map[string]interface{}, len(credentials))
 				for _, credential := range credentials {
-					key := credential.UUID
+					key := strings.TrimSpace(credential.UUID)
 					if key == "" {
-						key = credential.Username
+						key = strings.TrimSpace(credential.Username)
 					}
 					if key != "" {
 						users[key] = credential.Password
@@ -56,33 +58,71 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 					cfg["users"] = users
 				}
 			}
+
 		case "anytls", "hysteria2", "mieru":
+			// Map auth: username→password. Fall back to UUID as map key when
+			// username is empty (panel often stores password under UUID-only users).
 			users := make(map[string]interface{}, len(credentials))
+			var singlePass string
 			for _, credential := range credentials {
-				if credential.Username != "" {
-					users[credential.Username] = credential.Password
+				key := strings.TrimSpace(credential.Username)
+				if key == "" {
+					key = strings.TrimSpace(credential.UUID)
+				}
+				pass := credential.Password
+				if key != "" {
+					users[key] = pass
+				} else if pass != "" {
+					singlePass = pass
 				}
 			}
-			cfg["users"] = users
+			if len(users) > 0 {
+				cfg["users"] = users
+			} else if singlePass != "" {
+				// Password-only HY2-style listeners.
+				cfg["password"] = singlePass
+			}
+			// If neither produced anything, leave Config users untouched.
+
+		case "shadowsocks", "snell", "sudoku":
+			if credentials[0].Password != "" {
+				cfg["password"] = credentials[0].Password
+			}
+			if proto == "snell" && credentials[0].Password != "" {
+				cfg["psk"] = credentials[0].Password
+			}
+			if proto == "sudoku" && credentials[0].Password != "" {
+				cfg["key"] = credentials[0].Password
+			}
+
 		default:
+			// VLESS / VMess / Trojan / ShadowQUIC / TrustTunnel: array users.
 			users := make([]interface{}, 0, len(credentials))
 			for _, credential := range credentials {
-				row := map[string]interface{}{"username": credential.Username, "password": credential.Password, "uuid": credential.UUID}
-				// The listener-level flow is only meaningful on a raw/TCP
-				// transport; copying it onto users of a ws/grpc/xhttp listener
-				// reintroduces the value the form was supposed to have dropped.
+				row := map[string]interface{}{
+					"username": credential.Username,
+					"password": credential.Password,
+					"uuid":     credential.UUID,
+				}
 				if flow != "" && protocol.TransportCarriesFlow(cfg) &&
-					(listener.Protocol == "vless" || listener.Protocol == "vmess") {
+					(proto == "vless" || proto == "vmess") {
 					row["flow"] = flow
+				}
+				// Skip completely empty rows so we never replace a working
+				// Config users array with blank panel placeholders.
+				if strings.TrimSpace(credential.UUID) == "" &&
+					strings.TrimSpace(credential.Username) == "" &&
+					strings.TrimSpace(credential.Password) == "" {
+					continue
 				}
 				users = append(users, row)
 			}
-			cfg["users"] = users
-		}
-		if listener.Protocol == "shadowsocks" {
-			cfg["password"] = credentials[0].Password
+			if len(users) > 0 {
+				cfg["users"] = users
+			}
 		}
 	}
+
 	encoded, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare URI configuration: %w", err)

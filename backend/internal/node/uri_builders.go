@@ -387,7 +387,22 @@ func hysteria2URIs(name, host, port string, cfg map[string]interface{}) ([]strin
 	}
 	users := userMap(cfg)
 	if len(users) == 0 {
-		return nil, fmt.Errorf("hysteria2 listener requires at least one user for URI export")
+		// Single password / auth string (common for panel-managed HY2).
+		pass := ""
+		if v, ok := cfg["password"].(string); ok {
+			pass = strings.TrimSpace(v)
+		}
+		if pass == "" {
+			if v, ok := cfg["auth"].(string); ok {
+				pass = strings.TrimSpace(v)
+			}
+		}
+		if pass != "" {
+			users = map[string]interface{}{"": pass}
+		}
+	}
+	if len(users) == 0 {
+		return nil, fmt.Errorf("hysteria2 listener requires at least one user/password for URI export")
 	}
 	result := make([]string, 0, len(users))
 	for username, raw := range users {
