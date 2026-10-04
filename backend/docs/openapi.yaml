@@ -907,10 +907,23 @@ paths:
   /mihomo/logs:
     get:
       tags: [mihomo]
-      summary: Recent core logs
+      summary: Recent Mihomo core logs
+      description: |
+        In-memory ring of Mihomo process stdout/stderr lines only.
+        Panel process logs (ACME, bootstrap, errors) are **not** included;
+        use `GET /system/panel-logs` instead. The web UI Logs page shows
+        the two streams on separate tabs.
+      security:
+        - bearerAuth: []
       responses:
         "200":
-          description: Log lines
+          description: Array of log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEntry'
 
   /config:
     get:
@@ -962,6 +975,25 @@ paths:
       responses:
         "200":
           description: CPU/mem/disk
+  /system/panel-logs:
+    get:
+      tags: [system]
+      summary: Recent panel process logs
+      description: |
+        In-memory ring of panel stdlib `log` output (ACME renew, startup,
+        errors), tagged with `[panel]` in the payload. Separate from
+        Mihomo core logs (`GET /mihomo/logs`). Requires admin JWT.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEntry'
   /system/panel-server:
     get:
       tags: [system]
@@ -1162,7 +1194,7 @@ paths:
       tags: [system]
       summary: Panel SSL settings
       description: |
-        Returns panel SSL configuration. `dns_token` is never echoed (use
+        Returns panel SSL configuration including `domain_note` / `ip_note` (auto-renew windows: domain <15d, IP <48h; check every 6h). `dns_token` is never echoed (use
         `/system/ssl/status` → `has_dns_token`). Modes include HTTP-01 autocert,
         DNS-01 wildcard (Cloudflare), IP shortlived certs, and manual PEMs.
       responses:
@@ -1259,6 +1291,19 @@ components:
         cpu_percent: { type: number, format: float, description: 0–100 process CPU }
         memory_used: { type: number, format: float, description: RSS bytes }
         memory_percent: { type: number, format: float, description: 0–100 of system RAM }
+    LogEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        level:
+          type: string
+          description: debug|info|warning|error
+          example: info
+        payload:
+          type: string
+          description: Log line body (panel lines may start with [panel])
     ProxyUser:
       type: object
       description: Safe proxy-user view (no password/uuid secrets)
