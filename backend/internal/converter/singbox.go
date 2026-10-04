@@ -247,13 +247,14 @@ func defaultSingboxRouteRules() []map[string]interface{} {
 
 func defaultSingboxTUNInbound() map[string]interface{} {
 	return map[string]interface{}{
-		"type":         "tun",
-		"tag":          "tun-in",
-		"address":      []string{"172.19.0.1/30"},
-		"mtu":          9000,
-		"auto_route":   true,
-		"strict_route": true,
-		"dns_mode":     "hijack",
+		"type":           "tun",
+		"tag":            "tun-in",
+		"interface_name": "singbox_tun",
+		"address":        []string{"172.19.0.1/30"},
+		"mtu":            9000,
+		"auto_route":     true,
+		"strict_route":   true,
+		"dns_mode":       "hijack",
 	}
 }
 

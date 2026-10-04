@@ -38,8 +38,8 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 		t.Fatalf("dns_mode: %#v", first["dns_mode"])
 	}
 	dns, ok := parsed["dns"].(map[string]interface{})
-	if !ok || dns["final"] != "remote" {
-		t.Fatalf("dns: %#v", parsed["dns"])
+	if !ok || dns["final"] != "google" {
+		t.Fatalf("dns final want google: %#v", parsed["dns"])
 	}
 	// 1.14+: DNS rules must not use legacy address filters without match_response.
 	if rules, ok := dns["rules"].([]interface{}); ok {
@@ -58,6 +58,9 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	}
 	if _, ok := route["default_domain_resolver"]; !ok {
 		t.Fatalf("missing default_domain_resolver: %#v", route)
+	}
+	if _, ok := parsed["http_clients"]; !ok {
+		t.Fatalf("missing http_clients")
 	}
 	if first["auto_route"] != true {
 		t.Fatalf("auto_route: %#v", first["auto_route"])
