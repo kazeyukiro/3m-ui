@@ -14,13 +14,12 @@ import (
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
-	"golang.org/x/crypto/acme/autocert"
 	"gorm.io/gorm"
 )
 
 const settingKey = "panel_ssl"
 
-// Settings controls panel HTTPS via Let's Encrypt (autocert) or manual cert files.
+// Settings controls panel HTTPS via Let's Encrypt (acmez) or manual cert files.
 type Settings struct {
 	Enabled     bool   `json:"enabled"`
 	Domain      string `json:"domain"`
@@ -133,13 +132,13 @@ func SaveSettings(db *gorm.DB, s Settings) error {
 	return db.Save(&row).Error
 }
 
-// Manager wraps autocert or manual TLS for the panel listener.
+// Manager wraps acmez issuers or manual TLS for the panel listener.
 type Manager struct {
-	mu        sync.Mutex
-	settings  Settings
-	manager   *autocert.Manager
-	ipIssuer  *ipIssuer
-	dnsIssuer *dnsIssuer
+	mu         sync.Mutex
+	settings   Settings
+	domainHTTP *domainHTTPIssuer
+	ipIssuer   *ipIssuer
+	dnsIssuer  *dnsIssuer
 }
 
 func NewManager(s Settings) (*Manager, error) {
@@ -156,7 +155,7 @@ func NewManager(s Settings) (*Manager, error) {
 func (m *Manager) configure() error {
 	s := m.settings
 	if s.CertFile != "" && s.KeyFile != "" {
-		// Manual PEM pair — no autocert. Restrict to allowlisted directories so
+		// Manual PEM pair — no acmez. Restrict to allowlisted directories so
 		// the loader cannot be pointed at arbitrary sensitive files.
 		if !isAllowedCertKeyPath(s.CertFile) || !isAllowedCertKeyPath(s.KeyFile) {
 			return fmt.Errorf("panel SSL: cert_file/key_file must be under an allowed directory")
@@ -171,7 +170,10 @@ func (m *Manager) configure() error {
 		m.dnsIssuer.Close()
 		m.dnsIssuer = nil
 	}
-	m.manager = nil
+	if m.domainHTTP != nil {
+		m.domainHTTP.Close()
+		m.domainHTTP = nil
+	}
 	if s.Domain == "" {
 		return fmt.Errorf("panel SSL: domain or public IP is required for Let's Encrypt")
 	}
@@ -200,13 +202,11 @@ func (m *Manager) configure() error {
 	if IsWildcardDomain(s.Domain) {
 		return fmt.Errorf("panel SSL: wildcard domains require DNS-01 (set challenge=dns-01 and a DNS API token)")
 	}
-	hostPolicy := autocert.HostWhitelist(s.Domain)
-	m.manager = &autocert.Manager{
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: hostPolicy,
-		Cache:      autocert.DirCache(s.CacheDir),
-		Email:      s.Email,
+	iss, err := newDomainHTTPIssuer(s.Domain, s.Email, s.CacheDir)
+	if err != nil {
+		return err
 	}
+	m.domainHTTP = iss
 	return nil
 }
 
@@ -224,72 +224,62 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 		}
 		cert, err := tls.LoadX509KeyPair(s.CertFile, s.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("load manual cert: %w", err)
+			return nil, fmt.Errorf("panel SSL: load cert: %w", err)
 		}
-		return &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS12,
-		}, nil
+		return &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}, nil
 	}
 	if m.ipIssuer != nil {
-		cert := m.ipIssuer.certificate()
-		if cert == nil {
-			return nil, fmt.Errorf("panel SSL: IP certificate not ready for %s", s.Domain)
-		}
 		return &tls.Config{
-			Certificates: []tls.Certificate{*cert},
-			MinVersion:   tls.VersionTLS12,
-			NextProtos:   []string{"h2", "http/1.1", "acme-tls/1"},
-			GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				for _, p := range hello.SupportedProtos {
-					if p == "acme-tls/1" {
-						if c := m.ipIssuer.alpnChallengeCert(); c != nil {
-							return c, nil
-						}
-						return nil, fmt.Errorf("panel SSL: no TLS-ALPN-01 challenge cert")
-					}
-				}
-				c := m.ipIssuer.certificate()
-				if c == nil {
-					return nil, fmt.Errorf("panel SSL: IP certificate missing")
-				}
-				return c, nil
-			},
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: m.ipIssuer.GetCertificate,
 		}, nil
 	}
 	if m.dnsIssuer != nil {
 		return &tls.Config{
 			MinVersion:     tls.VersionTLS12,
-			NextProtos:     []string{"h2", "http/1.1"},
 			GetCertificate: m.dnsIssuer.GetCertificate,
 		}, nil
 	}
-	if m.manager == nil {
-		if err := m.configure(); err != nil {
-			return nil, err
-		}
-		if m.ipIssuer != nil {
-			cert := m.ipIssuer.certificate()
-			if cert == nil {
-				return nil, fmt.Errorf("panel SSL: IP certificate not ready")
-			}
-			return &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}, nil
-		}
+	if m.domainHTTP != nil {
+		return &tls.Config{
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: m.domainHTTP.GetCertificate,
+		}, nil
 	}
-	return m.manager.TLSConfig(), nil
+	if err := m.configure(); err != nil {
+		return nil, err
+	}
+	if m.ipIssuer != nil {
+		return &tls.Config{
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: m.ipIssuer.GetCertificate,
+		}, nil
+	}
+	if m.dnsIssuer != nil {
+		return &tls.Config{
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: m.dnsIssuer.GetCertificate,
+		}, nil
+	}
+	if m.domainHTTP != nil {
+		return &tls.Config{
+			MinVersion:     tls.VersionTLS12,
+			GetCertificate: m.domainHTTP.GetCertificate,
+		}, nil
+	}
+	return nil, fmt.Errorf("panel SSL: no certificate issuer configured")
 }
 
-// HTTPHandler returns the ACME HTTP-01 challenge handler.
 func (m *Manager) HTTPHandler(fallback http.Handler) http.Handler {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.ipIssuer != nil {
 		return m.ipIssuer.httpHandler(fallback)
 	}
-	if m.manager == nil {
-		return fallback
+	if m.domainHTTP != nil {
+		return m.domainHTTP.httpHandler(fallback)
 	}
-	return m.manager.HTTPHandler(fallback)
+	return fallback
 }
 
 // MarkChallengeBound tells the IP issuer permanent :80/:443 answer ACME challenges.
@@ -311,7 +301,18 @@ func (m *Manager) Update(s Settings) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.settings = s
-	m.manager = nil
+	if m.domainHTTP != nil {
+		m.domainHTTP.Close()
+		m.domainHTTP = nil
+	}
+	if m.ipIssuer != nil {
+		m.ipIssuer.close()
+		m.ipIssuer = nil
+	}
+	if m.dnsIssuer != nil {
+		m.dnsIssuer.Close()
+		m.dnsIssuer = nil
+	}
 	if !s.Enabled {
 		return nil
 	}
@@ -344,10 +345,11 @@ func Status(db *gorm.DB) map[string]interface{} {
 		"is_ip":         IsIPHost(s.Domain),
 		"is_wildcard":   IsWildcardDomain(s.Domain),
 		"has_cache":     hasCache,
-		"cert_path":     filepath.Join(s.CacheDir, s.Domain),
+		"cert_path":     domainCertPath(s),
 		"ip_profile":    ipCertProfile,
 		"ip_note":       "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
 		"dns_note":      "Wildcard (*.example.com) and DNS-01 need a DNS API token (Cloudflare Zone.DNS Edit). Apex is included on wildcard certs.",
+		"engine":        "acmez",
 	}
 }
 
@@ -388,4 +390,22 @@ func LogHint(s Settings) {
 	}
 	log.Printf("panel SSL: Let's Encrypt for %s (HTTP %s → TLS %s, cache %s)",
 		s.Domain, s.ListenHTTP, s.ListenTLS, s.CacheDir)
+}
+
+func domainCertPath(s Settings) string {
+	if s.CertFile != "" {
+		return s.CertFile
+	}
+	d := strings.TrimSpace(s.Domain)
+	if d == "" {
+		return s.CacheDir
+	}
+	if IsIPHost(d) {
+		return filepath.Join(s.CacheDir, "ip-"+strings.ReplaceAll(normalizeIPHost(d), ":", "_")+"-cert.pem")
+	}
+	if NeedsDNS01(s) || IsWildcardDomain(d) {
+		safe := strings.ReplaceAll(d, "*", "_wildcard_")
+		return filepath.Join(s.CacheDir, "dns-"+safe+".crt")
+	}
+	return filepath.Join(s.CacheDir, "http-"+strings.ToLower(d)+".crt")
 }

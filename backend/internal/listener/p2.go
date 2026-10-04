@@ -394,7 +394,7 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 			// Try to read the IP certificate PEM files from the ACME cache dir.
 			// IP certs are stored as <cacheDir>/ip-<sanitized-ip>-cert.pem
 			// and <cacheDir>/ip-<sanitized-ip>-key.pem (standard PEM format).
-			// Domain ACME (autocert.DirCache) stores certs in Go binary format
+			// Domain ACME (panel PEM cache) stores certs in Go binary format
 			// (not PEM), so we can't extract PEM from there — fall through to
 			// the "paste PEM" error below.
 			if st.CacheDir != "" && st.Domain != "" {
@@ -408,9 +408,9 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 				}
 			}
 			if certFile == "" || keyFile == "" {
-				// Try autocert DirCache: the file <cacheDir>/<domain>
+				// Try panel ACME cache: the file <cacheDir>/<domain>
 				// contains a PEM block with PRIVATE KEY + CERTIFICATE
-				// concatenated (autocert cacheGet format). Read it
+				// concatenated (ACME cache format). Read it
 				// and split into separate cert/key PEM.
 				if st.CacheDir != "" && st.Domain != "" {
 					autocertCachePath := filepath.Join(st.CacheDir, st.Domain)
