@@ -229,9 +229,28 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 		return &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}, nil
 	}
 	if m.ipIssuer != nil {
+		cert := m.ipIssuer.certificate()
+		if cert == nil {
+			return nil, fmt.Errorf("panel SSL: IP certificate not ready for %s", s.Domain)
+		}
 		return &tls.Config{
-			MinVersion:     tls.VersionTLS12,
-			GetCertificate: m.ipIssuer.GetCertificate,
+			MinVersion: tls.VersionTLS12,
+			GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				if hello != nil {
+					for _, p := range hello.SupportedProtos {
+						if p == "acme-tls/1" {
+							if c := m.ipIssuer.alpnChallengeCert(); c != nil {
+								return c, nil
+							}
+						}
+					}
+				}
+				c := m.ipIssuer.certificate()
+				if c == nil {
+					return nil, fmt.Errorf("panel SSL: IP certificate missing")
+				}
+				return c, nil
+			},
 		}, nil
 	}
 	if m.dnsIssuer != nil {
@@ -249,10 +268,30 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 	if err := m.configure(); err != nil {
 		return nil, err
 	}
+	// Retry after configure (same branches).
 	if m.ipIssuer != nil {
+		cert := m.ipIssuer.certificate()
+		if cert == nil {
+			return nil, fmt.Errorf("panel SSL: IP certificate not ready")
+		}
 		return &tls.Config{
-			MinVersion:     tls.VersionTLS12,
-			GetCertificate: m.ipIssuer.GetCertificate,
+			MinVersion: tls.VersionTLS12,
+			GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				if hello != nil {
+					for _, p := range hello.SupportedProtos {
+						if p == "acme-tls/1" {
+							if c := m.ipIssuer.alpnChallengeCert(); c != nil {
+								return c, nil
+							}
+						}
+					}
+				}
+				c := m.ipIssuer.certificate()
+				if c == nil {
+					return nil, fmt.Errorf("panel SSL: IP certificate missing")
+				}
+				return c, nil
+			},
 		}, nil
 	}
 	if m.dnsIssuer != nil {
@@ -347,8 +386,8 @@ func Status(db *gorm.DB) map[string]interface{} {
 		"has_cache":     hasCache,
 		"cert_path":     domainCertPath(s),
 		"ip_profile":    ipCertProfile,
-		"ip_note":       "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain (checked every 6h). Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
-		"domain_note":   "Domain HTTP-01/DNS-01 certs auto-renew when fewer than 15 days remain (checked every 6h). Engine: acmez.",
+		"ip_note":       "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
+		"domain_note":   "Domain HTTP-01/DNS-01 certs auto-renew when fewer than 15 days remain (checked every 12h). Engine: acmez.",
 		"dns_note":      "Wildcard (*.example.com) and DNS-01 need a DNS API token (Cloudflare Zone.DNS Edit). Apex is included on wildcard certs.",
 		"engine":        "acmez",
 	}
