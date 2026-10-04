@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
-	"github.com/kazeyukiro/3m-ui/backend/internal/converter/ruleset"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
@@ -261,9 +260,6 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 	handler := subscriptionHandler(db, cfg)
 	api.GET("/client/sub/:token", handler)
 	api.GET("/client/sub/:token/", handler)
-	api.GET("/client/rule-set/cnsite.srs", serveSingboxRuleSet("cnsite"))
-	api.GET("/client/rule-set/cnip.srs", serveSingboxRuleSet("cnip"))
-	api.GET("/client/rule-set/gfw.srs", serveSingboxRuleSet("gfw"))
 	// Path-based formats (docs.sanaei.dev style /sub /json /clash).
 	api.GET("/client/json/:token", forcedTargetHandler(db, cfg, "singbox"))
 	api.GET("/client/json/:token/", forcedTargetHandler(db, cfg, "singbox"))
@@ -438,27 +434,4 @@ func requestScheme(c *gin.Context) string {
 		return "https"
 	}
 	return "http"
-}
-
-func serveSingboxRuleSet(name string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var body []byte
-		switch name {
-		case "cnsite":
-			body = ruleset.CNSite
-		case "cnip":
-			body = ruleset.CNIP
-		case "gfw":
-			body = ruleset.GFW
-		default:
-			c.Status(http.StatusNotFound)
-			return
-		}
-		if len(body) == 0 {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Header("Cache-Control", "public, max-age=86400")
-		c.Data(http.StatusOK, "application/octet-stream", body)
-	}
 }

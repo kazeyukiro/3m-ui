@@ -117,167 +117,134 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 	if len(skipped) > 0 {
 		log.Printf("sing-box subscription: skipped %d node(s) for user %s: %s", len(skipped), pu.Username, strings.Join(skipped, "; "))
 	}
-	// Tags match LongLights sing-box_v1.14 template: Default + Direct-Out.
+	// Outbounds: proxy selector + direct (CN/overseas split via remote rule-sets).
 	outbounds = append(outbounds,
-		map[string]interface{}{"type": "direct", "tag": "Direct-Out"},
+		map[string]interface{}{"type": "direct", "tag": "direct"},
 		map[string]interface{}{
 			"type":      "selector",
-			"tag":       "Default",
+			"tag":       "proxy",
 			"outbounds": append([]string{}, tagNames...),
 			"default":   tagNames[0],
 		},
 	)
-	ruleBase := singboxRuleSetBaseURL(req)
-	doc := buildSingboxSubscriptionDoc(outbounds, ruleBase)
+	doc := buildSingboxSubscriptionDoc(outbounds)
 	return json.MarshalIndent(doc, "", "  ")
 }
 
-// buildSingboxSubscriptionDoc follows LongLights sing-box_v1.14 template layout
-// for CN / overseas split (DNS + route + rule_set), with rule-sets hosted on
-// this panel so SFI does not depend on GitHub.
-// Ref: https://github.com/LongLights/sing-box_template_merge_sub-store/blob/main/sing-box_v1.14/singbox.json
-func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}, ruleBase string) map[string]interface{} {
-	doc := map[string]interface{}{
+// buildSingboxSubscriptionDoc follows wuziwei client sb-1.15 bridge template
+// for CN/overseas split, using jsDelivr remote rule-sets (no panel hosting).
+// Ref: https://github.com/wuziwei/sing-box-config-template (client sb-1.15 bridge)
+func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
 		"log": map[string]interface{}{
 			"level": "warn",
 		},
-		"dns":       defaultSingboxDNS(),
-		"inbounds":  []map[string]interface{}{defaultSingboxTUNInbound()},
+		"dns": defaultSingboxDNS(),
+		"inbounds": []map[string]interface{}{
+			defaultSingboxTUNInbound(),
+		},
 		"outbounds": outbounds,
 		"route": map[string]interface{}{
-			"rules":                 defaultSingboxRouteRules(),
-			"final":                 "Default",
-			"auto_detect_interface": true,
-			"default_domain_resolver": map[string]interface{}{
-				"server": "cn_dns",
-			},
+			"rules":                   defaultSingboxRouteRules(),
+			"rule_set":                defaultSingboxRemoteRuleSets(),
+			"final":                   "proxy",
+			"auto_detect_interface":   true,
+			"default_domain_resolver": "ali",
 		},
 	}
-	if ruleBase != "" {
-		doc["route"].(map[string]interface{})["rule_set"] = defaultSingboxCNRuleSets(ruleBase)
-	}
-	return doc
 }
 
-func singboxRuleSetBaseURL(req *http.Request) string {
-	if req == nil {
-		return ""
-	}
-	scheme := "http"
-	if req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https") {
-		scheme = "https"
-	}
-	host := strings.TrimSpace(req.Host)
-	if host == "" {
-		return ""
-	}
-	webPath := ""
-	if config.GlobalConfig != nil {
-		webPath = strings.TrimSuffix(config.GlobalConfig.Server.WebPath, "/")
-	}
-	return scheme + "://" + host + webPath + "/api/v1/client/rule-set"
-}
-
-// defaultSingboxCNRuleSets — cnsite / cnip / gfw (MetaCubeX meta-rules-dat, embedded).
-func defaultSingboxCNRuleSets(base string) []map[string]interface{} {
-	base = strings.TrimRight(base, "/")
+// defaultSingboxRemoteRuleSets — MetaCubeX geosite/geoip via jsDelivr (template style).
+func defaultSingboxRemoteRuleSets() []map[string]interface{} {
 	return []map[string]interface{}{
 		{
-			"tag":             "cnsite",
 			"type":            "remote",
-			"format":          "binary",
-			"url":             base + "/cnsite.srs",
-			"download_detour": "Direct-Out",
-			"update_interval": "24h",
+			"tag":             []string{"apple@cn", "microsoft@cn", "category-games@cn", "cn"},
+			"url":             "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/{tag}.srs",
+			"update_interval": "48h",
 		},
 		{
-			"tag":             "cnip",
 			"type":            "remote",
+			"tag":             "cn_ip",
 			"format":          "binary",
-			"url":             base + "/cnip.srs",
-			"download_detour": "Direct-Out",
-			"update_interval": "24h",
-		},
-		{
-			"tag":             "gfw",
-			"type":            "remote",
-			"format":          "binary",
-			"url":             base + "/gfw.srs",
-			"download_detour": "Direct-Out",
-			"update_interval": "24h",
+			"url":             "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+			"update_interval": "48h",
 		},
 	}
 }
 
-// defaultSingboxDNS mirrors the v1.14 template: CN domains → 119.29.29.29, GFW → DoH via proxy.
+// defaultSingboxDNS — CN domains → AliDNS; else Google DoH via proxy (template simplified).
 func defaultSingboxDNS() map[string]interface{} {
 	return map[string]interface{}{
 		"servers": []map[string]interface{}{
 			{
-				"tag":    "proxy_dns",
-				"type":   "https",
-				"server": "8.8.8.8",
-				"detour": "Default",
+				"type": "hosts",
+				"tag":  "hosts",
+				"predefined": map[string]interface{}{
+					"dns.alidns.com": []string{"223.5.5.5", "223.6.6.6"},
+					"dns.google":     []string{"8.8.8.8", "8.8.4.4"},
+				},
 			},
 			{
-				"tag":    "cn_dns",
-				"type":   "udp",
-				"server": "119.29.29.29",
+				"tag":             "google",
+				"type":            "https",
+				"server":          "dns.google",
+				"domain_resolver": "hosts",
+				"detour":          "proxy",
+			},
+			{
+				"tag":             "ali",
+				"type":            "https",
+				"server":          "dns.alidns.com",
+				"domain_resolver": "hosts",
 			},
 		},
 		"rules": []map[string]interface{}{
-			{"query_type": "AAAA", "action": "predefined", "rcode": "NOERROR"},
-			{"rule_set": "gfw", "action": "route", "server": "proxy_dns"},
-			{"domain_suffix": []string{"googleapis.cn"}, "server": "proxy_dns"},
 			{
-				"type":   "logical",
-				"mode":   "or",
-				"action": "route",
-				"rules": []map[string]interface{}{
-					{"rule_set": "cnsite"},
-				},
-				"server": "cn_dns",
+				"rule_set": []string{"apple@cn", "microsoft@cn", "category-games@cn", "cn"},
+				"action":   "route",
+				"server":   "ali",
 			},
-			{"action": "route", "server": "proxy_dns"},
+			{"action": "route", "server": "google"},
 		},
+		"final": "google",
 	}
 }
 
-// defaultSingboxRouteRules — simplified from the v1.14 template (CN/overseas core path).
-// Skips per-app selectors (Telegram/TikTok/…) that need empty groups in a bare sub.
+// defaultSingboxRouteRules — CN geosite/geoip → direct; rest → proxy (template core path).
 func defaultSingboxRouteRules() []map[string]interface{} {
 	return []map[string]interface{}{
-		{"network": "icmp", "action": "route", "outbound": "Direct-Out"},
-		{"action": "sniff"},
 		{
 			"type":   "logical",
 			"mode":   "or",
 			"action": "hijack-dns",
 			"rules": []map[string]interface{}{
-				{"protocol": "dns"},
 				{"port": 53},
+				{"protocol": "dns"},
 			},
 		},
-		{"ip_is_private": true, "action": "route", "outbound": "Direct-Out"},
-		{"protocol": "bittorrent", "action": "route", "outbound": "Direct-Out"},
-		{"domain_suffix": []string{"googleapis.cn"}, "action": "route", "outbound": "Default"},
-		{"rule_set": "gfw", "action": "route", "outbound": "Default"},
+		{"ip_is_private": true, "action": "route", "outbound": "direct"},
+		{"action": "sniff", "timeout": "100ms"},
+		{"domain_suffix": []string{"googleapis.cn"}, "action": "route", "outbound": "proxy"},
+		{
+			"rule_set": []string{"apple@cn", "microsoft@cn", "category-games@cn", "cn"},
+			"action":   "route",
+			"outbound": "direct",
+		},
 		{"action": "resolve"},
-		{"rule_set": "cnip", "action": "route", "outbound": "Direct-Out"},
+		{"rule_set": "cn_ip", "action": "route", "outbound": "direct"},
 	}
 }
 
-// defaultSingboxTUNInbound — TUN for SFI/SFM (compatible fields for 1.12+).
 func defaultSingboxTUNInbound() map[string]interface{} {
 	return map[string]interface{}{
-		"type":          "tun",
-		"tag":           "tun-in",
-		"address":       []string{"172.19.0.1/30"},
-		"mtu":           9000,
-		"auto_route":    true,
-		"strict_route":  true,
-		"auto_redirect": true,
-		"dns_mode":      "hijack",
+		"type":         "tun",
+		"tag":          "tun-in",
+		"address":      []string{"172.19.0.1/30"},
+		"mtu":          9000,
+		"auto_route":   true,
+		"strict_route": true,
+		"dns_mode":     "hijack",
 	}
 }
 
