@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,12 +12,16 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/bootstrap"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database"
+	"github.com/kazeyukiro/3m-ui/backend/internal/panellog"
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 )
 
 // main accepts both the installer-provided THREE_M_UI_CONFIG environment
 // variable and the documented --config/-c command-line option.
 func main() {
+	// Capture stdlib log into the panel UI log ring (also keep stderr/journald).
+	log.SetOutput(io.MultiWriter(os.Stderr, panellog.Writer{}))
+
 	args := os.Args[1:]
 	configPath := os.Getenv("THREE_M_UI_CONFIG")
 	var cmd string
