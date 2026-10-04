@@ -605,13 +605,15 @@ export default {
   },
   "logs": {
     "title": "Logs",
-    "subtitle": "Recent panel and core logs.",
+    "subtitle": "Mihomo core logs and panel process logs (separate).",
     "empty": "No logs",
     "level": "Level",
     "timestamp": "Time",
     "payload": "Payload",
     "autoRefresh": "Auto refresh",
-    "clear": "Clear"
+    "clear": "Clear",
+    "tabCore": "Mihomo",
+    "tabPanel": "Panel"
   },
   "config": {
     "title": "Config Engine",

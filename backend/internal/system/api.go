@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kazeyukiro/3m-ui/backend/internal/panellog"
 	"log"
 	"net/http"
 	"os"
@@ -60,6 +61,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/restart", h.RestartPanel)
 	rg.GET("/update-info", h.UpdateInfo)
 	rg.POST("/update", h.RunUpdate)
+	rg.GET("/panel-logs", h.GetPanelLogs)
 }
 
 func (h *Handler) GetSystemStatus(c *gin.Context) {
@@ -640,4 +642,47 @@ func (h *Handler) WARPDelete(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (h *Handler) GetPanelLogs(c *gin.Context) {
+	lines := panellog.Lines()
+	type logEntry struct {
+		Timestamp string `json:"timestamp"`
+		Level     string `json:"level"`
+		Payload   string `json:"payload"`
+	}
+	out := make([]logEntry, 0, len(lines))
+	for _, line := range lines {
+		ts, payload := parsePanelLogLine(line)
+		out = append(out, logEntry{
+			Timestamp: ts.UTC().Format(time.RFC3339),
+			Level:     panelLogLevel(payload),
+			Payload:   payload,
+		})
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func parsePanelLogLine(line string) (time.Time, string) {
+	idx := strings.IndexByte(line, ' ')
+	if idx < 20 {
+		return time.Now(), line
+	}
+	ts, err := time.Parse(time.RFC3339, line[:idx])
+	if err != nil {
+		return time.Now(), line
+	}
+	return ts, strings.TrimSpace(line[idx+1:])
+}
+
+func panelLogLevel(payload string) string {
+	u := strings.ToUpper(payload)
+	switch {
+	case strings.Contains(u, "ERROR"), strings.Contains(u, "FATAL"):
+		return "error"
+	case strings.Contains(u, "WARN"):
+		return "warning"
+	default:
+		return "info"
+	}
 }

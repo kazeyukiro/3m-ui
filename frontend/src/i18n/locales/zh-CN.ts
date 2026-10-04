@@ -605,13 +605,15 @@ export default {
   },
   "logs": {
     "title": "运行日志",
-    "subtitle": "面板与核心最近日志。",
+    "subtitle": "Mihomo 核心日志与面板进程日志（分开显示）。",
     "empty": "暂无日志",
     "level": "级别",
     "timestamp": "时间",
     "payload": "内容",
     "autoRefresh": "自动刷新",
-    "clear": "清空"
+    "clear": "清空",
+    "tabCore": "Mihomo 核心",
+    "tabPanel": "面板进程"
   },
   "config": {
     "title": "配置引擎",

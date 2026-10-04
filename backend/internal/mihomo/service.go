@@ -4,13 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
-	"github.com/kazeyukiro/3m-ui/backend/internal/panellog"
 )
 
 type Service struct {
@@ -228,11 +226,10 @@ func (s *Service) RollbackConfig() error {
 }
 
 func (s *Service) GetLogs() ([]LogResponse, error) {
-	var lines []string
-	if s != nil && s.pm != nil {
-		lines = append(lines, s.pm.Logs()...)
+	if s == nil || s.pm == nil {
+		return nil, fmt.Errorf("mihomo service not initialized")
 	}
-	lines = append(lines, panellog.Lines()...)
+	lines := s.pm.Logs()
 	result := make([]LogResponse, 0, len(lines))
 	for _, line := range lines {
 		ts, payload := parseStoredLogLine(line)
@@ -242,18 +239,7 @@ func (s *Service) GetLogs() ([]LogResponse, error) {
 			Payload:   payload,
 		})
 	}
-	// Chronological order (panel + mihomo mixed).
-	sortLogResponses(result)
 	return result, nil
-}
-
-func sortLogResponses(logs []LogResponse) {
-	if len(logs) < 2 {
-		return
-	}
-	sort.SliceStable(logs, func(i, j int) bool {
-		return logs[i].Timestamp.Before(logs[j].Timestamp)
-	})
 }
 
 // parseStoredLogLine extracts the RFC3339 timestamp prefix that
