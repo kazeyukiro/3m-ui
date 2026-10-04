@@ -261,8 +261,9 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 	handler := subscriptionHandler(db, cfg)
 	api.GET("/client/sub/:token", handler)
 	api.GET("/client/sub/:token/", handler)
-	api.GET("/client/rule-set/geosite-cn.srs", serveSingboxRuleSet("geosite-cn"))
-	api.GET("/client/rule-set/geoip-cn.srs", serveSingboxRuleSet("geoip-cn"))
+	api.GET("/client/rule-set/cnsite.srs", serveSingboxRuleSet("cnsite"))
+	api.GET("/client/rule-set/cnip.srs", serveSingboxRuleSet("cnip"))
+	api.GET("/client/rule-set/gfw.srs", serveSingboxRuleSet("gfw"))
 	// Path-based formats (docs.sanaei.dev style /sub /json /clash).
 	api.GET("/client/json/:token", forcedTargetHandler(db, cfg, "singbox"))
 	api.GET("/client/json/:token/", forcedTargetHandler(db, cfg, "singbox"))
@@ -443,10 +444,12 @@ func serveSingboxRuleSet(name string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body []byte
 		switch name {
-		case "geosite-cn":
-			body = ruleset.GeositeCN
-		case "geoip-cn":
-			body = ruleset.GeoipCN
+		case "cnsite":
+			body = ruleset.CNSite
+		case "cnip":
+			body = ruleset.CNIP
+		case "gfw":
+			body = ruleset.GFW
 		default:
 			c.Status(http.StatusNotFound)
 			return

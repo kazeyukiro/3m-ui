@@ -117,12 +117,12 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 	if len(skipped) > 0 {
 		log.Printf("sing-box subscription: skipped %d node(s) for user %s: %s", len(skipped), pu.Username, strings.Join(skipped, "; "))
 	}
-	// Selector + direct for a usable minimal config (clients often strip extras).
+	// Tags match LongLights sing-box_v1.14 template: Default + Direct-Out.
 	outbounds = append(outbounds,
-		map[string]interface{}{"type": "direct", "tag": "direct"},
+		map[string]interface{}{"type": "direct", "tag": "Direct-Out"},
 		map[string]interface{}{
 			"type":      "selector",
-			"tag":       "proxy",
+			"tag":       "Default",
 			"outbounds": append([]string{}, tagNames...),
 			"default":   tagNames[0],
 		},
@@ -132,33 +132,31 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 	return json.MarshalIndent(doc, "", "  ")
 }
 
-// buildSingboxSubscriptionDoc wraps outbounds with TUN + full CN split via
-// panel-hosted binary rule-sets (same host as the subscription URL).
-// This keeps the JSON small so SFI/SFM can start, while still covering complete
-// geosite-cn / geoip-cn (not a short domain/IP sample list).
+// buildSingboxSubscriptionDoc follows LongLights sing-box_v1.14 template layout
+// for CN / overseas split (DNS + route + rule_set), with rule-sets hosted on
+// this panel so SFI does not depend on GitHub.
+// Ref: https://github.com/LongLights/sing-box_template_merge_sub-store/blob/main/sing-box_v1.14/singbox.json
 func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}, ruleBase string) map[string]interface{} {
-	route := map[string]interface{}{
-		"rules":                 defaultSingboxRouteRules(ruleBase != ""),
-		"final":                 "proxy",
-		"auto_detect_interface": true,
-		"default_domain_resolver": map[string]interface{}{
-			"server": "local",
-		},
-	}
-	if ruleBase != "" {
-		route["rule_set"] = defaultSingboxCNRuleSets(ruleBase)
-	}
-	return map[string]interface{}{
+	doc := map[string]interface{}{
 		"log": map[string]interface{}{
 			"level": "warn",
 		},
-		"dns": defaultSingboxDNS(),
-		"inbounds": []map[string]interface{}{
-			defaultSingboxTUNInbound(),
-		},
+		"dns":       defaultSingboxDNS(),
+		"inbounds":  []map[string]interface{}{defaultSingboxTUNInbound()},
 		"outbounds": outbounds,
-		"route":     route,
+		"route": map[string]interface{}{
+			"rules":                 defaultSingboxRouteRules(),
+			"final":                 "Default",
+			"auto_detect_interface": true,
+			"default_domain_resolver": map[string]interface{}{
+				"server": "cn_dns",
+			},
+		},
 	}
+	if ruleBase != "" {
+		doc["route"].(map[string]interface{})["rule_set"] = defaultSingboxCNRuleSets(ruleBase)
+	}
+	return doc
 }
 
 func singboxRuleSetBaseURL(req *http.Request) string {
@@ -180,29 +178,76 @@ func singboxRuleSetBaseURL(req *http.Request) string {
 	return scheme + "://" + host + webPath + "/api/v1/client/rule-set"
 }
 
-// defaultSingboxCNRuleSets points at this panel (reachable if the sub URL is).
+// defaultSingboxCNRuleSets — cnsite / cnip / gfw (MetaCubeX meta-rules-dat, embedded).
 func defaultSingboxCNRuleSets(base string) []map[string]interface{} {
 	base = strings.TrimRight(base, "/")
 	return []map[string]interface{}{
 		{
-			"tag":             "geosite-cn",
+			"tag":             "cnsite",
 			"type":            "remote",
 			"format":          "binary",
-			"url":             base + "/geosite-cn.srs",
-			"download_detour": "direct",
+			"url":             base + "/cnsite.srs",
+			"download_detour": "Direct-Out",
+			"update_interval": "24h",
 		},
 		{
-			"tag":             "geoip-cn",
+			"tag":             "cnip",
 			"type":            "remote",
 			"format":          "binary",
-			"url":             base + "/geoip-cn.srs",
-			"download_detour": "direct",
+			"url":             base + "/cnip.srs",
+			"download_detour": "Direct-Out",
+			"update_interval": "24h",
+		},
+		{
+			"tag":             "gfw",
+			"type":            "remote",
+			"format":          "binary",
+			"url":             base + "/gfw.srs",
+			"download_detour": "Direct-Out",
+			"update_interval": "24h",
 		},
 	}
 }
 
-func defaultSingboxRouteRules(useRuleSet bool) []map[string]interface{} {
-	rules := []map[string]interface{}{
+// defaultSingboxDNS mirrors the v1.14 template: CN domains → 119.29.29.29, GFW → DoH via proxy.
+func defaultSingboxDNS() map[string]interface{} {
+	return map[string]interface{}{
+		"servers": []map[string]interface{}{
+			{
+				"tag":    "proxy_dns",
+				"type":   "https",
+				"server": "8.8.8.8",
+				"detour": "Default",
+			},
+			{
+				"tag":    "cn_dns",
+				"type":   "udp",
+				"server": "119.29.29.29",
+			},
+		},
+		"rules": []map[string]interface{}{
+			{"query_type": "AAAA", "action": "predefined", "rcode": "NOERROR"},
+			{"rule_set": "gfw", "action": "route", "server": "proxy_dns"},
+			{"domain_suffix": []string{"googleapis.cn"}, "server": "proxy_dns"},
+			{
+				"type":   "logical",
+				"mode":   "or",
+				"action": "route",
+				"rules": []map[string]interface{}{
+					{"rule_set": "cnsite"},
+				},
+				"server": "cn_dns",
+			},
+			{"action": "route", "server": "proxy_dns"},
+		},
+	}
+}
+
+// defaultSingboxRouteRules — simplified from the v1.14 template (CN/overseas core path).
+// Skips per-app selectors (Telegram/TikTok/…) that need empty groups in a bare sub.
+func defaultSingboxRouteRules() []map[string]interface{} {
+	return []map[string]interface{}{
+		{"network": "icmp", "action": "route", "outbound": "Direct-Out"},
 		{"action": "sniff"},
 		{
 			"type":   "logical",
@@ -213,61 +258,27 @@ func defaultSingboxRouteRules(useRuleSet bool) []map[string]interface{} {
 				{"port": 53},
 			},
 		},
-		{"ip_is_private": true, "action": "route", "outbound": "direct"},
-	}
-	if useRuleSet {
-		rules = append(rules,
-			map[string]interface{}{"rule_set": "geosite-cn", "action": "route", "outbound": "direct"},
-			map[string]interface{}{"rule_set": "geoip-cn", "action": "route", "outbound": "direct"},
-		)
-	}
-	return rules
-}
-
-func defaultSingboxDNS() map[string]interface{} {
-	return map[string]interface{}{
-		"servers": []map[string]interface{}{
-			{
-				"type":   "local",
-				"tag":    "local",
-				"detour": "direct",
-			},
-			{
-				"type":   "https",
-				"tag":    "remote",
-				"server": "8.8.8.8",
-				"detour": "proxy",
-			},
-		},
-		"final":    "remote",
-		"strategy": "prefer_ipv4",
+		{"ip_is_private": true, "action": "route", "outbound": "Direct-Out"},
+		{"protocol": "bittorrent", "action": "route", "outbound": "Direct-Out"},
+		{"domain_suffix": []string{"googleapis.cn"}, "action": "route", "outbound": "Default"},
+		{"rule_set": "gfw", "action": "route", "outbound": "Default"},
+		{"action": "resolve"},
+		{"rule_set": "cnip", "action": "route", "outbound": "Direct-Out"},
 	}
 }
 
-// defaultSingboxTUNInbound follows current Tun schema:
-// - address (not inet4_address / inet6_address, removed in 1.12)
-// - no stack (deprecated 1.15, removed in 1.17 — client uses sing-tun default)
-// - no inbound sniff / domain_strategy (removed in 1.13; use route rule actions)
-// - dns_mode hijack (1.14+) with route hijack-dns rules
-// https://sing-box.sagernet.org/configuration/inbound/tun/
+// defaultSingboxTUNInbound — TUN for SFI/SFM (compatible fields for 1.12+).
 func defaultSingboxTUNInbound() map[string]interface{} {
 	return map[string]interface{}{
-		"type":           "tun",
-		"tag":            "tun-in",
-		"interface_name": "singbox_tun",
-		"address":        []string{"172.18.0.1/30"},
-		"mtu":            1500,
-		"auto_route":     true,
-		"route_exclude_address": []string{
-			"10.0.0.0/8",
-			"100.64.0.0/10",
-			"169.254.0.0/16",
-			"172.16.0.0/12",
-			"192.0.0.0/24",
-			"192.168.0.0/16",
-		},
-		"strict_route": true,
-		"dns_mode":     "hijack",
+		"type":                      "tun",
+		"tag":                       "tun-in",
+		"address":                   []string{"172.19.0.1/30"},
+		"mtu":                       9000,
+		"auto_route":                true,
+		"strict_route":              true,
+		"auto_redirect":             true,
+		"dns_mode":                  "hijack",
+		"route_exclude_address_set": []string{"cnip"},
 	}
 }
 

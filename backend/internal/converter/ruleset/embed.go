@@ -2,8 +2,11 @@ package ruleset
 
 import _ "embed"
 
-//go:embed geosite-cn.srs
-var GeositeCN []byte
+//go:embed cnsite.srs
+var CNSite []byte
 
-//go:embed geoip-cn.srs
-var GeoipCN []byte
+//go:embed cnip.srs
+var CNIP []byte
+
+//go:embed gfw.srs
+var GFW []byte
