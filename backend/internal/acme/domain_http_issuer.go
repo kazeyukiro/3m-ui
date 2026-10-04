@@ -26,7 +26,7 @@ import (
 
 const (
 	domainHTTPRenewBefore = 15 * 24 * time.Hour
-	domainHTTPRenewTick   = 12 * time.Hour
+	domainHTTPRenewTick   = 6 * time.Hour
 )
 
 // domainHTTPIssuer obtains and renews domain certificates via Let's Encrypt HTTP-01 (acmez).

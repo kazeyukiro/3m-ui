@@ -28,7 +28,7 @@ import (
 const (
 	ipCertProfile = "shortlived"
 	ipRenewBefore = 48 * time.Hour
-	ipRenewTick   = 12 * time.Hour
+	ipRenewTick   = 6 * time.Hour
 	leDirectory   = "https://acme-v02.api.letsencrypt.org/directory"
 )
 
