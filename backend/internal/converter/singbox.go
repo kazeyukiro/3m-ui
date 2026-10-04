@@ -158,9 +158,8 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 	}
 }
 
-// defaultSingboxRouteRules keeps private + CN domain suffixes on direct.
-// Remote rule-set downloads (GitHub / jsDelivr) block SFI/SFM startup when
-// the device cannot reach those hosts — so we never require them here.
+// defaultSingboxRouteRules: private + compact CN domains + embedded CN IP → direct.
+// Domain list is intentionally small — full china domain dumps break SFI/SFM.
 func defaultSingboxRouteRules() []map[string]interface{} {
 	return []map[string]interface{}{
 		{"action": "sniff"},
