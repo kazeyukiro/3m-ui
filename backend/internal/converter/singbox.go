@@ -270,15 +270,14 @@ func defaultSingboxRouteRules() []map[string]interface{} {
 // defaultSingboxTUNInbound — TUN for SFI/SFM (compatible fields for 1.12+).
 func defaultSingboxTUNInbound() map[string]interface{} {
 	return map[string]interface{}{
-		"type":                      "tun",
-		"tag":                       "tun-in",
-		"address":                   []string{"172.19.0.1/30"},
-		"mtu":                       9000,
-		"auto_route":                true,
-		"strict_route":              true,
-		"auto_redirect":             true,
-		"dns_mode":                  "hijack",
-		"route_exclude_address_set": []string{"cnip"},
+		"type":          "tun",
+		"tag":           "tun-in",
+		"address":       []string{"172.19.0.1/30"},
+		"mtu":           9000,
+		"auto_route":    true,
+		"strict_route":  true,
+		"auto_redirect": true,
+		"dns_mode":      "hijack",
 	}
 }
 
