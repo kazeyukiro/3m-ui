@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	dnsRenewBefore = 30 * 24 * time.Hour
+	dnsRenewBefore = 15 * 24 * time.Hour
 	dnsRenewTick   = 12 * time.Hour
 	cfAPIBase      = "https://api.cloudflare.com/client/v4"
 )

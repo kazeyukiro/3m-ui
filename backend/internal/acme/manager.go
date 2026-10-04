@@ -348,6 +348,7 @@ func Status(db *gorm.DB) map[string]interface{} {
 		"cert_path":     domainCertPath(s),
 		"ip_profile":    ipCertProfile,
 		"ip_note":       "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
+		"domain_note":   "Domain HTTP-01/DNS-01 certs auto-renew when fewer than 15 days remain (checked every 12h). Engine: acmez.",
 		"dns_note":      "Wildcard (*.example.com) and DNS-01 need a DNS API token (Cloudflare Zone.DNS Edit). Apex is included on wildcard certs.",
 		"engine":        "acmez",
 	}

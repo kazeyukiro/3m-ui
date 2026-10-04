@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	domainHTTPRenewBefore = 30 * 24 * time.Hour
+	domainHTTPRenewBefore = 15 * 24 * time.Hour
 	domainHTTPRenewTick   = 12 * time.Hour
 )
 
