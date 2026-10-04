@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/converter"
+	"github.com/kazeyukiro/3m-ui/backend/internal/converter/ruleset"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
@@ -260,6 +261,8 @@ func RegisterPublicSubscriptionRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *co
 	handler := subscriptionHandler(db, cfg)
 	api.GET("/client/sub/:token", handler)
 	api.GET("/client/sub/:token/", handler)
+	api.GET("/client/rule-set/geosite-cn.srs", serveSingboxRuleSet("geosite-cn"))
+	api.GET("/client/rule-set/geoip-cn.srs", serveSingboxRuleSet("geoip-cn"))
 	// Path-based formats (docs.sanaei.dev style /sub /json /clash).
 	api.GET("/client/json/:token", forcedTargetHandler(db, cfg, "singbox"))
 	api.GET("/client/json/:token/", forcedTargetHandler(db, cfg, "singbox"))
@@ -434,4 +437,25 @@ func requestScheme(c *gin.Context) string {
 		return "https"
 	}
 	return "http"
+}
+
+func serveSingboxRuleSet(name string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body []byte
+		switch name {
+		case "geosite-cn":
+			body = ruleset.GeositeCN
+		case "geoip-cn":
+			body = ruleset.GeoipCN
+		default:
+			c.Status(http.StatusNotFound)
+			return
+		}
+		if len(body) == 0 {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.Data(http.StatusOK, "application/octet-stream", body)
+	}
 }

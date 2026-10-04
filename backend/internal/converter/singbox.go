@@ -127,17 +127,27 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 			"default":   tagNames[0],
 		},
 	)
-	doc := buildSingboxSubscriptionDoc(outbounds)
+	ruleBase := singboxRuleSetBaseURL(req)
+	doc := buildSingboxSubscriptionDoc(outbounds, ruleBase)
 	return json.MarshalIndent(doc, "", "  ")
 }
 
-// buildSingboxSubscriptionDoc wraps outbounds with a default TUN inbound and
-// route so official SFI/SFM clients create a system VPN interface. Without
-// inbounds, outbounds alone never capture traffic (issue #88).
-//
-// Default split: private + geosite-cn + geoip-cn → direct; everything else →
-// selector "proxy" (same idea as Clash GEOSITE,cn / GEOIP,CN).
-func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]interface{} {
+// buildSingboxSubscriptionDoc wraps outbounds with TUN + full CN split via
+// panel-hosted binary rule-sets (same host as the subscription URL).
+// This keeps the JSON small so SFI/SFM can start, while still covering complete
+// geosite-cn / geoip-cn (not a short domain/IP sample list).
+func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}, ruleBase string) map[string]interface{} {
+	route := map[string]interface{}{
+		"rules":                 defaultSingboxRouteRules(ruleBase != ""),
+		"final":                 "proxy",
+		"auto_detect_interface": true,
+		"default_domain_resolver": map[string]interface{}{
+			"server": "local",
+		},
+	}
+	if ruleBase != "" {
+		route["rule_set"] = defaultSingboxCNRuleSets(ruleBase)
+	}
 	return map[string]interface{}{
 		"log": map[string]interface{}{
 			"level": "warn",
@@ -147,21 +157,52 @@ func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]
 			defaultSingboxTUNInbound(),
 		},
 		"outbounds": outbounds,
-		"route": map[string]interface{}{
-			"rules":                 defaultSingboxRouteRules(),
-			"final":                 "proxy",
-			"auto_detect_interface": true,
-			"default_domain_resolver": map[string]interface{}{
-				"server": "local",
-			},
+		"route":     route,
+	}
+}
+
+func singboxRuleSetBaseURL(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	scheme := "http"
+	if req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	host := strings.TrimSpace(req.Host)
+	if host == "" {
+		return ""
+	}
+	webPath := ""
+	if config.GlobalConfig != nil {
+		webPath = strings.TrimSuffix(config.GlobalConfig.Server.WebPath, "/")
+	}
+	return scheme + "://" + host + webPath + "/api/v1/client/rule-set"
+}
+
+// defaultSingboxCNRuleSets points at this panel (reachable if the sub URL is).
+func defaultSingboxCNRuleSets(base string) []map[string]interface{} {
+	base = strings.TrimRight(base, "/")
+	return []map[string]interface{}{
+		{
+			"tag":             "geosite-cn",
+			"type":            "remote",
+			"format":          "binary",
+			"url":             base + "/geosite-cn.srs",
+			"download_detour": "direct",
+		},
+		{
+			"tag":             "geoip-cn",
+			"type":            "remote",
+			"format":          "binary",
+			"url":             base + "/geoip-cn.srs",
+			"download_detour": "direct",
 		},
 	}
 }
 
-// defaultSingboxRouteRules: private + compact CN domains + embedded CN IP → direct.
-// Domain list is intentionally small — full china domain dumps break SFI/SFM.
-func defaultSingboxRouteRules() []map[string]interface{} {
-	return []map[string]interface{}{
+func defaultSingboxRouteRules(useRuleSet bool) []map[string]interface{} {
+	rules := []map[string]interface{}{
 		{"action": "sniff"},
 		{
 			"type":   "logical",
@@ -173,23 +214,16 @@ func defaultSingboxRouteRules() []map[string]interface{} {
 			},
 		},
 		{"ip_is_private": true, "action": "route", "outbound": "direct"},
-		{
-			"domain_suffix": defaultSingboxCNDomainSuffixes(),
-			"action":        "route",
-			"outbound":      "direct",
-		},
-		{
-			"ip_cidr":  defaultSingboxCNIPCIDRs(),
-			"action":   "route",
-			"outbound": "direct",
-		},
 	}
+	if useRuleSet {
+		rules = append(rules,
+			map[string]interface{}{"rule_set": "geosite-cn", "action": "route", "outbound": "direct"},
+			map[string]interface{}{"rule_set": "geoip-cn", "action": "route", "outbound": "direct"},
+		)
+	}
+	return rules
 }
 
-// defaultSingboxDNS uses the post-1.12 server object format (type/tag/server)
-// and avoids deprecated DNS rule address filters (ip_is_private / ip_cidr without
-// match_response — removed path in 1.16). Private destinations are handled by
-// route rules instead. See https://sing-box.sagernet.org/migration/
 func defaultSingboxDNS() map[string]interface{} {
 	return map[string]interface{}{
 		"servers": []map[string]interface{}{
