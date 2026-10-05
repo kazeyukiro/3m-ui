@@ -16,6 +16,14 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/system"
 )
 
+// cmdsWithOwnFlags lists subcommands that parse their own flags after the
+// subcommand name (e.g. `3m-ui reset-config --panel --yes`). The global
+// scanner must let those flags through instead of rejecting them as unknown
+// arguments — otherwise the subcommand never gets a chance to see them.
+var cmdsWithOwnFlags = map[string]bool{
+	"reset-config": true,
+}
+
 // main accepts both the installer-provided THREE_M_UI_CONFIG environment
 // variable and the documented --config/-c command-line option.
 func main() {
@@ -44,7 +52,7 @@ func main() {
 		default:
 			if cmd == "" && !hasPrefixDash(args[i]) {
 				cmd = args[i]
-			} else if hasPrefixDash(args[i]) {
+			} else if hasPrefixDash(args[i]) && !cmdsWithOwnFlags[cmd] {
 				log.Fatalf("unknown argument: %s", args[i])
 			}
 		}
