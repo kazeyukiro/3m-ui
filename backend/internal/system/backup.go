@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -22,24 +23,63 @@ type BackupPaths struct {
 // WriteZip creates a zip archive containing the SQLite database and Mihomo config
 // when present. The caller owns closing the writer.
 
-// flushSQLiteWAL checkpoints the WAL into the main database file so a plain
-// file copy of dbPath contains recent writes (listener↔user bindings, etc.).
-// Without this, ExportBackup can miss rows that only lived in the -wal file.
-func flushSQLiteWAL(dbPath string) {
+// snapshotSQLiteDB produces a crash-consistent copy of the live SQLite database
+// at dbPath into destPath without stopping the running panel.
+//
+// The panel's own GORM connection pool keeps the database open and may write to
+// it at any moment. A raw file copy of dbPath (the old approach) races with
+// those writes and can capture a torn page, and a WAL checkpoint alone is not
+// enough — under a busy writer the checkpoint can leave frames in -wal that a
+// plain copy never replays. Instead we use SQLite's online backup primitive
+// VACUUM INTO, which reads through the WAL and any in-flight transactions to
+// produce a self-contained, fully-replayed snapshot. The destination is a
+// complete database file, so the backup no longer needs (and must not carry)
+// the -wal/-shm sidecars.
+func snapshotSQLiteDB(dbPath, destPath string) error {
 	if dbPath == "" {
-		return
+		return fmt.Errorf("database path is empty")
+	}
+	// VACUUM INTO requires the destination to not already exist.
+	if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("prepare snapshot destination: %w", err)
 	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return
+		return fmt.Errorf("open live database: %w", err)
 	}
 	defer db.Close()
-	_, _ = db.Exec(`PRAGMA busy_timeout=5000`)
-	_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	if _, err := db.Exec(`PRAGMA busy_timeout=5000`); err != nil {
+		return fmt.Errorf("set busy_timeout: %w", err)
+	}
+	// VACUUM INTO takes a filename literal, not a bind parameter.
+	if _, err := db.Exec(fmt.Sprintf("VACUUM INTO %s", sqliteQuotePath(destPath))); err != nil {
+		return fmt.Errorf("vacuum into %s: %w", destPath, err)
+	}
+	return nil
+}
+
+// sqliteQuotePath quotes a filesystem path as a single-quoted SQLite string
+// literal, escaping embedded single quotes per SQLite string rules.
+func sqliteQuotePath(p string) string {
+	return "'" + strings.ReplaceAll(p, "'", "''") + "'"
 }
 
 func WriteZip(w io.Writer, paths BackupPaths) error {
-	flushSQLiteWAL(paths.DatabasePath)
+	dbPath := paths.DatabasePath
+	// Snapshot the live database into a temp file so the zip carries a
+	// crash-consistent copy instead of whatever bytes the open file happened to
+	// expose mid-write. If the db file is absent we keep dbPath as-is (addFile
+	// skips a missing file), preserving the previous best-effort behavior.
+	if dbPath != "" {
+		if _, err := os.Stat(dbPath); err == nil {
+			snap := dbPath + ".backup-snapshot"
+			if serr := snapshotSQLiteDB(dbPath, snap); serr != nil {
+				return fmt.Errorf("snapshot database: %w", serr)
+			}
+			defer os.Remove(snap)
+			dbPath = snap
+		}
+	}
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 
@@ -76,12 +116,13 @@ func WriteZip(w io.Writer, paths BackupPaths) error {
 		return err
 	}
 
-	if err := addFile("3m-ui.db", paths.DatabasePath); err != nil {
+	if err := addFile("3m-ui.db", dbPath); err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
-	// Best-effort: if checkpoint could not run, keep sidecars so restore can replay.
-	_ = addFile("3m-ui.db-wal", paths.DatabasePath+"-wal")
-	_ = addFile("3m-ui.db-shm", paths.DatabasePath+"-shm")
+	// No longer bundling 3m-ui.db-wal / 3m-ui.db-shm: the VACUUM INTO snapshot is
+	// already self-contained (WAL replayed into the main file), so the sidecars
+	// would be dead weight. They were previously bundled but never restored,
+	// which silently dropped any un-checkpointed writes on restore.
 	if err := addFile("mihomo-config.yaml", paths.MihomoConfig); err != nil {
 		return fmt.Errorf("mihomo config: %w", err)
 	}
