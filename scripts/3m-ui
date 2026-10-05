@@ -551,9 +551,15 @@ ssl_cert_menu() {
     say '  0) 返回'
     printf '选择: '
     IFS= read -r c || return 0
+    # 0 / 空输入先返回主菜单，不要继续索要域名。
+    case "$c" in
+        1|2|3) ;;
+        0|'') return 0 ;;
+        *) say '无效选择，请重新输入。'; return 0 ;;
+    esac
     printf '域名 (例 dzx.qzz.io): '
     IFS= read -r dom || return 0
-    [ -z "$dom" ] && return 0
+    if [ -z "$dom" ]; then return 0; fi
     printf '邮箱 (可空): '
     IFS= read -r em || true
     case "$c" in
