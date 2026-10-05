@@ -968,6 +968,35 @@ paths:
         "200":
           description: Rolled back
 
+  /config/visual:
+    get:
+      tags: [config]
+      summary: Visual config (mode, general, proxies, groups, rules)
+      description: |
+        Includes global Mihomo keys `inboundTfo` / `inboundMptcp` (YAML `inbound-tfo` /
+        `inbound-mptcp`) applied to **server** inbound sockets only — never copied into
+        client subscription documents. Per-proxy `tfo` / `mptcp` live on each proxy object
+        and **are** exported to client subscriptions when set.
+      responses:
+        "200":
+          description: VisualConfig JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisualConfig'
+    post:
+      tags: [config]
+      summary: Save visual config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisualConfig'
+      responses:
+        "200":
+          description: Saved
+
   /system/status:
     get:
       tags: [system]
@@ -1194,9 +1223,9 @@ paths:
       tags: [system]
       summary: Panel SSL settings
       description: |
-        Returns panel SSL configuration including `domain_note` / `ip_note` (auto-renew windows: domain <15d, IP <48h; check every 6h). `dns_token` is never echoed (use
-        `/system/ssl/status` → `has_dns_token`). Modes include HTTP-01 autocert,
-        DNS-01 wildcard (Cloudflare), IP shortlived certs, and manual PEMs.
+        Returns panel SSL configuration including `domain_note` / `ip_note` (certmagic auto-renew; IP uses LE shortlived profile). `dns_token` is never echoed (use
+        `/system/ssl/status` → `has_dns_token`). Engine: **certmagic** (domains + IP). Modes: HTTP-01, DNS-01 wildcard (Cloudflare),
+        IP shortlived (LE profile), and manual PEMs.
       responses:
         "200":
           description: SSL settings (token redacted)
@@ -1291,7 +1320,42 @@ components:
         cpu_percent: { type: number, format: float, description: 0–100 process CPU }
         memory_used: { type: number, format: float, description: RSS bytes }
         memory_percent: { type: number, format: float, description: 0–100 of system RAM }
+    VisualConfig:
+      type: object
+      properties:
+        mode: { type: string, example: rule }
+        logLevel: { type: string, example: info }
+        allowLan: { type: boolean }
+        ipv6: { type: boolean }
+        inboundTfo:
+          type: boolean
+          description: Global inbound TCP Fast Open (Mihomo inbound-tfo); server only
+        inboundMptcp:
+          type: boolean
+          description: Global inbound Multipath TCP (Mihomo inbound-mptcp); server only
+        proxies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProxyEntry'
+        proxyGroups: { type: array, items: { type: object } }
+        rules: { type: array, items: { type: string } }
+    ProxyEntry:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        server: { type: string }
+        port: { type: string }
+        password: { type: string }
+        uuid: { type: string }
+        tfo:
+          type: boolean
+          description: Per-proxy TCP Fast Open (TCP only); included in client subscriptions
+        mptcp:
+          type: boolean
+          description: Per-proxy Multipath TCP (TCP only); included in client subscriptions
     LogEntry:
+
       type: object
       properties:
         timestamp:
