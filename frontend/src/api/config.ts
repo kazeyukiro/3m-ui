@@ -7,6 +7,10 @@ export interface ProxyEntry {
   port: string;
   password?: string;
   uuid?: string;
+  // Mihomo proxy-level TCP options (wiki.metacubex.one/config/proxies): only
+  // take effect on TCP transports.
+  tfo?: boolean;
+  mptcp?: boolean;
   [key: string]: any;
 }
 

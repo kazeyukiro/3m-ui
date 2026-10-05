@@ -637,6 +637,9 @@ export default {
     "proxyPort": "Proxy Port",
     "proxyPassword": "Proxy Password",
     "proxyUUID": "Proxy UUID",
+    "proxyTfo": "TFO (TCP Fast Open)",
+    "proxyMptcp": "MPTCP (Multipath TCP)",
+    "proxyTcpOnly": "Only takes effect on TCP"
     "generate": "Generate config",
     "validate": "Validate config",
     "validateOk": "Configuration is valid",
