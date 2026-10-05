@@ -11,6 +11,12 @@ export interface ProxyEntry {
 }
 
 export interface VisualConfig {
+  mode?: string;
+  logLevel?: string;
+  allowLan?: boolean;
+  ipv6?: boolean;
+  inboundTfo?: boolean;
+  inboundMptcp?: boolean;
   proxies: ProxyEntry[];
   proxyGroups?: any[];
   rules?: any[];

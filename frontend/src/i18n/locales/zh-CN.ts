@@ -644,7 +644,17 @@ export default {
     "apply": "应用",
     "applySuccess": "已应用配置",
     "rollback": "回滚",
-    "rollbackSuccess": "已回滚到上一份配置"
+    "rollbackSuccess": "已回滚到上一份配置",
+    "general": "通用内核设置",
+    "mode": "运行模式",
+    "logLevel": "日志级别",
+    "allowLan": "允许局域网",
+    "ipv6": "启用 IPv6",
+    "inboundTfo": "入站 TCP 快速打开 (TFO)",
+    "inboundMptcp": "入站多路径 TCP (MPTCP)",
+    "inboundTfoHint": "为所有入站监听的套接字启用 TCP Fast Open（内核需支持：/proc/sys/net/ipv4/tcp_fast_open 含服务端位）。全局开关，非单监听器设置。",
+    "saveGeneral": "保存通用设置",
+    "generalSaved": "通用设置已保存"
   },
   "users": {
     "title": "用户管理",

@@ -18,10 +18,18 @@ type VisualConfig struct {
 	LogLevel string       `json:"logLevel" yaml:"log-level"`
 	AllowLAN bool         `json:"allowLan" yaml:"allow-lan"`
 	IPv6     bool         `json:"ipv6" yaml:"ipv6"`
-	DNS      VisualDNS    `json:"dns" yaml:"dns"`
-	Proxies  []ProxyEntry `json:"proxies" yaml:"proxies"`
-	Groups   []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
-	Rules    []string     `json:"rules" yaml:"rules"`
+	// InboundTfo / InboundMPTCP map to Mihomo's top-level `inbound-tfo` /
+	// `inbound-mptcp` general keys: a GLOBAL switch applied to every inbound
+	// listener's listening socket (TCP Fast Open / Multipath TCP). They are NOT
+	// per-listener fields — Mihomo only honours them at the general level, so
+	// they live on the VisualConfig (which feeds the serving config fragment)
+	// and must never be copied into client subscription documents.
+	InboundTfo   bool `json:"inboundTfo" yaml:"inbound-tfo"`
+	InboundMPTCP bool `json:"inboundMptcp" yaml:"inbound-mptcp"`
+	DNS          VisualDNS    `json:"dns" yaml:"dns"`
+	Proxies      []ProxyEntry `json:"proxies" yaml:"proxies"`
+	Groups       []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules        []string     `json:"rules" yaml:"rules"`
 }
 
 type VisualDNS struct {
