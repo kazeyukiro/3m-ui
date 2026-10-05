@@ -289,9 +289,15 @@ func (s *Service) ensureEndpointAvailable(candidate *models.Listener) error {
 		if !portsOverlap(candidate.Port, existing.Port) {
 			continue
 		}
-		if listenerAddressesConflict(firstListenerAddress(*candidate), firstListenerAddress(existing)) {
-			return fmt.Errorf("listener %q conflicts with existing listener %q on %s:%s", candidate.Name, existing.Name, firstListenerAddress(existing), existing.Port)
+		if !listenerAddressesConflict(firstListenerAddress(*candidate), firstListenerAddress(existing)) {
+			continue
 		}
+		// TCP and UDP listeners on the same address:port are independent sockets
+		// and must not be treated as a conflict.
+		if !listenersShareTransport(*candidate, existing) {
+			continue
+		}
+		return fmt.Errorf("listener %q conflicts with existing listener %q on %s:%s", candidate.Name, existing.Name, firstListenerAddress(existing), existing.Port)
 	}
 	return nil
 }

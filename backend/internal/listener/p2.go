@@ -157,7 +157,7 @@ func (s *Service) ensureBatchEndpointsAvailable(created []models.Listener) error
 			return err
 		}
 		for j := i + 1; j < len(created); j++ {
-			if portsOverlap(created[i].Port, created[j].Port) && listenerAddressesConflict(firstListenerAddress(created[i]), firstListenerAddress(created[j])) {
+			if portsOverlap(created[i].Port, created[j].Port) && listenerAddressesConflict(firstListenerAddress(created[i]), firstListenerAddress(created[j])) && listenersShareTransport(created[i], created[j]) {
 				return fmt.Errorf("listeners %q and %q have conflicting endpoints", created[i].Name, created[j].Name)
 			}
 		}
