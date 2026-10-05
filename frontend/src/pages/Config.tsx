@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs, Row, Col, Switch } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs, Row, Col, Switch, Alert } from 'antd';
 import { IconAddGeneric, IconDelete, IconEdit, IconDownload, IconCheck, IconFile } from '../icons';
 import {
   fetchProxies, createProxy, updateProxy, deleteProxy,
@@ -388,6 +388,7 @@ const ConfigPage: React.FC = () => {
         }}
         onOk={() => form.submit()}
         destroyOnClose width={isMobile ? '100%' : 640} style={isMobile ? { top: 8 } : undefined}
+        styles={isMobile ? { body: { maxHeight: '78vh', overflowY: 'auto', paddingBottom: 8 } } : undefined}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
           <Form.Item name="name" label={t('config.proxyName')} rules={[{ required: true }]}>
@@ -414,6 +415,28 @@ const ConfigPage: React.FC = () => {
           <Form.Item name="uuid" label={t('config.proxyUUID')}>
             <Input />
           </Form.Item>
+          <Form.Item
+            name="tfo"
+            label={t('config.proxyTfo')}
+            valuePropName="checked"
+            tooltip={t('config.proxyTcpOnly')}
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="mptcp"
+            label={t('config.proxyMptcp')}
+            valuePropName="checked"
+            tooltip={t('config.proxyTcpOnly')}
+          >
+            <Switch />
+          </Form.Item>
+          <Alert
+            type="info"
+            showIcon
+            className="proxy-tcp-only-hint"
+            message={t('config.proxyTcpOnly')}
+          />
         </Form>
       </Modal>
     </div>
