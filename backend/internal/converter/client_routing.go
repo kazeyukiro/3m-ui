@@ -60,6 +60,10 @@ func clientSubscriptionDocument(proxies []map[string]interface{}, names []string
 		rules = defaultClientRules()
 	}
 
+	for i := range proxies {
+		sanitizeClientProxyMap(proxies[i])
+	}
+
 	return map[string]interface{}{
 		"mixed-port":   7890,
 		"allow-lan":    false,
@@ -360,11 +364,83 @@ func mergeVisualProxiesForClient(
 			"port":   vp.Port,
 		}
 		for k, v := range vp.Options {
+			if isServerOnlyProxyKey(k) {
+				continue
+			}
 			m[k] = v
 		}
+		// Normalise TFO/MPTCP: client proxies use bool `tfo` / `mptcp` (wiki proxies#tfo).
+		// Never emit inbound-tfo / inbound-mptcp (those are server general keys only).
+		normalizeClientDialFlags(m)
 		proxies = append(proxies, m)
 		names = append(names, n)
 		nameSet[n] = struct{}{}
 	}
 	return proxies, names
+}
+
+// Server-side / general keys that must never appear on a client proxy entry.
+func isServerOnlyProxyKey(k string) bool {
+	switch strings.ToLower(strings.TrimSpace(k)) {
+	case "inbound-tfo", "inbound-mptcp", "inboundtfo", "inboundmptcp",
+		"listeners", "users", "user", "account", "accounts",
+		"certificate", "private-key", "private_key", "privatekey",
+		"client-auth-cert", "client-auth-key":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeClientDialFlags(m map[string]interface{}) {
+	if m == nil {
+		return
+	}
+	// Drop server general dial keys if someone stuffed them into options.
+	delete(m, "inbound-tfo")
+	delete(m, "inbound-mptcp")
+	delete(m, "inboundTfo")
+	delete(m, "inboundMptcp")
+	// Wiki: tfo / mptcp are booleans on the proxy object. Coerce truthy; omit false.
+	for _, key := range []string{"tfo", "mptcp"} {
+		v, ok := m[key]
+		if !ok {
+			continue
+		}
+		if asBool(v) {
+			m[key] = true
+		} else {
+			delete(m, key)
+		}
+	}
+}
+
+func sanitizeClientProxyMap(m map[string]interface{}) {
+	if m == nil {
+		return
+	}
+	for k := range m {
+		if isServerOnlyProxyKey(k) {
+			delete(m, k)
+		}
+	}
+	normalizeClientDialFlags(m)
+}
+
+func asBool(v interface{}) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		s := strings.ToLower(strings.TrimSpace(x))
+		return s == "true" || s == "1" || s == "yes"
+	case int:
+		return x != 0
+	case int64:
+		return x != 0
+	case float64:
+		return x != 0
+	default:
+		return false
+	}
 }

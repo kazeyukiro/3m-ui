@@ -1313,8 +1313,8 @@ paths:
       tags: [system]
       summary: Panel SSL settings
       description: |
-        Returns panel SSL configuration including `domain_note` / `ip_note` (certmagic auto-renew; IP uses LE shortlived profile). `dns_token` is never echoed (use
-        `/system/ssl/status` → `has_dns_token`). Engine: **certmagic** (domains + IP). Modes: HTTP-01, DNS-01 wildcard (Cloudflare),
+        Returns panel SSL configuration including `domain_note` / `ip_note` (acmez auto-renew; IP uses LE shortlived profile). `dns_token` is never echoed (use
+        `/system/ssl/status` → `has_dns_token`). Engine: **acmez** (domains; IP via acmez shortlived). Modes: HTTP-01, DNS-01 wildcard (Cloudflare),
         IP shortlived (LE profile), and manual PEMs.
       responses:
         "200":

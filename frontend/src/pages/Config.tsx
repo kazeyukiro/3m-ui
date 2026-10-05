@@ -62,7 +62,6 @@ const ConfigPage: React.FC = () => {
         const vc = await fetchVisualConfig();
         setGeneralCfg(vc ? { ...vc } : null);
         generalForm.setFieldsValue({
-          mode: vc?.mode ?? 'rule',
           logLevel: vc?.logLevel ?? 'info',
           allowLan: !!vc?.allowLan,
           ipv6: !!vc?.ipv6,
@@ -86,7 +85,7 @@ const ConfigPage: React.FC = () => {
     try {
       const payload: VisualConfig = {
         ...generalCfg,
-        mode: values.mode,
+        // mode is not editable here — keep whatever was already stored
         logLevel: values.logLevel,
         allowLan: !!values.allowLan,
         ipv6: !!values.ipv6,
@@ -108,13 +107,23 @@ const ConfigPage: React.FC = () => {
     load();
   }, []);
 
-  const onSubmit = async (values: ProxyEntry) => {
+  const onSubmit = async (values: any) => {
     try {
+      const { tfo, mptcp, ...rest } = values;
+      // Client proxy keys per wiki.metacubex.one/config/proxies — only emit when enabled.
+      const payload: ProxyEntry = { ...rest };
+      if (tfo === true) payload.tfo = true;
+      if (mptcp === true) payload.mptcp = true;
+      // Never send server-only dial flags on a client proxy object.
+      delete (payload as any)['inbound-tfo'];
+      delete (payload as any)['inbound-mptcp'];
+      delete (payload as any).inboundTfo;
+      delete (payload as any).inboundMptcp;
       if (editingIndex !== null) {
-        await updateProxy(editingIndex, values);
+        await updateProxy(editingIndex, payload);
         message.success(t('config.editProxy') + ' ' + t('common.success'));
       } else {
-        await createProxy(values);
+        await createProxy(payload);
         message.success(t('config.addProxy') + ' ' + t('common.success'));
       }
       setModalOpen(false);
@@ -207,7 +216,12 @@ const ConfigPage: React.FC = () => {
             icon={<IconEdit />}
             onClick={() => {
               setEditingIndex(index);
-              form.setFieldsValue(proxies[index]);
+              const record = proxies[index] as any;
+      form.setFieldsValue({
+        ...record,
+        tfo: !!record.tfo,
+        mptcp: !!record.mptcp,
+      });
               setModalOpen(true);
             }}
           />
@@ -244,16 +258,6 @@ const ConfigPage: React.FC = () => {
             <Form form={generalForm} layout="vertical" onFinish={onSaveGeneral}>
               <Row gutter={16}>
                 <Col xs={24} sm={12} md={8}>
-                  <Form.Item name="mode" label={t('config.mode') || 'Mode'}>
-                    <Select
-                      options={[
-                        { value: 'rule', label: 'rule' },
-                        { value: 'global', label: 'global' },
-                        { value: 'direct', label: 'direct' },
-                        { value: 'script', label: 'script' },
-                      ]}
-                    />
-                  </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} md={8}>
                   <Form.Item name="logLevel" label={t('config.logLevel') || 'Log level'}>

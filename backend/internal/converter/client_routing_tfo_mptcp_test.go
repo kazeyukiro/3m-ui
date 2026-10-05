@@ -42,3 +42,31 @@ func TestClientSubscriptionIncludesProxyTFOMPTCP(t *testing.T) {
 		t.Fatalf("client subscription missing mptcp:\n%s", s)
 	}
 }
+
+func TestClientSubscriptionStripsInboundTfo(t *testing.T) {
+	visual := &mihomocfg.VisualConfig{
+		InboundTfo:   true,
+		InboundMPTCP: true,
+		Proxies: []mihomocfg.ProxyEntry{
+			{
+				Name:    "NODE-A",
+				Type:    "ss",
+				Server:  "example.com",
+				Port:    8388,
+				Options: map[string]interface{}{"tfo": true, "inbound-tfo": true, "inbound-mptcp": true},
+			},
+		},
+	}
+	doc := clientSubscriptionDocument(nil, nil, visual)
+	raw, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	if strings.Contains(s, "inbound-tfo") || strings.Contains(s, "inbound-mptcp") {
+		t.Fatalf("server general keys must not appear in client subscription:\n%s", s)
+	}
+	if !strings.Contains(s, "tfo: true") {
+		t.Fatalf("client proxy tfo should remain:\n%s", s)
+	}
+}
