@@ -6,7 +6,7 @@ import {
   fetchProxies, createProxy, updateProxy, deleteProxy,
   fetchConfigYAML, generateConfig, validateConfigYAML, applyConfigYAML, rollbackConfig,
   fetchVisualConfig, saveVisualConfig,
-  ProxyEntry,
+  ProxyEntry, VisualConfig,
 } from '../api/config';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
@@ -26,7 +26,7 @@ const ConfigPage: React.FC = () => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [generalForm] = Form.useForm();
-  const [generalCfg, setGeneralCfg] = useState<Record<string, any> | null>(null);
+  const [generalCfg, setGeneralCfg] = useState<VisualConfig | null>(null);
   const [genSaving, setGenSaving] = useState(false);
   const [yaml, setYaml] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -84,7 +84,7 @@ const ConfigPage: React.FC = () => {
     if (!generalCfg) return;
     setGenSaving(true);
     try {
-      const payload = {
+      const payload: VisualConfig = {
         ...generalCfg,
         mode: values.mode,
         logLevel: values.logLevel,
@@ -92,6 +92,7 @@ const ConfigPage: React.FC = () => {
         ipv6: !!values.ipv6,
         inboundTfo: !!values.inboundTfo,
         inboundMptcp: !!values.inboundMptcp,
+        proxies: generalCfg.proxies ?? [],
       };
       await saveVisualConfig(payload);
       setGeneralCfg(payload);
