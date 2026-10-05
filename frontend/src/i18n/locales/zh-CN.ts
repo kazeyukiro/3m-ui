@@ -639,7 +639,7 @@ export default {
     "proxyUUID": "代理 UUID",
     "proxyTfo": "TFO (TCP 快速打开)",
     "proxyMptcp": "MPTCP (多路径 TCP)",
-    "proxyTcpOnly": "仅对 TCP 协议生效"
+    "proxyTcpOnly": "仅对 TCP 协议生效",
     "generate": "生成配置",
     "validate": "校验配置",
     "validateOk": "配置校验通过",

@@ -639,7 +639,7 @@ export default {
     "proxyUUID": "Proxy UUID",
     "proxyTfo": "TFO (TCP Fast Open)",
     "proxyMptcp": "MPTCP (Multipath TCP)",
-    "proxyTcpOnly": "Only takes effect on TCP"
+    "proxyTcpOnly": "Only takes effect on TCP",
     "generate": "Generate config",
     "validate": "Validate config",
     "validateOk": "Configuration is valid",
