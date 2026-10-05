@@ -506,7 +506,8 @@ bbr_menu() {
         1) bbr_status ;;
         2) enable_bbr ;;
         3) disable_bbr ;;
-        *) ;;
+        0|'') ;;
+        *) say '无效选择，请重新输入。' ;;
     esac
 }
 
