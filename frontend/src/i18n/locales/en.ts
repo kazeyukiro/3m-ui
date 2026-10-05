@@ -214,6 +214,8 @@ export default {
     "usersHint": "Per-user credentials written into the listener users structure (format depends on protocol).",
     "formHelpBanner": "Hover a field label for notes where available. Leave TLS certificate empty to auto-generate a panel self-signed pair on save when the protocol requires TLS.",
     "portHint": "Listen port (wiki: port). Single port or official ports syntax.",
+    "portRequired": "Port is required (single port or official ports syntax).",
+    "portFormat": "Invalid port: use a single port or comma/hyphen ranges, e.g. 443 or 1000-2000,3000.",
     "grpc_user_agentHint": "gRPC User-Agent for clients.",
     "certFromPanelHint": "Copy paths from panel SSL settings.",
     "certPemHint": "Certificate PEM text.",

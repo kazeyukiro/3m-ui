@@ -214,6 +214,8 @@ export default {
     "usersHint": "写入 Listener users 结构的用户凭证（形态因协议而异）。",
     "formHelpBanner": "有说明的字段可悬停标签查看。需要 TLS 的协议若证书留空，保存时可能由面板自动生成自签证书。",
     "portHint": "监听端口（wiki: port）。单端口或官方 ports 语法。",
+    "portRequired": "端口为必填项（单端口或官方 ports 语法）。",
+    "portFormat": "端口格式无效：单端口，或用逗号/连字符分隔的端口范围，例如 443 或 1000-2000,3000。",
     "grpc_user_agentHint": "gRPC 客户端 User-Agent。",
     "certFromPanelHint": "从面板 SSL 设置复制证书路径。",
     "certPemHint": "证书 PEM 文本。",
