@@ -134,12 +134,28 @@ func validateListenerEndpoints(listeners []models.Listener) error {
 			}
 			a := firstListenerAddress(listeners[i])
 			b := firstListenerAddress(listeners[j])
-			if listenerAddressesConflict(a, b) {
+			if listenerAddressesConflict(a, b) && listenersShareTransport(listeners[i], listeners[j]) {
 				return fmt.Errorf("listeners %q and %q have conflicting bind address/port ranges (%s:%s and %s:%s)", listeners[i].Name, listeners[j].Name, a, listeners[i].Port, b, listeners[j].Port)
 			}
 		}
 	}
 	return nil
+}
+
+// listenersShareTransport reports whether two listeners bind the same L4
+// transport (TCP vs UDP). A TCP listener and a UDP listener on the same
+// address:port are independent sockets at the OS level and must not be treated
+// as a conflict — Mihomo serves both fine. This mirrors the creation-time guard
+// in internal/listener so the two layers agree on what coexistence is allowed.
+func listenersShareTransport(a, b models.Listener) bool {
+	for _, ta := range protocol.ListenerTransports(a.Protocol) {
+		for _, tb := range protocol.ListenerTransports(b.Protocol) {
+			if ta == tb {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func validateListenerEndpoint(l *models.Listener) error {
