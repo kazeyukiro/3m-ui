@@ -1,0 +1,1647 @@
+openapi: 3.0.3
+info:
+  title: 3m-ui API
+  version: "1.3"
+  description: |
+    REST API for the 3m-ui Mihomo management panel.
+
+    Server egress: GET/PUT /config/server-routing (serving Mihomo rules + warpDomains).
+    WARP account: GET/POST/DELETE /system/warp (injects outbound WARP at config apply).
+    Client subscription rules: /config/rules and /config/groups (visual-config only).
+
+    - Base path: `/api/v1`
+    - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login` (or GitHub OAuth callback when enabled)
+    - Public subscription routes use path tokens (no JWT)
+
+    Subscription URLs:
+    - Always available: `/api/v1/client/sub/{token}` (and `/client/clash|v2ray|json/{token}`)
+    - Optional short path from config `server.sub_path` (e.g. `/sub/{token}`) on the same
+      process; optional `server.sub_port` serves subscription routes on a second listener.
+    - Generated links use `server.public_url` + `SubscriptionBasePath` (sub_path or legacy).
+
+    Cross-machine subscription: sync remote nodes via `/cluster/{id}/sync-nodes`,
+    bind with `/users/{id}/remote-nodes`, then the user's sub URL merges local + remote.
+
+    Async core apply: Listener create/update/delete (and user create/update that changes credentials) persist to the panel DB and return as soon as the write succeeds. Mihomo config application is debounced in the background (~400ms); a successful HTTP response does not mean the core has finished reloading. Use POST /nodes/{id}/reload or the core restart endpoints if you need a synchronous apply. Activation failures are logged server-side and do not roll back the panel record.
+
+    Proxy users support group/tags, per-user traffic reset cycle (`traffic_reset_days`)
+    and post-expiry renew (`expire_renew_days`). Export all share links via
+    `GET /users/export-links`.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: health
+  - name: users
+  - name: nodes
+  - name: cluster
+  - name: subscription
+  - name: traffic
+  - name: mihomo
+  - name: config
+  - name: system
+  - name: telegram
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness probe (includes panel build info)
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, example: v1.0.6 }
+                  git_commit: { type: string }
+                  build_time: { type: string }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login (returns JWT)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: token, expires_at, username
+
+
+  /auth/oauth/github:
+    get:
+      tags: [auth]
+      summary: Public GitHub OAuth status (enabled + client_id)
+      security: []
+      responses:
+        "200":
+          description: "{ enabled, client_id? }"
+
+  /auth/oauth/github/start:
+    get:
+      tags: [auth]
+      summary: Redirect browser to GitHub authorize URL
+      security: []
+      responses:
+        "302":
+          description: Redirect to github.com/login/oauth/authorize
+
+  /auth/oauth/github/callback:
+    get:
+      tags: [auth]
+      summary: OAuth callback; redirects to /login with oauth_token or oauth_error
+      security: []
+      parameters:
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: state
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect to panel /login
+
+  /auth/oauth/github/settings:
+    get:
+      tags: [auth]
+      summary: Get GitHub OAuth settings (admin)
+      responses:
+        "200":
+          description: "{ enabled, client_id, client_secret, allowed_logins[] }"
+    put:
+      tags: [auth]
+      summary: Save GitHub OAuth settings (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                client_id: { type: string }
+                client_secret: { type: string }
+                allowed_logins:
+                  type: array
+                  items: { type: string }
+                  description: GitHub usernames allowed to bind on first login
+      responses:
+        "200":
+          description: Saved; may include callback_url
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Current admin profile
+      responses:
+        "200":
+          description: Admin user info
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change admin password
+      responses:
+        "200":
+          description: Password updated
+
+  /dashboard:
+    get:
+      tags: [system]
+      summary: Dashboard snapshot (core, host, panel/core process, traffic)
+      description: |
+        Combined snapshot for the panel home page. Polling every few seconds is expected.
+
+        Process metrics (`panel`, `core`) are OS-level samples for the 3m-ui binary and the
+        managed Mihomo process. `cpu_percent` is a short delta (first sample after a gap may
+        be ~0). `memory_used` is RSS bytes; `memory_percent` is share of system RAM (0–100).
+        When the core is stopped, `core.pid` is 0 and CPU/memory fields are zero.
+      responses:
+        "200":
+          description: |
+            Object with `mihomo` (StatusResponse), `system` (host CPU/memory/disk/network),
+            `panel` / `core` (ProcessUsage), `listeners`, `users`, and `traffic` counters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mihomo:
+                    type: object
+                    properties:
+                      running: { type: boolean }
+                      version: { type: string }
+                      pid: { type: integer }
+                      uptime: { type: string }
+                  system:
+                    type: object
+                    description: Host-wide metrics (not a single process)
+                  panel:
+                    $ref: '#/components/schemas/ProcessUsage'
+                  core:
+                    $ref: '#/components/schemas/ProcessUsage'
+                  listeners:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      enabled: { type: integer }
+                      disabled: { type: integer }
+                  users:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      enabled: { type: integer }
+                      online: { type: integer }
+                  traffic:
+                    type: object
+
+  /users:
+    get:
+      tags: [users]
+      summary: List proxy users
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search username, remark, tags, or group
+        - in: query
+          name: group
+          schema: { type: string }
+          description: Exact group match
+        - in: query
+          name: enabled
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
+        - in: query
+          name: online
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
+        - in: query
+          name: blocked
+          schema: { type: string, enum: ["true", "false", "1", "0"] }
+      responses:
+        "200":
+          description: SafeUser array
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProxyUser" }
+    post:
+      tags: [users]
+      summary: Create proxy user
+      description: |
+        Creates the proxy user in the panel DB and returns 201 immediately.
+        Credential injection into Mihomo is scheduled asynchronously (debounced).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyUserWrite" }
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyUser" }
+
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users]
+      summary: Get proxy user
+      responses:
+        "200":
+          description: SafeUser
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyUser" }
+    put:
+      tags: [users]
+      summary: Update proxy user
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProxyUserWrite" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyUser" }
+    delete:
+      tags: [users]
+      summary: Delete proxy user (soft-delete; unique name/username freed)
+      responses:
+        "200":
+          description: Deleted
+
+
+  /users/export-links:
+    get:
+      tags: [users, subscription]
+      summary: Export subscription URLs for all (or filtered) users
+      description: |
+        One-click ops export. Returns username, group, tags and subscription URLs
+        (default + clash/v2ray/singbox targets) for each user with a sub_token.
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: group
+          schema: { type: string }
+      responses:
+        "200":
+          description: Export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        username: { type: string }
+                        remark: { type: string }
+                        group: { type: string }
+                        tags: { type: string }
+                        enabled: { type: boolean }
+                        sub_token: { type: string }
+                        subscription: { type: string, format: uri }
+                        subscription_clash: { type: string, format: uri }
+                        subscription_v2ray: { type: string, format: uri }
+                        subscription_singbox: { type: string, format: uri }
+
+  /users/batch:
+    post:
+      tags: [users]
+      summary: Batch enable/disable/reset-traffic/delete/extend users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, ids]
+              properties:
+                action:
+                  type: string
+                  enum: [enable, disable, reset-traffic, delete, extend-days, add-traffic]
+                ids:
+                  type: array
+                  items: { type: integer }
+                days: { type: integer, description: For extend-days }
+                traffic_gb: { type: number, description: For add-traffic }
+      responses:
+        "200":
+          description: '{ "affected": n, "action": "..." }'
+
+  /users/del-depleted:
+    post:
+      tags: [users]
+      summary: Delete expired or over-quota users
+      responses:
+        "200":
+          description: '{ "deleted": n }'
+
+  /users/{id}/nodes:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users]
+      summary: List local listeners bound to user
+      responses:
+        "200":
+          description: Node list
+    post:
+      tags: [users]
+      summary: Replace local node bindings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listener_ids:
+                  type: array
+                  items: { type: integer }
+      responses:
+        "200":
+          description: Bindings updated
+
+  /users/{id}/remote-nodes:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users, cluster]
+      summary: List mirrored remote node IDs bound to user
+      responses:
+        "200":
+          description: '{ "mirror_ids": [1,2] }'
+    post:
+      tags: [users, cluster]
+      summary: Replace remote node mirror bindings (cross-machine sub merge)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mirror_ids:
+                  type: array
+                  items: { type: integer }
+                remote_node_ids:
+                  type: array
+                  items: { type: integer }
+                  description: Alias of mirror_ids
+      responses:
+        "200":
+          description: Bindings updated
+
+
+  /users/{id}/node-traffic:
+    get:
+      tags: [Users]
+      summary: Per-node traffic for a user (raw + billed via multiplier)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Per-node raw and billed usage
+  /users/{id}/reset-traffic:
+    post:
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Reset traffic counters
+      responses:
+        "200":
+          description: Counters cleared
+
+  /users/{id}/subscription:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [users, subscription]
+      summary: Get user subscription token and URL
+      responses:
+        "200":
+          description: token, url
+
+  /users/{id}/subscription/rotate:
+    post:
+      tags: [users, subscription]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Rotate subscription token
+      responses:
+        "200":
+          description: New token and url
+
+  /nodes:
+    get:
+      tags: [nodes]
+      summary: List listeners (alias /listeners)
+      responses:
+        "200":
+          description: Listener list
+    post:
+      tags: [nodes]
+      summary: Create listener
+      description: |
+        Alias of POST /listeners. Returns 201 after the panel DB write; Mihomo
+        ApplyConfig is debounced asynchronously (see API info). Empty/zero port is
+        auto-allocated. For REALITY, supply a nonempty reality-config.dest inside
+        config (JSON string). Call POST /nodes/reality/scan first and copy
+        selected.target into dest, or choose a target manually. Creation does not
+        run a scan; missing credentials are still generated on save.
+        Prefer POST /nodes/quick when only protocol + name are needed.
+      responses:
+        "201":
+          description: Created (core apply may still be in progress)
+        "400":
+          description: Invalid listener, including a missing or blank REALITY destination
+
+
+  /nodes/batch/certificate:
+    post:
+      tags: [Nodes]
+      summary: Apply TLS certificate to multiple listeners
+      description: |
+        Writes certificate + private-key into each listener config.
+        Provide PEM fields, or cert_file+key_file (allowlisted paths), or from_panel_ssl.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer } }
+                certificate: { type: string }
+                private_key: { type: string }
+                cert_file: { type: string }
+                key_file: { type: string }
+                from_panel_ssl: { type: boolean }
+      responses:
+        "200":
+          description: Per-node results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: array, items: { type: integer } }
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        error: { type: string }
+  /nodes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [nodes]
+      summary: Get listener
+      responses:
+        "200":
+          description: Listener
+    put:
+      tags: [nodes]
+      summary: Update listener
+      description: |
+        Alias of PUT /listeners/{id}. Returns after the panel DB write; Mihomo
+        ApplyConfig is debounced asynchronously (see API info). Submit the full listener, preserving its
+        other fields and credentials. For REALITY, config is a JSON-encoded
+        string and must contain a nonempty reality-config.dest. Retain the saved
+        destination unless deliberately changing it. An omitted destination is
+        no longer filled from Microsoft or SNI. Updating does not run a scan or
+        automatically rotate the destination.
+      responses:
+        "200":
+          description: Updated
+        "400":
+          description: Invalid listener, including a missing or blank REALITY destination
+    delete:
+      tags: [nodes]
+      summary: Delete listener
+      description: |
+        Soft-deletes the listener in the panel DB and returns immediately.
+        Mihomo ApplyConfig is debounced asynchronously (see API info).
+      responses:
+        "200":
+          description: Deleted (core apply may still be in progress)
+
+  /nodes/{id}/uri:
+    get:
+      tags: [nodes]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Export share URI / client_yaml
+      responses:
+        "200":
+          description: uri, uris, client_yaml
+
+  /listeners/reality/scan:
+    post:
+      tags: [nodes]
+      summary: Find REALITY targets from this node's network
+      description: |
+        Samples only auto_select entries from the reviewed candidate catalog,
+        10 at a time, up to 30 probes with
+        5 concurrent target probes and 5 seconds per probe. Each probe races at
+        most 2 validated IPs with a 200ms fallback delay and a 1-second TCP
+        connection timeout per address. Stops after finding
+        at least 3 eligible targets. Selects randomly within a latency window
+        (max 300ms or 3x fastest, capped at 1500ms). Checks TLS 1.3, h2, X25519,
+        certificates, HTTP redirects and known delivery-network DNS/header signals.
+        Disabled catalog entries are never probed by this endpoint. Not proof against
+        fallback abuse. No custom target input; does not modify a listener.
+        Runs on the receiving panel, also when called via the cluster proxy.
+        Alias: POST /nodes/reality/scan. After a successful selection, copy
+        selected.target into reality-config.dest inside the listener's
+        JSON-encoded config string and submit a separate create/update request.
+        If selected is null, retry or enter a target manually; there is no default
+        fallback. Saving a listener never implicitly calls this endpoint.
+      responses:
+        "200":
+          description: Completed; selected is null if no target qualified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [selected, candidates, scanned, checked_at]
+                properties:
+                  selected:
+                    allOf:
+                      - $ref: '#/components/schemas/RealityTarget'
+                    nullable: true
+                  candidates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RealityTarget'
+                  scanned:
+                    type: integer
+                    maximum: 30
+                  checked_at:
+                    type: string
+                    format: date-time
+        "408":
+          description: Scan interrupted or timed out
+        "429":
+          description: A scan is already running; retry later
+
+  /nodes/reality/scan:
+    $ref: '#/paths/~1listeners~1reality~1scan'
+
+  /listeners:
+    get:
+      tags: [nodes]
+      summary: List listeners (same as /nodes)
+      responses:
+        "200":
+          description: Listener list
+    post:
+      tags: [nodes]
+      summary: Create listener
+      description: |
+        Alias of POST /nodes. Returns after the panel DB write; Mihomo ApplyConfig
+        is debounced asynchronously (see API info). Empty/zero port is auto-allocated.
+        For REALITY, supply a nonempty reality-config.dest inside config (JSON string).
+        Call POST /listeners/reality/scan first and copy selected.target into dest,
+        or choose a target manually. Prefer POST /listeners/quick for name+protocol only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: reality-node
+              protocol: vless
+              port: "10443"
+              enabled: true
+              config: '{"reality-config":{"dest":"chosen.example.com:443"}}'
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Invalid listener, including a missing or blank REALITY destination
+
+  /listeners/{id}:
+    $ref: '#/paths/~1nodes~1{id}'
+
+  /cluster:
+    get:
+      tags: [cluster]
+      summary: List remote 3m-ui panels
+      responses:
+        "200":
+          description: RemoteServer array
+    post:
+      tags: [cluster]
+      summary: Register remote panel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, base_url]
+              properties:
+                name: { type: string }
+                base_url: { type: string, example: "https://panel.example.com:8080" }
+                api_token:
+                  type: string
+                  description: JWT from remote POST /auth/login (not a sub token)
+                enabled: { type: boolean }
+                remark: { type: string }
+      responses:
+        "201":
+          description: Created
+
+  /cluster/health-all:
+    post:
+      tags: [cluster]
+      summary: Health-check all remotes
+      responses:
+        "200":
+          description: Updated RemoteServer list
+
+  /cluster/mirrored-nodes:
+    get:
+      tags: [cluster]
+      summary: List synced remote node mirrors (for sub merge)
+      parameters:
+        - in: query
+          name: remote_server_id
+          schema: { type: integer }
+      responses:
+        "200":
+          description: RemoteNodeMirror array
+
+  /cluster/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    put:
+      tags: [cluster]
+      summary: Update remote panel
+      responses:
+        "200":
+          description: Updated
+    delete:
+      tags: [cluster]
+      summary: Remove remote panel registration
+      responses:
+        "200":
+          description: Deleted
+
+  /cluster/{id}/health:
+    post:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Health-check one remote
+      responses:
+        "200":
+          description: RemoteServer with last_status
+
+  /cluster/{id}/sync-nodes:
+    post:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Pull remote nodes + URI/client_yaml into local mirrors
+      responses:
+        "200":
+          description: RemoteNodeMirror array
+        "502":
+          description: upstream cluster operation failed
+
+  /cluster/{id}/nodes:
+    parameters:
+      - $ref: "#/components/parameters/IdPath"
+    get:
+      tags: [cluster]
+      summary: Proxy list nodes on remote panel
+      responses:
+        "200":
+          description: Remote raw JSON
+    post:
+      tags: [cluster]
+      summary: Proxy create node on remote
+      responses:
+        "200":
+          description: Remote response
+
+  /cluster/{id}/dashboard:
+    get:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Proxy remote dashboard
+      responses:
+        "200":
+          description: Remote dashboard JSON
+
+  /cluster/{id}/users:
+    get:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Proxy remote users list
+      responses:
+        "200":
+          description: Remote users JSON
+
+  /cluster/{id}/mihomo/restart:
+    post:
+      tags: [cluster]
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      summary: Restart Mihomo on remote
+      responses:
+        "200":
+          description: OK / upstream error
+
+  /client/sub/{token}:
+    get:
+      tags: [subscription]
+      summary: User subscription (UA or ?target= selects format)
+      description: |
+        Public (no JWT). Formats via User-Agent or `?target=clash|v2ray|singbox|html`.
+        When `server.sub_path` is set (e.g. `/sub`), the same handler is also mounted at
+        `{sub_path}/{token}` on the panel port and, if configured, on `server.sub_port`.
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+        - in: query
+          name: target
+          schema:
+            type: string
+            enum: [mihomo, clash, meta, v2ray, base64, singbox, html]
+        - in: query
+          name: html
+          schema: { type: string, enum: ["1"] }
+      responses:
+        "200":
+          description: YAML / base64 / JSON / HTML; headers include Subscription-Userinfo
+
+  /client/clash/{token}:
+    get:
+      tags: [subscription]
+      security: []
+      summary: Force Clash/Meta YAML
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/yaml
+
+  /client/v2ray/{token}:
+    get:
+      tags: [subscription]
+      security: []
+      summary: Force v2ray Base64 URI list
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/plain base64
+
+  /client/json/{token}:
+    get:
+      tags: [subscription]
+      security: []
+      summary: Force sing-box JSON
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: application/json
+
+  /traffic/status:
+    get:
+      tags: [traffic]
+      summary: Global traffic snapshot
+      responses:
+        "200":
+          description: Rates and totals
+  /traffic/users:
+    get:
+      tags: [traffic]
+      summary: Per-user traffic
+      responses:
+        "200":
+          description: UserTraffic array
+  /traffic/connections:
+    get:
+      tags: [traffic]
+      summary: Active connections
+      responses:
+        "200":
+          description: Connection list
+
+  /mihomo/status:
+    get:
+      tags: [mihomo]
+      summary: Core process status
+      responses:
+        "200":
+          description: running, pid, version
+  /mihomo/start:
+    post:
+      tags: [mihomo]
+      summary: Start core
+      responses:
+        "200":
+          description: OK
+  /mihomo/stop:
+    post:
+      tags: [mihomo]
+      summary: Stop core
+      responses:
+        "200":
+          description: OK
+  /mihomo/restart:
+    post:
+      tags: [mihomo]
+      summary: Restart core
+      responses:
+        "200":
+          description: OK
+  /mihomo/logs:
+    get:
+      tags: [mihomo]
+      summary: Recent Mihomo core logs
+      description: |
+        In-memory ring of Mihomo process stdout/stderr lines only.
+        Panel process logs (ACME, bootstrap, errors) are **not** included;
+        use `GET /system/panel-logs` instead. The web UI Logs page shows
+        the two streams on separate tabs.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEntry'
+
+  /config:
+    get:
+      tags: [config]
+      summary: Current generated / stored config view
+      responses:
+        "200":
+          description: Config payload
+  /config/generate:
+    post:
+      tags: [config]
+      summary: Generate Mihomo config from DB
+      responses:
+        "200":
+          description: Generated YAML/text
+  /config/preview:
+    post:
+      tags: [config]
+      summary: Preview config without applying
+      responses:
+        "200":
+          description: Preview
+  /config/validate:
+    post:
+      tags: [config]
+      summary: Validate candidate config
+      responses:
+        "200":
+          description: Validation result
+  /config/apply:
+    post:
+      tags: [config]
+      summary: Apply config (with rollback on failure)
+      responses:
+        "200":
+          description: Applied
+  /config/rollback:
+    post:
+      tags: [config]
+      summary: Rollback last config
+      responses:
+        "200":
+          description: Rolled back
+
+  /config/visual:
+    get:
+      tags: [config]
+      summary: Visual config (mode, general, proxies, groups, rules)
+      description: |
+        Includes global Mihomo keys `inboundTfo` / `inboundMptcp` (YAML `inbound-tfo` /
+        `inbound-mptcp`) applied to **server** inbound sockets only — never copied into
+        client subscription documents. Per-proxy `tfo` / `mptcp` live on each proxy object
+        and **are** exported to client subscriptions when set.
+      responses:
+        "200":
+          description: VisualConfig JSON
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisualConfig'
+    post:
+      tags: [config]
+      summary: Save visual config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisualConfig'
+      responses:
+        "200":
+          description: Saved
+
+  /system/status:
+    get:
+      tags: [system]
+      summary: Host metrics
+      responses:
+        "200":
+          description: CPU/mem/disk
+  /system/panel-logs:
+    get:
+      tags: [system]
+      summary: Recent panel process logs
+      description: |
+        In-memory ring of panel stdlib `log` output (ACME renew, startup,
+        errors), tagged with `[panel]` in the payload. Separate from
+        Mihomo core logs (`GET /mihomo/logs`). Requires admin JWT.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Array of log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogEntry'
+  /system/panel-server:
+    get:
+      tags: [system]
+      summary: Panel listen port / public_url
+      responses:
+        "200":
+          description: Panel server settings
+    put:
+      tags: [system]
+      summary: Update panel server settings (may require restart)
+      responses:
+        "200":
+          description: Saved
+  /system/backup:
+    get:
+      tags: [system]
+      summary: Download zip backup (SQLite + Mihomo config)
+      responses:
+        "200":
+          description: application/zip
+  /system/backups:
+    get:
+      tags: [System]
+      summary: List on-disk install/update backups
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Backup list
+  /system/backups/cleanup:
+    post:
+      tags: [System]
+      summary: Cleanup on-disk backups by keep count and/or age
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keep: { type: integer, description: "Keep newest N (0 = ignore)" }
+                older_than_days: { type: integer, description: "Delete older than N days (0 = ignore)" }
+      responses:
+        "200":
+          description: Cleanup result
+  /system/backups/{name}:
+    delete:
+      tags: [System]
+      summary: Delete one on-disk backup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+
+  /system/backup/restore-db:
+    post:
+      tags: [system]
+      summary: Restore SQLite from multipart field `database`
+      responses:
+        "200":
+          description: Restored (restart required)
+  /system/restart:
+    post:
+      tags: [system]
+      summary: Restart the panel process (systemd Restart=always brings it back)
+      description: |
+        Triggers a graceful panel restart. The handler responds 200 first,
+        then calls `os.Exit(0)` after a 500ms delay so systemd's
+        `Restart=always` brings the panel back with the same config.
+        The web UI polls `/api/v1/health` and auto-reloads when the panel
+        is back (typically 2-3 seconds).
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Panel is restarting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  message:
+                    type: string
+                    example: Panel is restarting now. This page will auto-reload when it is back.
+
+  /system/update-info:
+    get:
+      tags: [system]
+      summary: Check for latest stable and pre-release versions on GitHub
+      description: |
+        Queries the GitHub releases API for BOTH the latest stable release
+        (`/releases/latest`) and the pre-release tag (`/releases/tags/pre`)
+        simultaneously. Returns the current panel version + channel, the
+        latest version for each channel, and whether an update is available
+        for the target (opposite) channel — so the UI can offer switching
+        between stable and pre-release.
+
+        Channel detection reads the `CHANNEL` file alongside the binary
+        (written by `install.sh`). Falls back to checking the version
+        string for `-rc` or `-pre` suffixes.
+
+        Pre-release URL: https://github.com/kazeyukiro/3m-ui/releases/tag/pre
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Update information (both channels)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_version:
+                    type: string
+                    example: v1.3.0
+                  current_channel:
+                    type: string
+                    enum: [stable, pre]
+                    example: stable
+                    description: Detected from CHANNEL file or version suffix
+                  target_channel:
+                    type: string
+                    enum: [stable, pre]
+                    example: pre
+                    description: The channel you are NOT currently on (for switch prompt)
+                  latest_version:
+                    type: string
+                    example: pre
+                    description: Latest version in the target channel
+                  latest_stable:
+                    type: string
+                    example: v1.3.0
+                    description: Latest stable release tag from GitHub /releases/latest
+                  latest_pre:
+                    type: string
+                    example: pre
+                    description: Latest pre-release tag from GitHub /releases/tags/pre
+                  update_available:
+                    type: boolean
+                    example: true
+                    description: Whether the target channel has a newer version
+                  release_url:
+                    type: string
+                    example: https://github.com/kazeyukiro/3m-ui/releases/tag/pre
+                  release_notes:
+                    type: string
+                    description: GitHub release body for the target channel (markdown)
+                  error:
+                    type: string
+                    description: Present when GitHub API is unreachable
+
+  /system/update:
+    post:
+      tags: [system]
+      summary: Trigger update.sh in the background to update the panel
+      description: |
+        Runs the `update.sh` script in the background. The script downloads
+        the latest release, stops the panel, replaces binaries + scripts,
+        and restarts the panel via systemd. The handler responds immediately
+        (the update takes 30-60 seconds). The web UI polls `/api/v1/health`
+        with a 120-second timeout and auto-reloads when the panel is back.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Update started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  message:
+                    type: string
+                    example: Update started. The panel will restart automatically when the update completes.
+        "503":
+          description: update.sh not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "update.sh not found at /usr/local/lib/3m-ui/update.sh. Update via SSH: 3m-ui update"
+
+  /system/ssl:
+    get:
+      tags: [system]
+      summary: Panel SSL settings
+      description: |
+        Returns panel SSL configuration including `domain_note` / `ip_note` (acmez auto-renew; IP uses LE shortlived profile). `dns_token` is never echoed (use
+        `/system/ssl/status` → `has_dns_token`). Engine: **acmez** (domains + IP). Modes: HTTP-01, DNS-01 wildcard (Cloudflare),
+        IP shortlived (LE profile), and manual PEMs.
+      responses:
+        "200":
+          description: SSL settings (token redacted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSSLSettings'
+    put:
+      tags: [system]
+      summary: Update panel SSL (restart to apply)
+      description: |
+        Enable HTTPS via Let's Encrypt or manual certs. Wildcard domains
+        (`*.example.com`) require `challenge=dns-01` and a Cloudflare `dns_token`.
+        Empty `dns_token` on update keeps the previously stored token.
+        Restart the panel process for ListenTLS / issuance to take effect.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelSSLSettings'
+      responses:
+        "200":
+          description: Saved
+        "400":
+          description: Validation error (missing domain/token, etc.)
+  /system/ssl/status:
+    get:
+      tags: [system]
+      summary: Panel SSL runtime status
+      responses:
+        "200":
+          description: Enabled, domain, mode hints
+
+  /system/subscription-page/default-template:
+    get:
+      tags: [system, subscription]
+      summary: Download default subscription HTML template
+      responses:
+        "200":
+          description: HTML template body
+
+  /system/templates/reverse-proxy:
+    post:
+      tags: [system]
+      summary: Generate reverse-proxy snippet template
+      responses:
+        "200":
+          description: Template text
+
+  /system/templates/acme:
+    post:
+      tags: [system]
+      summary: Generate ACME helper template
+      responses:
+        "200":
+          description: Template text
+
+  /openapi.yaml:
+    get:
+      tags: [system]
+      summary: This OpenAPI document
+      security: []
+      responses:
+        "200":
+          description: application/yaml
+
+components:
+  schemas:
+
+    PanelSSLSettings:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        domain: { type: string, description: "Hostname, *.example.com, or public IP" }
+        email: { type: string }
+        cache_dir: { type: string }
+        cert_file: { type: string }
+        key_file: { type: string }
+        listen_http: { type: string, example: ":80" }
+        listen_tls: { type: string, example: ":443" }
+        challenge: { type: string, description: "empty/http-01 or dns-01", enum: ["", "http-01", "dns-01"] }
+        dns_provider: { type: string, example: cloudflare }
+        dns_token: { type: string, description: "Write-only; omitted on GET" }
+        dns_zone: { type: string, description: "Optional zone name e.g. example.com" }
+
+    ProcessUsage:
+      type: object
+      description: CPU and RSS for one OS process (panel binary or Mihomo core)
+      properties:
+        pid: { type: integer, description: Process id; 0 if not running }
+        cpu_percent: { type: number, format: float, description: 0–100 process CPU }
+        memory_used: { type: number, format: float, description: RSS bytes }
+        memory_percent: { type: number, format: float, description: 0–100 of system RAM }
+    VisualConfig:
+      type: object
+      properties:
+        mode: { type: string, example: rule }
+        logLevel: { type: string, example: info }
+        allowLan: { type: boolean }
+        ipv6: { type: boolean }
+        inboundTfo:
+          type: boolean
+          description: Global inbound TCP Fast Open (Mihomo inbound-tfo); server only
+        inboundMptcp:
+          type: boolean
+          description: Global inbound Multipath TCP (Mihomo inbound-mptcp); server only
+        proxies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProxyEntry'
+        proxyGroups: { type: array, items: { type: object } }
+        rules: { type: array, items: { type: string } }
+    ProxyEntry:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        server: { type: string }
+        port: { type: string }
+        password: { type: string }
+        uuid: { type: string }
+        tfo:
+          type: boolean
+          description: Per-proxy TCP Fast Open (TCP only); included in client subscriptions
+        mptcp:
+          type: boolean
+          description: Per-proxy Multipath TCP (TCP only); included in client subscriptions
+    LogEntry:
+
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        level:
+          type: string
+          description: debug|info|warning|error
+          example: info
+        payload:
+          type: string
+          description: Log line body (panel lines may start with [panel])
+    ProxyUser:
+      type: object
+      description: Safe proxy-user view (no password/uuid secrets)
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        enabled: { type: boolean }
+        traffic_limit: { type: integer, format: int64, description: "0 = unlimited (bytes)" }
+        traffic_used: { type: integer, format: int64 }
+        upload_bytes: { type: integer, format: int64 }
+        download_bytes: { type: integer, format: int64 }
+        expire_time: { type: string, format: date-time }
+        online: { type: boolean }
+        blocked: { type: boolean }
+        ip_limit: { type: integer, description: "0 = unlimited concurrent source IPs; enforced by ~5s connection poll (disconnect excess)" }
+        sub_pull_limit: { type: integer, description: "0 = unlimited; max successful subscription pulls per rolling 24h" }
+        remark: { type: string }
+        group: { type: string, description: Admin group label }
+        tags: { type: string, description: "Comma-separated labels" }
+        traffic_reset_days: { type: integer, description: "Per-user traffic cycle; 0 = off" }
+        expire_renew_days: { type: integer, description: "Extend N days after expiry; 0 = off" }
+        last_traffic_cycle_reset: { type: string, format: date-time, nullable: true }
+        sub_token: { type: string }
+        telegram_id: { type: integer, format: int64 }
+        telegram_name: { type: string }
+        last_seen: { type: string, format: date-time, nullable: true }
+    ProxyUserWrite:
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string, description: Empty = auto-generate on create }
+        uuid: { type: string, description: Empty = auto-generate }
+        traffic_limit: { type: integer, format: int64 }
+        ip_limit: { type: integer, description: "0 = unlimited concurrent source IPs" }
+        sub_pull_limit: { type: integer, description: "0 = unlimited pulls per rolling 24h" }
+        remark: { type: string }
+        group: { type: string }
+        tags: { type: string }
+        traffic_reset_days: { type: integer }
+        expire_renew_days: { type: integer }
+        expire_time: { type: string, format: date-time }
+        enabled: { type: boolean }
+        telegram_id: { type: integer, format: int64 }
+        telegram_name: { type: string }
+    RealityTarget:
+      type: object
+      required: [target, server_name, latency_ms, eligible]
+      properties:
+        target:
+          type: string
+          example: chosen.example.com:443
+        server_name:
+          type: string
+          example: chosen.example.com
+        latency_ms:
+          type: integer
+        eligible:
+          type: boolean
+        reason:
+          type: string
+          description: Rejection code, when ineligible
+        evidence:
+          type: object
+          description: Observed DNS, TLS, certificate, HTTP and delivery-network signals; not a hosting safety attestation
+          properties:
+            cname: { type: string }
+            ip: { type: string }
+            tls_version: { type: string }
+            alpn: { type: string }
+            key_exchange: { type: string }
+            certificate_valid: { type: boolean }
+            certificate_expires: { type: string, format: date-time }
+            http_status: { type: integer }
+            server: { type: string }
+            redirect: { type: string }
+            cloudflare: { type: boolean }
+            delivery_signal: { type: string }
+  parameters:
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
+
+
+  /config/rules:
+    get:
+      tags: [config]
+      summary: List client-subscription routing rules (visual-config only)
+      description: Does not affect the serving Mihomo process.
+      responses:
+        "200":
+          description: string[] rule lines
+    put:
+      tags: [config]
+      summary: Replace client-subscription routing rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { type: string }
+      responses:
+        "200":
+          description: Saved rules
+  /config/groups:
+    get:
+      tags: [config]
+      summary: List client-subscription proxy-groups (visual-config)
+      responses:
+        "200":
+          description: Group list
+    put:
+      tags: [config]
+      summary: Replace client-subscription proxy-groups
+      responses:
+        "200":
+          description: Saved groups
+  /config/server-routing:
+    get:
+      tags: [config]
+      summary: Get server egress routing (serving Mihomo)
+      description: |
+        Controls how traffic leaves the VPS after hitting listeners.
+        Distinct from visual-config (client subscription).
+        When warpDomains is non-empty, a saved WARP account is required at apply time.
+      responses:
+        "200":
+          description: ServerRoutingConfig
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proxies:
+                    type: array
+                    items: { type: object }
+                  proxyGroups:
+                    type: array
+                    items: { type: object }
+                  rules:
+                    type: array
+                    items: { type: string }
+                    example: ["MATCH,DIRECT"]
+                  warpDomains:
+                    type: array
+                    items: { type: string }
+                    description: Domains (or GEOSITE:name) routed via outbound WARP
+    put:
+      tags: [config]
+      summary: Save server egress routing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxies: { type: array, items: { type: object } }
+                proxyGroups: { type: array, items: { type: object } }
+                rules: { type: array, items: { type: string } }
+                warpDomains: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Saved ServerRoutingConfig
+  /config/rule-providers/status:
+    get:
+      tags: [config]
+      summary: Live rule-provider status from Mihomo (GET /providers/rules)
+      responses:
+        "200":
+          description: providers object from core
+        "502":
+          description: core API unreachable
+  /config/rule-providers/{name}/update:
+    put:
+      tags: [config]
+      summary: Hot-update one rule-set (Mihomo PUT /providers/rules/{name})
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+        "502":
+          description: update failed
+  /system/warp:
+    get:
+      tags: [system]
+      summary: WARP account status (no secrets)
+      responses:
+        "200":
+          description: WARPAccountView
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
+                  device_id: { type: string }
+                  license_key: { type: string }
+                  address_v4: { type: string }
+                  address_v6: { type: string }
+                  endpoint_host: { type: string }
+                  endpoint_port: { type: integer }
+                  peer_public_key: { type: string }
+                  updated_at: { type: string, format: date-time }
+                  proxy_name: { type: string, example: WARP }
+    post:
+      tags: [system]
+      summary: Register Cloudflare WARP and persist account
+      description: |
+        Creates a WARP device, stores warp-account in panel settings, and enables
+        outbound name WARP for server egress. Query mode=wireguard|masque selects YAML preview.
+      parameters:
+        - in: query
+          name: mode
+          schema: { type: string, enum: [wireguard, masque] }
+      responses:
+        "200":
+          description: account + optional yaml
+        "502":
+          description: Cloudflare registration failed
+    delete:
+      tags: [system]
+      summary: Delete persisted WARP account
+      responses:
+        "200":
+          description: ok
+  /system/templates/warp/register:
+    post:
+      tags: [system]
+      summary: Register WARP (YAML + persist account by default)
+      description: |
+        Same registration as POST /system/warp. Persists account unless nosave=1.
+        Prefer POST /system/warp for account lifecycle.
+      parameters:
+        - in: query
+          name: mode
+          schema: { type: string, enum: [wireguard, masque, both] }
+        - in: query
+          name: nosave
+          schema: { type: string, enum: ["1"] }
+          description: Skip persisting warp-account
+      responses:
+        "200":
+          description: yaml / masque_yaml and addresses
+        "502":
+          description: Registration failed
+  /system/templates/warp:
+    post:
+      tags: [system]
+      summary: Build WireGuard YAML from operator-supplied keys (advanced)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                private_key: { type: string }
+                address: { type: string }
+                ipv6: { type: string }
+                reserved: { type: string }
+      responses:
+        "200":
+          description: yaml
+
