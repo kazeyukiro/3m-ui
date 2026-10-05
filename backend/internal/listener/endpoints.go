@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 )
 
 func portRanges(value string) ([][2]int, bool) {
@@ -79,4 +80,19 @@ func listenerAddressesConflict(a, b string) bool {
 		return strings.EqualFold(a, b)
 	}
 	return ia.Equal(ib)
+}
+
+// listenersShareTransport reports whether two listeners bind a common L4 transport
+// on their listening socket (per protocol.ListenerTransports). A TCP listener and a
+// UDP listener on the same address:port are independent sockets and must not be
+// reported as a conflict, so they return false here.
+func listenersShareTransport(a, b models.Listener) bool {
+	for _, x := range protocol.ListenerTransports(a.Protocol) {
+		for _, y := range protocol.ListenerTransports(b.Protocol) {
+			if x == y {
+				return true
+			}
+		}
+	}
+	return false
 }
