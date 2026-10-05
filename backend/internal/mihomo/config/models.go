@@ -9,6 +9,8 @@ type MihomoConfig struct {
 	AllowLan           bool                     `yaml:"allow-lan,omitempty"`
 	LogLevel           string                   `yaml:"log-level,omitempty"`
 	IPv6               bool                     `yaml:"ipv6,omitempty"`
+	InboundTfo         bool                     `yaml:"inbound-tfo,omitempty"`
+	InboundMPTCP       bool                     `yaml:"inbound-mptcp,omitempty"`
 	ExternalController string                   `yaml:"external-controller,omitempty"`
 	Secret             string                   `yaml:"secret,omitempty"`
 	DNS                map[string]interface{}   `yaml:"dns,omitempty"`

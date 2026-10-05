@@ -644,7 +644,17 @@ export default {
     "apply": "Apply",
     "applySuccess": "Configuration applied",
     "rollback": "Rollback",
-    "rollbackSuccess": "Rolled back to previous config"
+    "rollbackSuccess": "Rolled back to previous config",
+    "general": "General Kernel Settings",
+    "mode": "Mode",
+    "logLevel": "Log level",
+    "allowLan": "Allow LAN",
+    "ipv6": "IPv6",
+    "inboundTfo": "Inbound TCP Fast Open (TFO)",
+    "inboundMptcp": "Inbound Multipath TCP (MPTCP)",
+    "inboundTfoHint": "Enable TCP Fast Open on every inbound listener socket (kernel support required: /proc/sys/net/ipv4/tcp_fast_open must include the server bit). Global switch, not per-listener.",
+    "saveGeneral": "Save general settings",
+    "generalSaved": "General settings saved"
   },
   "users": {
     "title": "User Management",

@@ -1,11 +1,12 @@
 import { useSearchParams } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Tabs, Row, Col, Switch } from 'antd';
 import { IconAddGeneric, IconDelete, IconEdit, IconDownload, IconCheck, IconFile } from '../icons';
 import {
   fetchProxies, createProxy, updateProxy, deleteProxy,
   fetchConfigYAML, generateConfig, validateConfigYAML, applyConfigYAML, rollbackConfig,
-  ProxyEntry,
+  fetchVisualConfig, saveVisualConfig,
+  ProxyEntry, VisualConfig,
 } from '../api/config';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
@@ -24,6 +25,9 @@ const ConfigPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [form] = Form.useForm();
+  const [generalForm] = Form.useForm();
+  const [generalCfg, setGeneralCfg] = useState<VisualConfig | null>(null);
+  const [genSaving, setGenSaving] = useState(false);
   const [yaml, setYaml] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
@@ -51,11 +55,52 @@ const ConfigPage: React.FC = () => {
       const [p, y] = await Promise.all([fetchProxies(), fetchConfigYAML()]);
       setProxies(p || []);
       setYaml(typeof y?.config === 'string' ? y.config : '');
+      // General kernel settings (mode / allow-lan / ipv6 / inbound-tfo / mptcp)
+      // live on the same VisualConfig that drives the serving Mihomo process.
+      // Load failure here is non-fatal: proxies still work without the card.
+      try {
+        const vc = await fetchVisualConfig();
+        setGeneralCfg(vc ? { ...vc } : null);
+        generalForm.setFieldsValue({
+          mode: vc?.mode ?? 'rule',
+          logLevel: vc?.logLevel ?? 'info',
+          allowLan: !!vc?.allowLan,
+          ipv6: !!vc?.ipv6,
+          inboundTfo: !!vc?.inboundTfo,
+          inboundMptcp: !!vc?.inboundMptcp,
+        });
+      } catch (e: any) {
+        console.error('failed to load visual config', e);
+      }
     } catch (e: any) {
       message.error(e.message || t('common.error'));
     } finally {
       setLoading(false);
       setYamlLoading(false);
+    }
+  };
+
+  const onSaveGeneral = async (values: Record<string, any>) => {
+    if (!generalCfg) return;
+    setGenSaving(true);
+    try {
+      const payload: VisualConfig = {
+        ...generalCfg,
+        mode: values.mode,
+        logLevel: values.logLevel,
+        allowLan: !!values.allowLan,
+        ipv6: !!values.ipv6,
+        inboundTfo: !!values.inboundTfo,
+        inboundMptcp: !!values.inboundMptcp,
+        proxies: generalCfg.proxies ?? [],
+      };
+      await saveVisualConfig(payload);
+      setGeneralCfg(payload);
+      message.success(t('config.generalSaved') || 'General settings saved');
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setGenSaving(false);
     }
   };
 
@@ -195,6 +240,61 @@ const ConfigPage: React.FC = () => {
       <PageHeader title={t('config.title')} subtitle={t('config.subtitle')} />
       <Tabs activeKey={activeTab} onChange={selectTab}>
         <TabPane tab={t('config.visual') || 'Visual'} key="visual">
+          <Card title={t('config.general') || 'General'} style={{ marginBottom: 16 }}>
+            <Form form={generalForm} layout="vertical" onFinish={onSaveGeneral}>
+              <Row gutter={16}>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item name="mode" label={t('config.mode') || 'Mode'}>
+                    <Select
+                      options={[
+                        { value: 'rule', label: 'rule' },
+                        { value: 'global', label: 'global' },
+                        { value: 'direct', label: 'direct' },
+                        { value: 'script', label: 'script' },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item name="logLevel" label={t('config.logLevel') || 'Log level'}>
+                    <Select
+                      options={[
+                        { value: 'info', label: 'info' },
+                        { value: 'warning', label: 'warning' },
+                        { value: 'error', label: 'error' },
+                        { value: 'debug', label: 'debug' },
+                        { value: 'silent', label: 'silent' },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Space size="large" wrap>
+                <Form.Item name="allowLan" label={t('config.allowLan') || 'Allow LAN'} valuePropName="checked">
+                  <Switch disabled={!generalCfg} />
+                </Form.Item>
+                <Form.Item name="ipv6" label={t('config.ipv6') || 'IPv6'} valuePropName="checked">
+                  <Switch disabled={!generalCfg} />
+                </Form.Item>
+                <Form.Item
+                  name="inboundTfo"
+                  label={t('config.inboundTfo') || 'Inbound TCP Fast Open'}
+                  valuePropName="checked"
+                  tooltip={t('config.inboundTfoHint')}
+                >
+                  <Switch disabled={!generalCfg} />
+                </Form.Item>
+                <Form.Item name="inboundMptcp" label={t('config.inboundMptcp') || 'Inbound MPTCP'} valuePropName="checked">
+                  <Switch disabled={!generalCfg} />
+                </Form.Item>
+              </Space>
+              <div>
+                <Button type="primary" htmlType="submit" loading={genSaving} disabled={!generalCfg}>
+                  {t('config.saveGeneral') || 'Save general settings'}
+                </Button>
+              </div>
+            </Form>
+          </Card>
           <Card
             title={t('config.proxies') || 'Proxies'}
             extra={
