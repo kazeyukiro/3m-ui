@@ -169,7 +169,20 @@ export default {
     "openSockets": "打开连接",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP"
+    "udp": "UDP",
+    "manage": "管理",
+    "charts": "图表",
+    "systemHistory": "系统历史",
+    "mihomoMetrics": "Mihomo 指标",
+    "usage": "资源占用",
+    "overallSpeed": "总速率",
+    "totalData": "总流量",
+    "connectionStats": "连接统计",
+    "nodes": "节点",
+    "sent": "发送",
+    "received": "接收",
+    "backup": "备份与恢复",
+    "backupDone": "备份已下载"
   },
   "listeners": {
     "subtitle": "创建与管理 Mihomo 入站节点。",
