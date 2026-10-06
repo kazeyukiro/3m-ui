@@ -259,12 +259,10 @@ const ConfigPage: React.FC = () => {
       <Tabs activeKey={activeTab} onChange={selectTab}>
         <TabPane tab={t('config.visual') || 'Visual'} key="visual">
           <Card title={t('config.general') || 'General'} style={{ marginBottom: 16 }}>
-            <Form form={generalForm} layout="vertical" onFinish={onSaveGeneral}>
-              <Row gutter={16}>
-                <Col xs={24} sm={12} md={8}>
-                </Col>
-                <Col xs={24} sm={12} md={8}>
-                  <Form.Item name="logLevel" label={t('config.logLevel') || 'Log level'}>
+            <Form form={generalForm} layout="vertical" onFinish={onSaveGeneral} disabled={!generalCfg}>
+              <Row gutter={[16, 8]}>
+                <Col xs={24} sm={12} md={8} lg={6}>
+                  <Form.Item name="logLevel" label={t('config.logLevel') || 'Log level'} style={{ marginBottom: 12 }}>
                     <Select
                       options={[
                         { value: 'info', label: 'info' },
@@ -277,47 +275,67 @@ const ConfigPage: React.FC = () => {
                   </Form.Item>
                 </Col>
               </Row>
-              <Space size="large" wrap>
-                <Form.Item name="allowLan" label={t('config.allowLan') || 'Allow LAN'} valuePropName="checked">
-                  <Switch disabled={!generalCfg} />
-                </Form.Item>
-                <Form.Item name="ipv6" label={t('config.ipv6') || 'IPv6'} valuePropName="checked">
-                  <Switch disabled={!generalCfg} />
-                </Form.Item>
-                <Form.Item
-                  name="inboundTfo"
-                  label={t('config.inboundTfo') || 'Inbound TCP Fast Open'}
-                  valuePropName="checked"
-                  tooltip={t('config.inboundTfoHint')}
-                >
-                  <Switch disabled={!generalCfg} />
-                </Form.Item>
-                <Form.Item name="inboundMptcp" label={t('config.inboundMptcp') || 'Inbound MPTCP'} valuePropName="checked">
-                  <Switch disabled={!generalCfg} />
-                </Form.Item>
-                <Form.Item
-                  name="clientTfo"
-                  label={t('config.clientTfo') || 'Subscription TFO'}
-                  valuePropName="checked"
-                  tooltip={t('config.clientTfoHint')}
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name="clientMptcp"
-                  label={t('config.clientMptcp') || 'Subscription MPTCP'}
-                  valuePropName="checked"
-                  tooltip={t('config.clientMptcpHint')}
-                >
-                  <Switch />
-                </Form.Item>
-
-              </Space>
-              <div>
+              <Row gutter={[16, 4]}>
+                <Col xs={12} sm={8} md={6} lg={4}>
+                  <Form.Item name="allowLan" label={t('config.allowLan') || 'Allow LAN'} valuePropName="checked" style={{ marginBottom: 12 }}>
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8} md={6} lg={4}>
+                  <Form.Item name="ipv6" label={t('config.ipv6') || 'IPv6'} valuePropName="checked" style={{ marginBottom: 12 }}>
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8} md={6} lg={4}>
+                  <Form.Item
+                    name="inboundTfo"
+                    label={t('config.inboundTfo') || 'Inbound TFO'}
+                    valuePropName="checked"
+                    tooltip={t('config.inboundTfoHint')}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8} md={6} lg={4}>
+                  <Form.Item
+                    name="inboundMptcp"
+                    label={t('config.inboundMptcp') || 'Inbound MPTCP'}
+                    valuePropName="checked"
+                    tooltip={t('config.inboundMptcpHint')}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8} md={6} lg={4}>
+                  <Form.Item
+                    name="clientTfo"
+                    label={t('config.clientTfo') || 'Subscription TFO'}
+                    valuePropName="checked"
+                    tooltip={t('config.clientTfoHint')}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={12} sm={8} md={6} lg={4}>
+                  <Form.Item
+                    name="clientMptcp"
+                    label={t('config.clientMptcp') || 'Subscription MPTCP'}
+                    valuePropName="checked"
+                    tooltip={t('config.clientMptcpHint')}
+                    style={{ marginBottom: 12 }}
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item style={{ marginBottom: 0, marginTop: 4 }}>
                 <Button type="primary" htmlType="submit" loading={genSaving} disabled={!generalCfg}>
                   {t('config.saveGeneral') || 'Save general settings'}
                 </Button>
-              </div>
+              </Form.Item>
             </Form>
           </Card>
           <Card
