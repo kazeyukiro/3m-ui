@@ -24,12 +24,17 @@ type VisualConfig struct {
 	// per-listener fields — Mihomo only honours them at the general level, so
 	// they live on the VisualConfig (which feeds the serving config fragment)
 	// and must never be copied into client subscription documents.
-	InboundTfo   bool         `json:"inboundTfo" yaml:"inbound-tfo"`
-	InboundMPTCP bool         `json:"inboundMptcp" yaml:"inbound-mptcp"`
-	DNS          VisualDNS    `json:"dns" yaml:"dns"`
-	Proxies      []ProxyEntry `json:"proxies" yaml:"proxies"`
-	Groups       []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
-	Rules        []string     `json:"rules" yaml:"rules"`
+	InboundTfo   bool `json:"inboundTfo" yaml:"inbound-tfo"`
+	InboundMPTCP bool `json:"inboundMptcp" yaml:"inbound-mptcp"`
+	// ClientTfo / ClientMPTCP are written onto every *client subscription*
+	// proxy as Mihomo outbound keys `tfo` / `mptcp` (wiki proxies#tfo).
+	// They are independent of inbound-tfo / inbound-mptcp (server listen sockets).
+	ClientTfo   bool         `json:"clientTfo" yaml:"-"`
+	ClientMPTCP bool         `json:"clientMptcp" yaml:"-"`
+	DNS         VisualDNS    `json:"dns" yaml:"dns"`
+	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
+	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules       []string     `json:"rules" yaml:"rules"`
 }
 
 type VisualDNS struct {

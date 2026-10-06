@@ -21,6 +21,8 @@ export interface VisualConfig {
   ipv6?: boolean;
   inboundTfo?: boolean;
   inboundMptcp?: boolean;
+  clientTfo?: boolean;
+  clientMptcp?: boolean;
   proxies: ProxyEntry[];
   proxyGroups?: any[];
   rules?: any[];

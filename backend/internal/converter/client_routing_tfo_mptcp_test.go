@@ -70,3 +70,25 @@ func TestClientSubscriptionStripsInboundTfo(t *testing.T) {
 		t.Fatalf("client proxy tfo should remain:\n%s", s)
 	}
 }
+
+func TestClientSubscriptionAppliesClientTfoFlags(t *testing.T) {
+	proxies := []map[string]interface{}{
+		{"name": "n1", "type": "ss", "server": "1.2.3.4", "port": 443},
+	}
+	visual := &mihomocfg.VisualConfig{ClientTfo: true, ClientMPTCP: true, InboundTfo: true}
+	doc := clientSubscriptionDocument(proxies, []string{"n1"}, visual)
+	raw, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	if !strings.Contains(s, "tfo: true") {
+		t.Fatalf("expected client tfo:\n%s", s)
+	}
+	if !strings.Contains(s, "mptcp: true") {
+		t.Fatalf("expected client mptcp:\n%s", s)
+	}
+	if strings.Contains(s, "inbound-tfo") {
+		t.Fatalf("inbound-tfo must not appear in client sub:\n%s", s)
+	}
+}

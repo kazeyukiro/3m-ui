@@ -655,6 +655,11 @@ export default {
     "ipv6": "启用 IPv6",
     "inboundTfo": "入站 TCP 快速打开 (TFO)",
     "inboundMptcp": "入站多路径 TCP (MPTCP)",
+    "inboundTfoHint": "仅服务端监听；不会写入客户端订阅",
+    "clientTfo": "订阅节点 TFO",
+    "clientMptcp": "订阅节点 MPTCP",
+    "clientTfoHint": "写入客户端订阅 proxies 的 tfo（wiki proxies#tfo），与入站无关",
+    "clientMptcpHint": "写入客户端订阅 proxies 的 mptcp，与入站无关",
     "inboundTfoHint": "为所有入站监听的套接字启用 TCP Fast Open（内核需支持：/proc/sys/net/ipv4/tcp_fast_open 含服务端位）。全局开关，非单监听器设置。",
     "saveGeneral": "保存通用设置",
     "generalSaved": "通用设置已保存"

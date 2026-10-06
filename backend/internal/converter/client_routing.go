@@ -63,6 +63,9 @@ func clientSubscriptionDocument(proxies []map[string]interface{}, names []string
 	for i := range proxies {
 		sanitizeClientProxyMap(proxies[i])
 	}
+	if visual != nil {
+		applyClientSubscriptionDialFlags(proxies, visual)
+	}
 
 	return map[string]interface{}{
 		"mixed-port":   7890,
@@ -442,5 +445,23 @@ func asBool(v interface{}) bool {
 		return x != 0
 	default:
 		return false
+	}
+}
+
+func applyClientSubscriptionDialFlags(proxies []map[string]interface{}, visual *mihomocfg.VisualConfig) {
+	if visual == nil {
+		return
+	}
+	for _, m := range proxies {
+		if m == nil {
+			continue
+		}
+		if visual.ClientTfo {
+			m["tfo"] = true
+		}
+		if visual.ClientMPTCP {
+			m["mptcp"] = true
+		}
+		normalizeClientDialFlags(m)
 	}
 }

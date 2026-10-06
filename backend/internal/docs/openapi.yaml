@@ -1065,7 +1065,7 @@ paths:
       description: |
         Includes global Mihomo keys `inboundTfo` / `inboundMptcp` (YAML `inbound-tfo` /
         `inbound-mptcp`) applied to **server** inbound sockets only — never copied into
-        client subscription documents. Per-proxy `tfo` / `mptcp` live on each proxy object
+        client subscription documents. Global `clientTfo` / `clientMptcp` stamp every subscription node; per-proxy `tfo` / `mptcp` also allowed
         and **are** exported to client subscriptions when set.
       responses:
         "200":
@@ -1422,7 +1422,17 @@ components:
           description: Global inbound TCP Fast Open (Mihomo inbound-tfo); server only
         inboundMptcp:
           type: boolean
-          description: Global inbound Multipath TCP (Mihomo inbound-mptcp); server only
+          description: |
+            Server general inbound-mptcp only; never in client subscription YAML.
+        clientTfo:
+          type: boolean
+          description: |
+            When true, every client-subscription proxy gets Mihomo outbound `tfo: true`
+            (wiki proxies#tfo). Independent of inboundTfo.
+        clientMptcp:
+          type: boolean
+          description: |
+            When true, every client-subscription proxy gets `mptcp: true`. Not inbound-mptcp.
         proxies:
           type: array
           items:

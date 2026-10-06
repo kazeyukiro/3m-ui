@@ -67,6 +67,8 @@ const ConfigPage: React.FC = () => {
           ipv6: !!vc?.ipv6,
           inboundTfo: !!vc?.inboundTfo,
           inboundMptcp: !!vc?.inboundMptcp,
+          clientTfo: !!vc?.clientTfo,
+          clientMptcp: !!vc?.clientMptcp,
         });
       } catch (e: any) {
         console.error('failed to load visual config', e);
@@ -91,6 +93,8 @@ const ConfigPage: React.FC = () => {
         ipv6: !!values.ipv6,
         inboundTfo: !!values.inboundTfo,
         inboundMptcp: !!values.inboundMptcp,
+        clientTfo: !!values.clientTfo,
+        clientMptcp: !!values.clientMptcp,
         proxies: generalCfg.proxies ?? [],
       };
       await saveVisualConfig(payload);
@@ -291,6 +295,23 @@ const ConfigPage: React.FC = () => {
                 <Form.Item name="inboundMptcp" label={t('config.inboundMptcp') || 'Inbound MPTCP'} valuePropName="checked">
                   <Switch disabled={!generalCfg} />
                 </Form.Item>
+                <Form.Item
+                  name="clientTfo"
+                  label={t('config.clientTfo') || 'Subscription TFO'}
+                  valuePropName="checked"
+                  tooltip={t('config.clientTfoHint')}
+                >
+                  <Switch />
+                </Form.Item>
+                <Form.Item
+                  name="clientMptcp"
+                  label={t('config.clientMptcp') || 'Subscription MPTCP'}
+                  valuePropName="checked"
+                  tooltip={t('config.clientMptcpHint')}
+                >
+                  <Switch />
+                </Form.Item>
+
               </Space>
               <div>
                 <Button type="primary" htmlType="submit" loading={genSaving} disabled={!generalCfg}>

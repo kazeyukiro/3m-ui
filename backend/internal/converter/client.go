@@ -14,6 +14,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"github.com/kazeyukiro/3m-ui/backend/internal/export"
+	mihomocfg "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/netutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 	"golang.org/x/crypto/curve25519"
@@ -100,7 +101,11 @@ func GenerateRawConfig(db *gorm.DB, token models.AccessToken, req *http.Request)
 			names = append(names, name)
 		}
 	}
-	return yaml.Marshal(clientSubscriptionDocument(proxies, names, nil))
+	var visual *mihomocfg.VisualConfig
+	if v, err := mihomocfg.GetVisualConfig(db); err == nil {
+		visual = &v
+	}
+	return yaml.Marshal(clientSubscriptionDocument(proxies, names, visual))
 }
 
 func listenerToProxies(l models.Listener, server string, credentials []user.Credential) ([]map[string]interface{}, error) {
