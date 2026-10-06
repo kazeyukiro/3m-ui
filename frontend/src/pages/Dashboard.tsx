@@ -1,12 +1,26 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Col, Row, Space, Typography, message, theme } from 'antd';
+import { Button, Card, Col, Row, Typography, message, theme } from 'antd';
 import { Link } from 'react-router-dom';
-import { IconPlay, IconStop, IconRestart } from '../icons';
+import {
+  IconPlay,
+  IconStop,
+  IconRestart,
+  IconNavLogs,
+  IconNavConfig,
+  IconChart,
+  IconHistory,
+  IconDownload,
+  IconDisk,
+  IconCloudUp,
+  IconCloudDown,
+  IconUser,
+} from '../icons';
 import {
   fetchDashboard,
   startMihomo,
   stopMihomo,
   restartMihomo,
+  downloadBackup,
   isTransientNetworkError,
   type DashboardResponse,
   type ProcessUsageSample,
@@ -19,12 +33,9 @@ import { startVisiblePolling } from '../utils/visiblePolling';
 
 const { Text } = Typography;
 
-/** Dashboard refresh cadence — CPU, memory and traffic rates read as live. */
+/** Dashboard refresh cadence — CPU, memory, traffic read live. */
 const DASHBOARD_POLL_MS = 1000;
-/** Ring buffer length for sparklines / speed chart (~2 min at 1 Hz). */
-const HISTORY_LEN = 120;
 
-const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
 const clampPct = (v: unknown) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return 0;
@@ -32,191 +43,133 @@ const clampPct = (v: unknown) => {
   return Math.round(n * 10) / 10;
 };
 
-function pushHistory(buf: number[], value: number, max = HISTORY_LEN): number[] {
-  const next = buf.length >= max ? buf.slice(buf.length - max + 1) : buf.slice();
-  next.push(Number.isFinite(value) ? value : 0);
-  return next;
-}
+const formatRate = (bps: number) => `${formatBytes(bps)}/s`;
 
-/** Compact metric sparkline — thin stroke, no soft blob fill. */
-const Sparkline: React.FC<{
-  data: number[];
-  color: string;
-  height?: number;
-}> = ({ data, color, height = 32 }) => {
-  const w = 160;
-  const h = height;
-  if (data.length < 2) {
-    return <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden />;
-  }
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const span = max - min || 1;
-  const coords = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((v - min) / span) * (h - 6) - 3;
-    return [x, y] as const;
-  });
-  // Straight segments only (no smooth curve) — reads like a real counter strip.
-  const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const baseline = coords.map(([x]) => `${x.toFixed(1)},${(h - 1).toFixed(1)}`).join(' ');
+/* ---------- Ring gauge — thin stroke, 3X-UI style ---------- */
+const Gauge: React.FC<{ pct: number; label: string; sub?: string; size?: number }> = ({
+  pct,
+  label,
+  sub,
+  size = 76,
+}) => {
+  const { token } = theme.useToken();
+  const r = 31;
+  const stroke = 5;
+  const C = 2 * Math.PI * r;
+  const pctVal = clampPct(pct);
+  const off = C * (1 - pctVal / 100);
+  const track = token.colorFillSecondary;
+  const color = token.colorPrimary;
+  const pctText = pctVal.toFixed(pctVal % 1 === 0 ? 0 : 2) + '%';
   return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
-      <polyline points={baseline} fill="none" stroke={color} strokeOpacity={0.1} strokeWidth={1} />
-      <polyline
-        points={line}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.15}
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-};
-
-/** Single-series total rate chart — one muted stroke, plain grid. */
-/** Up/down rate chart — same muted color; down solid, up dashed. */
-const SpeedChart: React.FC<{
-  up: number[];
-  down: number[];
-  color: string;
-  height?: number;
-}> = ({ up, down, color, height = 160 }) => {
-  const w = 480;
-  const h = height;
-  const n = Math.max(up.length, down.length, 2);
-  const pad = (series: number[]) =>
-    series.length < n ? Array(n - series.length).fill(0).concat(series) : series.slice(-n);
-  const upS = pad(up);
-  const downS = pad(down);
-  const max = Math.max(...upS, ...downS, 1);
-  const toPts = (series: number[]) =>
-    series
-      .map((v, i) => {
-        const x = (i / (n - 1)) * w;
-        const y = h - (Math.max(0, v) / max) * (h - 12) - 6;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }} aria-hidden>
-      {[0, 0.5, 1].map((p) => (
-        <line
-          key={p}
-          x1={0}
-          x2={w}
-          y1={6 + (h - 12) * p}
-          y2={6 + (h - 12) * p}
-          stroke="currentColor"
-          strokeOpacity={0.1}
-          strokeWidth={1}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 140 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={C.toFixed(2)}
+          strokeDashoffset={off.toFixed(2)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
-      ))}
-      <polyline
-        points={toPts(downS)}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.25}
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-        vectorEffect="non-scaling-stroke"
-      />
-      <polyline
-        points={toPts(upS)}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.15}
-        strokeOpacity={0.55}
-        strokeDasharray="4 3"
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+        <text x={size / 2} y={size / 2 + 4.5} textAnchor="middle" fontSize={14} fontWeight={600} fill={token.colorText}>
+          {pctText}
+        </text>
+      </svg>
+      <div style={{ fontSize: 13, color: token.colorTextSecondary, textAlign: 'center' }}>
+        <b style={{ color: token.colorText }}>{label}</b>
+        {sub ? `: ${sub}` : ''}
+      </div>
+    </div>
   );
 };
 
-type MetricCardProps = {
+/* ---------- Panel card: title → divider → content ---------- */
+const PanelCard: React.FC<{
   title: string;
-  value: string;
-  unit?: string;
-  detail?: string;
-  peak?: string;
-  series: number[];
-  color: string;
+  status?: React.ReactNode;
   isMobile: boolean;
-};
-
-const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit, detail, peak, series, color, isMobile }) => {
+  children: React.ReactNode;
+}> = ({ title, status, isMobile, children }) => {
   const { token } = theme.useToken();
   return (
-    <Card
-      size="small"
-      styles={{
-        body: { padding: isMobile ? 12 : 16 },
-      }}
-      style={{ height: '100%', borderRadius: 12 }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <Text type="secondary" style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.04em' }}>
+    <Card size="small" styles={{ body: { padding: 0 } }} style={{ borderRadius: 12, height: '100%' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: isMobile ? '12px 14px' : '14px 16px',
+        }}
+      >
+        <Text strong style={{ fontSize: 15 }}>
           {title}
         </Text>
-        {peak ? (
-          <Text type="secondary" style={{ fontSize: 11 }}>
-            {peak}
-          </Text>
-        ) : null}
+        {status}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
-        <span
-          style={{
-            fontSize: isMobile ? 24 : 28,
-            fontWeight: 600,
-            lineHeight: 1.1,
-            fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '-0.02em',
-            color: token.colorText,
-          }}
-        >
-          {value}
-        </span>
-        {unit ? (
-          <Text type="secondary" style={{ fontSize: 14, fontWeight: 500 }}>
-            {unit}
-          </Text>
-        ) : null}
-      </div>
-      {detail ? (
-        <div style={{ fontSize: 11, color: token.colorTextSecondary, marginBottom: 6, lineHeight: 1.3 }}>{detail}</div>
-      ) : (
-        <div style={{ height: 14, marginBottom: 6 }} />
-      )}
-      <Sparkline data={series} color={color} height={isMobile ? 26 : 30} />
+      <div style={{ height: 1, background: token.colorBorderSecondary }} />
+      <div style={{ padding: isMobile ? 12 : 14 }}>{children}</div>
     </Card>
   );
 };
 
-type HistoryState = {
-  cpu: number[];
-  mem: number[];
-  disk: number[];
-  up: number[];
-  down: number[];
-  tcp: number[];
-  udp: number[];
+/* ---------- Cell row with vertical separators ---------- */
+const Cell: React.FC<{ first?: boolean; isMobile: boolean; children: React.ReactNode }> = ({
+  first,
+  isMobile,
+  children,
+}) => {
+  const { token } = theme.useToken();
+  return (
+    <div
+      style={{
+        flex: '1 1 0',
+        minWidth: 92,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 7,
+        padding: isMobile ? '11px 12px' : '13px 14px',
+        color: token.colorTextSecondary,
+        fontSize: 13,
+        fontWeight: 500,
+        borderLeft: first ? 'none' : `1px solid ${token.colorBorderSecondary}`,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+      }}
+    >
+      {children}
+    </div>
+  );
 };
 
-const emptyHistory = (): HistoryState => ({
-  cpu: [],
-  mem: [],
-  disk: [],
-  up: [],
-  down: [],
-  tcp: [],
-  udp: [],
-});
+const CellsRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div style={{ display: 'flex', flexWrap: 'wrap' }}>{children}</div>
+);
+
+/* ---------- Metric: label above value ---------- */
+const Metric: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
+  const { token } = theme.useToken();
+  return (
+    <div style={{ flex: '1 1 0', minWidth: 0 }}>
+      <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 600, color: token.colorText }}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const MetricRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div style={{ display: 'flex', gap: 18 }}>{children}</div>
+);
+
+const linkStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 7, color: 'inherit' };
+const linkBtnStyle: React.CSSProperties = { padding: 0, height: 'auto' };
 
 const Dashboard: React.FC = () => {
   const { t } = useI18n();
@@ -224,30 +177,21 @@ const Dashboard: React.FC = () => {
   const { token } = theme.useToken();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [busy, setBusy] = useState(false);
-  const [hist, setHist] = useState<HistoryState>(emptyHistory);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const d = await fetchDashboard(signal);
-      if (signal?.aborted) return;
-      setData(d);
-      const sys = d.system;
-      const tr = d.traffic;
-      setHist((prev) => ({
-        cpu: pushHistory(prev.cpu, clampPct(sys?.cpu?.percent)),
-        mem: pushHistory(prev.mem, clampPct(sys?.memory?.percent)),
-        disk: pushHistory(prev.disk, clampPct(sys?.disk?.percent)),
-        up: pushHistory(prev.up, Number(tr?.uploadRate) || 0),
-        down: pushHistory(prev.down, Number(tr?.downloadRate) || 0),
-        tcp: pushHistory(prev.tcp, Number(tr?.tcpConnections) || 0),
-        udp: pushHistory(prev.udp, Number(tr?.udpConnections) || 0),
-      }));
-    } catch (e: unknown) {
-      if (signal?.aborted || isCanceledError(e)) return;
-      const msg = e instanceof Error ? e.message : t('dashboard.unavailable');
-      message.error(msg || t('dashboard.unavailable'));
-    }
-  }, [t]);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const d = await fetchDashboard(signal);
+        if (signal?.aborted) return;
+        setData(d);
+      } catch (e: unknown) {
+        if (signal?.aborted || isCanceledError(e)) return;
+        const msg = e instanceof Error ? e.message : t('dashboard.unavailable');
+        message.error(msg || t('dashboard.unavailable'));
+      }
+    },
+    [t],
+  );
 
   useEffect(() => startVisiblePolling((signal) => load(signal), DASHBOARD_POLL_MS), [load]);
 
@@ -277,332 +221,333 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const backup = async () => {
+    try {
+      await downloadBackup();
+      message.success(t('dashboard.backupDone'));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : t('dashboard.operationFailed');
+      message.error(msg || t('dashboard.operationFailed'));
+    }
+  };
+
   const sys = data?.system;
   const users = data?.users;
   const traffic = data?.traffic;
-  const panel: ProcessUsageSample | undefined = data?.panel;
   const core: ProcessUsageSample | undefined = data?.core;
-  const coreRunning = !!data?.mihomo?.running;
+  const running = !!data?.mihomo?.running;
 
   const cpuPct = clampPct(sys?.cpu?.percent);
   const memPct = clampPct(sys?.memory?.percent);
   const diskPct = clampPct(sys?.disk?.percent);
-  const online = users?.online ?? traffic?.onlineUsers ?? 0;
-  const conns = traffic?.activeConnections ?? 0;
-  const tcpConns = traffic?.tcpConnections ?? 0;
-  const udpConns = traffic?.udpConnections ?? 0;
+  const coreCpuPct = clampPct(core?.cpu_percent);
   const upRate = traffic?.uploadRate || 0;
   const downRate = traffic?.downloadRate || 0;
-  const peakUp = hist.up.length ? Math.max(0, ...hist.up) : 0;
-  const peakDown = hist.down.length ? Math.max(0, ...hist.down) : 0;
+  const online = users?.online ?? traffic?.onlineUsers ?? 0;
+  const tcp = traffic?.tcpConnections ?? 0;
+  const udp = traffic?.udpConnections ?? 0;
+  const listeners = data?.listeners;
 
-  const gutter: [number, number] = isMobile ? [8, 8] : [12, 12];
+  const gutter: [number, number] = isMobile ? [8, 8] : [16, 16];
+
+  const statusDot = (color: string) => (
+    <span
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: color,
+        boxShadow: `0 0 0 3px ${color}22`,
+        display: 'inline-block',
+      }}
+    />
+  );
 
   return (
-    <div className="page-root" style={{ display: 'block', maxWidth: 1400 }}>
-      {/* Top control bar — 3X-UI style */}
+    <div className="page-root" style={{ maxWidth: 1300 }}>
+      {/* Top: ring gauges */}
       <Card
         size="small"
-        styles={{ body: { padding: isMobile ? '10px 12px' : '12px 16px' } }}
-        style={{ marginBottom: isMobile ? 8 : 12, borderRadius: 12 }}
+        styles={{ body: { padding: isMobile ? 16 : 22 } }}
+        style={{ marginBottom: isMobile ? 8 : 16, borderRadius: 12 }}
       >
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: isMobile ? 8 : 12,
-            justifyContent: 'space-between',
-          }}
-        >
-          <Space size={8} wrap>
-            {!coreRunning ? (
-              <Button type="primary" icon={<IconPlay />} onClick={() => act('start')} loading={busy} size={isMobile ? 'middle' : 'middle'}>
-                {t('dashboard.start')}
-              </Button>
-            ) : null}
-            <Button icon={<IconRestart />} onClick={() => act('restart')} loading={busy}>
-              {t('dashboard.restart')}
-            </Button>
-            <Button icon={<IconStop />} danger onClick={() => act('stop')} loading={busy} disabled={!coreRunning}>
-              {t('dashboard.stop')}
-            </Button>
-            {!isMobile ? (
-              <>
-                <Link to="/logs"><Button type="link" size="small">{t('nav.logs')}</Button></Link>
-                <Link to="/config"><Button type="link" size="small">{t('nav.config')}</Button></Link>
-              </>
-            ) : null}
-          </Space>
-        </div>
-      </Card>
-
-      {/* Resource metric cards */}
-      <Row gutter={gutter} style={{ marginBottom: isMobile ? 8 : 12 }}>
-        <Col xs={12} sm={12} md={6}>
-          <MetricCard
-            title={t('dashboard.cpu')}
-            value={String(cpuPct)}
-            unit="%"
-            detail={undefined}
-            peak={hist.cpu.length ? `${t('dashboard.peak')} ${Math.max(...hist.cpu)}%` : undefined}
-            series={hist.cpu}
-            color={token.colorTextSecondary}
-            isMobile={isMobile}
-          />
-        </Col>
-        <Col xs={12} sm={12} md={6}>
-          <MetricCard
-            title={t('dashboard.memory')}
-            value={String(memPct)}
-            unit="%"
-            detail={`${formatBytes(sys?.memory?.used || 0)} / ${formatBytes(sys?.memory?.total || 0)}`}
-            peak={hist.mem.length ? `${t('dashboard.avg')} ${Math.round((hist.mem.reduce((a, b) => a + b, 0) / hist.mem.length) * 10) / 10}%` : undefined}
-            series={hist.mem}
-            color={token.colorTextSecondary}
-            isMobile={isMobile}
-          />
-        </Col>
-        <Col xs={12} sm={12} md={6}>
-          <MetricCard
-            title={t('dashboard.disk')}
-            value={String(diskPct)}
-            unit="%"
-            detail={`${formatBytes(sys?.disk?.used || 0)} / ${formatBytes(sys?.disk?.total || 0)}`}
-            peak={sys?.disk?.total ? `${t('dashboard.free')} ${formatBytes(Math.max(0, (sys?.disk?.total || 0) - (sys?.disk?.used || 0)))}` : undefined}
-            series={hist.disk}
-            color={token.colorTextSecondary}
-            isMobile={isMobile}
-          />
-        </Col>
-        <Col xs={12} sm={12} md={6}>
-          <MetricCard
-            title={t('dashboard.users')}
-            value={String(online)}
-            unit=""
-            detail={`${t('dashboard.totalUsers')}: ${users?.total ?? 0} · ${t('dashboard.enabledUsers')}: ${users?.enabled ?? 0}`}
-            peak={`${t('dashboard.listeners')}: ${data?.listeners?.enabled ?? 0}/${data?.listeners?.total ?? 0}`}
-            series={hist.tcp.length ? hist.tcp.map((v, i) => v + (hist.udp[i] || 0)) : [0, online]}
-            color={token.colorTextSecondary}
-            isMobile={isMobile}
-          />
-        </Col>
-      </Row>
-
-      {/* Speed chart + connection stats */}
-      <Row gutter={gutter} style={{ marginBottom: isMobile ? 8 : 12 }}>
-        <Col xs={24} lg={16}>
-          <Card
-            size="small"
-            styles={{ body: { padding: isMobile ? 12 : 16 } }}
-            style={{ height: '100%', borderRadius: 12 }}
-          >
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-              <div>
-                <Text type="secondary" style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.04em' }}>
-                  {t('dashboard.traffic')}
-                </Text>
-                <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
-                  {t('dashboard.uploadRate')} · {t('dashboard.peak')} {formatRate(peakUp)} · {t('dashboard.downloadRate')} · {t('dashboard.peak')}{' '}
-                  {formatRate(peakDown)}
-                </div>
-              </div>
-              <Space size={16} wrap>
-                <span style={{ fontSize: isMobile ? 12 : 13 }}>
-                  <Text type="secondary">↑ {t('dashboard.upload')} </Text>
-                  <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatRate(upRate)}
-                  </Text>
-                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(···)</Text>
-                </span>
-                <span style={{ fontSize: isMobile ? 12 : 13 }}>
-                  <Text type="secondary">↓ {t('dashboard.download')} </Text>
-                  <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {formatRate(downRate)}
-                  </Text>
-                  <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(—)</Text>
-                </span>
-              </Space>
-            </div>
-            <SpeedChart
-              up={hist.up}
-              down={hist.down}
-              color={token.colorTextSecondary}
-              height={isMobile ? 120 : 160}
+        <Row gutter={[16, 16]} justify="space-around" align="middle" wrap>
+          <Col flex="1 1 140px">
+            <Gauge pct={cpuPct} label={t('dashboard.cpu')} />
+          </Col>
+          <Col flex="1 1 140px">
+            <Gauge
+              pct={memPct}
+              label={t('dashboard.memory')}
+              sub={sys ? `${formatBytes(sys.memory.used)} / ${formatBytes(sys.memory.total)}` : undefined}
             />
-            <Row gutter={8} style={{ marginTop: 12 }}>
-              <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  {t('dashboard.totalUpload')}
-                </Text>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatBytes(traffic?.totalUpload || 0)}</div>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  {t('dashboard.totalDownload')}
-                </Text>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatBytes(traffic?.totalDownload || 0)}</div>
-              </Col>
-              <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  {t('dashboard.onlineUsers')}
-                </Text>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{online}</div>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card
-            size="small"
-            styles={{ body: { padding: isMobile ? 12 : 16 } }}
-            style={{ height: '100%', borderRadius: 12 }}
-          >
-            <Text type="secondary" style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.04em' }}>
-              {t('dashboard.activeConnections')}
-            </Text>
-            <div
-              style={{
-                fontSize: isMobile ? 28 : 32,
-                fontWeight: 600,
-                lineHeight: 1.2,
-                fontVariantNumeric: 'tabular-nums',
-                margin: '6px 0 4px',
-              }}
-            >
-              {conns}
-            </div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {t('dashboard.openSockets')}
-            </Text>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: isMobile ? 12 : 16,
-                marginTop: 10,
-                fontSize: 12,
-              }}
-            >
-              <span>
-                <Text type="secondary">{t('dashboard.tcp')} </Text>
-                <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{tcpConns}</Text>
-                <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(—)</Text>
-              </span>
-              <span>
-                <Text type="secondary">{t('dashboard.udp')} </Text>
-                <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>{udpConns}</Text>
-                <Text type="secondary" style={{ marginLeft: 4, fontSize: 11 }}>(···)</Text>
-              </span>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <SpeedChart
-                up={hist.udp}
-                down={hist.tcp}
-                color={token.colorTextSecondary}
-                height={isMobile ? 48 : 64}
-              />
-            </div>
-            <div
-              style={{
-                marginTop: 16,
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
-                gap: 8,
-                textAlign: 'center',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('dashboard.total')}</div>
-                <div style={{ fontWeight: 600 }}>{data?.listeners?.total ?? 0}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('dashboard.enabled')}</div>
-                <div style={{ fontWeight: 600 }}>{data?.listeners?.enabled ?? 0}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('dashboard.disabled')}</div>
-                <div style={{ fontWeight: 600, color: token.colorError }}>{data?.listeners?.disabled ?? 0}</div>
-              </div>
-            </div>
-            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 8, textAlign: 'center' }}>
-              {t('dashboard.listeners')}
-            </Text>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Bottom strip: panel / core process */}
-      <Card size="small" styles={{ body: { padding: isMobile ? 10 : 14 } }} style={{ borderRadius: 12 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col xs={12} sm={6} md={4}>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.uptime')}
-            </Text>
-            <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14 }}>{data?.mihomo?.uptime || '—'}</div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.coreName')}
-            </Text>
           </Col>
-          <Col xs={12} sm={6} md={5}>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.panel')}
-            </Text>
-            <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: isMobile ? 13 : 14 }}>
-              {panel?.memory_used != null ? formatBytes(panel.memory_used) : '—'}
-              {panel?.cpu_percent != null ? (
-                <Text type="secondary" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                  {t('dashboard.cpu')} {clampPct(panel.cpu_percent)}%
-                </Text>
-              ) : null}
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {panel?.pid ? `PID ${panel.pid}` : t('dashboard.panelUsage')}
-            </Text>
+          <Col flex="1 1 140px">
+            <Gauge
+              pct={diskPct}
+              label={t('dashboard.disk')}
+              sub={sys ? `${formatBytes(sys.disk.used)} / ${formatBytes(sys.disk.total)}` : undefined}
+            />
           </Col>
-          <Col xs={12} sm={6} md={5}>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.core')}
-            </Text>
-            <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: isMobile ? 13 : 14 }}>
-              {coreRunning && core?.memory_used != null ? formatBytes(core.memory_used) : '—'}
-              {coreRunning && core?.cpu_percent != null ? (
-                <Text type="secondary" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                  {t('dashboard.cpu')} {clampPct(core.cpu_percent)}%
-                </Text>
-              ) : null}
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {coreRunning && core?.pid ? `PID ${core.pid}` : t('dashboard.coreUsage')}
-            </Text>
-          </Col>
-          <Col xs={12} sm={6} md={5}>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.onlineUsers')}
-            </Text>
-            <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: isMobile ? 13 : 14 }}>
-              {online}
-              <Text type="secondary" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                / {users?.total ?? 0}
-              </Text>
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.enabledUsers')}: {users?.enabled ?? 0}
-            </Text>
-          </Col>
-          <Col xs={24} sm={24} md={5}>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {t('dashboard.version')}
-            </Text>
-            <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14, wordBreak: 'break-all' }}>
-              {data?.mihomo?.version || '—'}
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {coreRunning ? t('dashboard.running') : t('dashboard.stoppedStatus')}
-            </Text>
+          <Col flex="1 1 140px">
+            <Gauge pct={coreCpuPct} label={t('dashboard.coreCpu')} />
           </Col>
         </Row>
       </Card>
+
+      {/* Card grid */}
+      <Row gutter={gutter}>
+        {/* Mihomo */}
+        <Col xs={24} md={12}>
+          <PanelCard
+            title={t('dashboard.coreName')}
+            isMobile={isMobile}
+            status={
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13 }}>
+                {statusDot(running ? token.colorSuccess : token.colorError)}
+                {running ? t('dashboard.running') : t('dashboard.stoppedStatus')}
+              </span>
+            }
+          >
+            <CellsRow>
+              <Cell first isMobile={isMobile}>
+                <Link to="/logs" style={linkStyle}>
+                  <IconNavLogs size={15} />
+                  {t('nav.logs')}
+                </Link>
+              </Cell>
+              {running ? (
+                <Cell isMobile={isMobile}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={linkBtnStyle}
+                    danger
+                    loading={busy}
+                    icon={<IconStop size={15} />}
+                    onClick={() => act('stop')}
+                  >
+                    {t('dashboard.stop')}
+                  </Button>
+                </Cell>
+              ) : (
+                <Cell isMobile={isMobile}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={linkBtnStyle}
+                    loading={busy}
+                    icon={<IconPlay size={15} />}
+                    onClick={() => act('start')}
+                  >
+                    {t('dashboard.start')}
+                  </Button>
+                </Cell>
+              )}
+              <Cell isMobile={isMobile}>
+                <Button
+                  type="link"
+                  size="small"
+                  style={linkBtnStyle}
+                  loading={busy}
+                  disabled={!running}
+                  icon={<IconRestart size={15} />}
+                  onClick={() => act('restart')}
+                >
+                  {t('dashboard.restart')}
+                </Button>
+              </Cell>
+              <Cell isMobile={isMobile}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <IconDisk size={15} />
+                  {data?.mihomo?.version || '—'}
+                </span>
+              </Cell>
+            </CellsRow>
+          </PanelCard>
+        </Col>
+
+        {/* Manage */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.manage')} isMobile={isMobile}>
+            <CellsRow>
+              <Cell first isMobile={isMobile}>
+                <Link to="/logs" style={linkStyle}>
+                  <IconNavLogs size={15} />
+                  {t('nav.logs')}
+                </Link>
+              </Cell>
+              <Cell isMobile={isMobile}>
+                <Link to="/config" style={linkStyle}>
+                  <IconNavConfig size={15} />
+                  {t('nav.config')}
+                </Link>
+              </Cell>
+              <Cell isMobile={isMobile}>
+                <Button
+                  type="link"
+                  size="small"
+                  style={linkBtnStyle}
+                  icon={<IconDownload size={15} />}
+                  onClick={backup}
+                >
+                  {t('dashboard.backup')}
+                </Button>
+              </Cell>
+            </CellsRow>
+          </PanelCard>
+        </Col>
+
+        {/* Charts */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.charts')} isMobile={isMobile}>
+            <CellsRow>
+              <Cell first isMobile={isMobile}>
+                <Link to="/traffic" style={linkStyle}>
+                  <IconHistory size={15} />
+                  {t('dashboard.systemHistory')}
+                </Link>
+              </Cell>
+              <Cell isMobile={isMobile}>
+                <Link to="/traffic" style={linkStyle}>
+                  <IconChart size={15} />
+                  {t('dashboard.mihomoMetrics')}
+                </Link>
+              </Cell>
+            </CellsRow>
+          </PanelCard>
+        </Col>
+
+        {/* Uptime */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.uptime')} isMobile={isMobile}>
+            <MetricRow>
+              <Metric label={t('dashboard.coreName')}>
+                <IconHistory size={15} style={{ color: token.colorTextSecondary }} />
+                {data?.mihomo?.uptime || '—'}
+              </Metric>
+              <Metric label={t('dashboard.coreCpu')}>
+                <IconChart size={15} style={{ color: token.colorTextSecondary }} />
+                {coreCpuPct}%
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+
+        {/* Usage */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.usage')} isMobile={isMobile}>
+            <MetricRow>
+              <Metric label={t('dashboard.memory')}>
+                <IconDisk size={15} style={{ color: token.colorTextSecondary }} />
+                {sys ? `${formatBytes(sys.memory.used)} / ${formatBytes(sys.memory.total)}` : '—'}
+              </Metric>
+              <Metric label={t('dashboard.disk')}>
+                <IconDisk size={15} style={{ color: token.colorTextSecondary }} />
+                {sys ? `${formatBytes(sys.disk.used)} / ${formatBytes(sys.disk.total)}` : '—'}
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+
+        {/* Overall Speed */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.overallSpeed')} isMobile={isMobile}>
+            <MetricRow>
+              <Metric label={t('dashboard.upload')}>
+                <IconCloudUp size={15} style={{ color: token.colorTextSecondary }} />
+                {formatRate(upRate)}
+              </Metric>
+              <Metric label={t('dashboard.download')}>
+                <IconCloudDown size={15} style={{ color: token.colorTextSecondary }} />
+                {formatRate(downRate)}
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+
+        {/* Total Data */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.totalData')} isMobile={isMobile}>
+            <MetricRow>
+              <Metric label={t('dashboard.sent')}>
+                <IconCloudUp size={15} style={{ color: token.colorTextSecondary }} />
+                {formatBytes(traffic?.totalUpload || 0)}
+              </Metric>
+              <Metric label={t('dashboard.received')}>
+                <IconCloudDown size={15} style={{ color: token.colorTextSecondary }} />
+                {formatBytes(traffic?.totalDownload || 0)}
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+
+        {/* Connection Stats */}
+        <Col xs={24} md={12}>
+          <PanelCard title={t('dashboard.connectionStats')} isMobile={isMobile}>
+            <MetricRow>
+              <Metric label={t('dashboard.tcp')}>
+                <IconChart size={15} style={{ color: token.colorTextSecondary }} />
+                {tcp}
+              </Metric>
+              <Metric label={t('dashboard.udp')}>
+                <IconChart size={15} style={{ color: token.colorTextSecondary }} />
+                {udp}
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+
+        {/* Nodes */}
+        <Col xs={24} md={12}>
+          <PanelCard
+            title={t('dashboard.listeners')}
+            isMobile={isMobile}
+            status={
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13 }}>
+                {statusDot(token.colorSuccess)}
+                {listeners?.enabled ?? 0} / {listeners?.total ?? 0} {t('dashboard.enabled')}
+              </span>
+            }
+          >
+            <MetricRow>
+              <Metric label={t('dashboard.enabled')}>
+                {statusDot(token.colorSuccess)}
+                <span style={{ marginLeft: 2 }}>{listeners?.enabled ?? 0}</span>
+              </Metric>
+              <Metric label={t('dashboard.disabled')}>
+                {statusDot(token.colorError)}
+                <span style={{ marginLeft: 2 }}>{listeners?.disabled ?? 0}</span>
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+
+        {/* Users */}
+        <Col xs={24} md={12}>
+          <PanelCard
+            title={t('dashboard.users')}
+            isMobile={isMobile}
+            status={
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: token.colorWarning }}>
+                {statusDot(token.colorWarning)}
+                {online} {t('dashboard.onlineUsers')}
+              </span>
+            }
+          >
+            <MetricRow>
+              <Metric label={t('dashboard.onlineUsers')}>
+                <IconUser size={15} style={{ color: token.colorTextSecondary }} />
+                {online}
+              </Metric>
+              <Metric label={t('dashboard.totalUsers')}>
+                <IconUser size={15} style={{ color: token.colorTextSecondary }} />
+                {users?.total ?? 0}
+              </Metric>
+            </MetricRow>
+          </PanelCard>
+        </Col>
+      </Row>
     </div>
   );
 };

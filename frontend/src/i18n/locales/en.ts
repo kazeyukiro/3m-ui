@@ -169,7 +169,20 @@ export default {
     "openSockets": "Open sockets",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP"
+    "udp": "UDP",
+    "manage": "Manage",
+    "charts": "Charts",
+    "systemHistory": "System History",
+    "mihomoMetrics": "Mihomo Metrics",
+    "usage": "Usage",
+    "overallSpeed": "Overall Speed",
+    "totalData": "Total Data",
+    "connectionStats": "Connection Stats",
+    "nodes": "Nodes",
+    "sent": "Sent",
+    "received": "Received",
+    "backup": "Backup & Restore",
+    "backupDone": "Backup downloaded"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",
