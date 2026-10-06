@@ -175,3 +175,30 @@ func hasJLSUsers(m map[string]interface{}) bool {
 	}
 	return false
 }
+
+// ensureShadowQUICJLSUpstream fills Mihomo-required jls-upstream.addr for shadowquic.
+// Without it, `mihomo -t` fails with: has unset fields: jls-upstream — the whole
+// config is rejected and new listeners stay "config_not_applied".
+func ensureShadowQUICJLSUpstream(cfg map[string]interface{}, protocol string) {
+	if cfg == nil {
+		return
+	}
+	proto := strings.ToLower(strings.TrimSpace(protocol))
+	if typ, _ := cfg["type"].(string); proto == "" {
+		proto = strings.ToLower(strings.TrimSpace(typ))
+	}
+	if proto != "shadowquic" {
+		return
+	}
+	ju, _ := cfg["jls-upstream"].(map[string]interface{})
+	if ju == nil {
+		ju = map[string]interface{}{}
+	}
+	if addr, _ := ju["addr"].(string); strings.TrimSpace(addr) == "" {
+		ju["addr"] = "www.microsoft.com:443"
+	}
+	if sni, _ := ju["sni"].(string); strings.TrimSpace(sni) == "" {
+		ju["sni"] = "www.microsoft.com"
+	}
+	cfg["jls-upstream"] = ju
+}

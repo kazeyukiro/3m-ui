@@ -57,6 +57,23 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		if pass, _ := cfg["password"].(string); strings.TrimSpace(pass) == "" {
 			cfg["password"] = ssPasswordForCipher(cipher)
 		}
+	case "shadowquic":
+		// Mihomo requires jls-upstream.addr; empty/missing fails `mihomo -t`.
+		autofillUsersArray(cfg)
+		ju, _ := cfg["jls-upstream"].(map[string]interface{})
+		if ju == nil {
+			ju = map[string]interface{}{}
+		}
+		if addr, _ := ju["addr"].(string); strings.TrimSpace(addr) == "" {
+			ju["addr"] = "www.microsoft.com:443"
+		}
+		if sni, _ := ju["sni"].(string); strings.TrimSpace(sni) == "" {
+			ju["sni"] = "www.microsoft.com"
+		}
+		cfg["jls-upstream"] = ju
+		if _, ok := cfg["alpn"]; !ok {
+			cfg["alpn"] = []string{"h3"}
+		}
 	case "snell":
 		if psk, _ := cfg["psk"].(string); strings.TrimSpace(psk) == "" {
 			cfg["psk"] = randomPassword(16)

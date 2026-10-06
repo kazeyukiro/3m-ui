@@ -265,6 +265,7 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 		}
 		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
 		sanitizeIncompleteTLSWrappers(configMap)
+		ensureShadowQUICJLSUpstream(configMap, protocolName)
 
 		// Protocols without top-level certificate/private-key (shadowsocks,
 		// snell, shadowquic, mieru, sudoku) must never carry those fields —
@@ -417,6 +418,7 @@ func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint]
 			continue
 		}
 		sanitizeIncompleteTLSWrappers(compiled)
+		ensureShadowQUICJLSUpstream(compiled, protocolName)
 		result = append(result, compiled)
 	}
 	if len(skipped) > 0 {
