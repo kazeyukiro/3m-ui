@@ -58,8 +58,8 @@ const Gauge: React.FC<{ pct: number; label: string; sub?: string; size?: number 
   const C = 2 * Math.PI * r;
   const pctVal = clampPct(pct);
   const off = C * (1 - pctVal / 100);
-  const track = token.colorFillSecondary ?? '#eceff3';
-  const color = token.colorPrimary ?? '#2563eb';
+  const track = token.colorFillSecondary;
+  const color = token.colorPrimary;
   const pctText = pctVal.toFixed(pctVal % 1 === 0 ? 0 : 2) + '%';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 140 }}>
@@ -112,7 +112,7 @@ const PanelCard: React.FC<{
         </Text>
         {status}
       </div>
-      <div style={{ height: 1, background: token.colorBorderSecondary ?? '#f0f2f5' }} />
+      <div style={{ height: 1, background: token.colorBorderSecondary }} />
       <div style={{ padding: isMobile ? 12 : 14 }}>{children}</div>
     </Card>
   );
@@ -137,7 +137,7 @@ const Cell: React.FC<{ first?: boolean; isMobile: boolean; children: React.React
         color: token.colorTextSecondary,
         fontSize: 13,
         fontWeight: 500,
-        borderLeft: first ? 'none' : `1px solid ${token.colorBorderSecondary ?? '#f0f2f5'}`,
+        borderLeft: first ? 'none' : `1px solid ${token.colorBorderSecondary}`,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
       }}
