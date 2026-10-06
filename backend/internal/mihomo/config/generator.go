@@ -56,6 +56,9 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 			delete(fragMap, "rules")
 			delete(fragMap, "proxy-groups")
 			delete(fragMap, "proxies")
+			// Panel-only subscription dial flags — not Mihomo general keys.
+			delete(fragMap, "client-tfo")
+			delete(fragMap, "client-mptcp")
 		}
 		for k, v := range fragMap {
 			merged[k] = v

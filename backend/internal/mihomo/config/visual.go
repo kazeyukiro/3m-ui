@@ -29,8 +29,10 @@ type VisualConfig struct {
 	// ClientTfo / ClientMPTCP are written onto every *client subscription*
 	// proxy as Mihomo outbound keys `tfo` / `mptcp` (wiki proxies#tfo).
 	// They are independent of inbound-tfo / inbound-mptcp (server listen sockets).
-	ClientTfo   bool         `json:"clientTfo" yaml:"-"`
-	ClientMPTCP bool         `json:"clientMptcp" yaml:"-"`
+	// Stored in visual-config YAML as client-tfo / client-mptcp (panel-only keys).
+	// Stripped when merging visual fragment into the serving Mihomo process.
+	ClientTfo   bool         `json:"clientTfo" yaml:"client-tfo"`
+	ClientMPTCP bool         `json:"clientMptcp" yaml:"client-mptcp"`
 	DNS         VisualDNS    `json:"dns" yaml:"dns"`
 	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
 	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
