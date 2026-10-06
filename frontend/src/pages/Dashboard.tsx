@@ -235,6 +235,7 @@ const Dashboard: React.FC = () => {
   const users = data?.users;
   const traffic = data?.traffic;
   const core: ProcessUsageSample | undefined = data?.core;
+  const panel: ProcessUsageSample | undefined = data?.panel;
   const running = !!data?.mihomo?.running;
 
   const cpuPct = clampPct(sys?.cpu?.percent);
@@ -364,6 +365,39 @@ const Dashboard: React.FC = () => {
                 </span>
               </Cell>
             </CellsRow>
+            <div style={{ height: 1, background: token.colorBorderSecondary, margin: '2px 0' }} />
+            <MetricRow>
+              <Metric label={t('dashboard.panel')}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {panel?.memory_used != null ? formatBytes(panel.memory_used) : '—'}
+                    {panel?.cpu_percent != null && (
+                      <span style={{ fontWeight: 400, fontSize: 12, color: token.colorTextSecondary }}>
+                        {t('dashboard.cpu')} {clampPct(panel.cpu_percent)}%
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 400 }}>
+                    {panel?.pid ? `PID ${panel.pid}` : t('dashboard.panelUsage')}
+                  </span>
+                </div>
+              </Metric>
+              <Metric label={t('dashboard.core')}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {running && core?.memory_used != null ? formatBytes(core.memory_used) : '—'}
+                    {running && core?.cpu_percent != null && (
+                      <span style={{ fontWeight: 400, fontSize: 12, color: token.colorTextSecondary }}>
+                        {t('dashboard.cpu')} {clampPct(core.cpu_percent)}%
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ fontSize: 11, color: token.colorTextSecondary, fontWeight: 400 }}>
+                    {running && core?.pid ? `PID ${core.pid}` : t('dashboard.coreUsage')}
+                  </span>
+                </div>
+              </Metric>
+            </MetricRow>
           </PanelCard>
         </Col>
 
