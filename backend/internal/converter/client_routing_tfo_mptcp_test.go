@@ -92,3 +92,29 @@ func TestClientSubscriptionAppliesClientTfoFlags(t *testing.T) {
 		t.Fatalf("inbound-tfo must not appear in client sub:\n%s", s)
 	}
 }
+
+func TestClientTfoSkippedForUDPProtocols(t *testing.T) {
+	proxies := []map[string]interface{}{
+		{"name": "tcp-node", "type": "ss", "server": "1.2.3.4", "port": 443},
+		{"name": "udp-node", "type": "hysteria2", "server": "1.2.3.4", "port": 443},
+		{"name": "tuic-node", "type": "tuic", "server": "1.2.3.4", "port": 443},
+	}
+	visual := &mihomocfg.VisualConfig{ClientTfo: true, ClientMPTCP: true}
+	doc := clientSubscriptionDocument(proxies, []string{"tcp-node", "udp-node", "tuic-node"}, visual)
+	raw, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(raw)
+	// ss should keep tfo; hysteria2/tuic blocks must not gain tfo via global stamp
+	if !strings.Contains(s, "name: tcp-node") {
+		t.Fatalf("missing tcp node:\n%s", s)
+	}
+	// crude check: count tfo occurrences — only tcp-node should have it
+	if strings.Count(s, "tfo: true") != 1 {
+		t.Fatalf("expected exactly one tfo:true (TCP only), got:\n%s", s)
+	}
+	if strings.Count(s, "mptcp: true") != 1 {
+		t.Fatalf("expected exactly one mptcp:true (TCP only), got:\n%s", s)
+	}
+}

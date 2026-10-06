@@ -374,7 +374,12 @@ func mergeVisualProxiesForClient(
 		}
 		// Normalise TFO/MPTCP: client proxies use bool `tfo` / `mptcp` (wiki proxies#tfo).
 		// Never emit inbound-tfo / inbound-mptcp (those are server general keys only).
-		normalizeClientDialFlags(m)
+		if !proxyTypeSupportsTCPDial(m["type"]) {
+			delete(m, "tfo")
+			delete(m, "mptcp")
+		} else {
+			normalizeClientDialFlags(m)
+		}
 		proxies = append(proxies, m)
 		names = append(names, n)
 		nameSet[n] = struct{}{}
@@ -456,6 +461,12 @@ func applyClientSubscriptionDialFlags(proxies []map[string]interface{}, visual *
 		if m == nil {
 			continue
 		}
+		// tfo / mptcp only affect TCP dials (wiki.metacubex.one/config/proxies/#tfo).
+		if !proxyTypeSupportsTCPDial(m["type"]) {
+			delete(m, "tfo")
+			delete(m, "mptcp")
+			continue
+		}
 		if visual.ClientTfo {
 			m["tfo"] = true
 		}
@@ -463,5 +474,24 @@ func applyClientSubscriptionDialFlags(proxies []map[string]interface{}, visual *
 			m["mptcp"] = true
 		}
 		normalizeClientDialFlags(m)
+	}
+}
+
+// proxyTypeSupportsTCPDial reports whether Mihomo's outbound tfo/mptcp can apply.
+// Pure UDP/QUIC outbounds (Hysteria2, TUIC, WireGuard, ShadowQUIC, …) are skipped.
+func proxyTypeSupportsTCPDial(typ interface{}) bool {
+	s, _ := typ.(string)
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "hysteria", "hysteria2", "hy2",
+		"tuic", "tuic-v4", "tuic-v5",
+		"wireguard", "wg",
+		"shadowquic", "hysteria2-realm":
+		return false
+	case "":
+		return false
+	default:
+		// ss / ssr / vmess / vless / trojan / http / socks5 / anytls / mieru / …
+		return true
 	}
 }
