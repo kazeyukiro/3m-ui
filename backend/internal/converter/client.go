@@ -121,6 +121,9 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	case "shadowsocks":
 		// Official client type is "ss", not "shadowsocks" (listener type).
 		exportProtocol = "ss"
+	case "socks":
+		// Client outbound type is socks5 (proxies/socks.md).
+		exportProtocol = "socks5"
 	}
 	if !config.IsMihomoListenerProtocol(protocol) {
 		return nil, fmt.Errorf("unsupported listener protocol %q", protocol)
@@ -546,6 +549,53 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 				"bbr-profile", "max-connections", "min-streams", "max-streams",
 			} {
 				copyOption(p, opts, key)
+			}
+			result = append(result, p)
+		}
+	case "http":
+		if len(credentials) == 0 {
+			// No auth HTTP inbound still exports a proxy (optional username/password).
+			p := makeProxy("")
+			result = append(result, p)
+			break
+		}
+		for i, cred := range credentials {
+			suffix := ""
+			if len(credentials) > 1 {
+				suffix = fmt.Sprintf("%d", i+1)
+			}
+			p := makeProxy(suffix)
+			if u := strings.TrimSpace(cred.Username); u != "" {
+				p["username"] = u
+			}
+			if cred.Password != "" {
+				p["password"] = cred.Password
+			}
+			result = append(result, p)
+		}
+	case "socks":
+		if len(credentials) == 0 {
+			p := makeProxy("")
+			if l.UDP {
+				p["udp"] = true
+			}
+			result = append(result, p)
+			break
+		}
+		for i, cred := range credentials {
+			suffix := ""
+			if len(credentials) > 1 {
+				suffix = fmt.Sprintf("%d", i+1)
+			}
+			p := makeProxy(suffix)
+			if u := strings.TrimSpace(cred.Username); u != "" {
+				p["username"] = u
+			}
+			if cred.Password != "" {
+				p["password"] = cred.Password
+			}
+			if l.UDP {
+				p["udp"] = true
 			}
 			result = append(result, p)
 		}
@@ -1445,7 +1495,7 @@ func clientSupportsUDP(protocol string) bool {
 	switch protocol {
 	case "shadowsocks", "snell", "vmess", "vless", "trojan",
 		"hysteria2", "tuic", "tuic-v4", "tuic-v5", "shadowquic",
-		"anytls", "trusttunnel":
+		"anytls", "trusttunnel", "socks":
 		return true
 	default:
 		return false

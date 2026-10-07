@@ -23,7 +23,7 @@ export const SS_CIPHERS = [
 ];
 
 const TLS_PROTOCOLS = new Set([
-  'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'anytls', 'trusttunnel',
+  'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'anytls', 'trusttunnel', 'http', 'socks',
 ]);
 /** Always require server TLS material (cert or autofilled self-signed). No Security=None. */
 const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'tuic-v4', 'tuic-v5', 'anytls', 'trusttunnel']);
@@ -31,7 +31,7 @@ const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'tuic-v4', 'tuic-v5',
 const OPTIONAL_SECURITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const TRANSPORT_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
-const UDP_PROTOCOLS = new Set(['shadowsocks', 'snell']);
+const UDP_PROTOCOLS = new Set(['shadowsocks', 'snell', 'socks']);
 /** Protocols that support shadow-tls / res-tls / jls-config wrappers */
 const WRAPPER_TLS_PROTOCOLS = new Set([
   'shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'anytls',

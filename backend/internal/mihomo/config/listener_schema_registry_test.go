@@ -18,7 +18,7 @@ func TestMihomoListenerSchemaRegistry(t *testing.T) {
 }
 
 func TestMihomoListenerSchemaRejectsNonListenerProtocols(t *testing.T) {
-	for _, protocol := range []string{"socks", "http", "mixed", "redir", "tproxy", "tun", "tunnel"} {
+	for _, protocol := range []string{"mixed", "redir", "tproxy", "tun", "tunnel"} {
 		if _, ok := GetMihomoListenerSchema(protocol); ok {
 			t.Fatalf("non-distributable protocol %q must not have a node schema", protocol)
 		}
@@ -35,6 +35,8 @@ func TestMihomoListenerSchemaIncludesFieldsUsedByForms(t *testing.T) {
 		"hysteria2":   {"users", "obfs", "certificate", "private-key", "alpn"},
 		"tuic":        {"users", "token", "certificate", "private-key", "congestion-controller"},
 		"anytls":      {"users", "certificate", "private-key", "padding-scheme"},
+		"http":        {"users", "certificate", "private-key"},
+		"socks":       {"users", "udp", "certificate", "private-key"},
 	}
 	for protocol, fields := range cases {
 		schema, ok := GetMihomoListenerSchema(protocol)

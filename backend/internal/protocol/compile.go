@@ -70,6 +70,8 @@ func DefaultCompileRegistry() Registry {
 		MieruCompiler{},
 		GenericCompiler{kind: "sudoku"},
 		TrustTunnelCompiler{},
+		HTTPCompiler{},
+		SocksCompiler{},
 	)
 }
 

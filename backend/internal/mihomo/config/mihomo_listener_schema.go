@@ -1,9 +1,9 @@
 package config
 
 // MihomoListenerProtocols is the set of listener protocols exposed by the
-// unified 3m-ui Node page. Local proxy endpoints (socks/http/tproxy/redir/
-// mixed), Tunnel, TUN and Hysteria2 Realm are intentionally excluded because
-// they do not represent a directly distributable client proxy node.
+// unified 3m-ui Node page. Tunnel, TUN, tproxy/redir/mixed and similar
+// local-capture-only endpoints stay excluded. HTTP and SOCKS are included as
+// standard Mihomo listeners (wiki: inbound/listeners/http|socks).
 var MihomoListenerProtocols = []string{
 	"shadowsocks",
 	"snell",
@@ -19,6 +19,8 @@ var MihomoListenerProtocols = []string{
 	"mieru",
 	"sudoku",
 	"trusttunnel",
+	"http",
+	"socks",
 }
 
 func IsMihomoListenerProtocol(protocol string) bool {

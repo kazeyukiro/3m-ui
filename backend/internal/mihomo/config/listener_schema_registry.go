@@ -57,7 +57,7 @@ func joinPath(p []string) string {
 
 // Mihomo listener schemas mirror the official listener examples. These are
 // the fields exposed at the node configuration boundary; protocol-local
-// capture endpoints such as socks/http/tun/tproxy are intentionally excluded.
+// capture endpoints such as tun/tproxy/redir/mixed are intentionally excluded; http/socks are supported.
 //
 // Design note (P3-5): the "users" field is intentionally present only at the
 // top level (Fields), never in NestedFields. Per-protocol the "users" shape
@@ -92,6 +92,21 @@ func joinPath(p []string) string {
 // listener mekya-config implementation silently ignores these 2 keys (only
 // enable / max-write-* / packet-writing-buffer / kcp are consumed).
 var MihomoListenerSchemas = map[string]ListenerSchema{
+	"http": {
+		Protocol: "http",
+		Fields: listenerFields(
+			"users", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key",
+		),
+		NestedFields: listenerNested(),
+	},
+	"socks": {
+		Protocol: "socks",
+		Fields: listenerFields(
+			"users", "udp", "certificate", "private-key", "client-auth-type", "client-auth-cert", "ech-key",
+		),
+		NestedFields: listenerNested(),
+	},
+
 	"shadowsocks": {
 		Protocol: "shadowsocks",
 		Fields: listenerFields(

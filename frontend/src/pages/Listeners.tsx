@@ -27,7 +27,7 @@ import { useListenerRuntimeMessages } from '../i18n/listenerRuntime';
 import { listenerAvailability } from '../utils/listenerAvailability';
 import { ListenerRuntimeTag, ListenerRuntimeDrawer } from '../components/ListenerRuntime';
 
-const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic-v4', 'tuic-v5', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel'];
+const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic-v4', 'tuic-v5', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel', 'http', 'socks'];
 const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
 const parseConfig = (raw?: string) => { try { return raw ? JSON.parse(raw) : {}; } catch { return {}; } };
 const firstNonEmpty = (...values: any[]) => values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');

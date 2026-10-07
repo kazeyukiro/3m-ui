@@ -1084,3 +1084,41 @@ func firstNonEmptyTokenValue(tok interface{}) string {
 	}
 	return ""
 }
+
+// --- HTTP (client share) ---
+// Standard URI: http://user:pass@host:port#name
+// Clash/Mihomo proxy: type: http
+
+func (HTTPCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	user := strings.TrimSpace(in.User.Username)
+	pass := in.User.Password
+	var auth string
+	if user != "" || pass != "" {
+		auth = url.UserPassword(user, pass).String() + "@"
+	}
+	uri := shareName("http://"+auth+netutil.JoinHostPort(host, port), in.Node.Name)
+	return Share{URI: uri, QRContent: uri}, nil
+}
+
+// --- SOCKS5 (client share) ---
+// Standard URI: socks5://user:pass@host:port#name
+// Clash/Mihomo proxy: type: socks5
+
+func (SocksCompiler) BuildShare(in ShareInput) (Share, error) {
+	host, port, err := shareHostPort(in.Node, "")
+	if err != nil {
+		return Share{}, err
+	}
+	user := strings.TrimSpace(in.User.Username)
+	pass := in.User.Password
+	var auth string
+	if user != "" || pass != "" {
+		auth = url.UserPassword(user, pass).String() + "@"
+	}
+	uri := shareName("socks5://"+auth+netutil.JoinHostPort(host, port), in.Node.Name)
+	return Share{URI: uri, QRContent: uri}, nil
+}

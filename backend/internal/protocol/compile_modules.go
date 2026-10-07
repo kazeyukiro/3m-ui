@@ -309,3 +309,89 @@ func allStringTokens(tok interface{}) []string {
 	}
 	return nil
 }
+
+// HTTPCompiler emits a Mihomo HTTP inbound listener.
+// Wiki: https://wiki.metacubex.one/config/inbound/listeners/http/
+// users: [{username, password}]; empty users: [] skips auth for this inbound.
+type HTTPCompiler struct{}
+
+func (HTTPCompiler) Kind() string { return "http" }
+func (HTTPCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{
+		Kind:  "http",
+		Label: "HTTP",
+		Fields: []FieldCapability{
+			{Path: "certificate", Label: "Certificate", Type: FieldText, Advanced: true, Description: "TLS cert PEM or path (with private-key enables TLS)."},
+			{Path: "private-key", Label: "Private Key", Type: FieldSecret, Advanced: true, Description: "TLS private key PEM or path."},
+			{Path: "client-auth-type", Label: "Client Auth Type", Type: FieldString, Advanced: true, Options: []string{"", "request", "require-any", "verify-if-given", "require-and-verify"}},
+			{Path: "client-auth-cert", Label: "Client Auth Cert", Type: FieldText, Advanced: true},
+			{Path: "ech-key", Label: "ECH Key", Type: FieldText, Advanced: true},
+		},
+		UserFields: []FieldCapability{
+			{Path: "username", Label: "Username", Type: FieldString, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+		},
+		Features: []string{"tcp"},
+	}
+}
+func (HTTPCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	skip := managedKeys()
+	copyConfigPassthrough(m, in.Config, skip)
+	delete(m, "udp") // HTTP listener has no udp field
+	delete(m, "tls")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if in.HasCredentialState || len(in.Users) > 0 {
+		if users == nil {
+			users = []map[string]interface{}{}
+		}
+		m["users"] = users
+	} else if raw, ok := in.Config["users"]; ok {
+		m["users"] = raw
+	}
+	return m, nil
+}
+
+// SocksCompiler emits a Mihomo SOCKS inbound listener.
+// Wiki: https://wiki.metacubex.one/config/inbound/listeners/socks/
+type SocksCompiler struct{}
+
+func (SocksCompiler) Kind() string { return "socks" }
+func (SocksCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{
+		Kind:  "socks",
+		Label: "SOCKS",
+		Fields: []FieldCapability{
+			{Path: "udp", Label: "UDP", Type: FieldBoolean, Description: "Listen for UDP (wiki: udp)."},
+			{Path: "certificate", Label: "Certificate", Type: FieldText, Advanced: true},
+			{Path: "private-key", Label: "Private Key", Type: FieldSecret, Advanced: true},
+			{Path: "client-auth-type", Label: "Client Auth Type", Type: FieldString, Advanced: true, Options: []string{"", "request", "require-any", "verify-if-given", "require-and-verify"}},
+			{Path: "client-auth-cert", Label: "Client Auth Cert", Type: FieldText, Advanced: true},
+			{Path: "ech-key", Label: "ECH Key", Type: FieldText, Advanced: true},
+		},
+		UserFields: []FieldCapability{
+			{Path: "username", Label: "Username", Type: FieldString, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+		},
+		Features: []string{"tcp", "udp"},
+	}
+}
+func (SocksCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	skip := managedKeys()
+	copyConfigPassthrough(m, in.Config, skip)
+	delete(m, "tls")
+	if in.UDP {
+		m["udp"] = true
+	}
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if in.HasCredentialState || len(in.Users) > 0 {
+		if users == nil {
+			users = []map[string]interface{}{}
+		}
+		m["users"] = users
+	} else if raw, ok := in.Config["users"]; ok {
+		m["users"] = raw
+	}
+	return m, nil
+}
