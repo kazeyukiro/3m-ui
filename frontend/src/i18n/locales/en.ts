@@ -116,7 +116,7 @@ export default {
   },
   "dashboard": {
     "title": "Dashboard",
-    "subtitle": "System & Core Overview",
+    "subtitle": "Runtime, system monitoring and traffic overview",
     "status": "Core Status",
     "running": "Running",
     "stoppedStatus": "Stopped",
@@ -170,6 +170,14 @@ export default {
     "coreName": "Mihomo",
     "tcp": "TCP",
     "udp": "UDP"
+    "systemCpu": "System CPU",
+    "systemMemory": "System Memory",
+    "systemDisk": "System Disk",
+    "recentActive": "Active in recent window",
+    "lastUpdated": "Last updated",
+    "autoRefresh": "Auto refresh",
+    "autoRefreshPaused": "Auto refresh paused",
+    "pause": "Pause",
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",
