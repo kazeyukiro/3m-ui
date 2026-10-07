@@ -118,7 +118,7 @@ export default {
   },
   "dashboard": {
     "title": "仪表盘",
-    "subtitle": "系统与核心状态概览",
+    "subtitle": "运行时、系统监控与流量概览",
     "status": "核心状态",
     "running": "运行中",
     "stoppedStatus": "已停止",
@@ -171,7 +171,15 @@ export default {
     "openSockets": "打开连接",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP"
+    "udp": "UDP",
+    "systemCpu": "系统 CPU",
+    "systemMemory": "系统内存",
+    "systemDisk": "系统硬盘",
+    "recentActive": "最近窗口活跃",
+    "lastUpdated": "最后更新",
+    "autoRefresh": "自动刷新",
+    "autoRefreshPaused": "自动刷新已暂停",
+    "pause": "暂停"
   },
   "listeners": {
     "subtitle": "创建与管理 Mihomo 入站节点。",
