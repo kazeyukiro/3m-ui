@@ -53,6 +53,7 @@ export default {
     "copy": "Copy",
     "download": "Download",
     "refresh": "Refresh",
+    "value": "Value",
     "loading": "Loading…",
     "empty": "No data",
     "search": "Search",
@@ -116,7 +117,7 @@ export default {
   },
   "dashboard": {
     "title": "Dashboard",
-    "subtitle": "Runtime, system monitoring and traffic overview",
+    "subtitle": "System & Core Overview",
     "status": "Core Status",
     "running": "Running",
     "stoppedStatus": "Stopped",
@@ -169,15 +170,7 @@ export default {
     "openSockets": "Open sockets",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP",
-    "systemCpu": "System CPU",
-    "systemMemory": "System Memory",
-    "systemDisk": "System Disk",
-    "recentActive": "Active in recent window",
-    "lastUpdated": "Last updated",
-    "autoRefresh": "Auto refresh",
-    "autoRefreshPaused": "Auto refresh paused",
-    "pause": "Pause",
+    "udp": "UDP"
   },
   "listeners": {
     "subtitle": "Create and manage Mihomo inbound listeners.",
