@@ -54,6 +54,7 @@ export default {
     "download": "Download",
     "refresh": "Refresh",
     "value": "Value",
+    "total": "Total",
     "loading": "Loading…",
     "empty": "No data",
     "search": "Search",

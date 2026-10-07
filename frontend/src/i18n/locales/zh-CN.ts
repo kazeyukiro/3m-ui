@@ -54,6 +54,7 @@ export default {
     "download": "下载",
     "refresh": "刷新",
     "value": "数值",
+    "total": "全部",
     "loading": "加载中…",
     "empty": "暂无数据",
     "search": "搜索",
