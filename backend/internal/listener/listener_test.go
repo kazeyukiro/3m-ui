@@ -48,9 +48,24 @@ func TestGenerateConfigYAML(t *testing.T) {
 }
 
 func TestGenerateConfigYAMLRejectsExcludedProtocol(t *testing.T) {
-	_, err := listener.GenerateConfigYAML([]models.Listener{{Name: "socks", Type: "socks", Protocol: "socks", Listen: "0.0.0.0", Port: "1080", Enabled: true}})
+	_, err := listener.GenerateConfigYAML([]models.Listener{{Name: "tun-bad", Type: "tun", Protocol: "tun", Listen: "0.0.0.0", Port: "1080", Enabled: true}})
 	if err == nil {
-		t.Fatal("expected excluded SOCKS listener protocol to be rejected")
+		t.Fatal("expected excluded TUN listener protocol to be rejected")
+	}
+}
+
+func TestGenerateConfigYAMLAcceptsHTTPAndSOCKS(t *testing.T) {
+	for _, protocol := range []string{"http", "socks"} {
+		yamlStr, err := listener.GenerateConfigYAML([]models.Listener{{
+			Name: "proxy-" + protocol, Type: protocol, Protocol: protocol,
+			Listen: "0.0.0.0", Port: "1080", Enabled: true, UDP: protocol == "socks",
+		}})
+		if err != nil {
+			t.Fatalf("%s: %v", protocol, err)
+		}
+		if !contains(yamlStr, "type: "+protocol) {
+			t.Fatalf("%s: expected type in yaml, got %q", protocol, yamlStr)
+		}
 	}
 }
 

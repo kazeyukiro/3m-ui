@@ -116,8 +116,22 @@ func TestGenerateShadowQUICUsesCredentialsAsList(t *testing.T) {
 	}
 }
 
+func TestGenerateListenersAcceptsHTTPAndSOCKS(t *testing.T) {
+	for _, protocol := range []string{"http", "socks"} {
+		result, err := generateListeners(nil, []models.Listener{{
+			Name: "p-" + protocol, Protocol: protocol, Port: "1080", Enabled: true, UDP: protocol == "socks",
+		}}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", protocol, err)
+		}
+		if len(result) != 1 || result[0]["type"] != protocol {
+			t.Fatalf("%s: unexpected result %#v", protocol, result)
+		}
+	}
+}
+
 func TestGenerateListenersRejectsExcludedProtocols(t *testing.T) {
-	for _, protocol := range []string{"socks", "http", "tproxy", "redir", "mixed", "tunnel", "tun", "wireguard"} {
+	for _, protocol := range []string{"tproxy", "redir", "mixed", "tunnel", "tun", "wireguard"} {
 		_, err := generateListeners(nil, []models.Listener{{Name: "bad", Protocol: protocol, Port: "1080", Enabled: true}}, nil)
 		if err == nil {
 			t.Fatalf("expected protocol %q to be rejected", protocol)
