@@ -169,7 +169,7 @@ export default {
     "openSockets": "打开连接",
     "coreName": "Mihomo",
     "tcp": "TCP",
-    "udp": "UDP"
+    "udp": "UDP",
     "systemCpu": "系统 CPU",
     "systemMemory": "系统内存",
     "systemDisk": "系统硬盘",
