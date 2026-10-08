@@ -127,27 +127,40 @@ service_disable() {
 }
 
 yaml_get() {
-    # yaml_get KEY_LINE_PREFIX  e.g. "  port:"
-    # Scoped to the "server:" block — an identically indented key elsewhere
-    # (e.g. a listener's port) must never be mistaken for the panel's.
+    # yaml_get KEY  e.g. "port:"  — pass the key WITHOUT leading indentation.
+    #
+    # Two properties are load-bearing:
+    #   1. Scope — only the "server:" block is searched, so an identically
+    #      named key elsewhere is never mistaken for the panel's.
+    #   2. Indentation-agnostic — the key is matched on $1, not on a fixed
+    #      prefix. The Go binary rewrites config.yaml through a YAML
+    #      marshaller whose indent is not stable (2 spaces when init writes
+    #      it, 4 after reset-config). Matching "  port:" literally made every
+    #      menu action silently miss after an SSH rescue.
     key="$1"
     if [ ! -f "$CONFIG_FILE" ]; then
         return 1
     fi
     awk -v k="$key" '
         /^[^[:space:]#]/ { inblk = (/^server:/) }
-        inblk && index($0, k) == 1 { sub(/^[^:]+:[[:space:]]*/, ""); gsub(/["\047]/, ""); print; exit }
+        inblk && $1 == k { sub(/^[^:]+:[[:space:]]*/, ""); gsub(/["\047]/, ""); print; exit }
     ' "$CONFIG_FILE"
 }
 
 yaml_set() {
-    # yaml_set "  port:" "8080"  — sets or inserts under the "server:" block.
+    # yaml_set KEY VALUE  — sets or inserts under the "server:" block.
+    # Pass the key WITHOUT leading indentation (see yaml_get).
     #
-    # Two properties are load-bearing here:
+    # Three properties are load-bearing here:
     #   1. Scope — only the first match inside "server:" is rewritten. The old
     #      `sed s|^  key:.*|` rewrote EVERY matching line, so a listener with
     #      the same indentation silently got the panel's port.
-    #   2. Permissions — we write back with `cat > file` instead of `mv`, so
+    #   2. Indentation — replacement preserves the indentation already used by
+    #      the matched line, and insertion adopts the block's existing indent
+    #      (defaulting to two spaces). A hardcoded indent produced a duplicate
+    #      key — "    port:" from the Go marshaller plus "  port:" from us —
+    #      while the menu still reported success.
+    #   3. Permissions — we write back with `cat > file` instead of `mv`, so
     #      the original inode, owner and mode survive. `mv` replaced a 0600
     #      config.yaml (JWT + credential keys) with a umask-default 0644 file.
     key="$1"
@@ -159,28 +172,38 @@ yaml_set() {
     tmp=$(mktemp "${CONFIG_FILE}.tmp.XXXXXX") || return 1
     if awk -v k="$key" '
         /^[^[:space:]#]/ { inblk = (/^server:/) }
-        inblk && index($0, k) == 1 { found = 1 }
+        inblk && $1 == k { found = 1 }
         END { exit found ? 0 : 1 }
     ' "$CONFIG_FILE"
     then
-        # Key exists: replace only the first in-block occurrence.
+        # Key exists: rewrite it in place, keeping its own indentation.
         awk -v k="$key" -v v="$val" '
             /^[^[:space:]#]/ { inblk = (/^server:/) }
-            inblk && index($0, k) == 1 && !done { print k " " v; done = 1; next }
+            inblk && $1 == k && !done {
+                match($0, /^[[:space:]]*/)
+                print substr($0, 1, RLENGTH) k " " v
+                done = 1
+                next
+            }
             { print }
         ' "$CONFIG_FILE" > "$tmp"
     else
-        # Key absent: append at the end of the "server:" block. Fail loudly if
-        # there is no such block — silently no-oping then restarting the panel
-        # would make the operator believe a change that never happened.
+        # Key absent: append at the end of the "server:" block using that
+        # block's indent. Fail loudly if there is no such block — silently
+        # no-oping and then restarting would make the operator believe in a
+        # change that never happened.
         if ! awk -v k="$key" -v v="$val" '
             /^[^[:space:]#]/ {
-                if (inblk && !ins) { print k " " v; ins = 1 }
+                if (inblk && !ins) { print (ind == "" ? "  " : ind) k " " v; ins = 1 }
                 inblk = (/^server:/)
+            }
+            inblk && /^[[:space:]]+[^[:space:]]/ && ind == "" {
+                match($0, /^[[:space:]]*/)
+                ind = substr($0, 1, RLENGTH)
             }
             { print }
             END {
-                if (inblk && !ins) print k " " v
+                if (inblk && !ins) { print (ind == "" ? "  " : ind) k " " v; ins = 1 }
                 else if (!ins) exit 3
             }
         ' "$CONFIG_FILE" > "$tmp"
@@ -291,13 +314,13 @@ version() {
 # --- config / access ---------------------------------------------------------
 
 show_access() {
-    port=$(yaml_get '  port:' 2>/dev/null || true)
+    port=$(yaml_get 'port:' 2>/dev/null || true)
     port="${port:-8080}"
-    listen=$(yaml_get '  listen:' 2>/dev/null || true)
-    pub=$(yaml_get '  public_url:' 2>/dev/null || true)
-    web=$(yaml_get '  web_path:' 2>/dev/null || true)
-    subp=$(yaml_get '  sub_path:' 2>/dev/null || true)
-    subport=$(yaml_get '  sub_port:' 2>/dev/null || true)
+    listen=$(yaml_get 'listen:' 2>/dev/null || true)
+    pub=$(yaml_get 'public_url:' 2>/dev/null || true)
+    web=$(yaml_get 'web_path:' 2>/dev/null || true)
+    subp=$(yaml_get 'sub_path:' 2>/dev/null || true)
+    subport=$(yaml_get 'sub_port:' 2>/dev/null || true)
 
     say "配置文件: $CONFIG_FILE"
     say "面板端口 / port: $port"
@@ -338,7 +361,7 @@ change_port() {
         err "配置文件不存在: $CONFIG_FILE"
         return 1
     fi
-    current=$(yaml_get '  port:' 2>/dev/null || echo "8080")
+    current=$(yaml_get 'port:' 2>/dev/null || echo "8080")
     printf '当前面板端口: %s\n' "$current"
     printf '输入新端口 (1-65535, 回车取消): '
     IFS= read -r new_port || return 0
@@ -351,7 +374,7 @@ change_port() {
         return 1
     }
     [ "$new_port" = "$current" ] && { say '端口未变更。'; return 0; }
-    yaml_set '  port:' "$new_port"
+    yaml_set 'port:' "$new_port"
     say "端口已更改: $current → $new_port"
     say '正在重启 3m-ui...'
     service_action restart
@@ -368,12 +391,12 @@ set_public_url() {
         err "配置不存在: $CONFIG_FILE"
         return 1
     fi
-    cur=$(yaml_get '  public_url:' 2>/dev/null || true)
+    cur=$(yaml_get 'public_url:' 2>/dev/null || true)
     printf '当前 public_url: %s\n' "${cur:-<empty>}"
     printf '输入新的 public_url (例如 https://example.com ，回车取消): '
     IFS= read -r url || return 0
     [ -z "$url" ] && return 0
-    yaml_set '  public_url:' "\"$url\""
+    yaml_set 'public_url:' "\"$url\""
     say '已写入 public_url。'
     if confirm '是否立即重启面板?' y; then
         service_action restart
@@ -388,10 +411,10 @@ set_panel_paths() {
         return 1
     fi
     say '留空则保持现有值。 / Leave blank to keep current.'
-    cur_web=$(yaml_get '  web_path:' 2>/dev/null || true)
-    cur_sub=$(yaml_get '  sub_path:' 2>/dev/null || true)
-    cur_sp=$(yaml_get '  sub_port:' 2>/dev/null || true)
-    cur_listen=$(yaml_get '  listen:' 2>/dev/null || true)
+    cur_web=$(yaml_get 'web_path:' 2>/dev/null || true)
+    cur_sub=$(yaml_get 'sub_path:' 2>/dev/null || true)
+    cur_sp=$(yaml_get 'sub_port:' 2>/dev/null || true)
+    cur_listen=$(yaml_get 'listen:' 2>/dev/null || true)
     printf 'web_path (面板路径前缀, 现: %s): ' "${cur_web:-<empty>}"
     IFS= read -r web || true
     printf 'sub_path (订阅路径前缀, 现: %s): ' "${cur_sub:-<empty>}"
@@ -403,21 +426,21 @@ set_panel_paths() {
 
     changed=0
     if [ -n "${web:-}" ]; then
-        yaml_set '  web_path:' "\"$web\""
+        yaml_set 'web_path:' "\"$web\""
         changed=1
     fi
     if [ -n "${sub:-}" ]; then
-        yaml_set '  sub_path:' "\"$sub\""
+        yaml_set 'sub_path:' "\"$sub\""
         changed=1
     fi
     if [ -n "${sp:-}" ]; then
         case "$sp" in
             ''|*[!0-9]*) err 'sub_port 无效' ;;
-            *) yaml_set '  sub_port:' "$sp"; changed=1 ;;
+            *) yaml_set 'sub_port:' "$sp"; changed=1 ;;
         esac
     fi
     if [ -n "${lis:-}" ]; then
-        yaml_set '  listen:' "\"$lis\""
+        yaml_set 'listen:' "\"$lis\""
         changed=1
     fi
     if [ "$changed" -eq 0 ]; then
@@ -488,7 +511,7 @@ reset_config() {
     sleep 1
     if service_is_active; then
         say '✓ 重置完成。请用 HTTP（不是 HTTPS）访问面板:'
-        port=$(yaml_get '  port:' 2>/dev/null || echo "8080")
+        port=$(yaml_get 'port:' 2>/dev/null || echo "8080")
         say "  http://<server-ip>:${port}/"
         say '在 Web UI 重新应用 SSL / 域名 / 订阅地址设置。'
     else
@@ -575,7 +598,7 @@ open_firewall() {
         return 0
     fi
     say '尝试放行常用端口 (22, 80, 443, 面板端口)...'
-    port=$(yaml_get '  port:' 2>/dev/null || echo "8080")
+    port=$(yaml_get 'port:' 2>/dev/null || echo "8080")
     if command -v ufw >/dev/null 2>&1; then
         ufw allow 22/tcp || true
         ufw allow 80/tcp || true
@@ -743,7 +766,16 @@ menu() {
             14) set_panel_paths || true; pause ;;
             15) reset_admin || true; pause ;;
             16) reset_config || true; pause ;;
-            17) run_app healthcheck || true; pause ;;
+            17)
+                # The binary's healthcheck exits 0 silently on success, so a
+                # bare `run_app healthcheck` made this item look inert.
+                if run_app healthcheck; then
+                    say '✓ 健康检查通过 / healthcheck OK'
+                else
+                    say '✗ 健康检查未通过 / healthcheck failed'
+                    say '  详情: 3m-ui logs'
+                fi
+                pause ;;
             18) bbr_menu || true; pause ;;
             19) update_geo || true; pause ;;
             20) open_firewall || true; pause ;;
