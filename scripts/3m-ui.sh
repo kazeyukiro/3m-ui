@@ -101,20 +101,42 @@ config() {
       fi
       ;;
     port)
-      new_port="$2"
+      # ${2:-} — under `set -u` a bare "$2" aborts with "parameter not set"
+      # before the usage message below can ever be printed.
+      new_port="${2:-}"
       case "$new_port" in
         ''|*[!0-9]*) err "Usage: 3m-ui config port <1-65535>" ;;
       esac
       [ "$new_port" -ge 1 ] 2>/dev/null && [ "$new_port" -le 65535 ] 2>/dev/null || err "Port must be 1-65535."
       [ -f "$CONFIG_FILE" ] || err "Config file not found: $CONFIG_FILE"
-      # Read current port
-      old_port=$(awk '/^  port:/ {print $2; exit}' "$CONFIG_FILE" 2>/dev/null || echo "8080")
+      # Read current port, scoped to the server: block
+      old_port=$(awk '
+        /^[^[:space:]#]/ { inblk = (/^server:/) }
+        inblk && /^[[:space:]]+port:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+      ' "$CONFIG_FILE" 2>/dev/null)
+      old_port="${old_port:-8080}"
       if [ "$old_port" = "$new_port" ]; then
         say "Port is already $new_port — no change needed."
         return 0
       fi
-      # Replace port in config.yaml
-      sed -i "s/^  port: .*/  port: $new_port/" "$CONFIG_FILE"
+      # Rewrite only the server: block's port.
+      #   sed -i "s/^  port: .*/  port: N/"
+      # rewrites EVERY indented "port:" line, silently clobbering unrelated
+      # listener ports that happen to share the same indentation.
+      tmp=$(mktemp "${CONFIG_FILE}.tmp.XXXXXX") || return 1
+      awk -v p="$new_port" '
+        /^[^[:space:]#]/ { inblk = (/^server:/) }
+        inblk && /^[[:space:]]+port:/ && !done { print "  port: " p; done = 1; next }
+        { print }
+        END { if (!done) exit 3 }
+      ' "$CONFIG_FILE" > "$tmp" || {
+        rm -f "$tmp"
+        err "Could not locate the server port in $CONFIG_FILE (no change made)."
+      }
+      # Write back through the original inode so owner and mode (0600 — the
+      # config holds JWT and credential secrets) are preserved.
+      cat "$tmp" > "$CONFIG_FILE" || { rm -f "$tmp"; return 1; }
+      rm -f "$tmp"
       say "Port changed: $old_port → $new_port"
       say "Restarting 3m-ui to apply..."
       service_action restart
@@ -223,10 +245,22 @@ main() {
     reset-config) shift; reset_config "$@" ;;
     help|-h|--help) usage ;;
     '')
-      if [ -x /usr/local/bin/3m-ui ] && [ "$(readlink -f /usr/local/bin/3m-ui 2>/dev/null || true)" = "$APP_BIN" ]; then
+      entry=/usr/local/bin/3m-ui
+      resolved=$(readlink -f "$entry" 2>/dev/null || true)
+      self=$(readlink -f "$0" 2>/dev/null || true)
+      if [ -x "$entry" ] && [ "$resolved" = "$APP_BIN" ]; then
         err "Invalid installation: management entrypoint points to the application binary. Re-run the latest installer to migrate it."
       fi
-      exec /usr/local/bin/3m-ui
+      # Direct self-reference: exec would restart this exact script with no
+      # args, land here again, and fork forever.
+      if [ -n "$resolved" ] && [ "$resolved" = "$self" ]; then
+        err "Invalid installation: $entry resolves to this script ($self). Re-run the latest installer to repair the entrypoint."
+      fi
+      # Indirect self-reference (A -> B -> A ...): the marker survives exec.
+      if [ -n "${THREE_M_UI_MENU_REEXEC:-}" ]; then
+        err "Detected a re-exec loop through $entry. Re-run the latest installer to repair the entrypoint."
+      fi
+      THREE_M_UI_MENU_REEXEC=1 exec "$entry"
       ;;
     *) err "Unknown command: $cmd" ;;
   esac
