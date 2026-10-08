@@ -109,24 +109,35 @@ config() {
       esac
       [ "$new_port" -ge 1 ] 2>/dev/null && [ "$new_port" -le 65535 ] 2>/dev/null || err "Port must be 1-65535."
       [ -f "$CONFIG_FILE" ] || err "Config file not found: $CONFIG_FILE"
-      # Read current port, scoped to the server: block
+      # Read current port, scoped to the server: block and indentation-agnostic
       old_port=$(awk '
         /^[^[:space:]#]/ { inblk = (/^server:/) }
-        inblk && /^[[:space:]]+port:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+        inblk && $1 == "port:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
       ' "$CONFIG_FILE" 2>/dev/null)
       old_port="${old_port:-8080}"
       if [ "$old_port" = "$new_port" ]; then
         say "Port is already $new_port — no change needed."
         return 0
       fi
-      # Rewrite only the server: block's port.
+      # Rewrite only the server: block's port, preserving its indentation.
       #   sed -i "s/^  port: .*/  port: N/"
       # rewrites EVERY indented "port:" line, silently clobbering unrelated
       # listener ports that happen to share the same indentation.
+      #
+      # A hardcoded two-space indent is just as fatal: the Go binary rewrites
+      # config.yaml through a YAML marshaller that uses four spaces, so
+      # emitting "  port:" next to "    mode:" yields mixed indentation and
+      # the panel then refuses to boot with
+      #   "failed to decode config YAML: did not find expected key".
       tmp=$(mktemp "${CONFIG_FILE}.tmp.XXXXXX") || return 1
       awk -v p="$new_port" '
         /^[^[:space:]#]/ { inblk = (/^server:/) }
-        inblk && /^[[:space:]]+port:/ && !done { print "  port: " p; done = 1; next }
+        inblk && $1 == "port:" && !done {
+          match($0, /^[[:space:]]*/)
+          print substr($0, 1, RLENGTH) "port: " p
+          done = 1
+          next
+        }
         { print }
         END { if (!done) exit 3 }
       ' "$CONFIG_FILE" > "$tmp" || {
