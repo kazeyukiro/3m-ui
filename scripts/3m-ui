@@ -128,33 +128,70 @@ service_disable() {
 
 yaml_get() {
     # yaml_get KEY_LINE_PREFIX  e.g. "  port:"
+    # Scoped to the "server:" block — an identically indented key elsewhere
+    # (e.g. a listener's port) must never be mistaken for the panel's.
     key="$1"
     if [ ! -f "$CONFIG_FILE" ]; then
         return 1
     fi
-    awk -v k="$key" 'index($0, k) == 1 { sub(/^[^:]+:[[:space:]]*/, ""); gsub(/["\047]/, ""); print; exit }' "$CONFIG_FILE"
+    awk -v k="$key" '
+        /^[^[:space:]#]/ { inblk = (/^server:/) }
+        inblk && index($0, k) == 1 { sub(/^[^:]+:[[:space:]]*/, ""); gsub(/["\047]/, ""); print; exit }
+    ' "$CONFIG_FILE"
 }
 
 yaml_set() {
-    # yaml_set "  port:" "8080"  — sets or inserts under server:
+    # yaml_set "  port:" "8080"  — sets or inserts under the "server:" block.
+    #
+    # Two properties are load-bearing here:
+    #   1. Scope — only the first match inside "server:" is rewritten. The old
+    #      `sed s|^  key:.*|` rewrote EVERY matching line, so a listener with
+    #      the same indentation silently got the panel's port.
+    #   2. Permissions — we write back with `cat > file` instead of `mv`, so
+    #      the original inode, owner and mode survive. `mv` replaced a 0600
+    #      config.yaml (JWT + credential keys) with a umask-default 0644 file.
     key="$1"
     val="$2"
     if [ ! -f "$CONFIG_FILE" ]; then
         err "配置不存在: $CONFIG_FILE"
         return 1
     fi
-    tmp="${CONFIG_FILE}.tmp.$$"
-    if grep -q "^${key}" "$CONFIG_FILE" 2>/dev/null; then
-        # Escape for sed
-        esc=$(printf '%s' "$val" | sed -e 's/[\\|&]/\\&/g')
-        sed "s|^${key}.*|${key} ${esc}|" "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
-    else
+    tmp=$(mktemp "${CONFIG_FILE}.tmp.XXXXXX") || return 1
+    if awk -v k="$key" '
+        /^[^[:space:]#]/ { inblk = (/^server:/) }
+        inblk && index($0, k) == 1 { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$CONFIG_FILE"
+    then
+        # Key exists: replace only the first in-block occurrence.
         awk -v k="$key" -v v="$val" '
-            BEGIN { done=0 }
+            /^[^[:space:]#]/ { inblk = (/^server:/) }
+            inblk && index($0, k) == 1 && !done { print k " " v; done = 1; next }
             { print }
-            /^server:/ && !done { print k " " v; done=1 }
-        ' "$CONFIG_FILE" > "$tmp" && mv "$tmp" "$CONFIG_FILE"
+        ' "$CONFIG_FILE" > "$tmp"
+    else
+        # Key absent: append at the end of the "server:" block. Fail loudly if
+        # there is no such block — silently no-oping then restarting the panel
+        # would make the operator believe a change that never happened.
+        if ! awk -v k="$key" -v v="$val" '
+            /^[^[:space:]#]/ {
+                if (inblk && !ins) { print k " " v; ins = 1 }
+                inblk = (/^server:/)
+            }
+            { print }
+            END {
+                if (inblk && !ins) print k " " v
+                else if (!ins) exit 3
+            }
+        ' "$CONFIG_FILE" > "$tmp"
+        then
+            rm -f "$tmp"
+            err "配置中未找到 server: 段，无法写入 ${key}（未做任何修改）"
+            return 1
+        fi
     fi
+    cat "$tmp" > "$CONFIG_FILE" || { rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
 }
 
 # --- service ops -------------------------------------------------------------
@@ -174,6 +211,13 @@ status() {
     case "$(init_system)" in
         systemd)
             if systemctl is-enabled --quiet 3m-ui 2>/dev/null; then
+                say '开机自启: 是 / enabled'
+            else
+                say '开机自启: 否 / disabled'
+            fi
+            ;;
+        openrc)
+            if rc-update show default 2>/dev/null | grep -qw 3m-ui; then
                 say '开机自启: 是 / enabled'
             else
                 say '开机自启: 否 / disabled'
@@ -474,6 +518,9 @@ enable_bbr() {
     fi
     modprobe tcp_bbr 2>/dev/null || true
     if [ ! -f /etc/sysctl.d/99-3m-ui-bbr.conf ]; then
+        # /etc/sysctl.d is missing on some minimal/container images. Without
+        # this mkdir the redirect fails and `set -e` aborts the whole menu.
+        mkdir -p /etc/sysctl.d || { err '无法创建 /etc/sysctl.d'; return 1; }
         printf '%s\n' 'net.core.default_qdisc=fq' > /etc/sysctl.d/99-3m-ui-bbr.conf
         printf '%s\n' 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.d/99-3m-ui-bbr.conf
     fi
@@ -522,6 +569,11 @@ update_geo() {
 }
 
 open_firewall() {
+    say '将放行 22 / 80 / 443 与面板端口，这会扩大公网暴露面。'
+    if ! confirm '确认继续?' n; then
+        say '已取消。'
+        return 0
+    fi
     say '尝试放行常用端口 (22, 80, 443, 面板端口)...'
     port=$(yaml_get '  port:' 2>/dev/null || echo "8080")
     if command -v ufw >/dev/null 2>&1; then
@@ -577,6 +629,7 @@ ssl_cert_menu() {
             ;;
         2)
             say ''
+            say '# 以下仅为示例命令，请自行确认来源后再执行'
             say 'curl https://get.acme.sh | sh'
             say "~/.acme.sh/acme.sh --set-default-ca --server letsencrypt"
             say "~/.acme.sh/acme.sh --issue -d $dom --standalone"
@@ -653,7 +706,7 @@ menu() {
         printf '%s\n' ' 20. 防火墙放行提示 | Firewall'
         printf '%s\n' ' 21. SSL 证书助手 | SSL cert helper'
         printf '%s\n' ' 22. 备份 | Backup'
-        printf '%s\n' ' 23. 更新本管理脚本 | Update this script'
+        printf '%s\n' ' 23. 更新 3m-ui（含管理脚本） | Update 3m-ui (incl. scripts)'
         printf '%s\n' '  a. 卸载 | Uninstall'
         printf '%s\n' '  0. 退出 | Exit'
         printf '\n请选择 / Select: '
@@ -668,10 +721,13 @@ menu() {
             7) service_action stop || true; pause ;;
             8)
                 printf 'e=启用 enable / d=禁用 disable: '
+                ed=''
                 IFS= read -r ed || true
                 case "$ed" in
                     e|E) service_enable || true ;;
                     d|D) service_disable || true ;;
+                    '') say '未变更。' ;;
+                    *) say "无效输入: $ed（请输入 e 或 d）" ;;
                 esac
                 pause
                 ;;
