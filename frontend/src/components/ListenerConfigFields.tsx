@@ -1,1 +1,1886 @@
-RESTORE_PENDING_USE_LOCAL_FILE
+import React from 'react';
+import { message,
+  Form, Input, InputNumber, Select, Switch, Divider, Alert, Space, Typography, Button, Card, Radio,
+} from 'antd';
+import { generateMaterial } from '../api/listeners';
+import { IconRemoveField, IconAddField } from '../icons';
+import { useI18n, fieldTip } from '../i18n';
+import RealityTargetFields from './RealityTargetFields';
+
+const { Text } = Typography;
+
+/** Official SS ciphers from https://wiki.metacubex.one/config/inbound/listeners/ss/ */
+export const SS_CIPHERS = [
+  '2022-blake3-aes-128-gcm',
+  '2022-blake3-aes-256-gcm',
+  '2022-blake3-chacha20-poly1305',
+  'aes-128-gcm',
+  'aes-192-gcm',
+  'aes-256-gcm',
+  'chacha20-ietf-poly1305',
+  'xchacha20-ietf-poly1305',
+  'none',
+];
+
+const TLS_PROTOCOLS = new Set([
+  'vmess', 'vless', 'trojan', 'hysteria2', 'tuic', 'anytls', 'trusttunnel', 'http', 'socks',
+]);
+/** Always require server TLS material (cert or autofilled self-signed). No Security=None. */
+const ALWAYS_TLS_PROTOCOLS = new Set(['hysteria2', 'tuic', 'tuic-v4', 'tuic-v5', 'anytls', 'trusttunnel']);
+/** Optional None / TLS / Reality security selector. */
+const OPTIONAL_SECURITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'http', 'socks']);
+const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
+const TRANSPORT_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
+const UDP_PROTOCOLS = new Set(['shadowsocks', 'snell', 'socks']);
+/** Protocols that support shadow-tls / res-tls / jls-config wrappers */
+const WRAPPER_TLS_PROTOCOLS = new Set([
+  'shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'anytls',
+]);
+const MUX_PROTOCOLS = new Set(['shadowsocks', 'vmess', 'vless', 'trojan']);
+const SIMPLE_OBFS_PROTOCOLS = new Set(['shadowsocks']);
+const KCP_TUN_PROTOCOLS = new Set(['shadowsocks']);
+// XHTTP is VLESS-only (MetaCubeX listener schema). Do NOT add vmess/trojan here.
+const XHTTP_PROTOCOLS = new Set(['vless']);
+const MKCP_PROTOCOLS = new Set(['vmess']);
+const MEKYA_PROTOCOLS = new Set(['vmess']);
+/** VMess-only TLS mirror (advanced). */
+const TLSMIRROR_PROTOCOLS = new Set(['vmess']);
+/** Protocols that support allow-insecure (plain TLS offload behind nginx/caddy). */
+const ALLOW_INSECURE_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'anytls']);
+
+export function protocolSupportsUDP(protocol: string): boolean {
+  return UDP_PROTOCOLS.has(protocol);
+}
+
+export function protocolSupportsTLS(protocol: string): boolean {
+  return TLS_PROTOCOLS.has(protocol);
+}
+
+function asArray(v: any): any[] {
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+function asStringList(v: any): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(String);
+  return [String(v)];
+}
+
+/** Parse stored config JSON into form field values. */
+export function configToFormValues(raw: string | undefined | null): Record<string, any> {
+  let cfg: Record<string, any> = {};
+  if (raw) {
+    try {
+      cfg = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      cfg = {};
+    }
+  }
+  // Only copy scalar / array top-level fields the form understands.
+  // Nested objects are expanded explicitly below to avoid leaking raw objects into Form state.
+  const values: Record<string, any> = {};
+  for (const [k, v] of Object.entries(cfg)) {
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) continue;
+    values[k] = v;
+  }
+
+  // Reality
+  if (cfg['reality-config'] && typeof cfg['reality-config'] === 'object') {
+    const r = cfg['reality-config'];
+    values.reality_enabled = true;
+    values.reality_dest = r.dest;
+    values.reality_private_key = r['private-key'];
+    values.reality_short_id = asStringList(r['short-id']);
+    values.reality_server_names = asStringList(r['server-names']);
+  } else {
+    values.reality_enabled = false;
+  }
+
+  // Trojan ss-option
+  if (cfg['ss-option'] && typeof cfg['ss-option'] === 'object') {
+    values.ss_option_enabled = !!cfg['ss-option'].enabled;
+    values.ss_option_method = cfg['ss-option'].method;
+    values.ss_option_password = cfg['ss-option'].password;
+  }
+
+  // simple-obfs
+  if (cfg['simple-obfs'] && typeof cfg['simple-obfs'] === 'object') {
+    values.simple_obfs_enabled = !!cfg['simple-obfs'].enable;
+    values.simple_obfs_mode = cfg['simple-obfs'].mode;
+  }
+
+  // shadow-tls
+  if (cfg['shadow-tls'] && typeof cfg['shadow-tls'] === 'object') {
+    const s = cfg['shadow-tls'];
+    values.shadow_tls_enabled = !!s.enable;
+    values.shadow_tls_version = s.version;
+    values.shadow_tls_password = s.password;
+    values.shadow_tls_handshake_dest = s.handshake?.dest;
+    values.shadow_tls_handshake_proxy = s.handshake?.proxy;
+    values.shadow_tls_users = asArray(s.users).map((u: any) => ({
+      name: u?.name ?? u?.username ?? '',
+      password: u?.password ?? '',
+    }));
+  }
+
+  // res-tls
+  if (cfg['res-tls'] && typeof cfg['res-tls'] === 'object') {
+    const r = cfg['res-tls'];
+    values.res_tls_enabled = !!r.enable;
+    values.res_tls_dest = r.dest;
+    values.res_tls_password = r.password;
+    values.res_tls_restls_script = r['restls-script'];
+    values.res_tls_min_record_len = r['min-record-len'];
+    values.res_tls_proxy = r.proxy;
+    values.res_tls_rate_limit = r['rate-limit'];
+  }
+
+  // jls-config
+  if (cfg['jls-config'] && typeof cfg['jls-config'] === 'object') {
+    const j = cfg['jls-config'];
+    values.jls_enabled = !!j.enable;
+    values.jls_dest = j.dest;
+    values.jls_sni = j.sni;
+    values.jls_alpn = asStringList(j.alpn);
+    values.jls_proxy = j.proxy;
+    values.jls_rate_limit = j['rate-limit'];
+    values.jls_users = asArray(j.users).map((u: any) => ({
+      username: u?.username ?? u?.name ?? '',
+      password: u?.password ?? '',
+    }));
+  }
+
+  // mux-option
+  if (cfg['mux-option'] && typeof cfg['mux-option'] === 'object') {
+    const m = cfg['mux-option'];
+    values.mux_enabled = m.enable === true || m.padding === true || m.brutal != null || m['brutal-opts'] != null;
+    values.mux_padding = !!m.padding;
+    values.mux_protocol = m.protocol;
+    values.mux_max_connections = m['max-connections'];
+    values.mux_min_streams = m['min-streams'];
+    values.mux_max_streams = m['max-streams'];
+    values.mux_statistic = !!m.statistic;
+    values.mux_only_tcp = !!m['only-tcp'];
+    const brutal = m.brutal || m['brutal-opts'] || {};
+    values.mux_brutal_enabled = !!brutal.enabled || !!brutal.enable;
+    values.mux_brutal_up = brutal.up;
+    values.mux_brutal_down = brutal.down;
+  }
+
+  // kcp-tun (SS)
+  if (cfg['kcp-tun'] && typeof cfg['kcp-tun'] === 'object') {
+    const k = cfg['kcp-tun'];
+    values.kcp_tun_enabled = !!k.enable;
+    values.kcp_tun_key = k.key;
+    values.kcp_tun_crypt = k.crypt;
+    values.kcp_tun_mode = k.mode;
+    values.kcp_tun_conn = k.conn;
+    values.kcp_tun_mtu = k.mtu;
+    values.kcp_tun_sndwnd = k.sndwnd;
+    values.kcp_tun_rcvwnd = k.rcvwnd;
+    values.kcp_tun_nocomp = !!k.nocomp;
+  }
+
+  // xhttp-config (VLESS)
+  if (cfg['xhttp-config'] && typeof cfg['xhttp-config'] === 'object') {
+    const x = cfg['xhttp-config'];
+    values.xhttp_enabled = true;
+    values.xhttp_path = x.path;
+    values.xhttp_host = x.host;
+    values.xhttp_mode = x.mode;
+  }
+
+  // mkcp-config (VMess)
+  if (cfg['mkcp-config'] && typeof cfg['mkcp-config'] === 'object') {
+    const k = cfg['mkcp-config'];
+    values.mkcp_enabled = k.enable !== false;
+    values.mkcp_mtu = k.mtu;
+    values.mkcp_tti = k.tti;
+    values.mkcp_uplink = k['uplink-capacity'];
+    values.mkcp_downlink = k['downlink-capacity'];
+    values.mkcp_congestion = !!k.congestion;
+    values.mkcp_write_buffer = k['write-buffer'];
+    values.mkcp_read_buffer = k['read-buffer'];
+    values.mkcp_seed = k.seed;
+    values.mkcp_header = k.header;
+  }
+
+  // mekya-config (VMess) — incompatible with mkcp/ws/grpc per official docs
+  if (cfg['mekya-config'] && typeof cfg['mekya-config'] === 'object') {
+    const m = cfg['mekya-config'];
+    values.mekya_enabled = m.enable !== false;
+    values.mekya_max_write_size = m['max-write-size'];
+    values.mekya_max_write_duration_ms = m['max-write-duration-ms'];
+    values.mekya_max_simultaneous_write_connection = m['max-simultaneous-write-connection'];
+    values.mekya_packet_writing_buffer = m['packet-writing-buffer'];
+    // R-M3 client-metadata fields (vmess only)
+    if (m['polling-interval-initial'] != null) values['mekya-polling-interval-initial'] = m['polling-interval-initial'];
+    if (m['h2-pool-size'] != null) values['mekya-h2-pool-size'] = m['h2-pool-size'];
+    const kcp = m.kcp && typeof m.kcp === 'object' ? m.kcp : {};
+    values.mekya_kcp_mtu = kcp.mtu;
+    values.mekya_kcp_tti = kcp.tti;
+    values.mekya_kcp_uplink = kcp['uplink-capacity'];
+    values.mekya_kcp_downlink = kcp['downlink-capacity'];
+    values.mekya_kcp_congestion = !!kcp.congestion;
+    values.mekya_kcp_write_buffer = kcp['write-buffer'];
+    values.mekya_kcp_read_buffer = kcp['read-buffer'];
+    values.mekya_kcp_seed = kcp.seed;
+    values.mekya_kcp_header = kcp.header;
+  }
+
+  // snell obfs-opts
+  if (cfg['obfs-opts'] && typeof cfg['obfs-opts'] === 'object') {
+    values.obfs_opts_mode = cfg['obfs-opts'].mode;
+    values.obfs_opts_host = cfg['obfs-opts'].host;
+  }
+
+  // tlsmirror-config (vmess) — full official inbound fields
+  if (cfg['tlsmirror-config'] && typeof cfg['tlsmirror-config'] === 'object') {
+    const m = cfg['tlsmirror-config'] as Record<string, any>;
+    values.tlsmirror_enabled = true;
+    values.tlsmirror_dest = m.dest;
+    values.tlsmirror_primary_key = m['primary-key'];
+    values.tlsmirror_proxy = m.proxy;
+    if (Array.isArray(m['explicit-nonce-ciphersuites'])) {
+      values.tlsmirror_explicit_nonce_ciphersuites = m['explicit-nonce-ciphersuites'].map((x: any) => String(x));
+    }
+    const defer = m['defer-instance-derived-write-time'];
+    if (defer && typeof defer === 'object') {
+      values.tlsmirror_defer_base_ns = defer['base-nanoseconds'];
+      values.tlsmirror_defer_random_ns = defer['uniform-random-multiplier-nanoseconds'];
+    }
+    const pad = m['transport-layer-padding'];
+    if (pad && typeof pad === 'object') {
+      values.tlsmirror_padding_enabled = !!pad.enabled;
+    }
+    const enrol = m['connection-enrolment'];
+    if (enrol && typeof enrol === 'object') {
+      values.tlsmirror_enrolment_outbound = enrol['primary-ingress-outbound'];
+    }
+    if (m['sequence-watermarking-enabled'] !== undefined) {
+      values.tlsmirror_sequence_watermarking = !!m['sequence-watermarking-enabled'];
+    }
+  }
+
+  // shadowquic jls-upstream
+  if (cfg['jls-upstream'] && typeof cfg['jls-upstream'] === 'object') {
+    const j = cfg['jls-upstream'];
+    values.jls_upstream_enabled = true;
+    values.jls_upstream_addr = j.addr;
+    values.jls_upstream_sni = j.sni;
+    values.jls_upstream_proxy = j.proxy;
+    values.jls_upstream_rate_limit = j['rate-limit'];
+  }
+
+  // hysteria2 realm-opts
+  if (cfg['realm-opts'] && typeof cfg['realm-opts'] === 'object') {
+    const r = cfg['realm-opts'];
+    values.realm_enabled = !!r.enable;
+    values.realm_server_url = r['server-url'];
+    values.realm_token = r.token;
+    values.realm_id = r['realm-id'];
+    values.realm_stun = asStringList(r['stun-servers']);
+    values.realm_proxy = r.proxy;
+    values.realm_sni = r.sni;
+    values.realm_skip_cert = !!r['skip-cert-verify'];
+    values.realm_name_cert_verify = r['name-cert-verify'];
+    values.realm_fingerprint = r.fingerprint;
+    values.realm_certificate = r.certificate;
+    values.realm_private_key = r['private-key'];
+    values.realm_alpn = asStringList(r.alpn);
+  }
+
+  // sudoku extras
+  if (cfg['padding-min'] != null) values['padding-min'] = cfg['padding-min'];
+  if (cfg['padding-max'] != null) values['padding-max'] = cfg['padding-max'];
+  if (cfg['table-type']) values['table-type'] = cfg['table-type'];
+  if (cfg['custom-table']) values['custom-table'] = cfg['custom-table'];
+  if (cfg['custom-tables']) values['custom-tables'] = asStringList(cfg['custom-tables']);
+  if (cfg['fallback']) values['fallback'] = cfg['fallback'];
+  if (cfg['handshake-timeout'] != null) values['handshake-timeout'] = cfg['handshake-timeout'];
+  if (cfg['enable-pure-downlink'] != null) values['enable-pure-downlink'] = cfg['enable-pure-downlink'];
+  // sudoku httpmask nested block
+  if (cfg['httpmask'] && typeof cfg['httpmask'] === 'object') {
+    const hm = cfg['httpmask'];
+    values.httpmask_enabled = true;
+    values.httpmask_disable = !!hm.disable;
+    values.httpmask_mode = hm.mode;
+    values.httpmask_path_root = hm['path-root'] ?? hm['path_root'];
+  } else {
+    values.httpmask_enabled = false;
+  }
+
+  // trusttunnel
+  if (cfg.network) {
+    if (Array.isArray(cfg.network)) values.network = cfg.network;
+    else if (typeof cfg.network === 'string') values.network = [cfg.network];
+  }
+  if (cfg['bbr-profile']) values['bbr-profile'] = cfg['bbr-profile'];
+  if (cfg['quic-versions']) values['quic-versions'] = asStringList(cfg['quic-versions']);
+  if (cfg.cwnd != null) values.cwnd = cfg.cwnd;
+  // R-M4 grpc-opts client-metadata fields (vmess/vless/trojan). The top-level
+  // scalar loop above already copies them; these explicit reads are redundant
+  // but kept for clarity and to survive any future change to that loop.
+  if (cfg['grpc-user-agent'] != null) values['grpc-user-agent'] = cfg['grpc-user-agent'];
+  if (cfg['ping-interval'] != null) values['ping-interval'] = cfg['ping-interval'];
+  if (cfg['max-connections'] != null) values['max-connections'] = cfg['max-connections'];
+  if (cfg['min-streams'] != null) values['min-streams'] = cfg['min-streams'];
+  if (cfg['max-streams'] != null) values['max-streams'] = cfg['max-streams'];
+
+  // ALPN
+  if (cfg.alpn && !Array.isArray(cfg.alpn)) {
+    values.alpn = [cfg.alpn];
+  }
+
+  // token
+  if (Array.isArray(cfg.token)) {
+    values.token = cfg.token.join(',');
+  }
+
+  // users managed elsewhere
+  delete values.users;
+  delete values['shadow-tls'];
+  delete values['res-tls'];
+  delete values['jls-config'];
+  delete values['simple-obfs'];
+  delete values['mux-option'];
+  delete values['kcp-tun'];
+  delete values['xhttp-config'];
+  delete values['mkcp-config'];
+  delete values['mekya-config'];
+  delete values['obfs-opts'];
+  delete values['jls-upstream'];
+  delete values['tlsmirror-config'];
+  delete values['realm-opts'];
+  delete values['reality-config'];
+  delete values['ss-option'];
+  delete values['httpmask'];
+
+  if (cfg['ws-path']) values.transport_layer = 'ws';
+  if (cfg['ws-headers'] && typeof cfg['ws-headers'] === 'object' && cfg['ws-headers'].Host) values.ws_host = cfg['ws-headers'].Host;
+  else if (cfg['grpc-service-name']) values.transport_layer = 'grpc';
+  else if (cfg['xhttp-config']) values.transport_layer = 'xhttp';
+  else values.transport_layer = 'raw';
+  if (cfg['reality-config']) values.security_layer = 'reality';
+  else if (cfg.certificate || cfg['private-key']) values.security_layer = 'tls';
+  else values.security_layer = 'none';
+
+  return values;
+}
+
+/** Keys the visual form fully owns. */
+const FORM_OWNED_KEYS = new Set([
+  'cipher', 'password', 'psk', 'version', 'alterId', 'flow', 'decryption', 'encryption',
+  'ws-path', 'grpc-service-name', 'ss-option',
+  'up', 'down', 'ignore-client-bandwidth', 'obfs', 'obfs-password',
+  'masquerade', 'alpn', 'max-idle-time', 'handshake-timeout', 'token', 'congestion-controller',
+  'authentication-timeout', 'max-udp-relay-packet-size', 'zero-rtt', 'padding-scheme', 'transport',
+  'key', 'aead-method', 'padding-min', 'padding-max', 'table-type', 'enable-pure-downlink',
+  'custom-table', 'custom-tables', 'fallback', 'httpmask',
+  'certificate', 'private-key', 'client-auth-type', 'client-auth-cert', 'ech-key', 'allow-insecure',
+  'reality-config', 'users', 'simple-obfs', 'shadow-tls', 'res-tls', 'jls-config', 'tlsmirror-config', 'mux-option',
+  'kcp-tun', 'xhttp-config', 'mkcp-config', 'mekya-config', 'obfs-opts', 'jls-upstream', 'realm-opts',
+  'network', 'bbr-profile', 'quic-versions', 'cwnd', 'max-datagram-frame-size', 'recv-window-conn', 'recv-window', 'disable-mtu-discovery', 'traffic-pattern', 'user-hint-is-mandatory',
+]);
+
+function cleanObj(obj: Record<string, any>): Record<string, any> | undefined {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null || v === '') continue;
+    if (typeof v === 'number' && Number.isNaN(v)) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Coerce form value to a finite number, or undefined if empty/invalid. */
+function toNum(v: any): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Coerce to int when finite. */
+function toInt(v: any): number | undefined {
+  const n = toNum(v);
+  return n === undefined ? undefined : Math.trunc(n);
+}
+
+/** Build official Mihomo listener config from form values. */
+export function formValuesToConfig(
+  protocol: string,
+  values: Record<string, any>,
+  previousConfig?: Record<string, any> | null,
+): Record<string, any> {
+  const cfg: Record<string, any> = {};
+
+  if (previousConfig && typeof previousConfig === 'object') {
+    for (const [k, v] of Object.entries(previousConfig)) {
+      if (!FORM_OWNED_KEYS.has(k) && k !== 'name' && k !== 'type' && k !== 'port' && k !== 'listen') {
+        cfg[k] = v;
+      }
+    }
+  }
+
+  const set = (key: string, v: any) => {
+    if (v === undefined || v === null || v === '') return;
+    if (typeof v === 'number' && Number.isNaN(v)) return;
+    if (Array.isArray(v) && v.length === 0) return;
+    cfg[key] = v;
+  };
+
+  // XTLS Vision flow is TCP-only (MetaCubeX / Xray). Decide this *before* any
+  // field writes the config. The protocol switch below used to write `flow`
+  // unconditionally and the clear only ran later, so it edited the form state
+  // after the value had already been copied into the saved listener — the UI
+  // said the flow was dropped for ws/grpc/xhttp while the share link kept
+  // advertising it.
+  const transportLayer = String(values.transport_layer ?? 'raw');
+  const flowAllowed =
+    (transportLayer === 'raw' || transportLayer === 'tcp') &&
+    !values.mkcp_enabled &&
+    !values.mekya_enabled;
+
+  switch (protocol) {
+    case 'shadowsocks':
+      set('cipher', values.cipher);
+      set('password', values.password);
+      break;
+    case 'snell':
+      set('psk', values.psk);
+      {
+        const ver = toInt(values.version);
+        if (ver !== undefined) set('version', ver);
+      }
+      // Mihomo rejects obfs-opts without Host; only emit a complete block.
+      {
+        const mode = typeof values.obfs_opts_mode === 'string' ? values.obfs_opts_mode.trim() : '';
+        const host = typeof values.obfs_opts_host === 'string' ? values.obfs_opts_host.trim() : '';
+        if (mode && host) {
+          const o = cleanObj({ mode, host });
+          if (o) cfg['obfs-opts'] = o;
+        }
+      }
+      break;
+    case 'vmess':
+      {
+        const aid = toInt(values.alterId);
+        if (aid !== undefined) set('alterId', aid);
+      }
+      set('ws-path', values['ws-path']);
+      if (values.ws_host) { cfg['ws-headers'] = { Host: String(values.ws_host).trim() }; }
+      set('grpc-service-name', values['grpc-service-name']);
+      // R-M4 grpc-opts client-metadata fields (panel-side; converter emits them
+      // into the client-side grpc-opts block).
+      set('grpc-user-agent', values['grpc-user-agent']);
+      set('ping-interval', toInt(values['ping-interval']));
+      set('max-connections', toInt(values['max-connections']));
+      set('min-streams', toInt(values['min-streams']));
+      set('max-streams', toInt(values['max-streams']));
+      break;
+    case 'vless':
+      set('flow', flowAllowed ? values.flow : undefined);
+      set('ws-path', values['ws-path']);
+      if (values.ws_host) { cfg['ws-headers'] = { Host: String(values.ws_host).trim() }; }
+      set('grpc-service-name', values['grpc-service-name']);
+      set('decryption', values.decryption);
+      set('encryption', values.encryption);
+      // R-M4 grpc-opts client-metadata fields
+      set('grpc-user-agent', values['grpc-user-agent']);
+      set('ping-interval', toInt(values['ping-interval']));
+      set('max-connections', toInt(values['max-connections']));
+      set('min-streams', toInt(values['min-streams']));
+      set('max-streams', toInt(values['max-streams']));
+      break;
+    case 'trojan':
+      set('ws-path', values['ws-path']);
+      if (values.ws_host) { cfg['ws-headers'] = { Host: String(values.ws_host).trim() }; }
+      set('grpc-service-name', values['grpc-service-name']);
+      // R-M4 grpc-opts client-metadata fields
+      set('grpc-user-agent', values['grpc-user-agent']);
+      set('ping-interval', toInt(values['ping-interval']));
+      set('max-connections', toInt(values['max-connections']));
+      set('min-streams', toInt(values['min-streams']));
+      set('max-streams', toInt(values['max-streams']));
+      if (values.ss_option_enabled) {
+        cfg['ss-option'] = cleanObj({
+          enabled: true,
+          method: values.ss_option_method,
+          password: values.ss_option_password,
+        });
+      }
+      break;
+    case 'hysteria2':
+      set('up', values.up);
+      set('down', values.down);
+      if (values['ignore-client-bandwidth'] === true) cfg['ignore-client-bandwidth'] = true;
+      set('obfs', values.obfs);
+      set('obfs-password', values['obfs-password']);
+      set('masquerade', values.masquerade);
+      set('alpn', values.alpn);
+      // HIGH-1 / HIGH-2: max-idle-time + handshake-timeout removed from hy2 —
+      // backend hy2 schema (listener_schema_registry.go:161-163) does NOT
+      // whitelist them and HARD-REJECTs every save. They are CLIENT-side or
+      // TUIC/Sudoku-only fields per wiki + fix-A HIGH-5.
+      set('bbr-profile', values['bbr-profile']);
+      break;
+    case 'tuic-v4':
+      // Wiki inbound tuic-v4: token only (array).
+      if (values.token) {
+        const tokens = String(values.token).split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (tokens.length > 0) {
+          set('token', tokens);
+        }
+      }
+      set('congestion-controller', values['congestion-controller']);
+      set('alpn', values.alpn);
+      set('max-idle-time', values['max-idle-time']);
+      set('authentication-timeout', values['authentication-timeout']);
+      set('max-udp-relay-packet-size', values['max-udp-relay-packet-size']);
+      set('bbr-profile', values['bbr-profile']);
+      break;
+    case 'tuic-v5':
+    case 'tuic':
+      // Wiki inbound tuic-v5: users UUID→password (panel-bound or config); no token field.
+      set('congestion-controller', values['congestion-controller']);
+      set('alpn', values.alpn);
+      set('max-idle-time', values['max-idle-time']);
+      set('authentication-timeout', values['authentication-timeout']);
+      set('max-udp-relay-packet-size', values['max-udp-relay-packet-size']);
+      set('bbr-profile', values['bbr-profile']);
+      break;
+    case 'shadowquic':
+      set('alpn', values.alpn);
+      set('congestion-controller', values['congestion-controller']);
+      if (values['zero-rtt'] === true) cfg['zero-rtt'] = true;
+      set('up', values.up);
+      set('down', values.down);
+      if (values['ignore-client-bandwidth'] === true) cfg['ignore-client-bandwidth'] = true;
+      set('max-idle-time', values['max-idle-time']);
+      set('cwnd', values.cwnd);
+      set('bbr-profile', values['bbr-profile']);
+      set('quic-versions', values['quic-versions']);
+      set('max-datagram-frame-size', values['max-datagram-frame-size']);
+      set('recv-window-conn', values['recv-window-conn']);
+      set('recv-window', values['recv-window']);
+      if (values['disable-mtu-discovery'] === true) cfg['disable-mtu-discovery'] = true;
+      break;
+    case 'anytls':
+      set('padding-scheme', values['padding-scheme']);
+      break;
+    case 'mieru':
+      set('transport', values.transport);
+      set('traffic-pattern', values['traffic-pattern']);
+      if (values['user-hint-is-mandatory'] === true) cfg['user-hint-is-mandatory'] = true;
+      break;
+    case 'sudoku':
+      set('key', values.key);
+      set('aead-method', values['aead-method']);
+      set('padding-min', values['padding-min']);
+      set('padding-max', values['padding-max']);
+      set('table-type', values['table-type']);
+      set('custom-table', values['custom-table']);
+      const customTables = typeof values['custom-tables'] === 'string'
+        ? values['custom-tables'].split(/[\\n,]+/).map((v: string) => v.trim()).filter(Boolean)
+        : values['custom-tables'];
+      if (Array.isArray(customTables) && customTables.length > 0) set('custom-tables', customTables);
+      set('fallback', values['fallback']);
+      set('handshake-timeout', values['handshake-timeout']);
+      if (values['enable-pure-downlink'] === true) cfg['enable-pure-downlink'] = true;
+      if (values.httpmask_enabled) {
+        cfg['httpmask'] = cleanObj({
+          disable: values.httpmask_disable === true ? true : undefined,
+          mode: values.httpmask_mode,
+          'path-root': values.httpmask_path_root,
+        }) || {};
+      }
+      break;
+    case 'trusttunnel':
+      if (Array.isArray(values.network) && values.network.length > 0) {
+        set('network', values.network);
+      }
+      set('congestion-controller', values['congestion-controller']);
+      set('bbr-profile', values['bbr-profile']);
+      break;
+    default:
+      break;
+  }
+
+  // Reality vs certificate/private-key are mutually exclusive per official docs.
+  if (values.security_layer === 'reality') {
+    values.reality_enabled = true;
+  } else if (values.security_layer === 'none' || values.security_layer === 'tls') {
+    values.reality_enabled = false;
+  }
+  // One transport at a time (MetaCubeX). mkcp/mekya conflict with ws/grpc/xhttp.
+  const layer = values.transport_layer || 'raw';
+  if (values.mkcp_enabled && values.mekya_enabled) {
+    values.mekya_enabled = false;
+  }
+  if (values.mkcp_enabled || values.mekya_enabled) {
+    values.transport_layer = 'raw';
+    values['ws-path'] = undefined;
+    values['grpc-service-name'] = undefined;
+    values.xhttp_enabled = false;
+  } else if (layer === 'ws') {
+    values['grpc-service-name'] = undefined;
+    values.xhttp_enabled = false;
+    values.mkcp_enabled = false;
+    values.mekya_enabled = false;
+  } else if (layer === 'grpc') {
+    values['ws-path'] = undefined;
+    values.xhttp_enabled = false;
+    values.mkcp_enabled = false;
+    values.mekya_enabled = false;
+  } else if (layer === 'xhttp' && XHTTP_PROTOCOLS.has(protocol)) {
+    values['ws-path'] = undefined;
+    values['grpc-service-name'] = undefined;
+    values.xhttp_enabled = true;
+    values.mkcp_enabled = false;
+    values.mekya_enabled = false;
+  } else {
+    values['ws-path'] = undefined;
+    values['grpc-service-name'] = undefined;
+    values.xhttp_enabled = false;
+  }
+  if (!XHTTP_PROTOCOLS.has(protocol)) {
+    values.xhttp_enabled = false;
+  }
+  // Keeps the form state consistent with what was written above, and drops any
+  // flow that reached cfg by another route. The decision itself was made before
+  // the protocol switch — see flowAllowed.
+  if (!flowAllowed) {
+    values.flow = undefined;
+    delete cfg.flow;
+  }
+  const realityOn = REALITY_PROTOCOLS.has(protocol) && (!!values.reality_enabled || values.security_layer === 'reality');
+  const wantTLSMaterial =
+    ALWAYS_TLS_PROTOCOLS.has(protocol) ||
+    (!realityOn && TLS_PROTOCOLS.has(protocol) && values.security_layer === 'tls');
+  if (realityOn) {
+    // Always emit reality-config so backend Autofill can fill empty private-key / short-id.
+    const dest = (values.reality_dest && String(values.reality_dest).trim()) || '';
+    if (!dest) throw new Error('REALITY destination is required');
+    const reality: Record<string, any> = { dest, 'private-key': values.reality_private_key || '' };
+    if (values.reality_short_id != null && values.reality_short_id !== '') {
+      reality['short-id'] = values.reality_short_id;
+    }
+    if (values.reality_server_names != null && values.reality_server_names !== '') {
+      reality['server-names'] = values.reality_server_names;
+    }
+    cfg['reality-config'] = reality;
+  } else if (wantTLSMaterial) {
+    set('certificate', values.certificate);
+    set('private-key', values['private-key']);
+    set('client-auth-type', values['client-auth-type']);
+    set('client-auth-cert', values['client-auth-cert']);
+    set('ech-key', values['ech-key']);
+    if (ALLOW_INSECURE_PROTOCOLS.has(protocol) && values['allow-insecure'] === true) cfg['allow-insecure'] = true;
+  }
+
+  // Reality is exclusive with cert/wrappers (MetaCubeX trojan/vless listener notes).
+  if (realityOn) {
+    values.shadow_tls_enabled = false;
+    values.res_tls_enabled = false;
+    values.jls_enabled = false;
+    values.tlsmirror_enabled = false;
+    values['allow-insecure'] = false;
+    values.certificate = undefined;
+    values['private-key'] = undefined;
+  }
+
+  // simple-obfs
+  if (SIMPLE_OBFS_PROTOCOLS.has(protocol) && values.simple_obfs_enabled) {
+    cfg['simple-obfs'] = cleanObj({
+      enable: true,
+      mode: values.simple_obfs_mode,
+    }) || { enable: true };
+  }
+
+  // shadow-tls — require handshake.dest and (password or users); never emit empty enable-only.
+  if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.shadow_tls_enabled) {
+    const users = asArray(values.shadow_tls_users)
+      .filter((u: any) => u?.name && u?.password)
+      .map((u: any) => cleanObj({ name: u.name, password: u.password }))
+      .filter(Boolean);
+    const dest = typeof values.shadow_tls_handshake_dest === 'string' ? values.shadow_tls_handshake_dest.trim() : '';
+    const password = typeof values.shadow_tls_password === 'string' ? values.shadow_tls_password.trim() : '';
+    if (dest && (password || users.length > 0)) {
+      const handshake = cleanObj({
+        dest,
+        proxy: values.shadow_tls_handshake_proxy,
+      });
+      cfg['shadow-tls'] = cleanObj({
+        enable: true,
+        version: toInt(values.shadow_tls_version),
+        password: password || undefined,
+        users: users.length ? users : undefined,
+        handshake,
+      });
+    }
+  }
+
+  // res-tls — require dest.
+  if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.res_tls_enabled) {
+    const dest = typeof values.res_tls_dest === 'string' ? values.res_tls_dest.trim() : '';
+    if (dest) {
+      cfg['res-tls'] = cleanObj({
+        enable: true,
+        dest,
+        password: values.res_tls_password,
+        'restls-script': values.res_tls_restls_script,
+        'min-record-len': values.res_tls_min_record_len,
+        proxy: values.res_tls_proxy,
+        'rate-limit': values.res_tls_rate_limit,
+      });
+    }
+  }
+
+  // jls-config — Mihomo requires dest + users; never emit a half-filled block.
+  if (WRAPPER_TLS_PROTOCOLS.has(protocol) && values.jls_enabled) {
+    const users = asArray(values.jls_users)
+      .filter((u: any) => u?.username && u?.password)
+      .map((u: any) => cleanObj({ username: u.username, password: u.password }))
+      .filter(Boolean);
+    const dest = typeof values.jls_dest === 'string' ? values.jls_dest.trim() : '';
+    if (dest && users.length > 0) {
+      cfg['jls-config'] = cleanObj({
+        enable: true,
+        dest,
+        sni: values.jls_sni,
+        alpn: values.jls_alpn,
+        proxy: values.jls_proxy,
+        'rate-limit': values.jls_rate_limit,
+        users,
+      });
+    }
+  }
+
+  // tlsmirror-config (vmess) — official inbound shape only (wiki listeners/vmess)
+  if (TLSMIRROR_PROTOCOLS.has(protocol) && values.tlsmirror_enabled) {
+    const dest = typeof values.tlsmirror_dest === 'string' ? values.tlsmirror_dest.trim() : '';
+    const primaryKey = typeof values.tlsmirror_primary_key === 'string' ? values.tlsmirror_primary_key.trim() : '';
+    if (dest && primaryKey) {
+      const suitesRaw = values.tlsmirror_explicit_nonce_ciphersuites;
+      let suites: number[] | undefined;
+      if (Array.isArray(suitesRaw) && suitesRaw.length) {
+        suites = suitesRaw
+          .map((x) => (typeof x === 'number' ? x : parseInt(String(x).trim(), 10)))
+          .filter((n) => Number.isFinite(n));
+        if (!suites.length) suites = undefined;
+      }
+      const deferBase = values.tlsmirror_defer_base_ns;
+      const deferRand = values.tlsmirror_defer_random_ns;
+      let defer: Record<string, number> | undefined;
+      if (deferBase != null && deferBase !== '' || deferRand != null && deferRand !== '') {
+        defer = {};
+        if (deferBase != null && deferBase !== '') defer['base-nanoseconds'] = Number(deferBase);
+        if (deferRand != null && deferRand !== '') defer['uniform-random-multiplier-nanoseconds'] = Number(deferRand);
+      }
+      const enrolOut =
+        typeof values.tlsmirror_enrolment_outbound === 'string'
+          ? values.tlsmirror_enrolment_outbound.trim()
+          : '';
+      cfg['tlsmirror-config'] = cleanObj({
+        dest,
+        'primary-key': primaryKey,
+        proxy: typeof values.tlsmirror_proxy === 'string' ? values.tlsmirror_proxy.trim() || undefined : values.tlsmirror_proxy,
+        'explicit-nonce-ciphersuites': suites,
+        'defer-instance-derived-write-time': defer && Object.keys(defer).length ? defer : undefined,
+        'transport-layer-padding': values.tlsmirror_padding_enabled ? { enabled: true } : undefined,
+        'connection-enrolment': enrolOut ? { 'primary-ingress-outbound': enrolOut } : undefined,
+        'sequence-watermarking-enabled': values.tlsmirror_sequence_watermarking === true ? true : undefined,
+      });
+    }
+  }
+
+  // mux-option (listener-side: only padding + brutal per official docs)
+  if (MUX_PROTOCOLS.has(protocol) && values.mux_enabled) {
+    const brutal = values.mux_brutal_enabled
+      ? cleanObj({ enabled: true, up: values.mux_brutal_up, down: values.mux_brutal_down })
+      : undefined;
+    cfg['mux-option'] = cleanObj({
+      padding: values.mux_padding === true ? true : undefined,
+      brutal,
+    }) || { padding: true };
+  }
+
+  // kcp-tun
+  if (KCP_TUN_PROTOCOLS.has(protocol) && values.kcp_tun_enabled) {
+    cfg['kcp-tun'] = cleanObj({
+      enable: true,
+      key: values.kcp_tun_key,
+      crypt: values.kcp_tun_crypt,
+      mode: values.kcp_tun_mode,
+      conn: values.kcp_tun_conn,
+      mtu: values.kcp_tun_mtu,
+      sndwnd: values.kcp_tun_sndwnd,
+      rcvwnd: values.kcp_tun_rcvwnd,
+      nocomp: values.kcp_tun_nocomp === true ? true : undefined,
+    }) || { enable: true };
+  }
+
+  // xhttp-config
+  if (XHTTP_PROTOCOLS.has(protocol) && values.xhttp_enabled) {
+    const xhttp = cleanObj({
+      path: values.xhttp_path,
+      host: values.xhttp_host,
+      mode: values.xhttp_mode,
+    });
+    // Official schema: non-empty xhttp-config enables the transport; keep at least path when toggled on.
+    cfg['xhttp-config'] = xhttp || { path: '/' };
+  }
+
+  // mkcp-config
+  if (MKCP_PROTOCOLS.has(protocol) && values.mkcp_enabled) {
+    cfg['mkcp-config'] = cleanObj({
+      enable: true,
+      mtu: values.mkcp_mtu,
+      tti: values.mkcp_tti,
+      'uplink-capacity': values.mkcp_uplink,
+      'downlink-capacity': values.mkcp_downlink,
+      congestion: values.mkcp_congestion === true ? true : undefined,
+      'write-buffer': values.mkcp_write_buffer,
+      'read-buffer': values.mkcp_read_buffer,
+      seed: values.mkcp_seed,
+      header: values.mkcp_header,
+    }) || { enable: true };
+  }
+
+  // mekya-config (VMess)
+  if (MEKYA_PROTOCOLS.has(protocol) && values.mekya_enabled) {
+    const kcp = cleanObj({
+      mtu: values.mekya_kcp_mtu,
+      tti: values.mekya_kcp_tti,
+      'uplink-capacity': values.mekya_kcp_uplink,
+      'downlink-capacity': values.mekya_kcp_downlink,
+      congestion: values.mekya_kcp_congestion === true ? true : undefined,
+      'write-buffer': values.mekya_kcp_write_buffer,
+      'read-buffer': values.mekya_kcp_read_buffer,
+      seed: values.mekya_kcp_seed,
+      header: values.mekya_kcp_header,
+    });
+    cfg['mekya-config'] = cleanObj({
+      enable: true,
+      'max-write-size': values.mekya_max_write_size,
+      'max-write-duration-ms': values.mekya_max_write_duration_ms,
+      'max-simultaneous-write-connection': values.mekya_max_simultaneous_write_connection,
+      'packet-writing-buffer': values.mekya_packet_writing_buffer,
+      // R-M3 client-metadata fields (vmess only; converter reads them for
+      // client-side mekya-opts emission).
+      'polling-interval-initial': values['mekya-polling-interval-initial'],
+      'h2-pool-size': values['mekya-h2-pool-size'],
+      kcp,
+    }) || { enable: true };
+  }
+
+  // jls-upstream (shadowquic) — Mihomo requires addr; do not emit empty blocks.
+  if (protocol === 'shadowquic' && values.jls_upstream_enabled) {
+    const addr = typeof values.jls_upstream_addr === 'string' ? values.jls_upstream_addr.trim() : '';
+    if (addr) {
+      const upstream = cleanObj({
+        addr,
+        sni: values.jls_upstream_sni,
+        proxy: values.jls_upstream_proxy,
+        'rate-limit': values.jls_upstream_rate_limit,
+      });
+      if (upstream) cfg['jls-upstream'] = upstream;
+    }
+  }
+
+  // realm-opts (hysteria2)
+  if (protocol === 'hysteria2' && values.realm_enabled) {
+    cfg['realm-opts'] = cleanObj({
+      enable: true,
+      'server-url': values.realm_server_url,
+      token: values.realm_token,
+      'realm-id': values.realm_id,
+      'stun-servers': values.realm_stun,
+      proxy: values.realm_proxy,
+      sni: values.realm_sni,
+      'skip-cert-verify': values.realm_skip_cert === true ? true : undefined,
+      'name-cert-verify': values.realm_name_cert_verify,
+      fingerprint: values.realm_fingerprint,
+      certificate: values.realm_certificate,
+      'private-key': values.realm_private_key,
+      alpn: values.realm_alpn,
+    }) || { enable: true };
+  }
+
+  return cfg;
+}
+
+
+/** Collapsible-style section with enable switch driving nested fields. */
+const EnableSection: React.FC<{
+  name: string;
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}> = ({ name, label, hint, children }) => (
+  <>
+    <Divider titlePlacement="start" plain>{label}</Divider>
+    {hint && (
+      <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>{hint}</Text>
+    )}
+    <Form.Item name={name} label={label} valuePropName="checked">
+      <Switch />
+    </Form.Item>
+    <Form.Item noStyle shouldUpdate={(prev, cur) => prev[name] !== cur[name]}>
+      {({ getFieldValue }) => (getFieldValue(name) ? <Card size="small" style={{ marginBottom: 16 }}>{children}</Card> : null)}
+    </Form.Item>
+  </>
+);
+
+type Props = { protocol?: string; autoSelectReality?: boolean };
+
+const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = false }) => {
+  const { t } = useI18n();
+  const form = Form.useFormInstance();
+  const gen = async (kind: string, cipher?: string) => {
+    try {
+      const data = await generateMaterial({ kind, cipher });
+      if (kind === 'reality') {
+        form.setFieldsValue({
+          reality_private_key: data.private_key,
+          reality_short_id: data.short_id ? [data.short_id] : undefined,
+        });
+      } else if (kind === 'uuid' && data.uuid) {
+        form.setFieldsValue({ uuid: data.uuid });
+      } else if ((kind === 'password' || kind === 'ss-password') && data.password) {
+        form.setFieldsValue({ password: data.password });
+      } else if (kind === 'short-id' && data.short_id) {
+        form.setFieldsValue({ reality_short_id: [data.short_id] });
+      }
+      message.success(t('common.generated') || 'Generated');
+    } catch (e: any) {
+      message.error(e?.message || 'generate failed');
+    }
+  };
+  if (!protocol) {
+    return (
+      <Alert type="info" showIcon message={t('listeners.selectProtocolFirst')} style={{ marginBottom: 16 }} />
+    );
+  }
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Alert type="info" showIcon message={t('listeners.usersHint')} />
+
+      {(protocol === 'http' || protocol === 'socks') && (
+        <Alert
+          type="info"
+          showIcon
+          message={
+            protocol === 'socks'
+              ? (t('listeners.socksHint') ||
+                'SOCKS inbound (wiki: type socks). Auth uses bound panel users (username/password). Enable UDP for UDP associate. Optional TLS via Security → TLS.')
+              : (t('listeners.httpHint') ||
+                'HTTP inbound (wiki: type http). Auth uses bound panel users (username/password). Optional TLS via Security → TLS (certificate + private-key).')
+          }
+        />
+      )}
+
+      {TRANSPORT_PROTOCOLS.has(protocol) && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionTransport')}</Divider>
+          <Form.Item
+            name="transport_layer"
+            label={t('listeners.transportLayer') || 'Transport'}
+            initialValue="raw"
+            extra={
+              XHTTP_PROTOCOLS.has(protocol)
+                ? (t('listeners.transportXhttpHint') || 'XHTTP is available for VLESS.')
+                : (t('listeners.transportExclusiveHint') || 'One transport only. mKCP/Mekya (VMess) require TCP.')
+            }
+           tooltip={fieldTip(t, 'listeners.transport_layerHint')}>
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v !== 'raw') {
+                  form.setFieldsValue({ mkcp_enabled: false, mekya_enabled: false });
+                }
+                form.setFieldsValue({ xhttp_enabled: v === 'xhttp' });
+              }}
+            >
+              <Radio.Button value="raw">TCP</Radio.Button>
+              <Radio.Button value="ws">WebSocket</Radio.Button>
+              <Radio.Button value="grpc">gRPC</Radio.Button>
+              {XHTTP_PROTOCOLS.has(protocol) && <Radio.Button value="xhttp">XHTTP</Radio.Button>}
+            </Radio.Group>
+          </Form.Item>
+        </>
+      )}
+      {OPTIONAL_SECURITY_PROTOCOLS.has(protocol) && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionSecurity') || 'Security'}</Divider>
+          <Form.Item name="security_layer" label={t('listeners.securityLayer') || 'Security'} initialValue="none" tooltip={fieldTip(t, 'listeners.security_layerHint')}>
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value="none">None</Radio.Button>
+              <Radio.Button value="tls">TLS</Radio.Button>
+              {REALITY_PROTOCOLS.has(protocol) && <Radio.Button value="reality">Reality</Radio.Button>}
+            </Radio.Group>
+          </Form.Item>
+        </>
+      )}
+      {ALWAYS_TLS_PROTOCOLS.has(protocol) && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 8 }}
+          message={t('listeners.alwaysTlsHint') || 'This protocol requires TLS. Leave certificate empty to auto-generate a panel self-signed pair on save.'}
+        />
+      )}
+
+      {/* ---- Protocol core options ---- */}
+      {protocol === 'shadowsocks' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="cipher" label={t('listeners.cipher')} initialValue="aes-128-gcm" tooltip={fieldTip(t, 'listeners.cipherHint')}>
+            <Select options={SS_CIPHERS.map((c) => ({ value: c, label: c }))} showSearch />
+          </Form.Item>
+          <Form.Item name="password" label={t('listeners.password')} tooltip={fieldTip(t, 'listeners.passwordHint')}>
+            <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('ss-password', form.getFieldValue('cipher'))}>{t('common.generate') || 'Generate'}</Button>} />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'snell' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="psk" label={t('listeners.psk')} tooltip={fieldTip(t, 'listeners.pskHint')}>
+            <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
+          </Form.Item>
+          <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4} tooltip={fieldTip(t, 'listeners.versionHint')}>
+            <Select options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))} />
+          </Form.Item>
+          <Form.Item name="obfs_opts_mode" label={t('listeners.obfsOptsMode')} tooltip={fieldTip(t, 'listeners.obfsOptsHint', 'Leave both empty to disable. Mode and host must be set together.')}>
+            <Select allowClear options={[{ value: 'http', label: 'http' }, { value: 'tls', label: 'tls' }]} />
+          </Form.Item>
+          <Form.Item
+            name="obfs_opts_host"
+            label={t('listeners.obfsOptsHost')}
+            dependencies={['obfs_opts_mode']}
+            tooltip={fieldTip(t, 'listeners.obfs_opts_hostHint')}
+            rules={[
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  const mode = getFieldValue('obfs_opts_mode');
+                  if (mode && !String(value || '').trim()) {
+                    return Promise.reject(new Error(t('listeners.obfsOptsHostRequired') || 'Host is required when obfs mode is set'));
+                  }
+                  return Promise.resolve();
+                },
+              }),
+            ]}
+          >
+            <Input placeholder="www.example.com" />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'vmess' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="alterId" label={t('listeners.alterId')} tooltip={fieldTip(t, 'listeners.alterIdHint')}>
+            <InputNumber min={0} max={65535} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'vless' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item noStyle shouldUpdate={(a, b) => a.transport_layer !== b.transport_layer}>
+            {({ getFieldValue }) => {
+              const layer = getFieldValue('transport_layer') || 'raw';
+              const tcpOnly = layer === 'raw' || layer === 'tcp';
+              return (
+                <Form.Item
+                  name="flow"
+                  label={t('listeners.flow')}
+                  tooltip={fieldTip(t, 'listeners.flowHint', 'xtls-rprx-vision requires TCP (raw). Cleared for ws/grpc/xhttp.')}
+                >
+                  <Select
+                    allowClear
+                    disabled={!tcpOnly}
+                    options={[{ value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' }]}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+                    <Form.Item
+            name="decryption"
+            label={t('listeners.decryption') || 'decryption (server)'}
+            tooltip={fieldTip(t, 'listeners.decryptionHint', 'Server-side VLESS decryption written to the listener.')}
+          >
+            <Input.TextArea rows={2} placeholder="mlkem768x25519plus...." />
+          </Form.Item>
+          <Form.Item
+            name="encryption"
+            label={t('listeners.encryption') || 'encryption (client)'}
+            tooltip={fieldTip(t, 'listeners.encryptionHint', 'Client-only; used in subscription export, not inbound YAML.')}
+          >
+            <Input.TextArea rows={2} placeholder="client export only" />
+          </Form.Item>
+        </>
+      )}
+
+      {TRANSPORT_PROTOCOLS.has(protocol) && (
+        <Form.Item noStyle shouldUpdate={(a, b) => a.transport_layer !== b.transport_layer}>
+          {({ getFieldValue }) => {
+            const layer = getFieldValue('transport_layer') || 'raw';
+            return (
+              <>
+                {layer === 'ws' && (
+                  <>
+                  <Form.Item name="ws-path" label={t('listeners.wsPath')} tooltip={fieldTip(t, 'listeners.wsPathHint')} rules={[{ required: true }]}>
+                    <Input placeholder="/ws" />
+                  </Form.Item>
+                  <Form.Item
+                    name="ws_host"
+                    label={t('listeners.wsHost') || 'WebSocket Host'}
+                    tooltip={fieldTip(t, 'listeners.wsHostHint') || 'Client Host header (CDN). Empty = use SNI / public host in subscription export.'}
+                  >
+                    <Input placeholder={t('listeners.wsHostPlaceholder') || 'cdn.example.com'} />
+                  </Form.Item>
+                  </>
+                )}
+                {layer === 'grpc' && (
+                  <>
+                    <Form.Item name="grpc-service-name" label={t('listeners.grpcServiceName')} tooltip={fieldTip(t, 'listeners.grpcHint')} rules={[{ required: true }]}>
+                      <Input placeholder="GunService" />
+                    </Form.Item>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                      {t('listeners.clientExportOnlyHint') || 'Below: client subscription only — not written to Mihomo inbound YAML.'}
+                    </Text>
+                    <Form.Item name="grpc-user-agent" label={t('listeners.grpcUserAgent')} tooltip={fieldTip(t, 'listeners.clientExportOnlyHint')}>
+                      <Input placeholder="Go-http-client/1.1" />
+                    </Form.Item>
+                    <Form.Item name="ping-interval" label={t('listeners.pingInterval')} tooltip={fieldTip(t, 'listeners.clientExportOnlyHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                    <Form.Item name="max-connections" label={t('listeners.maxConnections')} tooltip={fieldTip(t, 'listeners.clientExportOnlyHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                    <Form.Item name="min-streams" label={t('listeners.minStreams')} tooltip={fieldTip(t, 'listeners.clientExportOnlyHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                    <Form.Item name="max-streams" label={t('listeners.maxStreams')} tooltip={fieldTip(t, 'listeners.clientExportOnlyHint')}>
+                      <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+                    </Form.Item>
+                  </>
+                )}
+                {layer === 'xhttp' && XHTTP_PROTOCOLS.has(protocol) && (
+                  <>
+                    <Form.Item name="xhttp_path" label={t('listeners.xhttpPath')} rules={[{ required: true }]} tooltip={fieldTip(t, 'listeners.xhttp_pathHint')}>
+                      <Input placeholder="/" />
+                    </Form.Item>
+                    <Form.Item name="xhttp_host" label={t('listeners.xhttpHost')} tooltip={fieldTip(t, 'listeners.xhttp_hostHint')}>
+                      <Input placeholder="example.com" />
+                    </Form.Item>
+                    <Form.Item name="xhttp_mode" label={t('listeners.xhttpMode')} tooltip={fieldTip(t, 'listeners.xhttp_modeHint')}>
+                      <Select allowClear options={['auto', 'stream-one', 'stream-up', 'packet-up'].map((v) => ({ value: v, label: v }))} />
+                    </Form.Item>
+                  </>
+                )}
+              </>
+            );
+          }}
+        </Form.Item>
+      )}
+
+      {protocol === 'trojan' && (
+        <EnableSection name="ss_option_enabled" label={t('listeners.sectionSSOption')}>
+          <Form.Item name="ss_option_method" label={t('listeners.ssOptionMethod')} tooltip={fieldTip(t, 'listeners.ss_option_methodHint')}>
+            <Select
+              allowClear
+              options={SS_CIPHERS.filter((c) => !c.startsWith('2022')).map((c) => ({ value: c, label: c }))}
+            />
+          </Form.Item>
+          <Form.Item name="ss_option_password" label={t('listeners.ssOptionPassword')} tooltip={fieldTip(t, 'listeners.ss_option_passwordHint')}>
+            <Input.Password />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {protocol === 'hysteria2' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="up" label={t('listeners.up')} tooltip={fieldTip(t, 'listeners.bandwidthHint')}>
+            <Input placeholder="100 Mbps" />
+          </Form.Item>
+          <Form.Item name="down" label={t('listeners.down')} tooltip={fieldTip(t, 'listeners.bandwidthHint')}>
+            <Input placeholder="100 Mbps" />
+          </Form.Item>
+          <Form.Item name="ignore-client-bandwidth" label={t('listeners.ignoreClientBandwidth')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.ignore-client-bandwidthHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="obfs" label={t('listeners.obfs')} tooltip={fieldTip(t, 'listeners.obfsHint')}>
+            <Select allowClear options={[{ value: 'salamander', label: 'salamander' }]} />
+          </Form.Item>
+          <Form.Item name="obfs-password" label={t('listeners.obfsPassword')} tooltip={fieldTip(t, 'listeners.obfs-passwordHint')}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="masquerade" label={t('listeners.masquerade')} tooltip={fieldTip(t, 'listeners.masqueradeHint')}>
+            <Input placeholder="https://www.example.com" />
+          </Form.Item>
+          <Form.Item name="alpn" label={t('listeners.alpn')} tooltip={fieldTip(t, 'listeners.alpnHint')}>
+            <Select mode="tags" placeholder="h3" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="bbr-profile" label={t('listeners.bbrProfile')} tooltip={fieldTip(t, 'listeners.bbr-profileHint')}>
+            <Input />
+          </Form.Item>
+        </>
+      )}
+
+      {(protocol === 'tuic' || protocol === 'tuic-v4' || protocol === 'tuic-v5') && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          {(protocol === 'tuic-v4') && (
+            <Form.Item name="token" label={t('listeners.token')} tooltip={fieldTip(t, 'listeners.tokenHint')}>
+              <Input placeholder={t('listeners.tokenPlaceholder')} />
+            </Form.Item>
+          )}
+          <Form.Item name="congestion-controller" label={t('listeners.congestionController')} tooltip={fieldTip(t, 'listeners.congestion-controllerHint')}>
+            <Select allowClear options={['bbr', 'cubic', 'new_reno'].map((v) => ({ value: v, label: v }))} />
+          </Form.Item>
+          <Form.Item name="alpn" label={t('listeners.alpn')} tooltip={fieldTip(t, 'listeners.alpnHint')}>
+            <Select mode="tags" placeholder="h3" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="max-idle-time" label={t('listeners.maxIdleTime')} tooltip={fieldTip(t, 'listeners.max-idle-timeHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="15000" />
+          </Form.Item>
+          <Form.Item name="authentication-timeout" label={t('listeners.authenticationTimeout')} tooltip={fieldTip(t, 'listeners.authentication-timeoutHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1000" />
+          </Form.Item>
+          <Form.Item name="max-udp-relay-packet-size" label={t('listeners.maxUdpRelayPacketSize')} tooltip={fieldTip(t, 'listeners.max-udp-relay-packet-sizeHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1500" />
+          </Form.Item>
+          <Form.Item name="bbr-profile" label={t('listeners.bbrProfile')} tooltip={fieldTip(t, 'listeners.bbr-profileHint')}>
+            <Input />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'shadowquic' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="alpn" label={t('listeners.alpn')} tooltip={fieldTip(t, 'listeners.alpnHint')}>
+            <Select mode="tags" placeholder="h3" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="congestion-controller" label={t('listeners.congestionController')} initialValue="cubic" tooltip={fieldTip(t, 'listeners.congestion-controllerHint')}>
+            <Select allowClear options={['cubic', 'new_reno', 'bbr'].map((v) => ({ value: v, label: v }))} />
+          </Form.Item>
+          <Form.Item name="zero-rtt" label={t('listeners.zeroRtt')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.zero-rttHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="up" label={t('listeners.up')} tooltip={fieldTip(t, 'listeners.upHint')}>
+            <Input placeholder="100 Mbps" />
+          </Form.Item>
+          <Form.Item name="down" label={t('listeners.down')} tooltip={fieldTip(t, 'listeners.downHint')}>
+            <Input placeholder="100 Mbps" />
+          </Form.Item>
+          <Form.Item name="ignore-client-bandwidth" label={t('listeners.ignoreClientBandwidth')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.ignore-client-bandwidthHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="max-idle-time" label={t('listeners.maxIdleTime')} tooltip={fieldTip(t, 'listeners.max-idle-timeHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="cwnd" label={t('listeners.cwnd')} tooltip={fieldTip(t, 'listeners.cwndHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="bbr-profile" label={t('listeners.bbrProfile')} tooltip={fieldTip(t, 'listeners.bbr-profileHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="quic-versions" label={t('listeners.quicVersions')} tooltip={fieldTip(t, 'listeners.quic-versionsHint')}>
+            <Select mode="tags" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="max-datagram-frame-size" label={t('listeners.shadowquicMaxDatagramFrameSize', 'Max datagram frame size')} tooltip={fieldTip(t, 'listeners.max-datagram-frame-sizeHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1400" />
+          </Form.Item>
+          <Form.Item name="recv-window-conn" label={t('listeners.shadowquicRecvWindowConn', 'Recv window conn')} tooltip={fieldTip(t, 'listeners.recv-window-connHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item name="recv-window" label={t('listeners.shadowquicRecvWindow', 'Recv window')} tooltip={fieldTip(t, 'listeners.recv-windowHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item name="disable-mtu-discovery" label={t('listeners.shadowquicDisableMtuDiscovery', 'Disable MTU discovery')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.disable-mtu-discoveryHint')}>
+            <Switch />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'anytls' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="padding-scheme" label={t('listeners.paddingScheme')} tooltip={fieldTip(t, 'listeners.padding-schemeHint')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'mieru' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="transport" label={t('listeners.transport')} rules={[{ required: true }]} tooltip={fieldTip(t, 'listeners.transportHint')}>
+            <Select options={[{ value: 'TCP', label: 'TCP' }, { value: 'UDP', label: 'UDP' }]} />
+          </Form.Item>
+          <Form.Item name="traffic-pattern" label={t('listeners.trafficPattern')} tooltip={fieldTip(t, 'listeners.traffic-patternHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="user-hint-is-mandatory" label={t('listeners.userHintMandatory')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.user-hint-is-mandatoryHint')}>
+            <Switch />
+          </Form.Item>
+        </>
+      )}
+
+      {protocol === 'sudoku' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="key" label={t('listeners.sudokuKey')} tooltip="Leave empty to auto-generate">
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="aead-method" label={t('listeners.aeadMethod')} tooltip={fieldTip(t, 'listeners.aead-methodHint')}>
+            <Select
+              allowClear
+              options={['chacha20-poly1305', 'aes-128-gcm', 'none'].map((v) => ({ value: v, label: v }))}
+            />
+          </Form.Item>
+          <Form.Item name="padding-min" label={t('listeners.paddingMin')} tooltip={fieldTip(t, 'listeners.padding-minHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="padding-max" label={t('listeners.paddingMax')} tooltip={fieldTip(t, 'listeners.padding-maxHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="table-type" label={t('listeners.tableType')} tooltip={fieldTip(t, 'listeners.table_typeHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="custom-table" label={t('listeners.customTable')} tooltip={fieldTip(t, 'listeners.customTable', 'Custom byte layout (must contain 2x, 2p, 4v); entropy direction only')}>
+            <Input placeholder="xpxvvpvv" />
+          </Form.Item>
+          <Form.Item name="custom-tables" label={t('listeners.customTables')} tooltip={fieldTip(t, 'listeners.customTables', 'Custom byte layout list for multi-table rotation; overrides custom-table when non-empty')}>
+            <Input.TextArea rows={2} placeholder="xpxvvpvv\nvxpvxvvp" />
+          </Form.Item>
+          <Form.Item name="handshake-timeout" label={t('listeners.handshakeTimeout')} tooltip={fieldTip(t, 'listeners.handshake-timeoutHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="enable-pure-downlink" label={t('listeners.enablePureDownlink')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.enable_pure_downlinkHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="fallback" label={t('listeners.sudokuFallback')} tooltip={fieldTip(t, 'listeners.sudokuFallback', 'When HTTPMask is on, forward non-tunnel HTTP-like requests to this address (host:port)')}>
+            <Input placeholder="127.0.0.1:80" />
+          </Form.Item>
+          <EnableSection name="httpmask_enabled" label={t('listeners.sectionHttpmask')} hint={t('listeners.sectionHttpmask') || 'HTTP tunnel masking for Sudoku'}>
+            <Form.Item name="httpmask_disable" label={t('listeners.httpmaskDisable')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.httpmask_disableHint')}>
+              <Switch />
+            </Form.Item>
+            <Form.Item name="httpmask_mode" label={t('listeners.httpmaskMode')} tooltip={fieldTip(t, 'listeners.httpmask_modeHint')}>
+              <Select
+                allowClear
+                options={['legacy', 'stream', 'poll', 'auto', 'ws'].map((v) => ({ value: v, label: v }))}
+              />
+            </Form.Item>
+            <Form.Item name="httpmask_path_root" label={t('listeners.httpmaskPathRoot')} tooltip={fieldTip(t, 'listeners.httpmask_path_rootHint')}>
+              <Input placeholder="aabbcc" />
+            </Form.Item>
+          </EnableSection>
+        </>
+      )}
+
+      {protocol === 'trusttunnel' && (
+        <>
+          <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
+          <Form.Item name="network" label={t('listeners.network')} tooltip={fieldTip(t, 'listeners.networkHint')}>
+            <Select mode="multiple" allowClear options={['tcp', 'udp'].map((v) => ({ value: v, label: v }))} placeholder="tcp, udp" />
+          </Form.Item>
+          <Form.Item name="congestion-controller" label={t('listeners.congestionController')} tooltip={fieldTip(t, 'listeners.congestion-controllerHint')}>
+            <Select allowClear options={['bbr', 'cubic', 'new_reno'].map((v) => ({ value: v, label: v }))} />
+          </Form.Item>
+          <Form.Item name="bbr-profile" label={t('listeners.bbrProfile')} tooltip={fieldTip(t, 'listeners.bbr-profileHint')}>
+            <Input />
+          </Form.Item>
+        </>
+      )}
+
+      {/* ---- TLS certificates (always-TLS protocols, or optional security_layer=tls) ---- */}
+      <Form.Item noStyle shouldUpdate={(a, b) => a.security_layer !== b.security_layer}>
+        {({ getFieldValue }) => {
+          const layer = getFieldValue('security_layer');
+          const visible =
+            ALWAYS_TLS_PROTOCOLS.has(protocol) ||
+            (OPTIONAL_SECURITY_PROTOCOLS.has(protocol) && layer === 'tls');
+          if (!visible) return null;
+          return (
+            <>
+              <Divider titlePlacement="start" plain>{t('listeners.sectionTLS')}</Divider>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                {ALWAYS_TLS_PROTOCOLS.has(protocol)
+                  ? (t('listeners.tlsPairAutoHint') || 'Certificate + private-key required. Leave both empty → panel self-signed on save.')
+                  : t('listeners.tlsPairHint')}
+              </Text>
+              <Form.Item name="certificate" label={t('listeners.certificate')} tooltip={fieldTip(t, 'listeners.certificateHint')}>
+                <Input.TextArea rows={2} placeholder={ALWAYS_TLS_PROTOCOLS.has(protocol) ? 'auto' : './server.crt'} />
+              </Form.Item>
+              <Form.Item name="private-key" label={t('listeners.privateKey')} tooltip={fieldTip(t, 'listeners.private-keyHint')}>
+                <Input.TextArea rows={2} placeholder={ALWAYS_TLS_PROTOCOLS.has(protocol) ? 'auto' : './server.key'} />
+              </Form.Item>
+              <Form.Item name="client-auth-type" label={t('listeners.clientAuthType')} tooltip={fieldTip(t, 'listeners.client_auth_typeHint')}>
+                <Select
+                  allowClear
+                  options={['request', 'require-any', 'verify-if-given', 'require-and-verify'].map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item name="client-auth-cert" label={t('listeners.clientAuthCert')} tooltip={fieldTip(t, 'listeners.client_auth_certHint')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+              <Form.Item name="ech-key" label={t('listeners.echKey')} tooltip={fieldTip(t, 'listeners.ech_keyHint')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+              {ALLOW_INSECURE_PROTOCOLS.has(protocol) && (
+                <Form.Item
+                  name="allow-insecure"
+                  label={t('listeners.allowInsecure')}
+                  valuePropName="checked"
+                  tooltip={fieldTip(t, 'listeners.allowInsecureHint')}
+                >
+                  <Switch />
+                </Form.Item>
+              )}
+            </>
+          );
+        }}
+      </Form.Item>
+
+      {/* ---- Reality ---- */}
+      {REALITY_PROTOCOLS.has(protocol) && (
+        <Form.Item noStyle shouldUpdate={(prev, cur) => prev.security_layer !== cur.security_layer}>
+          {({ getFieldValue }) => getFieldValue('security_layer') === 'reality' ? <Card size="small" title={t('listeners.sectionReality')} style={{ marginBottom: 16 }}>
+          <RealityTargetFields autoSelect={autoSelectReality} />
+          <Form.Item name="reality_private_key" label={t('listeners.realityPrivateKey')} tooltip={fieldTip(t, 'listeners.reality_private_keyHint')}>
+            <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('reality')}>{t('common.generate') || 'Generate'}</Button>} />
+          </Form.Item>
+          <Form.Item name="reality_short_id" label={t('listeners.realityShortId')} tooltip={fieldTip(t, 'listeners.reality_short_idHint')}>
+            <Select mode="tags" placeholder="auto" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="reality_server_names" label={t('listeners.realityServerNames')} tooltip={fieldTip(t, 'listeners.reality_server_namesHint')}>
+            <Select mode="tags" placeholder="www.example.com" tokenSeparators={[',']} />
+          </Form.Item>
+          </Card> : null}
+        </Form.Item>
+      )}
+
+      {/* ---- tlsmirror (VMess) ---- */}
+      {TLSMIRROR_PROTOCOLS.has(protocol) && (
+        <EnableSection
+          name="tlsmirror_enabled"
+          label={t('listeners.sectionTlsMirror') || 'TLS Mirror'}
+          hint={t('listeners.tlsMirrorHint') || 'Advanced. Requires dest and primary-key; mutually exclusive with certificate TLS.'}
+        >
+          <Form.Item name="tlsmirror_dest" label={t('listeners.tlsMirrorDest') || 'Dest'} tooltip={fieldTip(t, 'listeners.tlsmirror_destHint')}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item name="tlsmirror_primary_key" label={t('listeners.tlsMirrorPrimaryKey') || 'Primary key'} tooltip={fieldTip(t, 'listeners.tlsmirror_primary_keyHint')}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="tlsmirror_proxy" label={t('listeners.tlsMirrorProxy') || 'Proxy'} tooltip={fieldTip(t, 'listeners.tlsmirror_proxyHint')}>
+            <Input placeholder="DIRECT" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_explicit_nonce_ciphersuites"
+            label={t('listeners.tlsMirrorCipherSuites') || 'Explicit nonce cipher suites'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorCipherSuitesHint')}
+          >
+            <Select
+              mode="tags"
+              tokenSeparators={[',', ' ']}
+              placeholder="156, 157, 49195, …"
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_defer_base_ns"
+            label={t('listeners.tlsMirrorDeferBase') || 'Defer write base (ns)'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorDeferBaseHint')}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_defer_random_ns"
+            label={t('listeners.tlsMirrorDeferRandom') || 'Defer write random max (ns)'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorDeferRandomHint')}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_padding_enabled"
+            label={t('listeners.tlsMirrorPadding') || 'Transport layer padding'}
+            valuePropName="checked"
+            tooltip={fieldTip(t, 'listeners.tlsMirrorPaddingHint')}
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_enrolment_outbound"
+            label={t('listeners.tlsMirrorEnrolment') || 'Enrolment primary ingress outbound'}
+            tooltip={fieldTip(t, 'listeners.tlsMirrorEnrolmentHint')}
+          >
+            <Input placeholder="" />
+          </Form.Item>
+          <Form.Item
+            name="tlsmirror_sequence_watermarking"
+            label={t('listeners.tlsMirrorWatermark') || 'Sequence watermarking'}
+            valuePropName="checked"
+            tooltip={fieldTip(t, 'listeners.tlsMirrorWatermarkHint')}
+          >
+            <Switch />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- simple-obfs (SS) ---- */}
+      {SIMPLE_OBFS_PROTOCOLS.has(protocol) && (
+        <EnableSection name="simple_obfs_enabled" label={t('listeners.sectionSimpleObfs')}>
+          <Form.Item name="simple_obfs_mode" label={t('listeners.simpleObfsMode')} tooltip={fieldTip(t, 'listeners.simple_obfs_modeHint')}>
+            <Select options={[{ value: 'http', label: 'http' }, { value: 'tls', label: 'tls' }]} />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- shadow-tls ---- */}
+      {WRAPPER_TLS_PROTOCOLS.has(protocol) && (
+        <EnableSection
+          name="shadow_tls_enabled"
+          label={t('listeners.sectionShadowTLS')}
+          hint={t('listeners.shadowTlsHint')}
+        >
+          <Form.Item name="shadow_tls_version" label={t('listeners.shadowTlsVersion')} tooltip={fieldTip(t, 'listeners.shadow_tls_versionHint')}>
+            <Select options={[1, 2, 3].map((v) => ({ value: v, label: `v${v}` }))} />
+          </Form.Item>
+          <Form.Item name="shadow_tls_password" label={t('listeners.shadowTlsPassword')} tooltip={fieldTip(t, 'listeners.shadowTlsPasswordHint')}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="shadow_tls_handshake_dest" label={t('listeners.shadowTlsHandshakeDest')} tooltip={fieldTip(t, 'listeners.shadow_tls_handshake_destHint')}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item name="shadow_tls_handshake_proxy" label={t('listeners.shadowTlsHandshakeProxy')} tooltip={fieldTip(t, 'listeners.shadow_tls_handshake_proxyHint')}>
+            <Input />
+          </Form.Item>
+          <Form.List name="shadow_tls_users">
+            {(fields, { add, remove }) => (
+              <>
+                <Text type="secondary">{t('listeners.shadowTlsUsers')} (v3)</Text>
+                {fields.map((field) => (
+                  <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                    <Form.Item {...field} name={[field.name, 'name']} rules={[{ required: true }]}>
+                      <Input placeholder={t('common.username')} />
+                    </Form.Item>
+                    <Form.Item {...field} name={[field.name, 'password']} rules={[{ required: true }]}>
+                      <Input.Password placeholder={t('common.password')} />
+                    </Form.Item>
+                    <IconRemoveField onClick={() => remove(field.name)} />
+                  </Space>
+                ))}
+                <Button type="dashed" onClick={() => add()} block icon={<IconAddField />}>
+                  {t('listeners.addUser')}
+                </Button>
+              </>
+            )}
+          </Form.List>
+        </EnableSection>
+      )}
+
+      {/* ---- res-tls ---- */}
+      {WRAPPER_TLS_PROTOCOLS.has(protocol) && (
+        <EnableSection name="res_tls_enabled" label={t('listeners.sectionResTLS')} hint={t('listeners.resTlsHint')}>
+          <Form.Item name="res_tls_dest" label={t('listeners.resTlsDest')} tooltip={fieldTip(t, 'listeners.res_tls_destHint')}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item name="res_tls_password" label={t('listeners.resTlsPassword')} tooltip={fieldTip(t, 'listeners.res_tls_passwordHint')}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="res_tls_restls_script" label={t('listeners.resTlsScript')} tooltip={fieldTip(t, 'listeners.res_tls_restls_scriptHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="res_tls_min_record_len" label={t('listeners.resTlsMinRecordLen')} tooltip={fieldTip(t, 'listeners.res_tls_min_record_lenHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="res_tls_proxy" label={t('listeners.resTlsProxy')} tooltip={fieldTip(t, 'listeners.res_tls_proxyHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="res_tls_rate_limit" label={t('listeners.rateLimit')} tooltip={fieldTip(t, 'listeners.rateLimitHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- jls-config ---- */}
+      {WRAPPER_TLS_PROTOCOLS.has(protocol) && (
+        <EnableSection name="jls_enabled" label={t('listeners.sectionJLS')} hint={t('listeners.jlsHint')}>
+          <Form.Item name="jls_dest" label={t('listeners.jlsDest')} tooltip={fieldTip(t, 'listeners.jls_destHint')}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item name="jls_sni" label={t('listeners.jlsSni')} tooltip={fieldTip(t, 'listeners.jlsSniHint')}>
+            <Input placeholder="www.example.com" />
+          </Form.Item>
+          <Form.Item name="jls_alpn" label={t('listeners.alpn')} tooltip={fieldTip(t, 'listeners.jls_alpnHint')}>
+            <Select mode="tags" tokenSeparators={[',']} placeholder="h2, http/1.1" />
+          </Form.Item>
+          <Form.Item name="jls_proxy" label={t('listeners.jlsProxy')} tooltip={fieldTip(t, 'listeners.jls_proxyHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="jls_rate_limit" label={t('listeners.rateLimit')} tooltip={fieldTip(t, 'listeners.rateLimitHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.List name="jls_users">
+            {(fields, { add, remove }) => (
+              <>
+                <Text type="secondary">{t('listeners.jlsUsers')}</Text>
+                {fields.map((field) => (
+                  <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                    <Form.Item {...field} name={[field.name, 'username']} rules={[{ required: true }]}>
+                      <Input placeholder={t('common.username')} />
+                    </Form.Item>
+                    <Form.Item {...field} name={[field.name, 'password']} rules={[{ required: true }]}>
+                      <Input.Password placeholder={t('common.password')} />
+                    </Form.Item>
+                    <IconRemoveField onClick={() => remove(field.name)} />
+                  </Space>
+                ))}
+                <Button type="dashed" onClick={() => add()} block icon={<IconAddField />}>
+                  {t('listeners.addUser')}
+                </Button>
+              </>
+            )}
+          </Form.List>
+        </EnableSection>
+      )}
+
+      {/* ---- mux-option ---- */}
+      {MUX_PROTOCOLS.has(protocol) && (
+        <EnableSection name="mux_enabled" label={t('listeners.sectionMux')}>
+          <Form.Item name="mux_padding" label={t('listeners.muxPadding')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.mux_paddingHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="mux_brutal_enabled" label={t('listeners.muxBrutal')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.mux_brutal_enabledHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(p, c) => p.mux_brutal_enabled !== c.mux_brutal_enabled}>
+            {({ getFieldValue }) =>
+              getFieldValue('mux_brutal_enabled') ? (
+                <>
+                  <Form.Item name="mux_brutal_up" label={t('listeners.muxBrutalUp')} tooltip={fieldTip(t, 'listeners.mux_brutal_upHint')}>
+                    <InputNumber min={0} style={{ width: '100%' }} placeholder="1000" />
+                  </Form.Item>
+                  <Form.Item name="mux_brutal_down" label={t('listeners.muxBrutalDown')} tooltip={fieldTip(t, 'listeners.mux_brutal_downHint')}>
+                    <InputNumber min={0} style={{ width: '100%' }} placeholder="1000" />
+                  </Form.Item>
+                </>
+              ) : null
+            }
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- kcp-tun (SS) ---- */}
+      {KCP_TUN_PROTOCOLS.has(protocol) && (
+        <EnableSection name="kcp_tun_enabled" label={t('listeners.sectionKcpTun')}>
+          <Form.Item name="kcp_tun_key" label={t('listeners.kcpTunKey')} tooltip={fieldTip(t, 'listeners.kcp_tun_keyHint')}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="kcp_tun_crypt" label={t('listeners.kcpTunCrypt')} tooltip={fieldTip(t, 'listeners.kcp_tun_cryptHint')}>
+            <Select
+              allowClear
+              options={[
+                'aes', 'aes-128', 'aes-128-gcm', 'aes-192', 'salsa20', 'blowfish', 'twofish',
+                'cast5', '3des', 'tea', 'xtea', 'xor', 'none', 'null',
+              ].map((v) => ({ value: v, label: v }))}
+            />
+          </Form.Item>
+          <Form.Item name="kcp_tun_mode" label={t('listeners.kcpTunMode')} tooltip={fieldTip(t, 'listeners.kcp_tun_modeHint')}>
+            <Select allowClear options={['fast3', 'fast2', 'fast', 'normal', 'manual'].map((v) => ({ value: v, label: v }))} />
+          </Form.Item>
+          <Form.Item name="kcp_tun_conn" label={t('listeners.kcpTunConn')} tooltip={fieldTip(t, 'listeners.kcp_tun_connHint')}>
+            <InputNumber min={1} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="kcp_tun_mtu" label="MTU" tooltip={fieldTip(t, 'listeners.kcp_tun_mtuHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1350" />
+          </Form.Item>
+          <Form.Item name="kcp_tun_sndwnd" label={t('listeners.kcpTunSndwnd')} tooltip={fieldTip(t, 'listeners.kcp_tun_sndwndHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="kcp_tun_rcvwnd" label={t('listeners.kcpTunRcvwnd')} tooltip={fieldTip(t, 'listeners.kcp_tun_rcvwndHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="kcp_tun_nocomp" label={t('listeners.kcpTunNocomp')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.kcp_tun_nocompHint')}>
+            <Switch />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- xhttp (VLESS) ---- */}
+      {/* XHTTP path/host/mode are under transport_layer === 'xhttp' */}
+
+      {/* ---- mkcp (VMess) ---- */}
+      {MKCP_PROTOCOLS.has(protocol) && (
+        <EnableSection name="mkcp_enabled" label={t('listeners.sectionMkcp')} hint={t('listeners.mkcpExclusiveHint') || 'Requires TCP transport; exclusive with WS/gRPC/Mekya. Enabling clears other transports on save.'}>
+          <Form.Item name="mkcp_mtu" label="MTU" tooltip={fieldTip(t, 'listeners.mkcp_mtuHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1350" />
+          </Form.Item>
+          <Form.Item name="mkcp_tti" label="TTI" tooltip={fieldTip(t, 'listeners.mkcp_ttiHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="50" />
+          </Form.Item>
+          <Form.Item name="mkcp_uplink" label={t('listeners.mkcpUplink')} tooltip={fieldTip(t, 'listeners.mkcp_uplinkHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mkcp_downlink" label={t('listeners.mkcpDownlink')} tooltip={fieldTip(t, 'listeners.mkcp_downlinkHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mkcp_congestion" label={t('listeners.mkcpCongestion')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.mkcp_congestionHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="mkcp_write_buffer" label={t('listeners.mkcpWriteBuffer')} tooltip={fieldTip(t, 'listeners.mkcp_write_bufferHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mkcp_read_buffer" label={t('listeners.mkcpReadBuffer')} tooltip={fieldTip(t, 'listeners.mkcp_read_bufferHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mkcp_seed" label={t('listeners.mkcpSeed')} tooltip={fieldTip(t, 'listeners.mkcp_seedHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="mkcp_header" label={t('listeners.mkcpHeader')} tooltip={fieldTip(t, 'listeners.mkcp_headerHint')}>
+            <Select
+              allowClear
+              options={['none', 'srtp', 'utp', 'wechat-video', 'dtls', 'wireguard'].map((v) => ({ value: v, label: v }))}
+            />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {MEKYA_PROTOCOLS.has(protocol) && (
+        <EnableSection name="mekya_enabled" label={t('listeners.sectionMekya')} hint={t('listeners.mekyaExclusiveHint') || 'Requires TCP transport; exclusive with WS/gRPC/mKCP. Enabling clears other transports on save.'}>
+          <Form.Item name="mekya_max_write_size" label={t('listeners.mekyaMaxWriteSize')} tooltip={fieldTip(t, 'listeners.mekyaMaxWriteSizeHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="10485760" />
+          </Form.Item>
+          <Form.Item name="mekya_max_write_duration_ms" label={t('listeners.mekyaMaxWriteDuration')} tooltip={fieldTip(t, 'listeners.mekyaMaxWriteDurationHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="5000" />
+          </Form.Item>
+          <Form.Item name="mekya_max_simultaneous_write_connection" label={t('listeners.mekyaMaxSimultaneous')} tooltip={fieldTip(t, 'listeners.mekyaMaxSimultaneousHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="128" />
+          </Form.Item>
+          <Form.Item name="mekya_packet_writing_buffer" label={t('listeners.mekyaPacketBuffer')} tooltip={fieldTip(t, 'listeners.mekyaPacketBufferHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="65536" />
+          </Form.Item>
+          {/* R-M3 client-metadata fields (vmess only) */}
+          <Form.Item name="mekya-polling-interval-initial" label={t('listeners.mekyaPollingInterval')} tooltip={fieldTip(t, 'listeners.mekya_polling_interval_initialHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mekya-h2-pool-size" label={t('listeners.mekyaH2PoolSize')} tooltip={fieldTip(t, 'listeners.mekya_h2_pool_sizeHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Divider titlePlacement="start" plain style={{ marginTop: 8 }}>{t('listeners.mekyaKcpSection')}</Divider>
+          <Form.Item name="mekya_kcp_mtu" label="MTU" tooltip={fieldTip(t, 'listeners.mekya_kcp_mtuHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="1350" />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_tti" label="TTI" tooltip={fieldTip(t, 'listeners.mekya_kcp_ttiHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="15" />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_uplink" label={t('listeners.mkcpUplink')} tooltip={fieldTip(t, 'listeners.mekya_kcp_uplinkHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="40" />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_downlink" label={t('listeners.mkcpDownlink')} tooltip={fieldTip(t, 'listeners.mekya_kcp_downlinkHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="2000" />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_congestion" label={t('listeners.mkcpCongestion')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.mekya_kcp_congestionHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_write_buffer" label={t('listeners.mkcpWriteBuffer')} tooltip={fieldTip(t, 'listeners.mekya_kcp_write_bufferHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="67108864" />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_read_buffer" label={t('listeners.mkcpReadBuffer')} tooltip={fieldTip(t, 'listeners.mekya_kcp_read_bufferHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="67108864" />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_seed" label={t('listeners.mkcpSeed')} tooltip={fieldTip(t, 'listeners.mekya_kcp_seedHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="mekya_kcp_header" label={t('listeners.mkcpHeader')} tooltip={fieldTip(t, 'listeners.mekya_kcp_headerHint')}>
+            <Select
+              allowClear
+              options={['none', 'srtp', 'utp', 'wechat-video', 'dtls', 'wireguard'].map((v) => ({ value: v, label: v }))}
+            />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- jls-upstream (ShadowQUIC) ---- */}
+      {protocol === 'shadowquic' && (
+        <EnableSection name="jls_upstream_enabled" label={t('listeners.sectionJlsUpstream')}>
+          <Form.Item name="jls_upstream_addr" label={t('listeners.jlsUpstreamAddr')} tooltip={fieldTip(t, 'listeners.jls_upstream_addrHint')}>
+            <Input placeholder="www.example.com:443" />
+          </Form.Item>
+          <Form.Item name="jls_upstream_sni" label={t('listeners.jlsSni')} tooltip={fieldTip(t, 'listeners.jls_upstream_sniHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="jls_upstream_proxy" label={t('listeners.jlsProxy')} tooltip={fieldTip(t, 'listeners.jls_upstream_proxyHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="jls_upstream_rate_limit" label={t('listeners.rateLimit')} tooltip={fieldTip(t, 'listeners.jls_upstream_rate_limitHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </EnableSection>
+      )}
+
+      {/* ---- realm-opts (Hysteria2) ---- */}
+      {protocol === 'hysteria2' && (
+        <EnableSection name="realm_enabled" label={t('listeners.sectionRealm')}>
+          <Form.Item name="realm_server_url" label={t('listeners.realmServerUrl')} tooltip={fieldTip(t, 'listeners.realm_server_urlHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="realm_token" label={t('listeners.realmToken')} tooltip={fieldTip(t, 'listeners.realm_tokenHint')}>
+            <Input.Password />
+          </Form.Item>
+          <Form.Item name="realm_id" label={t('listeners.realmId')} tooltip={fieldTip(t, 'listeners.realm_idHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="realm_stun" label={t('listeners.realmStun')} tooltip={fieldTip(t, 'listeners.realm_stunHint')}>
+            <Select mode="tags" tokenSeparators={[',']} />
+          </Form.Item>
+          <Form.Item name="realm_proxy" label={t('listeners.realmProxy')} tooltip={fieldTip(t, 'listeners.realm_proxyHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="realm_sni" label={t('listeners.realmSni') || 'Realm SNI'} tooltip={fieldTip(t, 'listeners.realm_sniHint')}>
+            <Input placeholder="example.com" />
+          </Form.Item>
+          <Form.Item name="realm_skip_cert" label={t('listeners.realmSkipCert')} valuePropName="checked" tooltip={fieldTip(t, 'listeners.realm_skip_certHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="realm_name_cert_verify" label={t('listeners.realmNameCertVerify') || 'Realm certificate verification name'} tooltip={fieldTip(t, 'listeners.realm_name_cert_verifyHint')}>
+            <Input placeholder="example.com" />
+          </Form.Item>
+          <Form.Item name="realm_fingerprint" label={t('listeners.realmFingerprint') || 'Realm TLS fingerprint'} tooltip={fieldTip(t, 'listeners.realm_fingerprintHint')}>
+            <Input placeholder="chrome" />
+          </Form.Item>
+          <Form.Item name="realm_certificate" label={t('listeners.realmCertificate') || 'Realm client certificate'} tooltip={fieldTip(t, 'listeners.realm_certificateHint')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="realm_private_key" label={t('listeners.realmPrivateKey') || 'Realm client private key'} tooltip={fieldTip(t, 'listeners.realm_private_keyHint')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="realm_alpn" label={t('listeners.realmAlpn') || 'Realm ALPN'} tooltip={fieldTip(t, 'listeners.realm_alpnHint')}>
+            <Select mode="tags" tokenSeparators={[',']} />
+          </Form.Item>
+        </EnableSection>
+      )}
+    </Space>
+  );
+};
+
+export default ListenerConfigFields;
