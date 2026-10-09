@@ -221,6 +221,8 @@ export default {
     "tlsMirrorDest": "镜像目标",
     "tlsMirrorPrimaryKey": "主密钥",
     "tlsMirrorProxy": "代理",
+    "httpHint": "HTTP 入站（wiki: type http）。认证使用已绑定的面板用户。可选 TLS（安全层 → TLS）。无独立 SNI 字段，身份由证书决定。",
+    "socksHint": "SOCKS 入站（wiki: type socks）。认证使用已绑定的面板用户；可开 UDP；可选 TLS。无独立 SNI 字段，身份由证书决定。",
     "usersHint": "写入 Listener users 结构的用户凭证（形态因协议而异）。",
     "formHelpBanner": "有说明的字段可悬停标签查看。需要 TLS 的协议若证书留空，保存时可能由面板自动生成自签证书。",
     "portHint": "监听端口（wiki: port）。单端口或官方 ports 语法。",
