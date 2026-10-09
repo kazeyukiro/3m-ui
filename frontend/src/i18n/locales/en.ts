@@ -221,6 +221,8 @@ export default {
     "tlsMirrorDest": "Mirror dest",
     "tlsMirrorPrimaryKey": "Primary key",
     "tlsMirrorProxy": "Proxy",
+    "httpHint": "HTTP inbound (wiki: type http). Auth uses bound panel users (username/password). Optional TLS via Security → TLS. No separate SNI field; identity comes from the certificate.",
+    "socksHint": "SOCKS inbound (wiki: type socks). Auth uses bound panel users. Enable UDP for UDP associate; optional TLS. No separate SNI field; identity comes from the certificate.",
     "usersHint": "Per-user credentials written into the listener users structure (format depends on protocol).",
     "formHelpBanner": "Hover a field label for notes where available. Leave TLS certificate empty to auto-generate a panel self-signed pair on save when the protocol requires TLS.",
     "portHint": "Listen port (wiki: port). Single port or official ports syntax.",
