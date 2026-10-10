@@ -147,7 +147,7 @@ const Listeners: React.FC = () => {
       const previous = editing ? parseConfig(editing.config) : null;
       const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
       const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
-      const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: values.access_sni || '', client_fingerprint: values.client_fingerprint || '', access_alpn: values.access_alpn || '', traffic_multiplier: values.traffic_multiplier != null && values.traffic_multiplier !== '' ? Number(values.traffic_multiplier) : 1 };
+      const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: (proto === 'http' || proto === 'socks') ? '' : (values.access_sni || ''), client_fingerprint: (proto === 'http' || proto === 'socks') ? '' : (values.client_fingerprint || ''), access_alpn: (proto === 'http' || proto === 'socks') ? '' : (values.access_alpn || ''), traffic_multiplier: values.traffic_multiplier != null && values.traffic_multiplier !== '' ? Number(values.traffic_multiplier) : 1 };
       let saved: Listener;
       if (editing) {
         saved = await updateListener(normalizeId(editing), payload);
@@ -384,9 +384,14 @@ const columns = [
         <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
         <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>
         <Form.Item name="public_port" label={t('settings.publicPort')} tooltip={t('listeners.public_portHint')}><Input placeholder="443" /></Form.Item>
-        <Form.Item name="access_sni" label={t('listeners.sni')} tooltip={t('listeners.access_sniHint')}><Input /></Form.Item>
-        <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome" tooltip={t('listeners.client_fingerprintHint')}><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
-        <Form.Item name="access_alpn" label={t('listeners.alpn')} tooltip={t('listeners.access_alpnHint')}><Input placeholder="h2,http/1.1" /></Form.Item>
+        {/* HTTP/SOCKS inbound: no SNI / client-fingerprint / ALPN in MetaCubeX wiki; share URIs are plain http:// or socks5:// */}
+        {protocol !== 'http' && protocol !== 'socks' && (
+          <>
+            <Form.Item name="access_sni" label={t('listeners.sni')} tooltip={t('listeners.access_sniHint')}><Input /></Form.Item>
+            <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome" tooltip={t('listeners.client_fingerprintHint')}><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
+            <Form.Item name="access_alpn" label={t('listeners.alpn')} tooltip={t('listeners.access_alpnHint')}><Input placeholder="h2,http/1.1" /></Form.Item>
+          </>
+        )}
         {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} autoSelectReality={modalOpen && !editing} />}
       </Form>
     </Modal>
