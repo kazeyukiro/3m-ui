@@ -149,6 +149,9 @@ _t_zh() {
         g_enter_key)      printf '%s' '按回车继续' ;;
         g_invalid)        printf '%s' '无效选择，请重新输入。' ;;
         g_cancelled)      printf '%s' '已取消。' ;;
+        g_confirm)        printf '%s' '确认继续?' ;;
+        g_press_any)      printf '%s' '按任意键返回' ;;
+        g_nav)            printf '%s' '↑↓ 选择 / 回车确认 / q 返回' ;;
         g_back)           printf '%s' '返回' ;;
         g_yes)            printf '%s' '是' ;;
         g_no)             printf '%s' '否' ;;
@@ -308,8 +311,6 @@ _t_zh() {
         ed_invalid)       printf '%s' '无效输入' ;;
         sysctl_mkdir_fail) printf '%s' '无法创建 /etc/sysctl.d' ;;
         ssl_install_acme)   printf '%s' '安装 / 更新 acme.sh' ;;
-        ssl_issue_standalone) printf '%s' '申请证书 (standalone, 需 80 端口空闲)' ;;
-        ssl_issue_dns)      printf '%s' '申请证书 (DNS API, 不占 80)' ;;
         ssl_deploy)         printf '%s' '安装证书到 3m-ui 并重载面板' ;;
         ssl_list)           printf '%s' '证书列表' ;;
         ssl_renew)          printf '%s' '续期证书' ;;
@@ -340,10 +341,12 @@ _t_zh() {
         cert_crt_label)    printf '%s' '证书' ;;
         acme_ca_title)     printf '%s' '选择证书颁发机构 (CA)' ;;
         acme_ca_le)        printf '%s' "Let's Encrypt" ;;
-        acme_ca_zerossl)   printf '%s' 'ZeroSSL (acme.sh v3 默认)' ;;
-        acme_ca_buypass)   printf '%s' 'Buypass' ;;
+        acme_ca_le_test)   printf '%s' "Let's Encrypt (staging 测试环境，不占正式额度)" ;;
+        acme_ca_zerossl)   printf '%s' 'ZeroSSL (acme.sh 默认)' ;;
         acme_ca_sslcom)    printf '%s' 'SSL.com' ;;
         acme_ca_google)    printf '%s' 'Google Trust Services' ;;
+        acme_ca_google_test) printf '%s' 'Google (staging 测试环境)' ;;
+        acme_ca_actalis)   printf '%s' 'Actalis' ;;
         ssl_cert_info)     printf '%s' '查看证书详情' ;;
         cert_info_of)      printf '%s' '证书信息' ;;
         cert_need_openssl) printf '%s' '需要 openssl 才能查看证书详情' ;;
@@ -357,6 +360,49 @@ _t_zh() {
         cert_key_ask)      printf '%s' '确认查看私钥?' ;;
         cert_key_missing)  printf '%s' '未找到该域名对应的私钥文件' ;;
         cert_key_shown)    printf '%s' '（以上为私钥内容，请妥善保管，勿泄露）' ;;
+        ssl_issue)         printf '%s' '申请证书' ;;
+        acme_mode_title)  printf '%s' '选择验证方式' ;;
+        acme_mode_standalone) printf '%s' 'standalone（需 80 端口空闲）' ;;
+        acme_mode_dns)    printf '%s' 'DNS API（支持通配符，不占端口）' ;;
+        acme_mode_webroot) printf '%s' 'webroot（用已有站点目录，不占端口）' ;;
+        acme_mode_nginx)  printf '%s' 'nginx（自动改 nginx 配置）' ;;
+        acme_mode_apache) printf '%s' 'apache（自动改 apache 配置）' ;;
+        acme_mode_alpn)   printf '%s' 'TLS-ALPN（用 443 端口）' ;;
+        ssl_renew_all)     printf '%s' '续期全部证书' ;;
+        ssl_revoke)        printf '%s' '吊销证书' ;;
+        ssl_export_pfx)    printf '%s' '导出 PFX（Windows / IIS）' ;;
+        ssl_remove)        printf '%s' '从 acme.sh 移除证书' ;;
+        ssl_set_ca)        printf '%s' '设置默认 CA' ;;
+        i_webroot)         printf '%s' 'Web 根目录（如 /var/www/html）' ;;
+        i_httpport)        printf '%s' 'standalone 监听端口（回车=80）' ;;
+        i_tlsport)         printf '%s' 'TLS-ALPN 监听端口（回车=443）' ;;
+        i_pfx_pass)        printf '%s' 'PFX 密码（可留空）' ;;
+        adv_title)         printf '%s' '高级选项（每项都可直接回车跳过）' ;;
+        adv_staging)       printf '%s' '用 staging 测试环境？(--staging，不占正式签发额度)' ;;
+        adv_keylength)     printf '%s' '密钥长度 (-k)' ;;
+        adv_keylength_hint) printf '%s' '可选 2048 / 3072 / 4096 / ec-256 / ec-384 / ec-521，回车用默认' ;;
+        adv_dnssleep)      printf '%s' 'DNS 传播等待秒数 (--dnssleep，回车不额外等待)' ;;
+        adv_days)          printf '%s' '提前续期天数 (--days，回车用默认)' ;;
+        adv_debug)         printf '%s' '调试级别 (--debug 0-3，回车不启用)' ;;
+        adv_ocsp)          printf '%s' '启用 OCSP Must-Staple? (--ocsp-must-staple)' ;;
+        adv_chain)         printf '%s' '首选证书链 (--preferred-chain，如 ISRG Root X1)' ;;
+        adv_eab_kid)       printf '%s' 'EAB Key ID (--eab-kid，回车跳过)' ;;
+        adv_eab_hmac)      printf '%s' 'EAB HMAC Key (--eab-hmac-key，回车跳过)' ;;
+        adv_bad_value)     printf '%s' '该取值 acme.sh 不接受' ;;
+        adv_eab_pair)      printf '%s' 'EAB 的 kid 与 hmac-key 必须成对填写，只填一个会在后续步骤失败' ;;
+        acme_dns_api_hint) printf '%s' '常用: dns_cf / dns_ali / dns_dp / dns_aws / dns_gd / dns_ovh（完整列表见 wiki dnsapi）' ;;
+        rev_title)         printf '%s' '吊销证书' ;;
+        rev_reason)        printf '%s' '吊销原因 0-10（回车=0 unspecified）' ;;
+        rev_note)          printf '%s' '吊销不可撤销，且该证书将立即失效。' ;;
+        rev_done)          printf '%s' '已提交吊销请求' ;;
+        pfx_title)         printf '%s' '导出 PFX' ;;
+        pfx_out)           printf '%s' '已导出；acme.sh 会把 .pfx 写在该域名的证书目录下' ;;
+        rm_title)          printf '%s' '从 acme.sh 移除' ;;
+        rm_note)           printf '%s' '仅从 acme.sh 的列表移除（不吊销、不删除文件）。' ;;
+        rm_done)           printf '%s' '已移除' ;;
+        ca_default_set)    printf '%s' '默认 CA 已设置为' ;;
+        renew_all_se)      printf '%s' '某个证书出错时停止? (-se)' ;;
+        renew_all_done)    printf '%s' '已触发全部续期' ;;
         *) printf '%s' "$1" ;;
     esac
 }
@@ -370,6 +416,7 @@ _t_en() {
         g_enter_key)      printf '%s' 'Press Enter to continue' ;;
         g_invalid)        printf '%s' 'Invalid choice, please try again.' ;;
         g_cancelled)      printf '%s' 'Cancelled.' ;;
+        g_confirm)        printf '%s' 'Continue?' ;;
         g_back)           printf '%s' 'Back' ;;
         g_yes)            printf '%s' 'Yes' ;;
         g_no)             printf '%s' 'No' ;;
@@ -401,7 +448,6 @@ _t_en() {
         m_backup)         printf '%s' 'Backup' ;;
         m_selfupd)        printf '%s' 'Update 3m-ui (incl. scripts)' ;;
         m_lang)           printf '%s' 'Language' ;;
-        m_uimode)         printf '%s' 'UI mode' ;;
         m_uninst)         printf '%s' 'Uninstall' ;;
         bbr_title)        printf '%s' 'BBR' ;;
         bbr_status)       printf '%s' 'Status' ;;
@@ -422,8 +468,6 @@ _t_en() {
         lang_title)       printf '%s' 'Language' ;;
         lang_zh)          printf '%s' 'Chinese' ;;
         lang_en)          printf '%s' 'English' ;;
-        uimode_title)     printf '%s' 'UI mode' ;;
-        uimode_classic)   printf '%s' 'Classic (plain-text menu)' ;;
         i_port)           printf '%s' 'New port (1-65535, Enter to cancel)' ;;
         i_puburl)         printf '%s' 'New public_url (e.g. https://example.com , Enter to cancel)' ;;
         i_webpath)        printf '%s' 'web_path (panel path prefix)' ;;
@@ -518,9 +562,6 @@ _t_en() {
         lang_current)     printf '%s' 'Current language' ;;
         lang_set)         printf '%s' 'Language set to' ;;
         lang_saved)       printf '%s' 'Saved to' ;;
-        uimode_current)   printf '%s' 'Current UI mode' ;;
-        uimode_set)       printf '%s' 'UI mode set to' ;;
-        uimode_now)       printf '%s' 'Active backend' ;;
         cfg_no_server)    printf '%s' 'No server: block in config, cannot write' ;;
         fw_confirm)       printf '%s' 'This opens 22 / 80 / 443 and the panel port, widening public exposure.' ;;
         ssl_disclaimer)   printf '%s' '# Example commands only - verify the source before running' ;;
@@ -531,8 +572,6 @@ _t_en() {
         ed_invalid)       printf '%s' 'Invalid input' ;;
         sysctl_mkdir_fail) printf '%s' 'Cannot create /etc/sysctl.d' ;;
         ssl_install_acme)   printf '%s' 'Install / update acme.sh' ;;
-        ssl_issue_standalone) printf '%s' 'Issue certificate (standalone, port 80 must be free)' ;;
-        ssl_issue_dns)      printf '%s' 'Issue certificate (DNS API, no port 80)' ;;
         ssl_deploy)         printf '%s' 'Install certificate into 3m-ui and reload' ;;
         ssl_list)           printf '%s' 'List certificates' ;;
         ssl_renew)          printf '%s' 'Renew certificate' ;;
@@ -563,10 +602,12 @@ _t_en() {
         cert_crt_label)    printf '%s' 'Certificate' ;;
         acme_ca_title)     printf '%s' 'Choose a certificate authority (CA)' ;;
         acme_ca_le)        printf '%s' "Let's Encrypt" ;;
-        acme_ca_zerossl)   printf '%s' 'ZeroSSL (acme.sh v3 default)' ;;
-        acme_ca_buypass)   printf '%s' 'Buypass' ;;
+        acme_ca_le_test)   printf '%s' "Let's Encrypt (staging, does not count against rate limits)" ;;
+        acme_ca_zerossl)   printf '%s' 'ZeroSSL (acme.sh default)' ;;
         acme_ca_sslcom)    printf '%s' 'SSL.com' ;;
         acme_ca_google)    printf '%s' 'Google Trust Services' ;;
+        acme_ca_google_test) printf '%s' 'Google (staging)' ;;
+        acme_ca_actalis)   printf '%s' 'Actalis' ;;
         ssl_cert_info)     printf '%s' 'Show certificate details' ;;
         cert_info_of)      printf '%s' 'Certificate' ;;
         cert_need_openssl) printf '%s' 'openssl is required to inspect a certificate' ;;
@@ -580,6 +621,49 @@ _t_en() {
         cert_key_ask)      printf '%s' 'Really show the private key?' ;;
         cert_key_missing)  printf '%s' 'No private key file found for this domain' ;;
         cert_key_shown)    printf '%s' '(The private key is shown above - keep it safe and never share it)' ;;
+        ssl_issue)         printf '%s' 'Issue a certificate' ;;
+        acme_mode_title)  printf '%s' 'Choose a validation method' ;;
+        acme_mode_standalone) printf '%s' 'standalone (port 80 must be free)' ;;
+        acme_mode_dns)    printf '%s' 'DNS API (wildcards, no port needed)' ;;
+        acme_mode_webroot) printf '%s' 'webroot (existing site directory, no port)' ;;
+        acme_mode_nginx)  printf '%s' 'nginx (edits the nginx config)' ;;
+        acme_mode_apache) printf '%s' 'apache (edits the apache config)' ;;
+        acme_mode_alpn)   printf '%s' 'TLS-ALPN (port 443)' ;;
+        ssl_renew_all)     printf '%s' 'Renew all certificates' ;;
+        ssl_revoke)        printf '%s' 'Revoke a certificate' ;;
+        ssl_export_pfx)    printf '%s' 'Export PFX (Windows / IIS)' ;;
+        ssl_remove)        printf '%s' 'Remove a cert from acme.sh' ;;
+        ssl_set_ca)        printf '%s' 'Set the default CA' ;;
+        i_webroot)         printf '%s' 'Web root directory (e.g. /var/www/html)' ;;
+        i_httpport)        printf '%s' 'Standalone listen port (Enter for 80)' ;;
+        i_tlsport)         printf '%s' 'TLS-ALPN listen port (Enter for 443)' ;;
+        i_pfx_pass)        printf '%s' 'PFX password (may be empty)' ;;
+        adv_title)         printf '%s' 'Advanced options (press Enter to skip any of them)' ;;
+        adv_staging)       printf '%s' 'Use the staging server? (--staging, does not count against rate limits)' ;;
+        adv_keylength)     printf '%s' 'Domain key length (-k)' ;;
+        adv_keylength_hint) printf '%s' '2048 / 3072 / 4096 / ec-256 / ec-384 / ec-521, Enter for the default' ;;
+        adv_dnssleep)      printf '%s' 'Seconds to wait for DNS propagation (--dnssleep, Enter to skip)' ;;
+        adv_days)          printf '%s' 'Renew this many days before expiry (--days, Enter for default)' ;;
+        adv_debug)         printf '%s' 'Debug level (--debug 0-3, Enter to disable)' ;;
+        adv_ocsp)          printf '%s' 'Enable OCSP Must-Staple? (--ocsp-must-staple)' ;;
+        adv_chain)         printf '%s' 'Preferred chain (--preferred-chain, e.g. ISRG Root X1)' ;;
+        adv_eab_kid)       printf '%s' 'EAB Key ID (--eab-kid, Enter to skip)' ;;
+        adv_eab_hmac)      printf '%s' 'EAB HMAC Key (--eab-hmac-key, Enter to skip)' ;;
+        adv_bad_value)     printf '%s' 'acme.sh does not accept that value' ;;
+        adv_eab_pair)      printf '%s' 'EAB kid and hmac-key must be given together; a lone one fails later on' ;;
+        acme_dns_api_hint) printf '%s' 'Common: dns_cf / dns_ali / dns_dp / dns_aws / dns_gd / dns_ovh (full list: wiki dnsapi)' ;;
+        rev_title)         printf '%s' 'Revoke a certificate' ;;
+        rev_reason)        printf '%s' 'Revoke reason 0-10 (Enter for 0 unspecified)' ;;
+        rev_note)          printf '%s' 'Revocation is irreversible and the certificate stops being valid immediately.' ;;
+        rev_done)          printf '%s' 'Revocation request submitted' ;;
+        pfx_title)         printf '%s' 'Export PFX' ;;
+        pfx_out)           printf '%s' 'Exported; acme.sh writes the .pfx into that domain certificate directory' ;;
+        rm_title)          printf '%s' 'Remove from acme.sh' ;;
+        rm_note)           printf '%s' 'Only removes it from the acme.sh list (no revocation, no file deletion).' ;;
+        rm_done)           printf '%s' 'Removed' ;;
+        ca_default_set)    printf '%s' 'Default CA set to' ;;
+        renew_all_se)      printf '%s' 'Stop if any certificate fails? (-se)' ;;
+        renew_all_done)    printf '%s' 'Renewal of all certificates triggered' ;;
         *) printf '%s' "$1" ;;
     esac
 }
@@ -645,7 +729,11 @@ _ui_menu_classic() {
         i=$((i + 1))
     done
     printf '\n%s: ' "$(t g_select)" >&2
-    IFS= read -r choice || return 1
+    # read returns non-zero on EOF, but still fills the variable with whatever
+    # it managed to read (a final line without a trailing newline). Treating
+    # that as "cancelled" silently swallows the operator's last answer, so keep
+    # the data and let the caller decide what an empty choice means.
+    IFS= read -r choice || true
     printf '%s' "$choice"
 }
 
@@ -664,7 +752,9 @@ ui_input() {
     else
         printf '%s: ' "$(t "$prompt")" >&2
     fi
-    IFS= read -r ans || return 0
+    # Same EOF caveat as ui_menu: read may fill ans and still return non-zero
+    # when the input ends without a newline.
+    IFS= read -r ans || true
     printf '%s' "$ans"
 }
 
@@ -679,7 +769,9 @@ ui_confirm() {
         *)   hint='y/N' ;;
     esac
     printf '%s [%s]: ' "$(t "$prompt")" "$hint" >&2
-    IFS= read -r ans || return 1
+    # EOF with a partial line still yields an answer; an empty one falls back
+    # to the default, exactly like pressing Enter.
+    IFS= read -r ans || true
     [ -n "$ans" ] || ans="$def"
     case "$ans" in
         y|Y|yes|YES|Yes) return 0 ;;
@@ -1415,56 +1507,158 @@ acme_install() {
     return 1
 }
 
-# Pick a certificate authority. acme.sh v3 defaults to ZeroSSL, so anyone who
-# specifically wants Let's Encrypt has to say so explicitly.
+# Pick a certificate authority. The short names below are exactly the ones
+# acme.sh accepts for --server (wiki/Server); anything else is rejected by
+# acme.sh itself. Buypass is deliberately absent: it terminated its
+# certificate service (last issuance 2025-10-31) and its ACME endpoint no
+# longer works, so offering it here would only produce guaranteed failures.
 acme_ca_menu() {
-    c=$(ui_menu acme_ca_title acme_ca_le acme_ca_zerossl acme_ca_buypass \
-        acme_ca_sslcom acme_ca_google g_back) || { printf ''; return 1; }
+    c=$(ui_menu acme_ca_title acme_ca_le acme_ca_le_test acme_ca_zerossl \
+        acme_ca_sslcom acme_ca_google acme_ca_google_test acme_ca_actalis \
+        g_back) || { printf ''; return 1; }
     case "$c" in
         1) printf 'letsencrypt' ;;
-        2) printf 'zerossl' ;;
-        3) printf 'buypass' ;;
+        2) printf 'letsencrypt_test' ;;
+        3) printf 'zerossl' ;;
         4) printf 'sslcom' ;;
         5) printf 'google' ;;
+        6) printf 'googletest' ;;
+        7) printf 'actalis' ;;
         *) printf '' ;;
     esac
 }
 
-acme_issue_standalone() {
-    # acme_issue_standalone DOMAIN [CA]  — needs port 80 free
+# Issue a certificate. MODE is one of the validation methods documented in
+# wiki/How-to-issue-a-cert: standalone | webroot | nginx | apache | alpn | dns.
+# Every flag below comes from wiki/Options-and-Params, and the free-form ones
+# are validated here instead of being forwarded blindly: acme.sh aborts on an
+# unknown value, and a half-filled EAB pair fails later in a confusing way.
+acme_issue() {
+    # acme_issue MODE [DOMAIN]
     acme_require || return 1
-    dom=$1
-    ca=${2:-}
-    say "$(t ssl_stop_hint)"
-    if ! ui_confirm acme_standalone_ask n; then
-        say "$(t g_cancelled)"
-        return 0
+    mode=${1:-standalone}
+    dom=${2:-}
+    [ -n "$dom" ] || dom=$(ui_input i_domain '')
+    [ -n "$dom" ] || { say "$(t g_cancelled)"; return 0; }
+    ca=$(acme_ca_menu) || ca=''
+    set -- --issue -d "$dom"
+    case "$mode" in
+        standalone)
+            say "$(t ssl_stop_hint)"
+            if ! ui_confirm acme_standalone_ask n; then
+                say "$(t g_cancelled)"
+                return 0
+            fi
+            set -- "$@" --standalone
+            p=$(ui_input i_httpport '')
+            case "$p" in
+                '') ;;
+                *[!0-9]*) err "$(t adv_bad_value): --httpport $p"; return 1 ;;
+                *) set -- "$@" --httpport "$p" ;;
+            esac
+            ;;
+        webroot)
+            w=$(ui_input i_webroot '')
+            [ -n "$w" ] || { say "$(t g_cancelled)"; return 0; }
+            set -- "$@" --webroot "$w"
+            ;;
+        nginx)  set -- "$@" --nginx ;;
+        apache) set -- "$@" --apache ;;
+        alpn)
+            set -- "$@" --alpn
+            p=$(ui_input i_tlsport '')
+            case "$p" in
+                '') ;;
+                *[!0-9]*) err "$(t adv_bad_value): --tlsport $p"; return 1 ;;
+                *) set -- "$@" --tlsport "$p" ;;
+            esac
+            ;;
+        dns)
+            say "$(t acme_dns_hint)"
+            say "$(t acme_dns_api_hint)"
+            dapi=$(ui_input acme_dns_api 'dns_cf')
+            [ -n "$dapi" ] || { say "$(t g_cancelled)"; return 0; }
+            set -- "$@" --dns "$dapi"
+            ;;
+        *)
+            err "$(t adv_bad_value): $mode"
+            return 1
+            ;;
+    esac
+    if [ -n "$ca" ]; then
+        set -- "$@" --server "$ca"
     fi
-    ash=$(acme_bin)
+
+    # Optional flags; Enter keeps acme.sh's own default for each of them.
+    say "$(t adv_title)"
+    if ui_confirm adv_staging n; then
+        set -- "$@" --staging
+    fi
+    say "$(t adv_keylength_hint)"
+    kl=$(ui_input adv_keylength '')
+    case "$kl" in
+        '') ;;
+        2048|3072|4096|8192|ec-256|ec-384|ec-521) set -- "$@" --keylength "$kl" ;;
+        *) err "$(t adv_bad_value): -k $kl"; return 1 ;;
+    esac
+    ds=$(ui_input adv_dnssleep '')
+    case "$ds" in
+        '') ;;
+        *[!0-9]*) err "$(t adv_bad_value): --dnssleep $ds"; return 1 ;;
+        *) set -- "$@" --dnssleep "$ds" ;;
+    esac
+    dy=$(ui_input adv_days '')
+    case "$dy" in
+        '') ;;
+        *[!0-9]*) err "$(t adv_bad_value): --days $dy"; return 1 ;;
+        *) set -- "$@" --days "$dy" ;;
+    esac
+    dbg=$(ui_input adv_debug '')
+    case "$dbg" in
+        '') ;;
+        0|1|2|3) set -- "$@" --debug "$dbg" ;;
+        *) err "$(t adv_bad_value): --debug $dbg"; return 1 ;;
+    esac
+    if ui_confirm adv_ocsp n; then
+        set -- "$@" --ocsp-must-staple
+    fi
+    chain=$(ui_input adv_chain '')
+    if [ -n "$chain" ]; then
+        set -- "$@" --preferred-chain "$chain"
+    fi
+    ek=$(ui_input adv_eab_kid '')
+    eh=$(ui_input adv_eab_hmac '')
+    if [ -n "$ek" ] && [ -n "$eh" ]; then
+        set -- "$@" --eab-kid "$ek" --eab-hmac-key "$eh"
+    elif [ -n "$ek" ] || [ -n "$eh" ]; then
+        err "$(t adv_eab_pair)"
+        return 1
+    fi
+
     # acme.sh v3 takes the account email only at install time (acme_install ->
     # --install -m). On --issue the flag is rejected ("Unknown parameter"), and
     # --email itself is only valid for --install/--update-account. So we never
     # forward an email here; the account (with or without an email) is created
     # automatically when acme.sh issues the first certificate.
-    set -- --issue -d "$dom" --standalone
-    [ -n "$ca" ] && set -- "$@" --server "$ca"
-    "$ash" "$@"
+    "$(acme_bin)" "$@"
 }
 
-acme_issue_dns() {
-    # acme_issue_dns DOMAIN [CA] — DNS-01, never touches port 80
-    acme_require || return 1
-    dom=$1
-    ca=${2:-}
-    say "$(t acme_dns_hint)"
-    dapi=$(ui_input acme_dns_api 'dns_cf')
-    [ -n "$dapi" ] || { say "$(t g_cancelled)"; return 0; }
-    ash=$(acme_bin)
-    if [ -n "$ca" ]; then
-        "$ash" --issue -d "$dom" --dns "$dapi" --server "$ca"
-    else
-        "$ash" --issue -d "$dom" --dns "$dapi"
-    fi
+# Which challenge type to use. Each entry maps onto one acme.sh flag:
+# --standalone / --dns / --webroot / --nginx / --apache / --alpn
+# (wiki/How-to-issue-a-cert).
+acme_mode_menu() {
+    m=$(ui_menu acme_mode_title acme_mode_standalone acme_mode_dns \
+        acme_mode_webroot acme_mode_nginx acme_mode_apache acme_mode_alpn \
+        g_back) || { printf ''; return 1; }
+    case "$m" in
+        1) printf 'standalone' ;;
+        2) printf 'dns' ;;
+        3) printf 'webroot' ;;
+        4) printf 'nginx' ;;
+        5) printf 'apache' ;;
+        6) printf 'alpn' ;;
+        *) printf '' ;;
+    esac
 }
 
 # How to reload the panel once a new certificate is in place. The reload cmd
@@ -1491,16 +1685,17 @@ acme_deploy() {
     fi
     mkdir -p "$CERT_DIR" || { err "$(t cert_mkdir_fail)"; return 1; }
     reload=$(_acme_reload_cmd)
-    if [ -n "$reload" ]; then
-        "$ash" --install-cert -d "$dom" \
-            --key-file "$CERT_DIR/${dom}.key" \
-            --fullchain-file "$CERT_DIR/${dom}.crt" \
-            --reloadcmd "$reload" || return 1
-    else
-        "$ash" --install-cert -d "$dom" \
-            --key-file "$CERT_DIR/${dom}.key" \
-            --fullchain-file "$CERT_DIR/${dom}.crt" || return 1
+    set -- --install-cert -d "$dom" \
+        --key-file "$CERT_DIR/${dom}.key" \
+        --fullchain-file "$CERT_DIR/${dom}.crt"
+    # An ECC cert is stored under <domain>_ecc and only reachable with --ecc.
+    if _acme_is_ecc "$dom"; then
+        set -- "$@" --ecc
     fi
+    if [ -n "$reload" ]; then
+        set -- "$@" --reloadcmd "$reload"
+    fi
+    "$ash" "$@" || return 1
     say "✓ $(t cert_deployed)"
     say "  $(t cert_key_label): $CERT_DIR/${dom}.key"
     say "  $(t cert_crt_label): $CERT_DIR/${dom}.crt"
@@ -1537,6 +1732,8 @@ acme_cert_info() {
     # Prefer the copy deployed into the panel, fall back to acme.sh's store.
     cert=$CERT_DIR/${dom}.crt
     [ -f "$cert" ] || cert="$home/$dom/fullchain.cer"
+    # ECC certificates live in <domain>_ecc rather than <domain>.
+    [ -f "$cert" ] || cert="$home/${dom}_ecc/fullchain.cer"
     [ -f "$cert" ] || { err "$(t acme_no_cert): $dom"; return 1; }
     if ! command -v openssl >/dev/null 2>&1; then
         err "$(t cert_need_openssl)"
@@ -1584,10 +1781,104 @@ acme_cert_info() {
     esac
 }
 
+# acme.sh keeps an ECC certificate in <domain>_ecc, and --install-cert,
+# --renew, --revoke and --to-pkcs12 all need --ecc to address it
+# (wiki/Options-and-Params). --remove does NOT take --ecc, so callers must not
+# add it there.
+_acme_is_ecc() {
+    ash=$(acme_bin) || return 1
+    [ -d "$(dirname "$ash")/${1}_ecc" ]
+}
+
 acme_renew() {
     # acme_renew DOMAIN
     acme_require || return 1
-    "$(acme_bin)" --renew -d "$1"
+    dom=$1
+    set -- --renew -d "$dom"
+    if _acme_is_ecc "$dom"; then
+        set -- "$@" --ecc
+    fi
+    "$(acme_bin)" "$@"
+}
+
+acme_renew_all() {
+    # --renew-all renews everything acme.sh knows about; -se stops at the
+    # first failure instead of ploughing through the rest.
+    acme_require || return 1
+    set -- --renew-all
+    if ui_confirm renew_all_se n; then
+        set -- "$@" -se
+    fi
+    "$(acme_bin)" "$@" || return 1
+    say "✓ $(t renew_all_done)"
+}
+
+acme_revoke() {
+    acme_require || return 1
+    dom=$(ui_input i_domain '')
+    [ -n "$dom" ] || { say "$(t g_cancelled)"; return 0; }
+    say "$(t rev_title): $dom"
+    say "$(t rev_note)"
+    if ! ui_confirm g_confirm n; then
+        say "$(t g_cancelled)"
+        return 0
+    fi
+    set -- --revoke -d "$dom"
+    if _acme_is_ecc "$dom"; then
+        set -- "$@" --ecc
+    fi
+    r=$(ui_input rev_reason '')
+    case "$r" in
+        '') ;;
+        0|1|2|3|4|5|6|7|8|9|10) set -- "$@" --revoke-reason "$r" ;;
+        *) err "$(t adv_bad_value): --revoke-reason $r"; return 1 ;;
+    esac
+    "$(acme_bin)" "$@" || return 1
+    say "✓ $(t rev_done)"
+}
+
+acme_export_pfx() {
+    # --to-pkcs12 exports a .pfx for Windows/IIS; --password is only valid
+    # together with it (wiki/Options-and-Params).
+    acme_require || return 1
+    dom=$(ui_input i_domain '')
+    [ -n "$dom" ] || { say "$(t g_cancelled)"; return 0; }
+    say "$(t pfx_title): $dom"
+    pw=$(ui_input i_pfx_pass '')
+    set -- --to-pkcs12 -d "$dom"
+    if _acme_is_ecc "$dom"; then
+        set -- "$@" --ecc
+    fi
+    if [ -n "$pw" ]; then
+        set -- "$@" --password "$pw"
+    fi
+    "$(acme_bin)" "$@" || return 1
+    say "✓ $(t pfx_out)"
+}
+
+acme_remove() {
+    # Only drops the cert from acme.sh's list: no revocation, no file removal.
+    acme_require || return 1
+    dom=$(ui_input i_domain '')
+    [ -n "$dom" ] || { say "$(t g_cancelled)"; return 0; }
+    say "$(t rm_title): $dom"
+    say "$(t rm_note)"
+    if ! ui_confirm g_confirm n; then
+        say "$(t g_cancelled)"
+        return 0
+    fi
+    "$(acme_bin)" --remove -d "$dom" || return 1
+    say "✓ $(t rm_done)"
+}
+
+acme_set_default_ca() {
+    # --set-default-ca writes the CA into acme.sh's config so later commands
+    # do not need --server (wiki/Server).
+    acme_require || return 1
+    ca=$(acme_ca_menu) || ca=''
+    [ -n "$ca" ] || { say "$(t g_cancelled)"; return 0; }
+    "$(acme_bin)" --set-default-ca --server "$ca" || return 1
+    say "✓ $(t ca_default_set) $ca"
 }
 
 ssl_cert_menu() {
@@ -1595,30 +1886,32 @@ ssl_cert_menu() {
     say "$(t ssl_head1)"
     say "$(t ssl_head2)"
     say ''
-    c=$(ui_menu ssl_title ssl_install_acme ssl_issue_standalone ssl_issue_dns \
-        ssl_deploy ssl_list ssl_cert_info ssl_renew ssl_print g_back) || return 0
+    c=$(ui_menu ssl_title ssl_install_acme ssl_issue ssl_deploy ssl_list \
+        ssl_cert_info ssl_renew ssl_renew_all ssl_revoke ssl_export_pfx \
+        ssl_remove ssl_set_ca ssl_print g_back) || return 0
     case "$c" in
         1) acme_install "$(ui_input i_email '')" ;;
-        2|3)
-            dom=$(ui_input i_domain '')
-            [ -n "$dom" ] || { say "$(t g_cancelled)"; return 0; }
-            ca=$(acme_ca_menu) || ca=''
-            case "$c" in
-                2) acme_issue_standalone "$dom" "$ca" ;;
-                3) acme_issue_dns "$dom" "$ca" ;;
-            esac
+        2)
+            mode=$(acme_mode_menu) || mode=''
+            [ -n "$mode" ] || { say "$(t g_cancelled)"; return 0; }
+            acme_issue "$mode"
             ;;
-        4|7)
+        3|6)
             dom=$(ui_input i_domain '')
             [ -n "$dom" ] || { say "$(t g_cancelled)"; return 0; }
             case "$c" in
-                4) acme_deploy "$dom" ;;
-                7) acme_renew "$dom" ;;
+                3) acme_deploy "$dom" ;;
+                6) acme_renew "$dom" ;;
             esac
             ;;
-        5) acme_list ;;
-        6) acme_cert_info ;;
-        8) ssl_print_commands ;;
+        4) acme_list ;;
+        5) acme_cert_info ;;
+        7) acme_renew_all ;;
+        8) acme_revoke ;;
+        9) acme_export_pfx ;;
+        10) acme_remove ;;
+        11) acme_set_default_ca ;;
+        12) ssl_print_commands ;;
         *) return 0 ;;
     esac
 }
