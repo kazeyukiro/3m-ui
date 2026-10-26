@@ -59,26 +59,32 @@ func connectionListenerHash(l models.Listener) [32]byte {
 	return sha256.Sum256(data)
 }
 
-func (s *Service) cachedConnectionResult(l models.Listener, pid int, configHash [32]byte) *ConnectionCheck {
+// connectionResult returns the stored check while it still describes the
+// current process, configuration and client export. An expired entry is
+// still returned as the last known result (so a badge does not silently
+// revert to "not tested"); the second return value reports whether the
+// reuse TTL is still valid. An invalidated entry is dropped.
+func (s *Service) connectionResult(l models.Listener, pid int, configHash [32]byte) (*ConnectionCheck, bool) {
 	id := l.ID
 	s.connectionResultsMu.Lock()
 	cached, ok := s.connectionResults[id]
 	s.connectionResultsMu.Unlock()
 	if !ok {
-		return nil
+		return nil, false
 	}
-	if cached.pid != pid || cached.configHash != configHash || cached.listenerHash != connectionListenerHash(l) || !time.Now().Before(cached.result.ExpiresAt) ||
+	if cached.pid != pid || cached.configHash != configHash || cached.listenerHash != connectionListenerHash(l) ||
 		(cached.clientUnchanged != nil && !cached.clientUnchanged()) {
 		s.connectionResultsMu.Lock()
 		// Validation must not evict a newer result stored in the meantime.
-		if s.connectionResults[id].result.CheckedAt.Equal(cached.result.CheckedAt) {
+		if entry, exists := s.connectionResults[id]; exists && entry.result.CheckedAt.Equal(cached.result.CheckedAt) {
 			delete(s.connectionResults, id)
 		}
 		s.connectionResultsMu.Unlock()
-		return nil
+		return nil, false
 	}
-	copy := cached.result
-	return &copy
+	result := cached.result
+	fresh := time.Now().Before(result.ExpiresAt)
+	return &result, fresh
 }
 
 // CheckConnection runs an isolated client, never a reload of the serving core.
@@ -87,7 +93,11 @@ func (s *Service) cachedConnectionResult(l models.Listener, pid int, configHash 
 func (s *Service) CheckConnection(ctx context.Context, l models.Listener, export func() (string, error), reuse bool) ListenerRuntime {
 	if reuse && l.Enabled {
 		result := s.ListenerRuntime([]models.Listener{l}, true)[0]
-		if cached := result.ConnectionCheck; cached != nil && (cached.State == "available" || cached.State == "unavailable") {
+		// Reuse only a result inside its TTL: the last known result stays
+		// visible on the badge, but a reuse request must re-run an
+		// expired check instead of presenting it as current.
+		if cached := result.ConnectionCheck; cached != nil && time.Now().Before(cached.ExpiresAt) &&
+			(cached.State == "available" || cached.State == "unavailable") {
 			return result
 		}
 	}
@@ -152,12 +162,10 @@ func (s *Service) CheckConnection(ctx context.Context, l models.Listener, export
 		if s.connectionResults == nil {
 			s.connectionResults = make(map[uint]cachedConnectionCheck)
 		}
-		// Bound the in-memory cache even when many nodes are checked/deleted.
-		for id, entry := range s.connectionResults {
-			if time.Now().After(entry.result.ExpiresAt) {
-				delete(s.connectionResults, id)
-			}
-		}
+		// Expired entries are kept as the last known result for display;
+		// they are dropped when invalidated (see connectionResult) or when
+		// the cap below is reached, which also bounds listeners that were
+		// deleted while their result was retained.
 		if len(s.connectionResults) >= 256 {
 			clear(s.connectionResults)
 		}

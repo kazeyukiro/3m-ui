@@ -95,18 +95,59 @@ func TestConnectionCacheInvalidation(t *testing.T) {
 		hash    [32]byte
 		expires time.Time
 		found   bool
+		fresh   bool
 	}{
-		{"current", 42, hash, time.Now().Add(time.Minute), true},
-		{"restarted", 43, hash, time.Now().Add(time.Minute), false},
-		{"edited", 42, sha256.Sum256([]byte("edited")), time.Now().Add(time.Minute), false},
-		{"expired", 42, hash, time.Now().Add(-time.Second), false},
+		{"current", 42, hash, time.Now().Add(time.Minute), true, true},
+		{"restarted", 43, hash, time.Now().Add(time.Minute), false, false},
+		{"edited", 42, sha256.Sum256([]byte("edited")), time.Now().Add(time.Minute), false, false},
+		// An expired entry stays as the last known result for display; only
+		// the reuse TTL lapsed, nothing about the node changed.
+		{"expired", 42, hash, time.Now().Add(-time.Second), true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &Service{connectionResults: map[uint]cachedConnectionCheck{1: {ConnectionCheck{State: "available", ExpiresAt: tc.expires}, 42, hash, connectionListenerHash(l), nil}}}
-			if (s.cachedConnectionResult(l, tc.pid, tc.hash) != nil) != tc.found {
-				t.Fatal("wrong cache validity")
+			got, fresh := s.connectionResult(l, tc.pid, tc.hash)
+			if (got != nil) != tc.found || fresh != tc.fresh {
+				t.Fatalf("wrong cache validity: found=%v fresh=%v", got != nil, fresh)
 			}
 		})
+	}
+}
+
+// The badge must keep showing the last result after the reuse TTL, while a
+// reuse request re-runs the check instead of presenting a stale result.
+func TestExpiredResultRemainsForDisplayButNotReuse(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := "listeners: []\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{cm: NewConfigManager(path)}
+	l := models.Listener{BaseModel: models.BaseModel{ID: 7}, Enabled: true}
+	export := func() (string, error) { return "client", nil }
+	first := svc.CheckConnection(context.Background(), l, export, false)
+	if first.ConnectionCheck == nil {
+		t.Fatal("no result stored")
+	}
+	// Expire only the reuse TTL; process, config and client stay unchanged.
+	svc.connectionResultsMu.Lock()
+	entry := svc.connectionResults[l.ID]
+	entry.result.ExpiresAt = time.Now().Add(-time.Second)
+	svc.connectionResults[l.ID] = entry
+	svc.connectionResultsMu.Unlock()
+
+	got, fresh := svc.connectionResult(l, svc.runtimePID(), sha256.Sum256([]byte(content)))
+	if got == nil || !got.CheckedAt.Equal(first.ConnectionCheck.CheckedAt) || fresh {
+		t.Fatalf("expired result must remain for display and be marked stale: %+v fresh=%v", got, fresh)
+	}
+	reused := svc.CheckConnection(context.Background(), l, export, true)
+	if reused.ConnectionCheck.CheckedAt.Equal(first.ConnectionCheck.CheckedAt) {
+		t.Fatal("reuse returned an expired result")
+	}
+	// Polling (runtime status) still exposes the latest result.
+	status := svc.ListenerRuntime([]models.Listener{l}, false)
+	if status[0].ConnectionCheck == nil {
+		t.Fatal("runtime status dropped the last known result")
 	}
 }
 
@@ -132,7 +173,7 @@ func TestConnectionCacheReuseAndClientInvalidation(t *testing.T) {
 	}
 	// Same applied config and PID, but public endpoint or credential changed.
 	client = "changed endpoint or credential"
-	if got := svc.cachedConnectionResult(l, 0, sha256.Sum256([]byte(content))); got != nil {
+	if got, _ := svc.connectionResult(l, 0, sha256.Sum256([]byte(content))); got != nil {
 		t.Fatal("cached result survived a client-only configuration change")
 	}
 	next := svc.CheckConnection(context.Background(), l, export, true)

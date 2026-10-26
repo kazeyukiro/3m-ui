@@ -48,7 +48,10 @@ export function useListenerRuntime(listeners: Listener[], detailID?: number) {
   }, [mergeDetails]);
 
   const test = useCallback(async (id: number, reuse = false) => {
-    if (tests.current.has(id)) return;
+    // A new explicit request supersedes a running one instead of being
+    // silently dropped: pressing 检测 must always start a fresh check,
+    // even while the auto-test triggered by opening the drawer runs.
+    tests.current.get(id)?.abort();
     const controller = new AbortController();
     tests.current.set(id, controller);
     setTesting(previous => [...previous, id]);
@@ -63,8 +66,13 @@ export function useListenerRuntime(listeners: Listener[], detailID?: number) {
       }
       throw error;
     } finally {
-      tests.current.delete(id);
-      if (mounted.current) setTesting(previous => previous.filter(value => value !== id));
+      // Only the request that still owns the entry may clear it: a
+      // superseded request finishing late must not remove the state of
+      // the test that replaced it.
+      if (tests.current.get(id) === controller) {
+        tests.current.delete(id);
+        if (mounted.current) setTesting(previous => previous.filter(value => value !== id));
+      }
     }
   }, [mergeDetails]);
 

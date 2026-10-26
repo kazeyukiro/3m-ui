@@ -192,7 +192,12 @@ func (s *Service) ListenerRuntime(listeners []models.Listener, details bool) []L
 				result.State, result.Reason = "not_listening", "config_not_applied"
 			}
 		}
-		result.ConnectionCheck = s.cachedConnectionResult(l, pid, configHash)
+		// Keep the last known result on the status payload even after its
+		// reuse TTL: polling must not erase a badge the operator just saw.
+		// Invalidation (process/config/client change) still clears it.
+		if check, _ := s.connectionResult(l, pid, configHash); check != nil {
+			result.ConnectionCheck = check
+		}
 		results = append(results, result)
 	}
 	return results
