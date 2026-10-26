@@ -93,35 +93,7 @@ func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 		c.JSON(http.StatusOK, saved)
 	})
 
-	// Website-audit blocklist (domains / IPs rejected server-side). Stored
-	// separately from server-routing so the routing editor cannot wipe it.
-	group.GET("/blocklist", func(c *gin.Context) {
-		entries, err := mihomoConfig.GetBlocklist(db)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, entries)
-	})
-	group.PUT("/blocklist", func(c *gin.Context) {
-		var entries []mihomoConfig.BlockEntry
-		if err := c.ShouldBindJSON(&entries); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if err := mihomoConfig.SaveBlocklist(db, entries); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		saved, err := mihomoConfig.GetBlocklist(db)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, saved)
-	})
-
-	// Batch-import parse endpoints. Both scopes (client subscription rules
+	// Batch-import parse endpoint. Both scopes (client subscription rules
 	// and server egress rules) share the same mihomo rule syntax, so one
 	// parser serves both; parsing never persists anything — the editor
 	// previews the normalized lines and appends them on confirm.
@@ -134,20 +106,6 @@ func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 			return
 		}
 		c.JSON(http.StatusOK, mihomoConfig.ParseRulesText(req.Text))
-	})
-
-	// Website-audit blocklist batch import: same single-source principle —
-	// the backend owns parsing/validation/normalization, the UI only
-	// previews and appends.
-	group.POST("/blocklist/parse", func(c *gin.Context) {
-		var req struct {
-			Text string `json:"text"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, mihomoConfig.ParseBlocklistTextDetailed(req.Text))
 	})
 
 	// Rule providers (rule-set) — stored in server-routing; hot-update via Mihomo API.

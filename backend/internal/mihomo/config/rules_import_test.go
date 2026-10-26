@@ -221,41 +221,6 @@ func TestParseRulesTextCap(t *testing.T) {
 	}
 }
 
-func TestParseBlocklistTextDetailed(t *testing.T) {
-	text := `example.com
-full:exact.example.com # note
-keyword:cdn
-geosite:google
-ip:1.2.3.4
-10.0.0.0/8
-ip:
-bad,,value
-DOMAIN-SUFFIX,-bad-.com`
-	res := ParseBlocklistTextDetailed(text)
-	// ip: (empty value) and bad,,value are rejected; -bad-.com has an
-	// invalid label; the rest normalize.
-	if len(res.Issues) != 3 {
-		t.Fatalf("expected 3 issues, got %+v", res.Issues)
-	}
-	if len(res.Entries) != 6 {
-		t.Fatalf("expected 6 entries, got %+v", res.Entries)
-	}
-	if res.Entries[0].Type != BlockTypeDomainSuffix || res.Entries[0].Value != "example.com" {
-		t.Fatalf("unexpected first entry: %+v", res.Entries[0])
-	}
-	if res.Entries[1].Type != BlockTypeDomain || res.Entries[1].Value != "exact.example.com" || res.Entries[1].Remark != "note" {
-		t.Fatalf("unexpected second entry: %+v", res.Entries[1])
-	}
-	if res.Entries[4].Type != BlockTypeIPCIDR || res.Entries[4].Value != "1.2.3.4/32" {
-		t.Fatalf("expected bare IP normalized to /32, got %+v", res.Entries[4])
-	}
-	// Dedup inside the batch.
-	res2 := ParseBlocklistTextDetailed("example.com\nexample.com")
-	if len(res2.Entries) != 1 || res2.Duplicates != 1 {
-		t.Fatalf("expected dedup, got %+v (dups=%d)", res2.Entries, res2.Duplicates)
-	}
-}
-
 // TestImportResultsNeverSerializeNull guards the API contract the import
 // previews rely on: an all-rejected or empty batch must still produce
 // JSON arrays ([]), never null, or the UI's .length / .map() calls throw.
@@ -266,8 +231,6 @@ func TestImportResultsNeverSerializeNull(t *testing.T) {
 	}{
 		{"rules empty", ParseRulesText("")},
 		{"rules all-rejected", ParseRulesText("BOGUS,x,y\nDOMAIN\n")},
-		{"blocklist empty", ParseBlocklistTextDetailed("")},
-		{"blocklist all-rejected", ParseBlocklistTextDetailed("ip:\nbad,,value\n")},
 	}
 	for _, c := range cases {
 		raw, err := json.Marshal(c.raw)
@@ -278,7 +241,7 @@ func TestImportResultsNeverSerializeNull(t *testing.T) {
 		if err := json.Unmarshal(raw, &generic); err != nil {
 			t.Fatalf("%s: unmarshal: %v", c.name, err)
 		}
-		for _, key := range []string{"rules", "issues", "entries"} {
+		for _, key := range []string{"rules", "issues"} {
 			v, ok := generic[key]
 			if !ok {
 				continue // field not present on this type

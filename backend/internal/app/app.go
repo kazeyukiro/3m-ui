@@ -36,6 +36,12 @@ func Run(frontendFS fs.FS) error {
 	security.InitCredentialKey(cfg.Security.CredentialKey)
 	container := NewContainer(db, cfg)
 
+	// The website-audit blocklist feature was removed (routing rules cover
+	// it); drop the inert settings row so stale data cannot linger.
+	if err := db.Where("key = ?", "blocklist").Delete(&models.PanelSetting{}).Error; err != nil {
+		log.Printf("[WARNING] drop removed blocklist setting: %v", err)
+	}
+
 	dbconfig.CredentialProvider = func() (map[uint][]dbconfig.Credential, error) {
 		if container.User == nil {
 			return map[uint][]dbconfig.Credential{}, nil

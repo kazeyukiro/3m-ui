@@ -91,14 +91,6 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		return "", fmt.Errorf("WARP routing is enabled (domains or global) but no WARP account is saved — open Settings → Cloudflare WARP → Register, then Apply again")
 	}
 	applyServerRouting(merged, sr, warpProxy)
-	// Website-audit blocklist: REJECT rules are prepended ahead of every
-	// other rule so a blocked destination can never be proxied (server-side
-	// enforcement for all listener clients).
-	blocklist, blErr := GetBlocklist(ce.db)
-	if blErr != nil {
-		return "", fmt.Errorf("load blocklist: %w", blErr)
-	}
-	applyBlocklist(merged, blocklist)
 	var listeners []models.Listener
 	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
 		return "", fmt.Errorf("load enabled listeners: %w", err)

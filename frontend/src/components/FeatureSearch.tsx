@@ -10,7 +10,6 @@ import {
   IconNavTraffic,
   IconNavCluster,
   IconNavRouting,
-  IconNavAudit,
   IconNavCore,
   IconNavLogs,
   IconNavConfig,
@@ -50,7 +49,6 @@ function useFeatureItems(): FeatureItem[] {
   return useMemo(() => {
     const settings = t('nav.settings');
     const routing = t('nav.routing');
-    const audit = t('nav.audit');
     const config = t('nav.config');
     const core = t('nav.core');
     const users = t('nav.users');
@@ -106,13 +104,6 @@ function useFeatureItems(): FeatureItem[] {
         label: routing,
         icon: <IconNavRouting />,
         keywords: ['rules', 'dns', 'warp', '规则', '規則', '路由', 'ルーティング'],
-      },
-      {
-        key: '/audit',
-        top: true,
-        label: audit,
-        icon: <IconNavAudit />,
-        keywords: ['audit', 'block', 'blocklist', 'reject', '审计', '審計', '屏蔽', '黑名单'],
       },
       {
         key: '/core',

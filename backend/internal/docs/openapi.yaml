@@ -8,8 +8,7 @@ info:
     Server egress: GET/PUT /config/server-routing (serving Mihomo rules + warpDomains + ruleProviders).
     WARP account: GET/POST/DELETE /system/warp (injects outbound WARP at config apply).
     Client subscription rules: /config/rules and /config/groups (visual-config only).
-    Batch import (both scopes): POST /config/rules/parse and POST /config/blocklist/parse — preview only, never persist.
-    Website-audit blocklist: GET/PUT /config/blocklist (server-side REJECT entries, stored apart from server-routing).
+    Batch import: POST /config/rules/parse — preview only, never persist.
 
     - Base path: `/api/v1`
     - Admin routes need `Authorization: Bearer <jwt>` from `POST /auth/login` (or GitHub OAuth callback when enabled)
@@ -1508,67 +1507,6 @@ paths:
       responses:
         "200":
           description: Saved ServerRoutingConfig
-  /config/blocklist:
-    get:
-      tags: [config]
-      summary: List website-audit blocklist entries (server-side REJECT)
-      description: |
-        Stored separately from server-routing so the routing editor cannot wipe
-        it. Each enabled entry becomes one REJECT rule in the serving Mihomo
-        config for every client behind a listener.
-      responses:
-        "200":
-          description: BlockEntry[]
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/BlockEntry'
-    put:
-      tags: [config]
-      summary: Replace website-audit blocklist entries
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/BlockEntry'
-      responses:
-        "200":
-          description: Saved entries
-        "400":
-          description: Invalid entries
-  /config/blocklist/parse:
-    post:
-      tags: [config]
-      summary: Website-audit blocklist batch import (preview only, never persists)
-      description: |
-        Same single-source principle as /config/rules/parse: the backend owns
-        parsing / validation / normalization, the UI only previews and appends.
-        Optional line prefixes map onto entry types (`domain:`, `domain-suffix:`,
-        `domain-keyword:`, `geosite:`, `ip:`); unmarked lines are auto-detected.
-        Rejected lines are reported with their 1-based line number without
-        aborting the batch; duplicates inside the batch are dropped (first wins);
-        the batch is capped at 5000 entries (`truncated` counts the overflow).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [text]
-              properties:
-                text: { type: string, description: "Raw pasted blob, one entry per line" }
-      responses:
-        "200":
-          description: Parse result (entries + issues)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BlocklistParseResult'
   /config/rule-providers/status:
     get:
       tags: [config]
@@ -1751,32 +1689,6 @@ components:
             $ref: '#/components/schemas/RuleImportIssue'
           description: "JSON array, never null"
         truncated: { type: integer, description: "Lines over the 5000-rule cap" }
-    BlockEntry:
-      type: object
-      description: One website-audit blocklist row (REJECT in serving Mihomo)
-      properties:
-        type:
-          type: string
-          enum: [domain, domain-suffix, domain-keyword, geosite, ip-cidr]
-          description: Auto-detected from value when empty
-        value: { type: string }
-        remark: { type: string }
-        enabled: { type: boolean }
-    BlocklistParseResult:
-      type: object
-      description: Outcome of POST /config/blocklist/parse
-      properties:
-        entries:
-          type: array
-          items:
-            $ref: '#/components/schemas/BlockEntry'
-          description: "JSON array, never null"
-        issues:
-          type: array
-          items: { type: string }
-          description: "Rejected lines with 1-based line numbers; JSON array, never null"
-        duplicates: { type: integer, description: "Dropped duplicates inside the batch (first wins)" }
-        truncated: { type: integer, description: "Entries over the 5000 cap" }
     RuleProvider:
       type: object
       description: Mihomo rule-providers entry (https://wiki.metacubex.one/config/rule-providers/)
