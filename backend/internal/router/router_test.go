@@ -327,9 +327,9 @@ func TestSecurityHeadersCSP(t *testing.T) {
 		if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
 			t.Fatalf("%s: X-Frame-Options = %q", path, got)
 		}
-	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
-		t.Fatalf("%s: X-Content-Type-Options = %q", path, got)
-	}
+		if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Fatalf("%s: X-Content-Type-Options = %q", path, got)
+		}
 	}
 }
 
@@ -370,8 +370,8 @@ func TestWebPathHidesPanel(t *testing.T) {
 	r := router.WebPathHandler("/secret", "", engine)
 
 	cases := []struct {
-		path      string
-		wantCode  int
+		path     string
+		wantCode int
 		wantMeta bool
 	}{
 		{"/secret/", 200, true},
