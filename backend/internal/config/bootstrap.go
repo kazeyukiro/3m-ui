@@ -39,7 +39,7 @@ func EnsureConfig(path string) error {
 		return err
 	}
 	cfg := Config{
-		Server:   ServerConfig{Port: 8080, Mode: "release"},
+		Server:   ServerConfig{Port: 8080, Mode: "release", WebPath: randomPanelPath()},
 		Database: DatabaseConfig{Path: filepath.Join(dataDir, "3m-ui.db")},
 		JWT:      JWTConfig{Secret: secret},
 		Security: SecurityConfig{CredentialKey: credentialKey},
@@ -92,4 +92,22 @@ func randomSecret() (string, error) {
 		return "", fmt.Errorf("generate configuration secret: %w", err)
 	}
 	return hex.EncodeToString(raw[:]), nil
+}
+
+// randomPanelPath returns a random panel base path (e.g. "/a1b2c3...") used to
+// hide the panel UI/API behind an unpredictable prefix so it is not trivially
+// discoverable by scanning the bare domain. It is generated once on first
+// install and persisted to the config file (so it stays stable across
+// restarts). Users can override it via server.web_path in config.yaml or the
+// THREE_M_UI_WEB_PATH environment variable; setting it to "" restores the root
+// path.
+func randomPanelPath() string {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		// crypto/rand failing is effectively impossible; fall back to a fixed
+		// non-empty prefix rather than the root path so the panel is never
+		// silently exposed.
+		return "/panel"
+	}
+	return "/" + hex.EncodeToString(raw[:])
 }

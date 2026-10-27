@@ -15,9 +15,13 @@ function panelClient() {
   const module = { exports: {} };
   vm.runInNewContext(javascript, {
     module, exports: module.exports,
-    require: name => name === '../stores/authStore'
-      ? { useAuthStore: { getState: () => ({ token: null }) } }
-      : require(name),
+    require: name => {
+      if (name === '../stores/authStore') return { useAuthStore: { getState: () => ({ token: null }) } };
+      // webPath is injected by index.html at runtime; the unit test only cares
+      // about timeout defaults, so return the root-path (empty) variant.
+      if (name === '../utils/webPath') return { webPath: () => '' };
+      return require(name);
+    },
   });
   const client = module.exports.default;
   // Observe the effective timeout after real Axios merging and interceptors.

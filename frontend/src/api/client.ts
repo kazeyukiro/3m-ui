@@ -1,8 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../stores/authStore';
+import { webPath } from '../utils/webPath';
 
 const client = axios.create({
-  baseURL: '/api/v1',
+  // Base URL is built from the panel mount path injected by the backend so the
+  // API works whether the panel is at the domain root or behind /<web_path>/.
+  baseURL: `${webPath()}/api/v1`,
   // Resolve the default after Axios merges request options. A null sentinel
   // preserves explicit timeouts, including 0 (no timeout).
   timeout: null,
@@ -90,10 +93,11 @@ client.interceptors.response.use(
       const msg = apiErrorMessage(err) || 'Session expired';
       // Only force logout on real auth failures — not transient upstream noise
       // that some proxies surface as 401 when the panel is briefly busy.
+      const target = webPath() + '/login';
       const path = window.location.pathname;
-      if (path !== '/login' && /session|expired|invalid|authentication required|log in again|user not found/i.test(msg)) {
+      if (path !== target && /session|expired|invalid|authentication required|log in again|user not found/i.test(msg)) {
         useAuthStore.getState().logout();
-        window.location.href = '/login';
+        window.location.href = target;
       }
       return Promise.reject(new Error(msg));
     }
@@ -104,8 +108,8 @@ client.interceptors.response.use(
     }
     if (status === 403 && data?.code === 'PASSWORD_CHANGE_REQUIRED') {
       useAuthStore.getState().setMustChangePassword(true);
-      if (window.location.pathname !== '/change-password') {
-        window.location.href = '/change-password';
+      if (window.location.pathname !== webPath() + '/change-password') {
+        window.location.href = webPath() + '/change-password';
       }
       return Promise.reject(new Error('Password change required'));
     }

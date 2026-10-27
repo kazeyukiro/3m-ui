@@ -1115,7 +1115,7 @@ export default {
     "totpSetupBtn": "Setup 2FA",
     "totpEnable": "Enable",
     "totpDisable": "Disable 2FA",
-    "webPathHint": "Panel path prefix (web_path) is set in /etc/3m-ui/config.yaml then restart. Example: web_path: \"/secret\" → open http://IP:8080/secret/",
+    "webPathHint": "On first install the panel gets a random URL path prefix (web_path) in /etc/3m-ui/config.yaml — only http://IP:8080/<random>/ is reachable and the bare domain returns 404. Edit web_path and restart to change it; set it to \"\" to serve from the domain root. Example: web_path: \"/secret\" → open http://IP:8080/secret/",
     "totpDesc": "Protect admin login with an authenticator app (Google Authenticator, Microsoft Authenticator, etc.).",
     "totpDisableHint": "Enter password and a current code to disable 2FA.",
     "totpNeedBoth": "Password and code are required",
@@ -1196,7 +1196,7 @@ export default {
     "cert_fileHint": "Manual certificate PEM path (allowlisted directories).",
     "key_fileHint": "Manual private key PEM path.",
     "public_urlHint": "Public base URL of the panel (used in OAuth redirect, subscription links, etc.). Include https://.",
-    "web_pathHint": "Optional URL path prefix for the panel UI.",
+    "web_pathHint": "Optional secret URL path prefix. Auto-generated randomly on first install to hide the panel; set to \"\" to serve from the domain root.",
 
     "restoreAutoReload": "Auto-reloading in 5s…",
     "restoreTimeout": "Panel did not come back in 30s; please refresh manually.",

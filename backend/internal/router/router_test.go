@@ -160,7 +160,7 @@ func TestFrontendCompressionAndCaching(t *testing.T) {
 		"web/dist/assets/style-Abcd123_.css": &fstest.MapFile{Data: []byte("body{color:red}")},
 		"web/dist/logo.svg":                  &fstest.MapFile{Data: []byte("<svg></svg>")},
 		"web/dist/manifest.webmanifest":      &fstest.MapFile{Data: []byte(`{"name":"3m-ui"}`)},
-	})
+	}, "")
 	request := func(method, path string, headers map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, nil)
 		for k, v := range headers {
@@ -327,8 +327,77 @@ func TestSecurityHeadersCSP(t *testing.T) {
 		if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
 			t.Fatalf("%s: X-Frame-Options = %q", path, got)
 		}
-		if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
-			t.Fatalf("%s: X-Content-Type-Options = %q", path, got)
-		}
+	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("%s: X-Content-Type-Options = %q", path, got)
+	}
+	}
+}
+
+// TestWebPathHidesPanel verifies the random base-path feature end to end:
+// the panel UI/API are only reachable under /secret/, the bare domain returns
+// 404, health probes stay public, and the active prefix is injected into the
+// served index.html as a <meta> tag (NOT a <script>, which the page CSP blocks).
+func TestWebPathHidesPanel(t *testing.T) {
+	_ = os.RemoveAll("/tmp/3m-ui-router-webpath-test")
+
+	cfg := &config.Config{}
+	cfg.Server.Mode = "debug"
+	cfg.Server.WebPath = "/secret"
+	cfg.Database.Path = "/tmp/3m-ui-router-webpath-test/db.sqlite"
+	cfg.Mihomo.Binary = "/tmp/dummy-nonexistent"
+	cfg.Mihomo.Config = "/tmp/3m-ui-router-webpath-test/config.yaml"
+	cfg.JWT.Secret = "super-secret-token-key-for-testing-purposes"
+	cfg.Security.CORSOrigins = nil
+
+	db, err := database.InitDB(cfg.Database.Path)
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer os.RemoveAll("/tmp/3m-ui-router-webpath-test")
+
+	engine := router.SetupRouterWithDeps(router.Deps{
+		DB:      db,
+		Config:  cfg,
+		Mihomo:  mihomo.NewService(cfg),
+		System:  system.NewService(),
+		Traffic: traffic.NewService(),
+	})
+	router.MountFrontend(engine, fstest.MapFS{
+		"web/dist/index.html":      &fstest.MapFile{Data: []byte("<!doctype html><html><head><title>3m-ui</title></head><body></body></html>")},
+		"web/dist/assets/index.js": &fstest.MapFile{Data: []byte("x")},
+	}, "/secret")
+	// Enforce the base path exactly like app.Run does: strip before matching.
+	r := router.WebPathHandler("/secret", "", engine)
+
+	cases := []struct {
+		path      string
+		wantCode  int
+		wantMeta bool
+	}{
+		{"/secret/", 200, true},
+		{"/secret", http.StatusMovedPermanently, false},
+		{"/", 404, false},
+		{"/api/v1/health", 200, false},
+		{"/api/v1/auth/login", 404, false},
+		{"/secret/api/v1/health", 200, false},
+		{"/secret/assets/index.js", 200, false},
+		{"/assets/index.js", 404, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if w.Code != tc.wantCode {
+				t.Fatalf("path %q: got %d, want %d", tc.path, w.Code, tc.wantCode)
+			}
+			if tc.wantMeta {
+				if !strings.Contains(w.Body.String(), `<meta name="x-web-path" content="/secret">`) {
+					t.Fatalf("path %q: index missing injected meta:\n%s", tc.path, w.Body.String())
+				}
+				if strings.Contains(w.Body.String(), "window.__WEB_PATH__") {
+					t.Fatalf("path %q: must not inject a <script> (blocked by page CSP)", tc.path)
+				}
+			}
+		})
 	}
 }

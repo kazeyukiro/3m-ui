@@ -13,6 +13,7 @@ import { login, fetchGithubOAuthPublic } from '../api/auth';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import { useThemeStore, type ThemeMode } from '../stores/themeStore';
+import { webPath } from '../utils/webPath';
 
 const { Title, Text } = Typography;
 
@@ -254,7 +255,7 @@ const Login: React.FC = () => {
                 block
                 size="large"
                 onClick={() => {
-                  window.location.href = '/api/v1/auth/oauth/github/start';
+                  window.location.href = `${webPath()}/api/v1/auth/oauth/github/start`;
                 }}
               >
                 {t('login.github', 'Continue with GitHub')}

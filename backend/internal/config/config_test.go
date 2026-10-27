@@ -93,3 +93,36 @@ func TestGetSubscriptionURLUsesSharedConfiguration(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestNormalizeWebPath(t *testing.T) {
+	cases := map[string]string{
+		"": "", "/": "", "/secret": "/secret", "secret": "/secret", "/secret/": "/secret",
+	}
+	for in, want := range cases {
+		if got := NormalizeWebPath(in); got != want {
+			t.Fatalf("NormalizeWebPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestRandomPanelPathIsRandomAndWellFormed(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		p := randomPanelPath()
+		if len(p) != 33 { // "/" + 32 lowercase hex chars
+			t.Fatalf("randomPanelPath() = %q, unexpected length", p)
+		}
+		if p[0] != '/' {
+			t.Fatalf("randomPanelPath() = %q, must start with /", p)
+		}
+		for _, c := range p[1:] {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				t.Fatalf("randomPanelPath() = %q, non-hex char %q", p, c)
+			}
+		}
+		if seen[p] {
+			t.Fatalf("collision, randomPanelPath() is not random: %q", p)
+		}
+		seen[p] = true
+	}
+}

@@ -108,6 +108,7 @@ func LoadConfig(path string) (*Config, error) {
 //	THREE_M_UI_PUBLIC_URL / PUBLIC_URL → server.public_url
 //	THREE_M_UI_SUB_PATH / SUB_PATH → server.sub_path
 //	THREE_M_UI_SUB_PORT / SUB_PORT → server.sub_port
+//	THREE_M_UI_WEB_PATH / WEB_PATH → server.web_path (panel base path prefix)
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
@@ -149,6 +150,12 @@ func ApplyEnvOverrides(cfg *Config) {
 	for _, key := range []string{"THREE_M_UI_SUB_LISTEN", "SUB_LISTEN"} {
 		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 			cfg.Server.SubListen = v
+			break
+		}
+	}
+	for _, key := range []string{"THREE_M_UI_WEB_PATH", "WEB_PATH"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			cfg.Server.WebPath = v
 			break
 		}
 	}

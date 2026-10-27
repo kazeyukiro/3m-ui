@@ -894,7 +894,7 @@ const Settings: React.FC = () => {
                     </Modal>
                   </div>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    {t('settings.webPathHint', 'Panel path prefix (web_path) is set in /etc/3m-ui/config.yaml then restart. Example: web_path: "/secret" → open http://IP:8080/secret/')}
+                    {t('settings.webPathHint', 'On first install the panel gets a random URL path prefix (web_path) written to /etc/3m-ui/config.yaml — only http://IP:8080/<random>/ is reachable and the bare domain returns 404. Edit web_path and restart to change it; set it to "" to serve from the domain root. Example: web_path: "/secret" → open http://IP:8080/secret/')}
                   </Typography.Paragraph>
                 </Space>
               </Card>

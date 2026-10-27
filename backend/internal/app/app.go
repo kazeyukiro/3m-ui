@@ -111,11 +111,14 @@ func Run(frontendFS fs.FS) error {
 	}
 
 	r := router.SetupRouterWithDeps(container.RouterDeps())
-	router.MountFrontend(r, frontendFS)
+	router.MountFrontend(r, frontendFS, config.NormalizeWebPath(cfg.Server.WebPath))
+	// WebPathHandler enforces the panel base path (e.g. /secret) before the
+	// Gin route tree is matched, so stripped requests route correctly.
+	handler := router.WebPathHandler(config.NormalizeWebPath(cfg.Server.WebPath), cfg.Server.SubPath, r)
 
 	sslSettings, _ := acme.LoadSettings(db)
 	if sslSettings.Enabled {
-		if err := serveWithSSL(r, sslSettings, cfg.Server.Port); err != nil {
+		if err := serveWithSSL(handler, sslSettings, cfg.Server.Port); err != nil {
 			// Fall back to plain HTTP so the panel remains reachable when TLS
 			// bind / ACME fails (port in use, missing domain, permission, …).
 			log.Printf("[WARNING] panel SSL failed (%v); falling back to HTTP on :%d", err, cfg.Server.Port)
@@ -129,8 +132,11 @@ func Run(frontendFS fs.FS) error {
 	}
 
 	addr := panelListenAddr(cfg.Server.Listen, cfg.Server.Port)
+	if wp := config.NormalizeWebPath(cfg.Server.WebPath); wp != "" {
+		log.Printf("3m-ui panel base path: %s (the panel UI/API is only reachable at /<host>%s/ and the bare domain returns 404)", wp, wp)
+	}
 	log.Printf("3m-ui listening on %s (IPv4/IPv6)", addr)
-	if err := r.Run(addr); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		return fmt.Errorf("run server: %w", err)
 	}
 	return nil

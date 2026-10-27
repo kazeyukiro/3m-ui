@@ -21,6 +21,7 @@ import plPL from 'antd/locale/pl_PL';
 import ukUA from 'antd/locale/uk_UA';
 import { I18nProvider, useI18n } from './i18n';
 import { useThemeStore } from './stores/themeStore';
+import { webPath } from './utils/webPath';
 import AppLayout from './components/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -87,7 +88,7 @@ const ThemedApp: React.FC = () => {
       }}
     >
       <AntApp>
-        <BrowserRouter>
+        <BrowserRouter basename={webPath() || undefined}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/change-password" element={<ChangePassword />} />

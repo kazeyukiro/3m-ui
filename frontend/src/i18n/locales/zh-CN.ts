@@ -1115,7 +1115,7 @@ export default {
     "totpSetupBtn": "设置两步验证",
     "totpEnable": "启用",
     "totpDisable": "关闭两步验证",
-    "webPathHint": "面板路径前缀在 /etc/3m-ui/config.yaml 配置 web_path 后重启。例如 web_path: \"/secret\"，访问 http://IP:8080/secret/",
+    "webPathHint": "首次安装时面板会自动生成一个随机路径前缀（web_path）并写入 /etc/3m-ui/config.yaml——只有 http://IP:8080/<随机>/ 可访问，裸域名返回 404。修改 web_path 后重启即可更换；设为 \"\" 则从域名根路径提供服务。例如 web_path: \"/secret\"，访问 http://IP:8080/secret/",
     "totpDesc": "使用验证器应用保护管理员登录（如 Google Authenticator、微软验证器等）。",
     "totpDisableHint": "关闭两步验证需填写当前密码与验证码。",
     "totpNeedBoth": "请同时填写密码与验证码",
@@ -1196,7 +1196,7 @@ export default {
     "cert_fileHint": "手动证书 PEM 路径（需在允许的目录内）。",
     "key_fileHint": "手动私钥 PEM 路径。",
     "public_urlHint": "面板公网根 URL（OAuth 回调、订阅拼接等）。需含 https://。",
-    "web_pathHint": "面板 UI 可选路径前缀。",
+    "web_pathHint": "可选的隐藏路径前缀。首次安装时随机自动生成以隐藏面板入口；设为 \"\" 则从域名根路径提供服务。",
 
     "restoreAutoReload": "5 秒后自动刷新…",
     "restoreTimeout": "面板 30 秒内未恢复，请手动刷新页面。",

@@ -32,6 +32,48 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
 
+// WebPathHandler wraps an http.Handler so the panel is only reachable under
+// webPath (e.g. /secret). Requests carrying the prefix are stripped to the bare
+// path BEFORE the inner handler's route tree is matched — unlike a Gin middleware,
+// which runs after matching and therefore cannot re-route — the bare prefix
+// redirects to a trailing-slash URL, and everything else (except public health
+// probes, client subscriptions, and the configured sub_path) returns 404 so the
+// entry point is not discoverable by scanning the bare domain.
+func WebPathHandler(webPath, subPath string, inner http.Handler) http.Handler {
+	wp := config.NormalizeWebPath(webPath)
+	if wp == "" {
+		return inner
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == wp {
+			http.Redirect(w, r, wp+"/", http.StatusMovedPermanently)
+			return
+		}
+		if path == wp+"/" || strings.HasPrefix(path, wp+"/") {
+			r.URL.Path = strings.TrimPrefix(path, wp)
+			if r.URL.Path == "" {
+				r.URL.Path = "/"
+			}
+			inner.ServeHTTP(w, r)
+			return
+		}
+		// Public, prefix-less endpoints stay reachable.
+		if strings.HasPrefix(path, "/api/v1/client/") || strings.HasPrefix(path, "/api/client/") ||
+			path == "/api/v1/health" || path == "/healthz" {
+			inner.ServeHTTP(w, r)
+			return
+		}
+		if sp := config.NormalizeSubPath(subPath); sp != "" {
+			if path == sp || strings.HasPrefix(path, sp+"/") {
+				inner.ServeHTTP(w, r)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+}
+
 func SetupRouter(cfg *config.Config) *gin.Engine {
 	return SetupRouterWithDeps(Deps{Config: cfg})
 }
@@ -53,36 +95,8 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 	r.Use(SecurityHeaders())
 	r.Use(CORSMiddleware(cfg.Security.CORSOrigins))
 
-	// Optional panel base path (hide UI/API behind /secret). Public subscription
-	// custom path remains independently configured via sub_path.
-	if webPath := config.NormalizeWebPath(cfg.Server.WebPath); webPath != "" {
-		r.Use(func(c *gin.Context) {
-			path := c.Request.URL.Path
-			if path == webPath || strings.HasPrefix(path, webPath+"/") {
-				c.Request.URL.Path = strings.TrimPrefix(path, webPath)
-				if c.Request.URL.Path == "" {
-					c.Request.URL.Path = "/"
-				}
-				c.Next()
-				return
-			}
-			// Allow health probes and subscription without the secret prefix.
-			if strings.HasPrefix(path, "/api/v1/client/") || strings.HasPrefix(path, "/api/client/") ||
-				path == "/api/v1/health" || path == "/healthz" {
-				c.Next()
-				return
-			}
-			if cfg.Server.SubPath != "" {
-				sp := config.NormalizeSubPath(cfg.Server.SubPath)
-				if path == sp || strings.HasPrefix(path, sp+"/") {
-					c.Next()
-					return
-				}
-			}
-			c.Status(http.StatusNotFound)
-			c.Abort()
-		})
-	}
+	// The optional panel base path (hide UI/API behind /secret) is enforced by
+	// WebPathHandler, which wraps the engine before its route tree is matched.
 
 	RegisterLegacySubscriptionRoutes(r, db, cfg)
 	RegisterCustomSubPathRoutes(r, db, cfg)
@@ -163,7 +177,9 @@ type frontendAsset struct {
 
 // MountFrontend serves embedded assets independently of API/subscription routes.
 // Compression happens once at startup, not on the request path or on disk.
-func MountFrontend(r *gin.Engine, frontendFS fs.FS) {
+// webPath is the active panel base path ("" when served from root); it is
+// injected into index.html so the SPA can build asset/API URLs relative to it.
+func MountFrontend(r *gin.Engine, frontendFS fs.FS, webPath string) {
 	staticFS, err := fs.Sub(frontendFS, "web/dist")
 	if err != nil {
 		log.Printf("frontend assets unavailable: %v", err)
@@ -181,34 +197,17 @@ func MountFrontend(r *gin.Engine, frontendFS fs.FS) {
 		if err != nil {
 			return err
 		}
-		contentType := mime.TypeByExtension(path.Ext(name))
-		if contentType == "" {
-			contentType = http.DetectContentType(data)
-		}
-		asset := frontendAsset{data: data, contentType: contentType, etag: fmt.Sprintf(`"%x"`, sha256.Sum256(data)), cacheControl: "no-cache"}
-		if hashedFrontendAsset.MatchString(name) {
-			asset.cacheControl = "public, max-age=31536000, immutable"
-		}
-		if len(data) >= 1024 && (strings.HasPrefix(contentType, "text/") || strings.Contains(contentType, "javascript") || strings.Contains(contentType, "json") || strings.Contains(contentType, "svg+xml")) {
-			var buffer bytes.Buffer
-			writer := gzip.NewWriter(&buffer)
-			if _, err := writer.Write(data); err != nil {
-				return err
-			}
-			if err := writer.Close(); err != nil {
-				return err
-			}
-			if buffer.Len() < len(data) {
-				asset.compressed = buffer.Bytes()
-				asset.compressedETag = fmt.Sprintf(`"%x"`, sha256.Sum256(asset.compressed))
-			}
-		}
-		assets[name] = asset
+		assets[name] = buildFrontendAsset(name, data)
 		return nil
 	})
 	if err != nil {
 		log.Printf("frontend assets unavailable: %v", err)
 		return
+	}
+	// Inject the active base path so the SPA knows where it is mounted. When the
+	// panel is served from the root (empty webPath) no injection is needed.
+	if idx, ok := assets["index.html"]; ok && webPath != "" {
+		assets["index.html"] = buildFrontendAsset("index.html", injectWebPathMeta(idx.data, webPath))
 	}
 	if _, ok := assets["index.html"]; !ok {
 		log.Printf("frontend index.html unavailable")
@@ -249,6 +248,51 @@ func MountFrontend(r *gin.Engine, frontendFS fs.FS) {
 		c.Header("ETag", etag)
 		http.ServeContent(c.Writer, c.Request, name, time.Time{}, bytes.NewReader(data))
 	})
+}
+
+// buildFrontendAsset pre-computes content type, ETag and optional gzip body
+// (and its ETag) once at startup.
+func buildFrontendAsset(name string, data []byte) frontendAsset {
+	contentType := mime.TypeByExtension(path.Ext(name))
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	asset := frontendAsset{
+		data:         data,
+		contentType:  contentType,
+		etag:         fmt.Sprintf(`"%x"`, sha256.Sum256(data)),
+		cacheControl: "no-cache",
+	}
+	if hashedFrontendAsset.MatchString(name) {
+		asset.cacheControl = "public, max-age=31536000, immutable"
+	}
+	if len(data) >= 1024 && (strings.HasPrefix(contentType, "text/") || strings.Contains(contentType, "javascript") || strings.Contains(contentType, "json") || strings.Contains(contentType, "svg+xml")) {
+		var buffer bytes.Buffer
+		writer := gzip.NewWriter(&buffer)
+		if _, err := writer.Write(data); err != nil {
+			return asset
+		}
+		if err := writer.Close(); err != nil {
+			return asset
+		}
+		if buffer.Len() < len(data) {
+			asset.compressed = buffer.Bytes()
+			asset.compressedETag = fmt.Sprintf(`"%x"`, sha256.Sum256(asset.compressed))
+		}
+	}
+	return asset
+}
+
+// injectWebPathMeta embeds the active panel base path into index.html as a
+// <meta> tag (not a <script>, which would be blocked by the page CSP) so the
+// SPA can compute asset and API URLs relative to it. An empty webPath yields "".
+func injectWebPathMeta(data []byte, webPath string) []byte {
+	meta := fmt.Sprintf("<meta name=\"x-web-path\" content=%q>", webPath)
+	s := string(data)
+	if i := strings.Index(s, "</head>"); i >= 0 {
+		return []byte(s[:i] + meta + s[i:])
+	}
+	return []byte(meta + s)
 }
 
 func acceptsFrontendGzip(values []string) bool {
