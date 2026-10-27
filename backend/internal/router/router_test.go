@@ -382,6 +382,12 @@ func TestWebPathHidesPanel(t *testing.T) {
 		{"/secret/api/v1/health", 200, false},
 		{"/secret/assets/index.js", 200, false},
 		{"/assets/index.js", 404, false},
+		// SPA deep links: refreshing /secret/nodes in a browser must hand back
+		// the shell — carrying the injected meta — while the same link on the
+		// bare domain stays hidden.
+		{"/secret/nodes", 200, true},
+		{"/secret/settings", 200, true},
+		{"/nodes", 404, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {

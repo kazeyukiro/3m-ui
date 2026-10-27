@@ -78,6 +78,13 @@ func main() {
 		}
 		initialized.PrintCredentials(os.Stdout)
 		fmt.Printf("Configuration: %s\nPanel port: %d\n", configPath, initialized.Config.Server.Port)
+		// The panel hides behind a random base path, so the one doing the install
+		// has to be told where it ended up — otherwise the first visit to their
+		// own domain is a 404. Print it even when no admin was created (an
+		// existing install re-running init may not print credentials).
+		if webPath := config.NormalizeWebPath(initialized.Config.Server.WebPath); webPath != "" {
+			fmt.Printf("Panel path: %s/ (panel UI/API live under this prefix; the bare domain returns 404)\n", webPath)
+		}
 		return
 	}
 	if cmd == "healthcheck" {

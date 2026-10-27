@@ -43,6 +43,39 @@ service_action() {
   esac
 }
 
+# Primary IPv4 address of this host; empty when it cannot be determined.
+# Only the local routing table is consulted — this never needs outbound
+# connectivity, so it also works on hosts behind NAT or with no internet.
+server_ip() {
+  ip -4 route get 1.1.1.1 2>/dev/null |
+    awk '{ for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }'
+}
+
+# Read a key from the server: block of the config file, scoped the same way
+# `config port` does it so a key of the same name elsewhere is never picked up.
+panel_setting() { # <key> <fallback>
+  [ -f "$CONFIG_FILE" ] || { printf '%s' "$2"; return 0; }
+  _v=$(awk -v key="$1:" '
+    /^[^[:space:]#]/ { inblk = (/^server:/) }
+    inblk && $1 == key { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+  ' "$CONFIG_FILE" 2>/dev/null)
+  printf '%s' "${_v:-$2}"
+}
+
+# The panel base path as a URL prefix: "/" for the domain root, otherwise
+# "/<path>/". The random path hides the panel, so it has to be shown here —
+# otherwise the first visit to one's own domain is a 404.
+panel_web_path() {
+  _wp=$(panel_setting web_path '' | tr -d '" ')
+  _wp=${_wp%/}
+  case "$_wp" in
+    '' | /) _wp='/' ;;
+    /*) _wp="$_wp/" ;;
+    *) _wp="/$_wp/" ;;
+  esac
+  printf '%s' "$_wp"
+}
+
 status() {
   case "$(init_system)" in
     systemd) systemctl --no-pager --full status "$SERVICE" || true ;;
@@ -62,6 +95,9 @@ status() {
   else
     say "Application binary not found: $APP_BIN"
   fi
+  _host=$(server_ip)
+  [ -n "$_host" ] || _host='<server-ip>'
+  say "Panel URL: http://${_host}:$(panel_setting port 8080)$(panel_web_path)"
 }
 
 logs() {
