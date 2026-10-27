@@ -63,11 +63,23 @@ def main():
         again = subprocess.run([panel, "init"], env=env, capture_output=True, text=True, check=True)
         assert "Initial password:" not in again.stdout, "Repeated init reset credentials"
         assert hashlib.sha256(config.read_bytes()).hexdigest() == fingerprint, "Repeated init changed keys"
+        # The panel hides its API behind a random base path generated on the
+        # first install, so every call has to be made under it: a bare
+        # /api/v1/... is a 404 by design. Read the path back from the config
+        # the init run above has just written, and use it for every request.
+        web_path = ""
+        match = re.search(r"^[ \t]*web_path:[ \t]*\"?([^\"\n]*?)\"?[ \t]*$", config.read_text(), re.M)
+        if match:
+            value = match.group(1).strip().rstrip("/")
+            if value and value != "/":
+                web_path = value if value.startswith("/") else f"/{value}"
+        assert web_path, "First install did not generate a random panel base path"
+
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         token = None
 
         def api(route, body=None):
-            request = urllib.request.Request(f"http://127.0.0.1:{port}/api/v1/{route}",
+            request = urllib.request.Request(f"http://127.0.0.1:{port}{web_path}/api/v1/{route}",
                                              data=None if body is None else json.dumps(body).encode())
             request.add_header("Content-Type", "application/json")
             if token:
@@ -98,6 +110,14 @@ def main():
             stack.callback(stop_core)
             log = stack.enter_context((root / "panel.log").open("w+"))
             running = start_panel(log)
+            # The bare API must stay hidden — that is the whole point of the
+            # random path, so assert it as soon as the panel comes up.
+            bare = urllib.request.Request(f"http://127.0.0.1:{port}/api/v1/auth/login", data=b"{}")
+            try:
+                with opener.open(bare, timeout=10) as response:
+                    raise AssertionError("bare /api/v1/auth/login is reachable; the panel is not hidden")
+            except urllib.error.HTTPError as error:
+                assert error.code == 404, f"bare API returned HTTP {error.code}, expected 404"
             token = api("auth/login", {"username": "admin", "password": password})["token"]
             password = "smoke-" + secrets.token_urlsafe(20)
             original = re.search(r"^Initial password: (.+)$", initialized.stdout, re.M).group(1)
