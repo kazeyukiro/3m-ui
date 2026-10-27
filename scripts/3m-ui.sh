@@ -97,7 +97,14 @@ status() {
   fi
   _host=$(server_ip)
   [ -n "$_host" ] || _host='<server-ip>'
-  say "Panel URL: http://${_host}:$(panel_setting port 8080)$(panel_web_path)"
+  _port=$(panel_setting port 8080)
+  # Port 443 means the panel terminates TLS itself (80 redirects to it), so
+  # print the URL you can actually open instead of an http:// one on :443.
+  if [ "$_port" = 443 ]; then
+    say "Panel URL: https://${_host}$(panel_web_path)"
+  else
+    say "Panel URL: http://${_host}:${_port}$(panel_web_path)"
+  fi
 }
 
 logs() {

@@ -740,7 +740,13 @@ main(){
     /*) panel_path="$panel_path/" ;;
     *) panel_path="/$panel_path/" ;;
   esac
-  say "Panel URL: http://${panel_ip}:${panel_port}${panel_path}"
+  # Port 443 means the panel terminates TLS itself (80 redirects to it), so
+  # print the URL you can actually open instead of an http:// one on :443.
+  if [ "$panel_port" = 443 ]; then
+    say "Panel URL: https://${panel_ip}${panel_path}"
+  else
+    say "Panel URL: http://${panel_ip}:${panel_port}${panel_path}"
+  fi
   say "Management: 3m-ui   Backup: $SNAPSHOT"
 }
 main "$@"
