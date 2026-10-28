@@ -695,6 +695,24 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 	return result, nil
 }
 
+// splitALPNList turns the panel's CSV storage form ("h2,http/1.1") into the
+// string list every client expects. Commas and semicolons are separators;
+// whitespace alone is not, because protocol names never contain it.
+func splitALPNList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ';' })
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if s := strings.TrimSpace(part); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // normalizeClientAlpn converts scalar alpn values into the string-list form
 // clients expect. A stray empty scalar is dropped so the protocol defaults
 // apply instead of an invalid empty list.
@@ -705,16 +723,16 @@ func normalizeClientAlpn(p map[string]interface{}) {
 	}
 	switch val := v.(type) {
 	case string:
-		if s := strings.TrimSpace(val); s != "" {
-			p["alpn"] = []string{s}
+		if list := splitALPNList(val); len(list) > 0 {
+			p["alpn"] = list
 		} else {
 			delete(p, "alpn")
 		}
 	case []interface{}:
 		out := make([]string, 0, len(val))
 		for _, item := range val {
-			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
-				out = append(out, strings.TrimSpace(s))
+			if s, ok := item.(string); ok {
+				out = append(out, splitALPNList(s)...)
 			}
 		}
 		if len(out) > 0 {
@@ -1192,9 +1210,22 @@ func ensureClientAccessTLS(p map[string]interface{}, l models.Listener, server s
 		if headers == nil {
 			headers = map[string]interface{}{}
 		}
-		if h, _ := headers["Host"].(string); strings.TrimSpace(h) == "" && domainHint {
+		// The dial address (p["server"]) is never a valid Host identity: it may
+		// be a bare IP while the edge routes on the SNI hostname. copyTransport
+		// leaves headers empty in that case, and the resolved hint fills it here
+		// once BuildProfile has consulted the certificate / access_sni.
+		if h, _ := headers["Host"].(string); domainHint && (strings.TrimSpace(h) == "" || net.ParseIP(strings.Trim(h, "[]")) != nil) {
 			headers["Host"] = hint
 			ws["headers"] = headers
+		}
+	}
+
+	// ALPN: listener.access_alpn is the client-facing override and must reach
+	// every plain-TLS client (YAML, sing-box). Reality keeps its own pairing
+	// from reality-config, so it is left untouched.
+	if _, isReality := p["reality-opts"]; !isReality {
+		if list := splitALPNList(l.AccessALPN); len(list) > 0 {
+			p["alpn"] = list
 		}
 	}
 }
@@ -1329,9 +1360,12 @@ func copyTransport(dst, src map[string]interface{}) {
 			}
 		}
 		// CDN-fronted WS clients need a Host header. If the listener left
-		// ws-headers empty, reuse TLS SNI / servername / server from the proxy.
+		// ws-headers empty, reuse TLS SNI / servername from the proxy. The dial
+		// address (server) is deliberately NOT a candidate: it is frequently a
+		// raw IP while the edge routes on the hostname, so ensureClientAccessTLS
+		// fills the field later from the resolved access identity.
 		if hostStr, _ := headers["Host"].(string); strings.TrimSpace(hostStr) == "" {
-			for _, key := range []string{"sni", "servername", "server"} {
+			for _, key := range []string{"sni", "servername"} {
 				if v, ok := dst[key].(string); ok && strings.TrimSpace(v) != "" {
 					headers["Host"] = strings.TrimSpace(v)
 					break

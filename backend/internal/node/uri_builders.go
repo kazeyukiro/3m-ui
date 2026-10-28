@@ -137,7 +137,44 @@ func tlsParams(cfg map[string]interface{}, connectHost string) map[string]string
 	if params["security"] == "tls" && params["fp"] == "" {
 		params["fp"] = "chrome"
 	}
+	// ALPN: listener.access_alpn is the client-facing override. It must reach the
+	// link as well, otherwise the same node advertises different TLS handshakes
+	// through YAML (alpn list) and through a share URI (absent).
+	if params["security"] == "tls" {
+		if raw, ok := cfg["alpn"]; ok {
+			if list := alpnStringList(raw); len(list) > 0 {
+				params["alpn"] = strings.Join(list, ",")
+			}
+		}
+	}
 	return params
+}
+
+// alpnStringList normalizes the accepted alpn storage shapes (CSV string,
+// []string, []interface{}) into a clean list.
+func alpnStringList(raw interface{}) []string {
+	var out []string
+	switch v := raw.(type) {
+	case string:
+		for _, part := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ';' }) {
+			if s := strings.TrimSpace(part); s != "" {
+				out = append(out, s)
+			}
+		}
+	case []string:
+		for _, part := range v {
+			if s := strings.TrimSpace(part); s != "" {
+				out = append(out, s)
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+	}
+	return out
 }
 
 func transportParams(cfg map[string]interface{}) map[string]string {
