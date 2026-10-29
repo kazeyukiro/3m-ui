@@ -260,8 +260,7 @@ func writeSubHeaders(c *gin.Context, db *gorm.DB, pu *models.ProxyUser) {
 			tok = strings.TrimSpace(c.Param("token"))
 		}
 		if tok != "" {
-			scheme := requestScheme(c)
-			c.Header("Profile-Web-Page-Url", scheme+"://"+c.Request.Host+"/api/v1/client/sub/"+url.PathEscape(tok)+"?html=1")
+			c.Header("Profile-Web-Page-Url", subBaseURL(c, tok)+"?html=1")
 		}
 	}
 	c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(title)+`.yaml"`)
@@ -364,8 +363,7 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 		if !pu.ExpireTime.IsZero() {
 			expire = pu.ExpireTime.UTC().Format(time.RFC3339)
 		}
-		scheme := requestScheme(c)
-		base := scheme + "://" + c.Request.Host + "/api/v1/client/sub/" + url.PathEscape(tok)
+		base := subBaseURL(c, tok)
 		c.JSON(http.StatusOK, gin.H{
 			"username":       pu.Username,
 			"remark":         pu.Remark,
@@ -386,8 +384,8 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 				"loon":       base + "?target=loon",
 				"surge":      base + "?target=surge",
 				"quanx":      base + "?target=quanx",
-				"json":       scheme + "://" + c.Request.Host + "/api/v1/client/json/" + url.PathEscape(tok),
-				"clash_path": scheme + "://" + c.Request.Host + "/api/v1/client/clash/" + url.PathEscape(tok),
+				"json":       subRootURL(c) + "json/" + url.PathEscape(tok),
+				"clash_path": subRootURL(c) + "clash/" + url.PathEscape(tok),
 				"html":       base + "?html=1",
 				"info":       base + "?format=info",
 			},
@@ -409,6 +407,23 @@ func writeSubInfo(c *gin.Context, db *gorm.DB, tok string) {
 		"listener_id": access.ListenerID,
 		"expire_at":   access.ExpireAt,
 	})
+}
+
+// subRootURL is the panel's client API root (scheme://host<basePath>/api/v1/client/),
+// including the random "hidden entry" prefix when one is configured.
+func subRootURL(c *gin.Context) string {
+	prefix := strings.TrimSuffix(c.GetHeader("X-Web-Path"), "/")
+	return requestScheme(c) + "://" + c.Request.Host + prefix + "/api/v1/client/"
+}
+
+// subBaseURL builds the canonical subscription URL for a token, including the
+// panel base path (the random "hidden entry" prefix) when the request arrived
+// under one. WebPathHandler records the stripped prefix in the X-Web-Path
+// header, so links / QR codes / app deep links rendered on the subscription
+// page stay reachable through the hidden path instead of pointing at the bare
+// domain (which always 404s).
+func subBaseURL(c *gin.Context, tok string) string {
+	return subRootURL(c) + "sub/" + url.PathEscape(tok)
 }
 
 func detectSubTarget(ua string) string {
@@ -442,9 +457,7 @@ func detectSubTarget(ua string) string {
 }
 
 func writeSubHTML(c *gin.Context, db *gorm.DB, cfg *config.Config, pu models.ProxyUser, tok string) {
-	scheme := requestScheme(c)
-	host := c.Request.Host
-	base := scheme + "://" + host + "/api/v1/client/sub/" + url.PathEscape(tok)
+	base := subBaseURL(c, tok)
 	var links []string
 	if raw, err := converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials); err == nil {
 		if decoded, err := base64.StdEncoding.DecodeString(string(raw)); err == nil {

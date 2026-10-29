@@ -167,7 +167,7 @@ func testViewModel() ViewModel {
 // returns the raw HTML bytes.
 func renderTestPage(t *testing.T) []byte {
 	t.Helper()
-	tpl, err := loadTemplate("")
+	tpl, err := loadTemplate("", "blue")
 	if err != nil {
 		t.Fatalf("loadTemplate: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestDefaultTemplateRenders(t *testing.T) {
 }
 
 func TestDefaultTemplateNoNoticesNoNodes(t *testing.T) {
-	tpl, err := loadTemplate("")
+	tpl, err := loadTemplate("", "blue")
 	if err != nil {
 		t.Fatalf("loadTemplate: %v", err)
 	}

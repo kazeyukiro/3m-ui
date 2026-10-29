@@ -55,6 +55,13 @@ func WebPathHandler(webPath, subPath string, inner http.Handler) http.Handler {
 			if r.URL.Path == "" {
 				r.URL.Path = "/"
 			}
+			// Propagate the stripped panel base path so subscription pages and
+			// their links/QR codes stay reachable under the hidden entry point
+			// (e.g. /secret/api/v1/client/sub/:token?html=1 renders links that
+			// include /secret/). The public /api/v1/client/ branch below does
+			// not set this header, which is correct: those requests carry no
+			// secret prefix.
+			r.Header.Set("X-Web-Path", wp)
 			inner.ServeHTTP(w, r)
 			return
 		}
