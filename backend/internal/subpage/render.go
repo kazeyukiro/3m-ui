@@ -27,7 +27,6 @@ const (
 	settingKeyWebPage  = "sub_web_page_url"
 	settingKeyUpdates  = "sub_updates"
 	settingKeyEncrypt  = "sub_encrypt"
-	settingKeyTheme    = "sub_theme"
 )
 
 // Notice size caps. The notice list is operator-authored panel content, but a
@@ -118,7 +117,6 @@ type ViewModel struct {
 // Settings holds subscription page branding options stored in PanelSetting.
 type Settings struct {
 	ThemeDir    string `json:"theme_dir"`
-	Theme       string `json:"theme"` // built-in theme id: "blue" (default) | "classic"
 	Title       string `json:"title"`
 	SupportURL  string `json:"support_url"`
 	Announce    string `json:"announce"`
@@ -131,14 +129,11 @@ type Settings struct {
 }
 
 func LoadPageSettings(db *gorm.DB) Settings {
-	s := Settings{Title: "3m-ui Subscription", UpdateHours: 12, Encrypt: true, Theme: "blue"}
+	s := Settings{Title: "3m-ui Subscription", UpdateHours: 12, Encrypt: true}
 	if db == nil {
 		return s
 	}
 	s.ThemeDir = getSetting(db, settingKeyThemeDir)
-	if t := getSetting(db, settingKeyTheme); t != "" {
-		s.Theme = t
-	}
 	if t := getSetting(db, settingKeyTitle); t != "" {
 		s.Title = t
 	}
@@ -175,7 +170,6 @@ func SavePageSettings(db *gorm.DB, s Settings) error {
 	}
 	for _, kv := range []struct{ k, v string }{
 		{settingKeyThemeDir, themeDir},
-		{settingKeyTheme, strings.TrimSpace(s.Theme)},
 		{settingKeyTitle, strings.TrimSpace(s.Title)},
 		{settingKeySupport, strings.TrimSpace(s.SupportURL)},
 		{settingKeyAnnounce, strings.TrimSpace(s.Announce)},
@@ -307,7 +301,7 @@ func RenderHTML(db *gorm.DB, pu models.ProxyUser, subBase string, links []string
 		SingboxDeepLink: template.URL("sing-box://import-remote?url=" + url.QueryEscape(base+"?target=singbox")),
 	}
 
-	tpl, err := loadTemplate(page.ThemeDir, page.Theme)
+	tpl, err := loadTemplate(page.ThemeDir)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +349,7 @@ func sanitizeThemeDir(themeDir string) string {
 	return ""
 }
 
-func loadTemplate(themeDir, theme string) (*template.Template, error) {
+func loadTemplate(themeDir string) (*template.Template, error) {
 	themeDir = sanitizeThemeDir(themeDir)
 	if themeDir != "" {
 		for _, name := range []string{"index.html", "sub.html"} {
@@ -365,14 +359,7 @@ func loadTemplate(themeDir, theme string) (*template.Template, error) {
 			}
 		}
 	}
-	// Built-in themes. "classic" is the original dark template; "blue" is the
-	// default mobile-first light/blue theme. Any unknown value falls back to blue.
-	switch strings.ToLower(strings.TrimSpace(theme)) {
-	case "classic":
-		return template.New("sub").Parse(defaultHTML)
-	default:
-		return template.New("sub").Parse(defaultBlueHTML)
-	}
+	return template.New("sub").Parse(defaultHTML)
 }
 
 func formatBytes(n int64) string {
