@@ -591,7 +591,7 @@ export default {
   },
   "core": {
     "title": "核心管理",
-    "subtitle": "Mihomo 核心状态与控制。",
+    "subtitle": "Mihomo 核心状态与控制",
     "status": "核心状态",
     "running": "运行中",
     "stoppedStatus": "已停止",
@@ -656,7 +656,7 @@ export default {
   },
   "logs": {
     "title": "运行日志",
-    "subtitle": "Mihomo 核心日志与面板进程日志（分开显示）。",
+    "subtitle": "Mihomo 核心日志与面板进程日志（分开显示）",
     "empty": "暂无日志",
     "level": "级别",
     "timestamp": "时间",
@@ -715,7 +715,7 @@ export default {
   },
   "users": {
     "title": "用户管理",
-    "subtitle": "管理账号、流量、节点绑定与订阅。",
+    "subtitle": "管理账号、流量、节点绑定与订阅",
     "batch": "批量操作",
     "create": "创建用户",
     "edit": "编辑用户",
@@ -826,7 +826,7 @@ export default {
   },
   "traffic": {
     "title": "流量监控",
-    "subtitle": "实时连接与流量统计。",
+    "subtitle": "实时连接与流量统计",
     "upload": "上传",
     "download": "下载",
     "uploadRate": "上传速率",
@@ -1242,7 +1242,7 @@ export default {
   },
   "share": {
     "title": "分享 / 订阅",
-    "subtitle": "统一查看用户订阅链接与已绑定节点的分享 URI。",
+    "subtitle": "统一查看用户订阅链接与已绑定节点的分享 URI",
     "selectUser": "选择用户",
     "tabSub": "订阅链接",
     "tabUri": "节点 URI",
