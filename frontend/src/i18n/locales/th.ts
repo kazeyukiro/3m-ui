@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "เปิดใช้ HTTPS สำหรับแผง แนะนำ ACME (Let’s Encrypt) หรือระบุพาธ cert/key เอง",
     "subEncryptHint": "เมื่อเปิด รายการ URI จะถูกเข้ารหัส Base64 (พบได้ในไคลเอนต์แบบ Clash/V2Ray)",
     "subUpdatesHint": "ช่วงเวลาที่แนะนำให้ไคลเอนต์รีเฟรชสมัครสมาชิก หน่วยชั่วโมง (1–168)",
-    "subWebPageHint": "ลิงก์เว็บภายนอก (ไม่บังคับ) ที่แสดงบนหน้าสมัครสมาชิก",
+    "subWebPageHint": "ส่งไปยังไคลเอนต์เป็นเฮดเดอร์การสมัครสมาชิก Profile-Web-Page-Url โดยไคลเอนต์จะแสดงเป็นเว็บไซต์ของการสมัครสมาชิกนี้ ปล่อยว่างเพื่อใช้หน้าสมัครสมาชิกของแผงควบคุม",
     "subAnnounceHint": "ข้อความประกาศที่แสดงบนหน้าสมัครสมาชิกแบบ HTML",
     "githubCallbackHint": "ต้องมี https:// หรือ http:// และตรงกับ public_url ตัวอย่าง: https://panel.example.com/api/v1/auth/oauth/github/callback — public_url ไม่ต้องมีเครื่องหมายทับท้าย",
     "githubCallbackLabel": "Callback URL (ต้องตรงกับ Redirect URI ของ OAuth App)",

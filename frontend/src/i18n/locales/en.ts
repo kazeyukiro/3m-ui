@@ -981,7 +981,7 @@ export default {
     "sslEnabledHint": "Enable HTTPS for the panel. Prefer ACME (Let’s Encrypt) or provide manual cert/key paths.",
     "subEncryptHint": "When on, the plain URI list is Base64-encoded (common for Clash/V2Ray style clients).",
     "subUpdatesHint": "Client recommended subscription refresh interval, in hours (1–168).",
-    "subWebPageHint": "Optional external website link shown on the subscription page.",
+    "subWebPageHint": "Sent to clients as the Profile-Web-Page-Url subscription header; they show it as this subscription's website. Leave empty to fall back to this panel's own subscription page.",
     "subAnnounceHint": "Announcement text shown on the HTML subscription page (single line, notice-block fallback).",
     "subNotices": "Notice block",
     "subNoticesHint": "Dedicated notice block on the subscription page, one notice per line: [*]date|title|desc. Date is optional; a leading * pins the notice (expanded by default); lines starting with # are comments. Up to 20 notices.",

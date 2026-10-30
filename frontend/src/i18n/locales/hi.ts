@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "पैनल के लिए HTTPS सक्षम करें। ACME (Let’s Encrypt) बेहतर, या मैन्युअल cert/key पथ दें।",
     "subEncryptHint": "चालू रहने पर URI सूची Base64 में एन्कोड होती है (Clash/V2Ray शैली क्लाइंट में आम)।",
     "subUpdatesHint": "क्लाइंट के लिए अनुशंसित सब्सक्रिप्शन रीफ़्रेश अंतराल, घंटों में (1–168)।",
-    "subWebPageHint": "सब्सक्रिप्शन पृष्ठ पर दिखने वाला वैकल्पिक बाहरी वेबसाइट लिंक।",
+    "subWebPageHint": "क्लाइंट को Profile-Web-Page-Url सब्सक्रिप्शन हेडर के रूप में भेजा जाता है; वे इसे इस सब्सक्रिप्शन की वेबसाइट के रूप में दिखाते हैं। पैनल के अपने सब्सक्रिप्शन पृष्ठ का उपयोग करने के लिए खाली छोड़ दें।",
     "subAnnounceHint": "HTML सब्सक्रिप्शन पृष्ठ पर दिखने वाली घोषणा।",
     "githubCallbackHint": "https:// या http:// शामिल होना चाहिए और public_url से मेल खाना चाहिए। उदाहरण: https://panel.example.com/api/v1/auth/oauth/github/callback — public_url के अंत में स्लैश न हो।",
     "githubCallbackLabel": "कॉलबैक URL (OAuth App के Redirect URI से मेल खाना चाहिए)",

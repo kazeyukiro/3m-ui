@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Увімкнути HTTPS для панелі. Використовуйте ACME (Let’s Encrypt) або вкажіть шляхи до своїх сертифіката і ключа.",
     "subEncryptHint": "Якщо увімкнено, список URI кодується в Base64 (зазвичай для клієнтів Clash/V2Ray).",
     "subUpdatesHint": "Рекомендований інтервал оновлення підписки клієнтом, у годинах (1–168).",
-    "subWebPageHint": "Необовʼязкове посилання на зовнішній сайт, яке показується на сторінці підписки.",
+    "subWebPageHint": "Надсилається клієнтам як заголовок підписки Profile-Web-Page-Url; вони показують його як сайт цієї підписки. Залиште порожнім, щоб використовувати сторінку підписки панелі.",
     "subAnnounceHint": "Текст оголошення на HTML-сторінці підписки.",
     "githubCallbackHint": "Має містити https:// або http:// і збігатися з public_url. Приклад: https://panel.example.com/api/v1/auth/oauth/github/callback. Без кінцевого слеша в public_url.",
     "githubCallbackLabel": "Callback URL (має збігатися з Redirect URI в OAuth App)",

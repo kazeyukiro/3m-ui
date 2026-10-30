@@ -981,7 +981,7 @@ export default {
     "sslEnabledHint": "为面板启用 HTTPS。可用 ACME（Let’s Encrypt）或手动填写证书/私钥路径。",
     "subEncryptHint": "开启后对 URI 列表做 Base64 编码（常见于 Clash/V2Ray 客户端）。",
     "subUpdatesHint": "建议客户端刷新订阅的间隔（小时，1–168）。",
-    "subWebPageHint": "订阅页可选的外部网站链接。",
+    "subWebPageHint": "会作为 Profile-Web-Page-Url 订阅响应头发给客户端，客户端将其显示为该订阅的网页入口；留空则回退到本面板自带的订阅页。",
     "subAnnounceHint": "HTML 订阅页上显示的公告文案（单条，作为公告区块兜底）。",
     "subNotices": "公告区块",
     "subNoticesHint": "订阅页独立公告区块，每行一条：[*]日期|标题|详情。日期可省略；行首 * 表示置顶（默认展开详情）；# 开头为注释。最多 20 条。",

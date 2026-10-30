@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "تمكين HTTPS للوحة. يُفضّل ACME (Let’s Encrypt) أو إدخال مسارات شهادة/مفتاح يدوية.",
     "subEncryptHint": "عند التفعيل تُرمَّز قائمة URI بـ Base64 (شائع في عملاء Clash/V2Ray).",
     "subUpdatesHint": "الفاصل الزمني المقترح لتحديث الاشتراك في العميل، بالساعات (1–168).",
-    "subWebPageHint": "رابط موقع خارجي اختياري يظهر في صفحة الاشتراك.",
+    "subWebPageHint": "يُرسل إلى العملاء كترويسة اشتراك Profile-Web-Page-Url، ويعرضونه كموقع لهذا الاشتراك. اتركه فارغًا لاستخدام صفحة الاشتراك الخاصة باللوحة.",
     "subAnnounceHint": "نص الإعلان الظاهر في صفحة الاشتراك HTML.",
     "githubCallbackHint": "يجب أن يتضمن https:// أو http:// وأن يطابق public_url. مثال: https://panel.example.com/api/v1/auth/oauth/github/callback — بدون شرطة مائلة في نهاية public_url.",
     "githubCallbackLabel": "رابط الاستدعاء (يجب أن يطابق Redirect URI في تطبيق OAuth)",

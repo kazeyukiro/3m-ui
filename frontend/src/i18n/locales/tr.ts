@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Panel için HTTPS’yi etkinleştirin. ACME (Let’s Encrypt) kullanın veya elle sertifika/anahtar yolu verin.",
     "subEncryptHint": "Açıkken URI listesi Base64 ile kodlanır (Clash/V2Ray tarzı istemcilerde yaygın).",
     "subUpdatesHint": "İstemci için önerilen abonelik yenileme aralığı, saat cinsinden (1–168).",
-    "subWebPageHint": "Abonelik sayfasında gösterilen isteğe bağlı harici site bağlantısı.",
+    "subWebPageHint": "İstemcilere Profile-Web-Page-Url abonelik başlığı olarak gönderilir ve bu aboneliğin web sitesi olarak gösterilir. Panelin kendi abonelik sayfasını kullanmak için boş bırakın.",
     "subAnnounceHint": "HTML abonelik sayfasında görünen duyuru metni.",
     "githubCallbackHint": "https:// veya http:// içermeli ve public_url ile eşleşmeli. Örnek: https://panel.example.com/api/v1/auth/oauth/github/callback — public_url sonunda eğik çizgi olmasın.",
     "githubCallbackLabel": "Callback URL (OAuth App Redirect URI ile aynı olmalı)",

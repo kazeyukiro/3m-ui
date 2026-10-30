@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Włącz HTTPS dla panelu. Użyj ACME (Let’s Encrypt) lub podaj własne ścieżki certyfikatu i klucza.",
     "subEncryptHint": "Gdy włączone, lista URI jest kodowana Base64 (typowe dla klientów Clash/V2Ray).",
     "subUpdatesHint": "Zalecany interwał odświeżania subskrypcji przez klienta, w godzinach (1–168).",
-    "subWebPageHint": "Opcjonalny link do zewnętrznej strony wyświetlany na stronie subskrypcji.",
+    "subWebPageHint": "Wysyłane do klientów jako nagłówek subskrypcji Profile-Web-Page-Url; wyświetlają je jako witrynę tej subskrypcji. Pozostaw puste, aby użyć strony subskrypcji panelu.",
     "subAnnounceHint": "Tekst ogłoszenia wyświetlany na stronie HTML subskrypcji.",
     "githubCallbackHint": "Musi zawierać https:// lub http:// i być zgodny z public_url. Przykład: https://panel.example.com/api/v1/auth/oauth/github/callback — public_url bez końcowego ukośnika.",
     "githubCallbackLabel": "Callback URL (musi być zgodny z Redirect URI w OAuth App)",

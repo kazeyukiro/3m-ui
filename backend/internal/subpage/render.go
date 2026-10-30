@@ -82,8 +82,6 @@ type ViewModel struct {
 	ExpireTime    string
 	IPLimit       int
 	SubURL        string
-	SubJSONURL    string
-	SubClashURL   string
 	SubV2RayURL   string
 	SubTitle      string
 	SubSupportURL string
@@ -276,8 +274,6 @@ func RenderHTML(db *gorm.DB, pu models.ProxyUser, subBase string, links []string
 		ExpireTime:    expire,
 		IPLimit:       pu.IPLimit,
 		SubURL:        base,
-		SubJSONURL:    base + "?target=singbox",
-		SubClashURL:   base + "?target=clash",
 		SubV2RayURL:   base + "?target=v2ray",
 		SubTitle:      page.Title,
 		PageTitle:     pageTitle,

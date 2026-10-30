@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Ativa HTTPS para o painel. Prefira ACME (Let’s Encrypt) ou informe caminhos manuais de certificado/chave.",
     "subEncryptHint": "Quando ativo, a lista de URI é codificada em Base64 (comum em clientes Clash/V2Ray).",
     "subUpdatesHint": "Intervalo de atualização da assinatura recomendado ao cliente, em horas (1–168).",
-    "subWebPageHint": "Link de site externo opcional exibido na página de assinatura.",
+    "subWebPageHint": "Enviado aos clientes como o cabeçalho de assinatura Profile-Web-Page-Url; eles o exibem como o site desta assinatura. Deixe vazio para usar a página de assinatura do painel.",
     "subAnnounceHint": "Texto de anúncio exibido na página HTML da assinatura.",
     "githubCallbackHint": "Deve incluir https:// ou http:// e corresponder a public_url. Exemplo: https://panel.example.com/api/v1/auth/oauth/github/callback — sem barra final em public_url.",
     "githubCallbackLabel": "URL de callback (deve corresponder à Redirect URI do OAuth App)",

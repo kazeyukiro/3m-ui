@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Bật HTTPS cho panel. Nên dùng ACME (Let’s Encrypt) hoặc cung cấp đường dẫn cert/key thủ công.",
     "subEncryptHint": "Khi bật, danh sách URI được mã hóa Base64 (thường dùng cho client kiểu Clash/V2Ray).",
     "subUpdatesHint": "Khoảng thời gian làm mới đăng ký khuyến nghị cho client, tính bằng giờ (1–168).",
-    "subWebPageHint": "Liên kết website ngoài (tùy chọn) hiển thị trên trang đăng ký.",
+    "subWebPageHint": "Được gửi tới client dưới dạng header đăng ký Profile-Web-Page-Url; client hiển thị nó là trang web của đăng ký này. Để trống sẽ dùng trang đăng ký của panel.",
     "subAnnounceHint": "Nội dung thông báo hiển thị trên trang đăng ký HTML.",
     "githubCallbackHint": "Phải có https:// hoặc http:// và khớp với public_url. Ví dụ: https://panel.example.com/api/v1/auth/oauth/github/callback — public_url không có dấu gạch chéo ở cuối.",
     "githubCallbackLabel": "Callback URL (phải khớp Redirect URI của OAuth App)",

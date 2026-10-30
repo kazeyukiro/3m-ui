@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Activer HTTPS pour le panneau. Préférez ACME (Let’s Encrypt) ou indiquez des chemins de certificat/clé manuels.",
     "subEncryptHint": "Si activé, la liste d’URI en clair est encodée en Base64 (courant sur les clients Clash/V2Ray).",
     "subUpdatesHint": "Intervalle de rafraîchissement d’abonnement recommandé au client, en heures (1–168).",
-    "subWebPageHint": "Lien de site web externe optionnel affiché sur la page d’abonnement.",
+    "subWebPageHint": "Envoyé aux clients comme en-tête d'abonnement Profile-Web-Page-Url ; ils l'affichent comme le site de cet abonnement. Laissez vide pour utiliser la page d'abonnement du panneau.",
     "subAnnounceHint": "Texte d’annonce affiché sur la page d’abonnement HTML.",
     "githubCallbackHint": "Doit inclure https:// ou http:// et correspondre à public_url. Exemple : https://panel.example.com/api/v1/auth/oauth/github/callback — pas de slash final dans public_url.",
     "githubCallbackLabel": "URL de callback (doit correspondre à l’URI de redirection de l’OAuth App)",

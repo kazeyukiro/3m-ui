@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "패널에 HTTPS를 사용합니다. ACME(Let's Encrypt)를 사용하거나 수동 인증서/키 경로를 지정하세요.",
     "subEncryptHint": "켜면 URI 목록이 Base64로 인코딩됩니다(Clash/V2Ray 계열 클라이언트에서 흔히 사용).",
     "subUpdatesHint": "클라이언트 권장 구독 갱신 주기(시간, 1–168).",
-    "subWebPageHint": "구독 페이지에 표시할 외부 웹사이트 링크(선택).",
+    "subWebPageHint": "Profile-Web-Page-Url 구독 헤더로 클라이언트에 전송되며, 클라이언트는 이를 이 구독의 웹사이트로 표시합니다. 비워 두면 이 패널의 구독 페이지로 대체됩니다.",
     "subAnnounceHint": "HTML 구독 페이지에 표시할 공지 문구.",
     "githubCallbackHint": "https:// 또는 http://를 포함해야 하며 public_url과 일치해야 합니다. 예: https://panel.example.com/api/v1/auth/oauth/github/callback. public_url 끝에 슬래시를 붙이지 마세요.",
     "githubCallbackLabel": "콜백 URL (OAuth App의 Redirect URI와 일치해야 함)",

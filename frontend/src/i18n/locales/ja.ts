@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "パネルで HTTPS を有効化します。ACME（Let's Encrypt）を使うか、手動で証明書/秘密鍵のパスを指定してください。",
     "subEncryptHint": "オンにすると、URI リストが Base64 エンコードされます（Clash/V2Ray 系クライアントで一般的）。",
     "subUpdatesHint": "クライアントに推奨する購読の更新間隔（時間、1–168）。",
-    "subWebPageHint": "購読ページに表示する任意の外部サイトのリンク。",
+    "subWebPageHint": "Profile-Web-Page-Url 購読ヘッダーとしてクライアントに送信され、クライアントはこれをこの購読のウェブサイトとして表示します。空にすると本パネルの購読ページにフォールバックします。",
     "subAnnounceHint": "HTML 購読ページに表示するお知らせ文。",
     "githubCallbackHint": "https:// または http:// を含み、public_url と一致している必要があります。例: https://panel.example.com/api/v1/auth/oauth/github/callback。public_url の末尾にスラッシュは付けないでください。",
     "githubCallbackLabel": "コールバック URL（OAuth App の Redirect URI と完全に一致させる必要があります）",

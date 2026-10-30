@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "Aktifkan HTTPS untuk panel. Gunakan ACME (Let’s Encrypt) atau isi path sertifikat/kunci manual.",
     "subEncryptHint": "Jika aktif, daftar URI dienkode Base64 (umum pada klien gaya Clash/V2Ray).",
     "subUpdatesHint": "Interval penyegaran langganan yang disarankan untuk klien, dalam jam (1–168).",
-    "subWebPageHint": "Tautan situs eksternal opsional yang ditampilkan di halaman langganan.",
+    "subWebPageHint": "Dikirim ke klien sebagai header langganan Profile-Web-Page-Url; klien menampilkannya sebagai situs web langganan ini. Biarkan kosong untuk menggunakan halaman langganan panel.",
     "subAnnounceHint": "Teks pengumuman yang ditampilkan di halaman langganan HTML.",
     "githubCallbackHint": "Harus menyertakan https:// atau http:// dan cocok dengan public_url. Contoh: https://panel.example.com/api/v1/auth/oauth/github/callback — tanpa garis miring di akhir public_url.",
     "githubCallbackLabel": "Callback URL (harus sama dengan Redirect URI OAuth App)",

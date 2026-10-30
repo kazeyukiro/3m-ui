@@ -961,7 +961,7 @@ export default {
     "sslEnabledHint": "HTTPS für das Panel aktivieren. Bevorzugt ACME (Let’s Encrypt) oder manuelle Zertifikats-/Schlüsselpfade angeben.",
     "subEncryptHint": "Wenn aktiv, wird die reine URI-Liste Base64-kodiert (üblich bei Clash/V2Ray-Clients).",
     "subUpdatesHint": "Empfohlenes Aktualisierungsintervall für Clients in Stunden (1–168).",
-    "subWebPageHint": "Optionaler externer Website-Link auf der Abonnementseite.",
+    "subWebPageHint": "Wird als Profile-Web-Page-Url-Abonnementheader an die Clients gesendet; diese zeigen ihn als Website dieses Abos an. Leer lassen, um die Abonnementseite des Panels zu verwenden.",
     "subAnnounceHint": "Ankündigungstext auf der HTML-Abonnementseite.",
     "githubCallbackHint": "Muss https:// oder http:// enthalten und mit public_url übereinstimmen. Beispiel: https://panel.example.com/api/v1/auth/oauth/github/callback — public_url ohne Schrägstrich am Ende.",
     "githubCallbackLabel": "Callback-URL (muss mit der Redirect-URI der OAuth App übereinstimmen)",
