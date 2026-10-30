@@ -18,6 +18,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useI18n } from '../i18n';
 import { useThemeStore } from '../stores/themeStore';
+import { webPath } from '../utils/webPath';
 import { SidebarFeatureSearch } from './FeatureSearch';
 
 const { Sider } = Layout;
@@ -68,7 +69,7 @@ export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSP
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...style }}>
       <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: 18, flexShrink: 0, padding: '0 12px' }}>
-        <img src="/logo.png" alt="" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} />
+        <img src={`${webPath()}/logo.png`} alt="" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} />
         {!collapsed && <span>3M-UI</span>}
       </div>
       <SidebarFeatureSearch collapsed={collapsed} />

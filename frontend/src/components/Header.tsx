@@ -11,6 +11,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useThemeStore, ThemeMode } from '../stores/themeStore';
 import { useI18n, LOCALE_OPTIONS, type Locale } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
+import { webPath } from '../utils/webPath';
 import { HeaderFeatureSearchButton } from './FeatureSearch';
 
 const { Header } = Layout;
@@ -68,7 +69,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
       >
         {isMobile ? (
           <>
-            <img src="/logo.png" alt="" width={28} height={28} style={{ objectFit: 'contain', flexShrink: 0 }} />
+            <img src={`${webPath()}/logo.png`} alt="" width={28} height={28} style={{ objectFit: 'contain', flexShrink: 0 }} />
             <Text strong style={{ fontSize: 15, lineHeight: 1.2 }}>
               3M-UI
             </Text>

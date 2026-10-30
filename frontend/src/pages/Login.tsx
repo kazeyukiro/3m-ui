@@ -159,7 +159,9 @@ const Login: React.FC = () => {
       <Card style={{ width: '100%', maxWidth: 420, margin: '0 16px' }}>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <img
-            src="/logo.png"
+            // Absolute /logo.png resolves to the domain root, which 404s as
+            // soon as the panel is served under its random web_path prefix.
+            src={`${webPath()}/logo.png`}
             alt="3m-ui"
             width={96}
             height={96}
