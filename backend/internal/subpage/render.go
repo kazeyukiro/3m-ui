@@ -847,6 +847,14 @@ const defaultHTML = `<!DOCTYPE html>
     }
     .mini-btn:active { -webkit-transform: scale(.97); transform: scale(.97); background: #1b263b; background: var(--card-2, #1b263b); }
     .mini-btn svg { width: 17px; height: 17px; color: #f59e0b; color: var(--accent, #f59e0b); flex-shrink: 0; }
+    /* The V2Ray / Base64 label is the longest string in this row; give it extra
+       room so it stays on one line instead of wrapping a single character onto
+       a second row. Below 380px there is not enough width for both, so equal
+       columns keep "复制链接" intact and let the long label wrap cleanly. */
+    .mini-btn.wide { -webkit-box-flex: 2; -webkit-flex: 2; flex: 2; }
+    @media (max-width: 379px) {
+      .mini-btn.wide { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; }
+    }
 
     /* ===== 账号摘要 ===== */
     details summary { list-style: none; cursor: pointer; }
@@ -1034,10 +1042,10 @@ const defaultHTML = `<!DOCTYPE html>
   </a>
 
   <div class="mini-row">
-    <a class="mini-btn" href="{{.SingboxDeepLink}}" data-deeplink="Sing-box">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6M12 9v6"/></svg>
-      <span data-i18n="singbox">Sing-box</span>
-    </a>
+    <button type="button" class="mini-btn wide" id="copyV2ray" data-link="{{.SubV2RayURL}}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <span data-i18n="copyV2ray">复制 V2Ray / Base64 链接</span>
+    </button>
     <button type="button" class="mini-btn" id="copySub" data-link="{{.SubURL}}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
       <span data-i18n="copySub">复制链接</span>
@@ -1065,10 +1073,11 @@ const defaultHTML = `<!DOCTYPE html>
         <span class="chip{{if .IsExpired}} bad{{else if le .DaysLeft 30}} warn{{else}} g{{end}}" id="daysChip" data-days="{{.DaysLeft}}" data-expired="{{if .IsExpired}}1{{else}}0{{end}}"></span>
       </div>
       {{end}}
+      {{if .SubSupportURL}}
       <div class="acct-actions">
-        <button type="button" id="copyV2ray" data-link="{{.SubV2RayURL}}"><span data-i18n="copyV2ray">复制 V2Ray / Base64 链接</span></button>
-        {{if .SubSupportURL}}<a href="{{.SubSupportURL}}" rel="noopener"><span data-i18n="support">技术支持</span></a>{{end}}
+        <a href="{{.SubSupportURL}}" rel="noopener"><span data-i18n="support">技术支持</span></a>
       </div>
+      {{end}}
     </div>
   </details>
 
@@ -1114,7 +1123,6 @@ const defaultHTML = `<!DOCTYPE html>
       scanSupport: "支持 Mihomo / Clash / sing-box / Shadowrocket",
       importClash: "一键导入 Clash / Mihomo",
       importClashSub: "点击自动唤起客户端",
-      singbox: "Sing-box",
       copySub: "复制链接",
       copyV2ray: "复制 V2Ray / Base64 链接",
       support: "技术支持",
@@ -1147,7 +1155,6 @@ const defaultHTML = `<!DOCTYPE html>
       scanSupport: "Mihomo / Clash / sing-box / Shadowrocket",
       importClash: "One-tap import Clash / Mihomo",
       importClashSub: "Opens your client automatically",
-      singbox: "Sing-box",
       copySub: "Copy link",
       copyV2ray: "Copy V2Ray / Base64 link",
       support: "Support",

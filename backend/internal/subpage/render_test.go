@@ -185,7 +185,8 @@ func TestDefaultTemplateRenders(t *testing.T) {
 		"audituser",
 		`data:image/png;base64,QUJD`,
 		"clash://install-config?url=https%3A%2F%2Fsub.example.com",
-		"sing-box://import-remote?url=https%3A%2F%2Fsub.example.com",
+		`class="mini-btn wide" id="copyV2ray"`,
+		`data-link="https://sub.example.com/api/v1/client/sub/tok?target=v2ray"`,
 		"公告",
 		"机房升级通知",
 		"02:00-04:00",
@@ -213,6 +214,25 @@ func TestDefaultTemplateRenders(t *testing.T) {
 		if strings.Contains(out, bad) {
 			t.Errorf("output still contains %q", bad)
 		}
+	}
+	// The sing-box deep-link button was dropped from the default template; its
+	// slot now holds the V2Ray / Base64 copy button.
+	if strings.Contains(out, "sing-box://import-remote") {
+		t.Error("sing-box deep link button should no longer render")
+	}
+	if strings.Contains(out, `data-i18n="singbox"`) {
+		t.Error("singbox i18n binding should no longer render")
+	}
+	// The v2ray button moved out of .acct-actions into .mini-row, so it must
+	// exist exactly once and carry the mini-btn class.
+	if n := strings.Count(out, `id="copyV2ray"`); n != 1 {
+		t.Errorf("copyV2ray button should render exactly once, got %d", n)
+	}
+	if !strings.Contains(out, `class="acct-actions"`) {
+		t.Error("acct-actions block missing (support link should still render)")
+	}
+	if strings.Contains(out, `id="copyV2ray"><span data-i18n="copyV2ray"`) {
+		t.Error("copyV2ray should not keep the old acct-actions markup")
 	}
 	// Pinned notice renders expanded with the pin tag.
 	if !strings.Contains(out, `class="notice-item open"`) || !strings.Contains(out, `class="pin"`) {
