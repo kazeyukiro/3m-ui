@@ -196,7 +196,6 @@ func TestDefaultTemplateRenders(t *testing.T) {
 		"157.40 GiB",
 		"2027-03-14T00:00:00Z",
 		"12.40 GiB / 30.20 GiB",
-		"https://t.me/example",
 		"vless://u@h:443?security=tls&amp;type=grpc#HK-01",
 		`data-link="vless://u@h:443?security=tls&amp;type=grpc#HK-01"`,
 		`data-link="https://sub.example.com/api/v1/client/sub/tok"`,
@@ -228,8 +227,16 @@ func TestDefaultTemplateRenders(t *testing.T) {
 	if n := strings.Count(out, `id="copyV2ray"`); n != 1 {
 		t.Errorf("copyV2ray button should render exactly once, got %d", n)
 	}
-	if !strings.Contains(out, `class="acct-actions"`) {
-		t.Error("acct-actions block missing (support link should still render)")
+	// The support link was dropped from the account panel. Nothing of it may
+	// render, even though testViewModel still sets SubSupportURL.
+	if strings.Contains(out, `class="acct-actions"`) {
+		t.Error("acct-actions block should no longer render")
+	}
+	if strings.Contains(out, "https://t.me/example") {
+		t.Error("support link should no longer render")
+	}
+	if strings.Contains(out, `data-i18n="support"`) {
+		t.Error("support i18n binding should no longer render")
 	}
 	if strings.Contains(out, `id="copyV2ray"><span data-i18n="copyV2ray"`) {
 		t.Error("copyV2ray should not keep the old acct-actions markup")

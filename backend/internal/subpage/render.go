@@ -894,30 +894,6 @@ const defaultHTML = `<!DOCTYPE html>
     .chip.g { background: rgba(34, 197, 94, .1); color: #22c55e; color: var(--green, #22c55e); }
     .chip.warn { background: rgba(245, 158, 11, .16); }
     .chip.bad { background: rgba(239, 68, 68, .12); color: #ef4444; color: var(--red, #ef4444); }
-    .acct-actions { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .acct-actions button, .acct-actions a {
-      -webkit-box-flex: 1;
-      -webkit-flex: 1 1 auto;
-      flex: 1 1 auto;
-      font-family: inherit;
-      font-size: .76rem;
-      font-weight: 700;
-      padding: 9px 10px;
-      border-radius: 10px;
-      border: 1px solid #26324a;
-      border: 1px solid var(--stroke, #26324a);
-      background: #0e1420;
-      background: var(--bg, #0e1420);
-      color: #8b9bb4;
-      color: var(--muted, #8b9bb4);
-      cursor: pointer;
-      text-decoration: none;
-      text-align: center;
-      -webkit-appearance: none;
-      appearance: none;
-    }
-    .acct-actions button:hover, .acct-actions a:hover { color: #f59e0b; color: var(--accent, #f59e0b); border-color: #f59e0b; border-color: var(--accent, #f59e0b); }
-
     /* ===== 节点 ===== */
     .nodes {
       background: #161f30;
@@ -1073,11 +1049,6 @@ const defaultHTML = `<!DOCTYPE html>
         <span class="chip{{if .IsExpired}} bad{{else if le .DaysLeft 30}} warn{{else}} g{{end}}" id="daysChip" data-days="{{.DaysLeft}}" data-expired="{{if .IsExpired}}1{{else}}0{{end}}"></span>
       </div>
       {{end}}
-      {{if .SubSupportURL}}
-      <div class="acct-actions">
-        <a href="{{.SubSupportURL}}" rel="noopener"><span data-i18n="support">技术支持</span></a>
-      </div>
-      {{end}}
     </div>
   </details>
 
@@ -1125,7 +1096,6 @@ const defaultHTML = `<!DOCTYPE html>
       importClashSub: "点击自动唤起客户端",
       copySub: "复制链接",
       copyV2ray: "复制 V2Ray / Base64 链接",
-      support: "技术支持",
       nodes: "节点",
       nodeHint: "{n} 个 · 点击展开",
       copyAll: "全部复制",
@@ -1157,7 +1127,6 @@ const defaultHTML = `<!DOCTYPE html>
       importClashSub: "Opens your client automatically",
       copySub: "Copy link",
       copyV2ray: "Copy V2Ray / Base64 link",
-      support: "Support",
       nodes: "Nodes",
       nodeHint: "{n} nodes · tap to expand",
       copyAll: "Copy all",
