@@ -1,4 +1,5 @@
 import client from './client';
+import type { ConnectionCheck } from './listenerRuntime';
 
 export interface OutboundProxy {
   name: string;
@@ -15,6 +16,7 @@ export interface ServerOutbound {
 }
 
 const endpoint = '/config/server-outbounds';
+export const testOutboundConnection = (name: string) => client.post<ConnectionCheck>(`${endpoint}/connection-check`, undefined, { params: { name }, timeout: 45000 }).then(r => r.data);
 export const fetchOutbounds = () => client.get<ServerOutbound[]>(endpoint).then(r => r.data);
 export const saveOutbound = (entry: ServerOutbound, previous?: string) => previous
   ? client.put<ServerOutbound>(endpoint, entry, { params: { name: previous } }).then(r => r.data)

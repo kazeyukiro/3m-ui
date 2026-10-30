@@ -64,6 +64,7 @@ func TestServerOutboundRoutesRequireAuthentication(t *testing.T) {
 		{"PUT", "/api/v1/config/server-outbounds?name=edge"},
 		{"DELETE", "/api/v1/config/server-outbounds?name=edge"},
 		{"POST", "/api/v1/config/server-outbounds/enabled"},
+		{"POST", "/api/v1/config/server-outbounds/connection-check?name=edge"},
 		{"PATCH", "/api/v1/config/server-routing"},
 	} {
 		w := httptest.NewRecorder()

@@ -41,6 +41,21 @@ Use the Settings link to manage the account. Account deletion is blocked while
 rules, groups, providers, dialer references, WARP domains, or global WARP still
 use it. Apply again after deleting the account.
 
+## Connection test
+
+Each outbound has a **Test connection** button on desktop and mobile. It opens
+diagnostics with the result, request duration, endpoint, target and individual
+test stages. Disabled outbounds cannot be tested from the UI.
+
+The test reuses the inbound test's isolated Mihomo client and fixed HTTP 204
+targets. It uses the saved outbound settings and includes required dialer
+proxies and groups, including Settings-managed WARP. Applying the saved
+configuration is not required. Testing does not reload the serving core.
+Credentials and WARP keys remain on the server and are never returned in test
+results. Results describe this server's route to the test targets; they do not
+verify every destination. Refreshing or changing outbound settings clears the
+displayed results.
+
 ## Configuration ownership and storage
 
 Outbound definitions remain in `panel_settings[server-routing].proxies`.
@@ -65,6 +80,7 @@ All endpoints require panel authentication and use `/api/v1`:
 | PUT | `/config/server-outbounds?name=existing` | Edit or rename an entry |
 | DELETE | `/config/server-outbounds?name=existing` | Delete an unreferenced entry |
 | POST | `/config/server-outbounds/enabled` | Atomically set `{names: [...], enabled: boolean}` |
+| POST | `/config/server-outbounds/connection-check?name=existing` | Test saved settings and dialer dependencies; return state, timing and diagnostic steps |
 | PATCH | `/config/server-routing` | Update routing fields while preserving outbound definitions and disabled state |
 
 Names in query parameters must be URL encoded. Invalid definitions return 400,

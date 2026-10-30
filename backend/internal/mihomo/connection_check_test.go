@@ -211,7 +211,7 @@ func TestProxyTargetsRunConcurrently(t *testing.T) {
 			client := controllerTestClient(server.URL)
 			done := make(chan bool, 1)
 			go func() {
-				_, _, ok := testProxyTargets(ctx, client, []string{"https://first.invalid", "https://second.invalid"})
+				_, _, ok := testProxyTargets(ctx, client, []string{"https://first.invalid", "https://second.invalid"}, "node-check")
 				done <- ok
 			}()
 			seen := map[string]bool{}
@@ -267,7 +267,7 @@ func TestProxyTargetsCancelLoserAndParent(t *testing.T) {
 			defer cancel()
 			done := make(chan bool, 1)
 			go func() {
-				_, _, ok := testProxyTargets(ctx, controllerTestClient(server.URL), []string{"https://slow.invalid", "https://fast.invalid"})
+				_, _, ok := testProxyTargets(ctx, controllerTestClient(server.URL), []string{"https://slow.invalid", "https://fast.invalid"}, "node-check")
 				done <- ok
 			}()
 			select {
@@ -369,7 +369,7 @@ func TestRealMihomoLocalConnectionCheck(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				runClientCheck(ctx, binary, prepared, &check, []string{target.URL, target.URL + "/backup"}, isAllowedBinaryPath)
+				runClientCheck(ctx, binary, []map[string]any{prepared}, nil, "node-check", &check, []string{target.URL, target.URL + "/backup"}, isAllowedBinaryPath)
 				cancel()
 				want := "unavailable"
 				if good {
@@ -414,7 +414,7 @@ func TestRealMihomoLocalConnectionCheck(t *testing.T) {
 			count := requests.Load()
 			check := ConnectionCheck{}
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			runClientCheck(ctx, binary, prepared, &check, []string{target.URL, target.URL + "/backup"}, isAllowedBinaryPath)
+			runClientCheck(ctx, binary, []map[string]any{prepared}, nil, "node-check", &check, []string{target.URL, target.URL + "/backup"}, isAllowedBinaryPath)
 			cancel()
 			if check.State != "unavailable" || requests.Load() != count || !pm.IsRunning() {
 				t.Fatalf("unreachable exported endpoint %s fell back to local listener: %+v", addr, check)
@@ -440,7 +440,7 @@ func TestRealMihomoLocalConnectionCheck(t *testing.T) {
 				done := make(chan struct{})
 				go func() {
 					check := ConnectionCheck{}
-					runClientCheck(ctx, binary, proxy, &check, []string{slow.URL}, isAllowedBinaryPath)
+					runClientCheck(ctx, binary, []map[string]any{proxy}, nil, "node-check", &check, []string{slow.URL}, isAllowedBinaryPath)
 					close(done)
 				}()
 				select {

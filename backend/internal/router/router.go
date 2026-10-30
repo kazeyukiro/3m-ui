@@ -170,7 +170,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		)
 
 		registerConfigRoutes(apiV1, d, cfg)
-		registerRoutingRoutes(apiV1, db)
+		registerRoutingRoutes(apiV1, db, d.mihomoService())
 	}
 
 	return r

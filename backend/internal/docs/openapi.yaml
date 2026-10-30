@@ -1588,6 +1588,44 @@ paths:
         "400": { description: WARP must be managed in Settings }
         "404": { description: Outbound not found }
         "409": { description: Error lists references that must be removed first }
+  /config/server-outbounds/connection-check:
+    post:
+      tags: [config]
+      summary: Test a saved outbound using an isolated Mihomo client
+      description: Uses saved protocol settings and dialer dependencies, including managed WARP. Does not apply configuration or reload the serving core. Test targets and timeouts are server-defined.
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Connection state, reason, checked_at, expires_at, source, address, target, delay_ms and diagnostic steps. Disabled outbounds return a disabled result. Credentials are never returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state, reason, checked_at, expires_at, source, steps]
+                properties:
+                  state: { type: string, enum: [available, unavailable, unknown, disabled] }
+                  reason: { type: string }
+                  checked_at: { type: string, format: date-time }
+                  expires_at: { type: string, format: date-time }
+                  source: { type: string, enum: [local] }
+                  address: { type: string }
+                  target: { type: string }
+                  delay_ms: { type: integer }
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        state: { type: string, enum: [passed, failed, unknown] }
+                        reason: { type: string }
+        "400": { description: Missing name or unavailable dialer dependency }
+        "404": { description: Outbound not found }
+        "503": { description: Mihomo service unavailable }
   /config/server-outbounds/enabled:
     post:
       tags: [config]
