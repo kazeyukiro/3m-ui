@@ -128,15 +128,18 @@ test('no locale carries an empty or non-string value', () => {
   }
 });
 
-test('other locales fall back to English for keys they lack', () => {
-  // Informational: these lag on purpose and the provider resolves them from
-  // en.ts. Printed so the gap stays visible instead of being forgotten.
+test('every locale covers every key en.ts declares', () => {
+  // These locales used to lag on purpose and the provider resolved the gaps
+  // from en.ts. The catalogue is aligned across all languages now, so the gap
+  // is no longer tolerated: adding a key to en.ts without carrying it into the
+  // other locales fails here instead of silently rendering English — or the raw
+  // key — inside a non-English UI.
   const lagging = [];
   for (const file of fs.readdirSync(localeDir).filter((f) => f.endsWith('.ts') && f !== 'zh.ts').sort()) {
-    if (file === 'en.ts' || file === 'zh-CN.ts') continue;
-    const missing = [...en.keys.keys()].filter((k) => !parseLocale(file).keys.has(k)).length;
-    if (missing > 0) lagging.push(`${file}:${missing}`);
+    if (file === 'en.ts') continue;
+    const keys = parseLocale(file).keys;
+    const missing = [...en.keys.keys()].filter((k) => !keys.has(k)).sort();
+    if (missing.length) lagging.push(`${file} (${missing.length}): ${missing.join(', ')}`);
   }
-  if (lagging.length) console.log('    untranslated (falls back to en):', lagging.join(' '));
-  assert.ok(true);
+  assert.deepEqual(lagging, [], `locales missing keys declared in en.ts:\n${lagging.join('\n')}`);
 });
