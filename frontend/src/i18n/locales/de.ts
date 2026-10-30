@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Dashboard",
-    "listeners": "Knotenverwaltung",
+    "listeners": "Eingänge",
+    "outbounds": "Ausgänge",
     "users": "Benutzerverwaltung",
     "traffic": "Traffic",
     "cluster": "Cluster",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Knotenverwaltung",
+    "title": "Eingänge",
     "create": "Knoten erstellen",
     "quickCreate": "Schnell erstellen",
     "quickCreated": "Erstellt",

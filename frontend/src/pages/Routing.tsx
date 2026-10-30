@@ -43,6 +43,7 @@ import {
   type RuleImportResult,
 } from '../api/routing';
 import { generateConfig, applyConfigYAML, fetchProxies } from '../api/config';
+import { fetchOutbounds } from '../api/outbounds';
 import PageHeader from '../components/PageHeader';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
@@ -69,6 +70,7 @@ const RoutingPage: React.FC = () => {
   const [groups, setGroups] = useState<GroupEntry[]>([]);
   const [rules, setRules] = useState<RuleRow[]>([]);
   const [proxyNames, setProxyNames] = useState<string[]>([]);
+  const [serverTargets, setServerTargets] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -105,22 +107,27 @@ const RoutingPage: React.FC = () => {
   const [importParsing, setImportParsing] = useState(false);
 
   const targetOptions = useMemo(() => {
-    const set = new Set<string>(['DIRECT', 'REJECT', 'COMPATIBLE', 'WARP']);
-    groups.forEach((g) => g.name && set.add(g.name));
-    proxyNames.forEach((n) => n && set.add(n));
+    const set = new Set<string>(['DIRECT', 'REJECT', 'COMPATIBLE']);
+    if (scope === 'server') serverTargets.forEach(n => set.add(n));
+    else {
+      groups.forEach((g) => g.name && set.add(g.name));
+      proxyNames.forEach((n) => n && set.add(n));
+    }
     return Array.from(set).map((v) => ({ value: v, label: v }));
-  }, [groups, proxyNames]);
+  }, [scope, groups, proxyNames, serverTargets]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [g, r, px, sr] = await Promise.all([
+      const [g, r, px, sr, outbounds] = await Promise.all([
         fetchGroups(),
         fetchRules(),
         fetchProxies().catch(() => []),
         fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [], warpGlobal: false, ruleProviders: [] })),
+        fetchOutbounds(),
       ]);
       setGroups(Array.isArray(g) ? g : []);
+      setServerTargets([...outbounds.filter(e => e.enabled).map(e => e.proxy.name), ...(sr.proxyGroups || []).map(g => g.name)]);
       setRules(parseRulesText((Array.isArray(r) ? r : []).join('\n')));
       setServerRules(parseRulesText((Array.isArray(sr?.rules) ? sr.rules : ['MATCH,DIRECT']).join('\n')));
       setWarpDomains(Array.isArray(sr?.warpDomains) ? sr.warpDomains.join('\n') : '');
@@ -151,8 +158,6 @@ const RoutingPage: React.FC = () => {
         .filter(Boolean);
       const mergedRuleLines = mergeWarpDomainRules(serializeRules(serverRules), warpDomains);
       const saved = await saveServerRouting({
-        proxies: [],
-        proxyGroups: [],
         rules: mergedRuleLines,
         warpDomains: domains,
         warpGlobal,
@@ -303,8 +308,6 @@ const RoutingPage: React.FC = () => {
           .filter(Boolean);
         const mergedRuleLines = mergeWarpDomainRules(serializeRules(current), warpDomains);
         const saved = await saveServerRouting({
-          proxies: [],
-          proxyGroups: [],
           rules: mergedRuleLines,
           warpDomains: domains,
           warpGlobal,

@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/kazeyukiro/3m-ui/backend/internal/panellog"
 	"log"
@@ -22,14 +23,20 @@ import (
 const maxRestoreDatabaseBytes = 128 << 20
 
 type Handler struct {
-	svc       *Service
-	db        *gorm.DB
-	dbPath    string
-	mihomoCfg string
+	svc        *Service
+	db         *gorm.DB
+	dbPath     string
+	mihomoCfg  string
+	deleteWARP func(*gorm.DB) error
 }
 
 func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+	return &Handler{svc: svc, deleteWARP: DeleteWARPAccount}
+}
+
+func (h *Handler) WithWARPDelete(deleteAccount func(*gorm.DB) error) *Handler {
+	h.deleteWARP = deleteAccount
+	return h
 }
 
 func (h *Handler) WithBackupPaths(dbPath, mihomoConfig string) *Handler {
@@ -637,8 +644,12 @@ func (h *Handler) WARPCreate(c *gin.Context) {
 }
 
 func (h *Handler) WARPDelete(c *gin.Context) {
-	if err := DeleteWARPAccount(h.db); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.deleteWARP(h.db); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ErrWARPInUse) {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})

@@ -43,6 +43,7 @@ const MobileBottomNav: React.FC = () => {
     () => [
       { key: '/', icon: <IconNavDashboard />, label: t('nav.dashboard'), primary: true },
       { key: '/listeners', icon: <IconNavListeners />, label: t('nav.listeners'), primary: true },
+      { key: '/outbounds', icon: <IconNavRouting />, label: t('nav.outbounds') },
       { key: '/users', icon: <IconNavUsers />, label: t('nav.users'), primary: true },
       { key: '/traffic', icon: <IconNavTraffic />, label: t('nav.traffic'), primary: true },
       { key: '/share', icon: <IconNavShare />, label: t('nav.share') },

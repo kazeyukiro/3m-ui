@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Tổng quan",
-    "listeners": "Node",
+    "listeners": "Quản lý đầu vào",
+    "outbounds": "Quản lý đầu ra",
     "users": "Người dùng",
     "traffic": "Lưu lượng",
     "cluster": "Cụm",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Node",
+    "title": "Quản lý đầu vào",
     "create": "Tạo",
     "quickCreate": "Tạo nhanh",
     "quickCreated": "Đã tạo",

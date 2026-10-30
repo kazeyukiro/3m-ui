@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "ダッシュボード",
-    "listeners": "ノード管理",
+    "listeners": "インバウンド管理",
+    "outbounds": "アウトバウンド管理",
     "users": "ユーザー管理",
     "traffic": "トラフィック",
     "cluster": "クラスター",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "ノード管理",
+    "title": "インバウンド管理",
     "create": "ノード作成",
     "quickCreate": "かんたん作成",
     "quickCreated": "作成済み",

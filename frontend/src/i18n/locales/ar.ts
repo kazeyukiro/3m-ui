@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "لوحة المعلومات",
-    "listeners": "العقد",
+    "listeners": "الاتصالات الواردة",
+    "outbounds": "الاتصالات الصادرة",
     "users": "المستخدمون",
     "traffic": "المرور",
     "cluster": "العنقود",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "العقد",
+    "title": "الاتصالات الواردة",
     "create": "إنشاء",
     "quickCreate": "إنشاء سريع",
     "quickCreated": "تم الإنشاء",

@@ -13,6 +13,7 @@ import (
 
 func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group := api.Group("/config")
+	mihomoConfig.RegisterServerOutboundRoutes(group, db)
 	group.GET("/groups", func(c *gin.Context) {
 		visual, err := mihomoConfig.GetVisualConfig(db)
 		if err != nil {

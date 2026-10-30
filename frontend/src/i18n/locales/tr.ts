@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Özet",
-    "listeners": "Düğümler",
+    "listeners": "Gelen bağlantılar",
+    "outbounds": "Giden bağlantılar",
     "users": "Kullanıcılar",
     "traffic": "Trafik",
     "cluster": "Küme",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Düğümler",
+    "title": "Gelen bağlantılar",
     "create": "Oluştur",
     "quickCreate": "Hızlı oluştur",
     "quickCreated": "Oluşturuldu",

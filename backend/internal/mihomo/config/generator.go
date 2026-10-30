@@ -43,6 +43,9 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		return "", fmt.Errorf("load custom config fragments: %w", err)
 	}
 	for _, fragment := range customFragments {
+		if fragment.Name == serverRoutingName {
+			continue
+		}
 		var fragMap map[string]interface{}
 		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil {
 			return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err)
@@ -59,6 +62,9 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 			// Panel-only subscription dial flags — not Mihomo general keys.
 			delete(fragMap, "client-tfo")
 			delete(fragMap, "client-mptcp")
+		}
+		if proxies, ok := fragMap["proxies"].([]interface{}); ok && len(proxies) > 0 {
+			return "", fmt.Errorf("custom config %q defines proxies — move these entries to 出站管理 and remove the fragment's proxies before applying", fragment.Name)
 		}
 		for k, v := range fragMap {
 			merged[k] = v
@@ -128,7 +134,7 @@ func validateListenerEndpoints(listeners []models.Listener) error {
 			return fmt.Errorf("listener id=%d has empty name", listeners[i].ID)
 		}
 		if _, ok := seenNames[name]; ok {
-			return fmt.Errorf("duplicate listener name %q — rename or delete the extra entry in 节点管理", name)
+			return fmt.Errorf("duplicate listener name %q — rename or delete the extra entry in 入站管理", name)
 		}
 		seenNames[name] = struct{}{}
 		for j := i + 1; j < len(listeners); j++ {

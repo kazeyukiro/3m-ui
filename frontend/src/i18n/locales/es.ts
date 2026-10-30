@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Panel",
-    "listeners": "Gestión de nodos",
+    "listeners": "Entradas",
+    "outbounds": "Salidas",
     "users": "Gestión de usuarios",
     "traffic": "Tráfico",
     "cluster": "Clúster",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Gestión de nodos",
+    "title": "Entradas",
     "create": "Crear nodo",
     "quickCreate": "Creación rápida",
     "quickCreated": "Creado",

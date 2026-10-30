@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "แดชบอร์ด",
-    "listeners": "โหนด",
+    "listeners": "การเชื่อมต่อขาเข้า",
+    "outbounds": "การเชื่อมต่อขาออก",
     "users": "ผู้ใช้",
     "traffic": "ทราฟฟิก",
     "cluster": "คลัสเตอร์",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "โหนด",
+    "title": "การเชื่อมต่อขาเข้า",
     "create": "สร้าง",
     "quickCreate": "สร้างด่วน",
     "quickCreated": "สร้างแล้ว",

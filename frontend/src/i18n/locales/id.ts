@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Dasbor",
-    "listeners": "Node",
+    "listeners": "Masuk",
+    "outbounds": "Keluar",
     "users": "Pengguna",
     "traffic": "Lalu lintas",
     "cluster": "Klaster",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Node",
+    "title": "Masuk",
     "create": "Buat",
     "quickCreate": "Buat cepat",
     "quickCreated": "Dibuat",

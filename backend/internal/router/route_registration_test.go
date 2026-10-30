@@ -53,3 +53,23 @@ func TestSetupRouterWithListenerAndNodeServices(t *testing.T) {
 	}
 
 }
+
+func TestServerOutboundRoutesRequireAuthentication(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.JWT.Secret = "test-outbound-route-secret"
+	r := router.SetupRouterWithDeps(router.Deps{Config: cfg})
+	for _, endpoint := range []struct{ method, path string }{
+		{"GET", "/api/v1/config/server-outbounds"},
+		{"POST", "/api/v1/config/server-outbounds"},
+		{"PUT", "/api/v1/config/server-outbounds?name=edge"},
+		{"DELETE", "/api/v1/config/server-outbounds?name=edge"},
+		{"POST", "/api/v1/config/server-outbounds/enabled"},
+		{"PATCH", "/api/v1/config/server-routing"},
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(endpoint.method, endpoint.path, nil))
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s: unauthenticated status %d", endpoint.method, endpoint.path, w.Code)
+		}
+	}
+}

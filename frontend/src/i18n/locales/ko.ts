@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "대시보드",
-    "listeners": "노드 관리",
+    "listeners": "인바운드 관리",
+    "outbounds": "아웃바운드 관리",
     "users": "사용자 관리",
     "traffic": "트래픽",
     "cluster": "클러스터",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "노드 관리",
+    "title": "인바운드 관리",
     "create": "노드 생성",
     "quickCreate": "빠른 생성",
     "quickCreated": "생성됨",
