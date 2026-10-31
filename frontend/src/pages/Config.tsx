@@ -11,6 +11,8 @@ import {
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
 import PageHeader from '../components/PageHeader';
+import DNSSettingsFields from '../components/DNSSettingsFields';
+import { cleanFormValue } from '../utils/formValues';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -61,6 +63,7 @@ const ConfigPage: React.FC = () => {
       try {
         const vc = await fetchVisualConfig();
         setGeneralCfg(vc ? { ...vc } : null);
+        generalForm.resetFields();
         generalForm.setFieldsValue({
           logLevel: vc?.logLevel ?? 'info',
           allowLan: !!vc?.allowLan,
@@ -69,6 +72,7 @@ const ConfigPage: React.FC = () => {
           inboundMptcp: !!vc?.inboundMptcp,
           clientTfo: !!vc?.clientTfo,
           clientMptcp: !!vc?.clientMptcp,
+          dns: vc?.dns,
         });
       } catch (e: any) {
         console.error('failed to load visual config', e);
@@ -95,6 +99,7 @@ const ConfigPage: React.FC = () => {
         inboundMptcp: !!values.inboundMptcp,
         clientTfo: !!values.clientTfo,
         clientMptcp: !!values.clientMptcp,
+        dns: cleanFormValue(values.dns),
         proxies: generalCfg.proxies ?? [],
       };
       await saveVisualConfig(payload);
@@ -331,6 +336,7 @@ const ConfigPage: React.FC = () => {
                   </Form.Item>
                 </Col>
               </Row>
+              <DNSSettingsFields />
               <Form.Item style={{ marginBottom: 0, marginTop: 4 }}>
                 <Button type="primary" htmlType="submit" loading={genSaving} disabled={!generalCfg}>
                   {t('config.saveGeneral') || 'Save general settings'}
