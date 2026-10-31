@@ -102,7 +102,7 @@ curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/docs/ai-insta
 curl -fsSL https://raw.githubusercontent.com/kazeyukiro/3m-ui/main/scripts/install.sh | sudo sh
 ```
 
-测试 / 预发布通道（可选，非默认）见 [安装文档](docs/installation.md#ai-提示词安装)。
+测试 / 预发布通道（可选，非默认）见 [AI 提示词安装文档](docs/ai-install-prompt.md)。
 
 ---
 

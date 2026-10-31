@@ -1,8 +1,0 @@
-# 节点运行状态
-
-> 本文已迁移至官方文档站（中英双语）。
-
-- 中文：<https://3m-ui.top/guide/listener-runtime>
-- English: <https://3m-ui.top/en/guide/listener-runtime>
-
-多语言项目介绍仍见 [`docs/readme/`](./readme/)。
