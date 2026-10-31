@@ -42,6 +42,7 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 	if err := ce.db.Where("enabled = ?", true).Find(&customFragments).Error; err != nil {
 		return "", fmt.Errorf("load custom config fragments: %w", err)
 	}
+	var panelDNS interface{}
 	for _, fragment := range customFragments {
 		if fragment.Name == serverRoutingName {
 			continue
@@ -53,9 +54,12 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 		// Listeners are owned by the panel DB; fragments must not inject them
 		// or Mihomo will report duplicate listener names after merge.
 		delete(fragMap, "listeners")
-		// visual-config is client-subscription routing only; never merge
+		// Visual routing is client-subscription only; never merge
 		// rules / proxy-groups / proxies into the serving Mihomo process.
 		if fragment.Name == visualConfigName || fragment.Type == "visual" {
+			if fragment.Name == visualConfigName {
+				panelDNS = fragMap["dns"]
+			}
 			delete(fragMap, "rules")
 			delete(fragMap, "proxy-groups")
 			delete(fragMap, "proxies")
@@ -70,15 +74,19 @@ func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
 			merged[k] = v
 		}
 	}
+	// Saved panel DNS wins over custom fragments regardless of insertion order.
+	// WARP routing below retains its existing requirement to enable DNS.
+	if panelDNS != nil {
+		merged["dns"] = panelDNS
+	}
 	// Config fragments are operator-authored YAML and can carry
 	// geodata-loader: standard. On a small box that single line undoes the
-	// low-memory tuning, so pin it after the merge. This is the only key we
-	// ever override post-merge, and only when low-memory mode is active.
+	// low-memory tuning, so pin it after the merge when low-memory mode is active.
 	if CoreLowMemory() {
 		merged["geodata-loader"] = geodataLoaderMemConservative
 	}
 	// Server-side egress routing (): proxies / groups / rules for the
-	// serving Mihomo process. visual-config remains client-subscription only.
+	// serving Mihomo process. Visual proxies / groups / rules are client-only.
 	sr, srErr := GetServerRouting(ce.db)
 	if srErr != nil {
 		return "", fmt.Errorf("load server-routing: %w", srErr)

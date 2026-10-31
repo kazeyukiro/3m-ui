@@ -39,14 +39,6 @@ type VisualConfig struct {
 	Rules       []string     `json:"rules" yaml:"rules"`
 }
 
-type VisualDNS struct {
-	Enable       bool     `json:"enable" yaml:"enable"`
-	EnhancedMode string   `json:"enhancedMode" yaml:"enhanced-mode"`
-	Listen       string   `json:"listen" yaml:"listen"`
-	Nameserver   []string `json:"nameserver" yaml:"nameserver"`
-	Fallback     []string `json:"fallback" yaml:"fallback,omitempty"`
-}
-
 type ProxyEntry struct {
 	Name    string                 `json:"name" yaml:"name"`
 	Type    string                 `json:"type" yaml:"type"`
@@ -143,7 +135,7 @@ func DefaultVisualConfig() VisualConfig {
 	return VisualConfig{
 		Mode: "rule", LogLevel: "info", AllowLAN: true,
 		DNS: VisualDNS{
-			Enable: true, EnhancedMode: "fake-ip", Listen: "0.0.0.0:1053",
+			Enable: false, EnhancedMode: "fake-ip", Listen: "0.0.0.0:1053",
 			Nameserver: []string{"119.29.29.29", "223.5.5.5"},
 		},
 		Proxies: []ProxyEntry{}, Groups: []GroupEntry{},
@@ -164,6 +156,8 @@ func GetVisualConfig(db *gorm.DB) (VisualConfig, error) {
 		}
 		return cfg, err
 	}
+	// Saved DNS omissions use core defaults, rather than the new-config preset.
+	cfg.DNS = VisualDNS{}
 	if err := yaml.Unmarshal([]byte(fragment.Content), &cfg); err != nil {
 		return cfg, fmt.Errorf("invalid visual config: %w", err)
 	}
@@ -183,13 +177,9 @@ func SaveVisualConfig(db *gorm.DB, cfg VisualConfig) error {
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "info"
 	}
-	if cfg.DNS.EnhancedMode == "" {
-		cfg.DNS.EnhancedMode = "fake-ip"
+	if err := cfg.DNS.validate(); err != nil {
+		return err
 	}
-	if cfg.DNS.Listen == "" {
-		cfg.DNS.Listen = "0.0.0.0:1053"
-	}
-
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err

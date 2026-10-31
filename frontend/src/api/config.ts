@@ -14,6 +14,33 @@ export interface ProxyEntry {
   [key: string]: any;
 }
 
+export interface VisualDNS {
+  enable: boolean;
+  listen?: string;
+  enhancedMode?: 'fake-ip' | 'redir-host';
+  ipv6?: boolean;
+  cacheAlgorithm?: 'lru' | 'arc';
+  preferH3?: boolean;
+  useHosts?: boolean;
+  useSystemHosts?: boolean;
+  respectRules?: boolean;
+  defaultNameserver?: string[];
+  nameserver?: string[];
+  fallback?: string[];
+  proxyServerNameserver?: string[];
+  directNameserver?: string[];
+  directNameserverFollowPolicy?: boolean;
+  nameserverPolicy?: Record<string, string | string[]>;
+  proxyServerNameserverPolicy?: Record<string, string | string[]>;
+  fakeIPRange?: string;
+  fakeIPRange6?: string;
+  fakeIPFilterMode?: 'blacklist' | 'whitelist' | 'rule';
+  fakeIPFilter?: string[];
+  fakeIPTTL?: number;
+  fallbackFilter?: { geoip?: boolean; geoipCode?: string; geosite?: string[]; ipcidr?: string[]; domain?: string[] };
+  fallbackLazyQuery?: boolean;
+}
+
 export interface VisualConfig {
   mode?: string;
   logLevel?: string;
@@ -23,6 +50,7 @@ export interface VisualConfig {
   inboundMptcp?: boolean;
   clientTfo?: boolean;
   clientMptcp?: boolean;
+  dns?: VisualDNS;
   proxies: ProxyEntry[];
   proxyGroups?: any[];
   rules?: any[];
