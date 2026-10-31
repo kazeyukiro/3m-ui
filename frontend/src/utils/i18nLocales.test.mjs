@@ -70,7 +70,7 @@ function referencedKeys() {
             const key = node.arguments[0].text;
             if (key.includes('.')) {
               if (!found.has(key)) found.set(key, new Set());
-              found.get(key).add(`${path.relative(fs.realpathSync(srcDir), fs.realpathSync(target.pathname))}:${source.getLineAndCharacterOfPosition(node.pos).line + 1}`);
+              found.get(key).add(`${path.relative(fs.realpathSync(srcDir), fs.realpathSync(target))}:${source.getLineAndCharacterOfPosition(node.pos).line + 1}`);
             }
           }
         }

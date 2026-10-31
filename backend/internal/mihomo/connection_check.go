@@ -212,7 +212,7 @@ func (s *Service) CheckConnection(ctx context.Context, l models.Listener, export
 	}
 	check.Address = address
 	check.Steps = append(check.Steps, ConnectionStep{"client_config", "passed", "client_config_ready"})
-	runClientCheck(ctx, binary, proxy, &check, []string{"https://www.gstatic.com/generate_204", "https://cp.cloudflare.com/generate_204"}, s.pm.allowedBinary)
+	runClientCheck(ctx, binary, []map[string]any{proxy}, nil, "node-check", &check, connectionTestTargets, s.pm.allowedBinary)
 	return finish(check.Reason)
 }
 
@@ -264,7 +264,9 @@ func exportedClientProxy(clientYAML string) (map[string]any, string, error) {
 	return proxy, net.JoinHostPort(address, strconv.Itoa(p)), nil
 }
 
-func runClientCheck(ctx context.Context, binary string, proxy map[string]any, check *ConnectionCheck, targets []string, allowed func(string) bool) {
+var connectionTestTargets = []string{"https://www.gstatic.com/generate_204", "https://cp.cloudflare.com/generate_204"}
+
+func runClientCheck(ctx context.Context, binary string, proxies, groups []map[string]any, proxyName string, check *ConnectionCheck, targets []string, allowed func(string) bool) {
 	check.State, check.Reason = "unknown", "client_start_failed"
 	ready := false
 	defer func() {
@@ -284,7 +286,7 @@ func runClientCheck(ctx context.Context, binary string, proxy map[string]any, ch
 	config := map[string]any{
 		"external-controller": "", "external-controller-unix": socket,
 		"mode": "rule", "log-level": "silent", "ipv6": true,
-		"proxies": []map[string]any{proxy}, "rules": []string{"MATCH,node-check"},
+		"proxies": proxies, "proxy-groups": groups, "rules": []string{"MATCH," + proxyName},
 		"dns": map[string]any{"enable": false}, "profile": map[string]any{"store-selected": false},
 	}
 	data, err := yaml.Marshal(config)
@@ -338,7 +340,7 @@ func runClientCheck(ctx context.Context, binary string, proxy map[string]any, ch
 		return
 	}
 	check.Steps = append(check.Steps, ConnectionStep{"client_start", "passed", "client_started"})
-	target, delay, ok := testProxyTargets(ctx, client, targets)
+	target, delay, ok := testProxyTargets(ctx, client, targets, proxyName)
 	if ok {
 		check.State, check.Reason, check.Target, check.DelayMS = "available", "proxy_request_passed", target, delay
 		check.Steps = append(check.Steps, ConnectionStep{"proxy_request", "passed", "proxy_request_passed"})
@@ -360,7 +362,7 @@ func runClientCheck(ctx context.Context, binary string, proxy map[string]any, ch
 
 // Both targets use the same isolated proxy, with no direct fallback. Preserve
 // each target's timeout but avoid paying it twice when the endpoint is blocked.
-func testProxyTargets(ctx context.Context, client *http.Client, targets []string) (string, int, bool) {
+func testProxyTargets(ctx context.Context, client *http.Client, targets []string, proxyName string) (string, int, bool) {
 	ctx, cancel := context.WithCancel(ctx)
 	var workers sync.WaitGroup
 	defer func() { cancel(); workers.Wait() }()
@@ -377,7 +379,7 @@ func testProxyTargets(ctx context.Context, client *http.Client, targets []string
 			requestCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
 			defer cancel()
 			query := url.Values{"url": {target}, "timeout": {"5000"}, "expected": {"204"}}
-			req, _ := http.NewRequestWithContext(requestCtx, http.MethodGet, "http://local/proxies/node-check/delay?"+query.Encode(), nil)
+			req, _ := http.NewRequestWithContext(requestCtx, http.MethodGet, "http://local/proxies/"+url.PathEscape(proxyName)+"/delay?"+query.Encode(), nil)
 			resp, err := client.Do(req)
 			var result struct {
 				Delay *int `json:"delay"`

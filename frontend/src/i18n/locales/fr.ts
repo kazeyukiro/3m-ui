@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Tableau de bord",
-    "listeners": "Gestion des nœuds",
+    "listeners": "Entrées",
+    "outbounds": "Sorties",
     "users": "Gestion des utilisateurs",
     "traffic": "Trafic",
     "cluster": "Cluster",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Gestion des nœuds",
+    "title": "Entrées",
     "create": "Créer un nœud",
     "quickCreate": "Création rapide",
     "quickCreated": "Créé",

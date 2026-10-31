@@ -14,6 +14,8 @@ import (
 const warpAccountKey = "warp-account"
 const WARPProxyName = "WARP"
 
+var ErrWARPInUse = errors.New("WARP is in use")
+
 // Cloudflare WARP WireGuard peer public key (shared by all consumer accounts).
 const warpCloudflarePublicKey = "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
 

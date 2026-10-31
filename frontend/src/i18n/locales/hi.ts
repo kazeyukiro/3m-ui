@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "डैशबोर्ड",
-    "listeners": "नोड्स",
+    "listeners": "इनबाउंड प्रबंधन",
+    "outbounds": "आउटबाउंड प्रबंधन",
     "users": "उपयोगकर्ता",
     "traffic": "ट्रैफ़िक",
     "cluster": "क्लस्टर",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "नोड्स",
+    "title": "इनबाउंड प्रबंधन",
     "create": "बनाएँ",
     "quickCreate": "त्वरित बनाएँ",
     "quickCreated": "बनाया गया",

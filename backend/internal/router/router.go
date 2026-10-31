@@ -23,6 +23,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
 	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
+	mihomoConfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
 	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 	"github.com/kazeyukiro/3m-ui/backend/internal/subpage"
@@ -141,7 +142,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		registerPanelServerRoutes(apiV1, cfg)
 		protocol.RegisterRoutes(apiV1)
 
-		system.NewHandler(d.systemService()).WithDB(db).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
+		system.NewHandler(d.systemService()).WithDB(db).WithWARPDelete(mihomoConfig.DeleteServerWARP).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
 		registerMihomoRoutes(apiV1, d)
 
 		user.NewHandler(d.userService()).RegisterRoutes(apiV1.Group("/users"))
@@ -169,7 +170,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		)
 
 		registerConfigRoutes(apiV1, d, cfg)
-		registerRoutingRoutes(apiV1, db)
+		registerRoutingRoutes(apiV1, db, d.mihomoService())
 	}
 
 	return r

@@ -1,17 +1,19 @@
 import client from './client';
 
+export interface ConnectionCheck {
+  state: 'available' | 'unavailable' | 'unknown' | 'disabled';
+  reason: string; source: 'local'; checked_at: string; expires_at: string;
+  address?: string; target?: string; delay_ms?: number;
+  steps: { name: string; state: 'passed' | 'failed' | 'unknown'; reason: string }[];
+}
+
 export interface ListenerRuntime {
   id: number;
   state: 'disabled' | 'listening' | 'not_listening' | 'unknown';
   reason: string;
   checked_at: string;
   endpoints: { network: string; address: string; port: number; bound: boolean }[];
-  connection_check?: {
-    state: 'available' | 'unavailable' | 'unknown' | 'disabled';
-    reason: string; source: 'local'; checked_at: string; expires_at: string;
-    address?: string; target?: string; delay_ms?: number;
-    steps: { name: string; state: 'passed' | 'failed' | 'unknown'; reason: string }[];
-  };
+  connection_check?: ConnectionCheck;
 }
 
 export const fetchListenerRuntime = (signal?: AbortSignal) =>

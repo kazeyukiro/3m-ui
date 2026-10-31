@@ -11,8 +11,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB) {
+func registerRoutingRoutes(api *gin.RouterGroup, db *gorm.DB, svc *mihomo.Service) {
 	group := api.Group("/config")
+	mihomoConfig.RegisterServerOutboundRoutes(group, db)
+	mihomo.RegisterOutboundConnectionRoute(group, db, svc)
 	group.GET("/groups", func(c *gin.Context) {
 		visual, err := mihomoConfig.GetVisualConfig(db)
 		if err != nil {

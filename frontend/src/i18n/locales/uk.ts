@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Огляд",
-    "listeners": "Вузли",
+    "listeners": "Вхідні з’єднання",
+    "outbounds": "Вихідні з’єднання",
     "users": "Користувачі",
     "traffic": "Трафік",
     "cluster": "Кластер",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Вузли",
+    "title": "Вхідні з’єднання",
     "create": "Створити",
     "quickCreate": "Швидке створення",
     "quickCreated": "Створено",

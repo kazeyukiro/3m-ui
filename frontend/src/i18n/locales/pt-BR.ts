@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Painel",
-    "listeners": "Nós",
+    "listeners": "Entradas",
+    "outbounds": "Saídas",
     "users": "Usuários",
     "traffic": "Tráfego",
     "cluster": "Cluster",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Nós",
+    "title": "Entradas",
     "create": "Criar",
     "quickCreate": "Criação rápida",
     "quickCreated": "Criado",

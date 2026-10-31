@@ -28,6 +28,7 @@ import Login from './pages/Login';
 import ChangePassword from './pages/ChangePassword';
 import Dashboard from './pages/Dashboard';
 import Listeners from './pages/Listeners';
+import Outbounds from './pages/Outbounds';
 import Users from './pages/Users';
 import Core from './pages/Core';
 import Logs from './pages/Logs';
@@ -98,6 +99,7 @@ const ThemedApp: React.FC = () => {
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/listeners" element={<Listeners />} />
+                    <Route path="/outbounds" element={<Outbounds />} />
                     <Route path="/users" element={<Users />} />
                     <Route path="/share" element={<SharePage />} />
                     <Route path="/traffic" element={<TrafficPage />} />

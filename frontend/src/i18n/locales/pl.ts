@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Pulpit",
-    "listeners": "Węzły",
+    "listeners": "Połączenia przychodzące",
+    "outbounds": "Połączenia wychodzące",
     "users": "Użytkownicy",
     "traffic": "Ruch",
     "cluster": "Klaster",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Węzły",
+    "title": "Połączenia przychodzące",
     "create": "Utwórz",
     "quickCreate": "Szybkie tworzenie",
     "quickCreated": "Utworzono",

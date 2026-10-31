@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
@@ -34,10 +35,11 @@ type RuleProvider struct {
 }
 
 type ServerRoutingConfig struct {
-	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
-	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
-	Rules       []string     `json:"rules" yaml:"rules"`
-	WarpDomains []string     `json:"warpDomains" yaml:"warp-domains,omitempty"`
+	DisabledOutboundNames []string     `json:"disabledOutboundNames,omitempty" yaml:"-"`
+	Proxies               []ProxyEntry `json:"proxies" yaml:"proxies"`
+	Groups                []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules                 []string     `json:"rules" yaml:"rules"`
+	WarpDomains           []string     `json:"warpDomains" yaml:"warp-domains,omitempty"`
 	// WarpGlobal sends all non-exempt traffic via the WARP outbound (MATCH,WARP).
 	// Cloudflare control-plane domains stay DIRECT so the tunnel can dial.
 	WarpGlobal    bool           `json:"warpGlobal" yaml:"warp-global,omitempty"`
@@ -116,6 +118,51 @@ func SaveServerRouting(db *gorm.DB, cfg ServerRoutingConfig) error {
 		return err
 	}
 	return nil
+}
+
+// ServerRoutingUpdate is the routing editor's owned subset. Outbounds are
+// managed separately so saving an older routing screen cannot erase them.
+type ServerRoutingUpdate struct {
+	Groups        *[]GroupEntry   `json:"proxyGroups"`
+	Rules         *[]string       `json:"rules"`
+	WarpDomains   *[]string       `json:"warpDomains"`
+	WarpGlobal    *bool           `json:"warpGlobal"`
+	RuleProviders *[]RuleProvider `json:"ruleProviders"`
+}
+
+func UpdateServerRouting(db *gorm.DB, update ServerRoutingUpdate) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		sr, err := GetServerRouting(tx)
+		if err != nil {
+			return err
+		}
+		if update.Groups != nil {
+			sr.Groups = *update.Groups
+		}
+		if update.Rules != nil {
+			sr.Rules = *update.Rules
+		}
+		if update.WarpDomains != nil {
+			sr.WarpDomains = *update.WarpDomains
+		}
+		if update.WarpGlobal != nil {
+			sr.WarpGlobal = *update.WarpGlobal
+		}
+		if update.RuleProviders != nil {
+			sr.RuleProviders = *update.RuleProviders
+		}
+		for _, p := range sr.Proxies {
+			for _, group := range sr.Groups {
+				if p.Name == group.Name {
+					return ErrInvalidOutbound
+				}
+			}
+		}
+		if err := validateActiveOutboundReferences(tx, sr); err != nil {
+			return err
+		}
+		return SaveServerRouting(tx, sr)
+	})
 }
 
 func normalizeServerRouting(cfg *ServerRoutingConfig) {
@@ -242,7 +289,13 @@ func materializeWARPDomainRules(cfg *ServerRoutingConfig) {
 // warpProxy, when non-nil, is injected (or replaces same-name entry) as the WARP outbound.
 func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, warpProxy map[string]interface{}) {
 	normalizeServerRouting(&sr)
-	proxies := proxyEntriesToYAML(sr.Proxies)
+	enabled := make([]ProxyEntry, 0, len(sr.Proxies))
+	for _, p := range sr.Proxies {
+		if !slices.Contains(sr.DisabledOutboundNames, p.Name) {
+			enabled = append(enabled, p)
+		}
+	}
+	proxies := proxyEntriesToYAML(enabled)
 	if warpProxy != nil {
 		name, _ := warpProxy["name"].(string)
 		if name == "" {
@@ -256,7 +309,9 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 			m, ok := p.(map[string]interface{})
 			if ok {
 				if n, _ := m["name"].(string); n == name {
-					out = append(out, warpProxy)
+					if !replaced {
+						out = append(out, warpProxy)
+					}
 					replaced = true
 					continue
 				}
@@ -268,9 +323,7 @@ func applyServerRouting(merged map[string]interface{}, sr ServerRoutingConfig, w
 		}
 		proxies = out
 	}
-	if len(proxies) > 0 {
-		merged["proxies"] = proxies
-	}
+	merged["proxies"] = proxies
 	if len(sr.Groups) > 0 {
 		merged["proxy-groups"] = groupEntriesToYAML(sr.Groups)
 	} else {

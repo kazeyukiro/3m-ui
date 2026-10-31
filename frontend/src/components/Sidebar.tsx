@@ -32,6 +32,7 @@ export function useSidebarMenuItems(onNavigate?: () => void) {
   const items = [
     { key: '/', icon: <IconNavDashboard />, label: t('nav.dashboard') },
     { key: '/listeners', icon: <IconNavListeners />, label: t('nav.listeners') },
+    { key: '/outbounds', icon: <IconNavRouting />, label: t('nav.outbounds') },
     { key: '/users', icon: <IconNavUsers />, label: t('nav.users') },
     { key: '/share', icon: <IconNavShare />, label: t('nav.share') },
     { key: '/traffic', icon: <IconNavTraffic />, label: t('nav.traffic') },

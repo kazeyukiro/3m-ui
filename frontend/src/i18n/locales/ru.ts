@@ -17,7 +17,8 @@ export default {
   },
   "nav": {
     "dashboard": "Панель",
-    "listeners": "Узлы",
+    "listeners": "Входящие подключения",
+    "outbounds": "Исходящие подключения",
     "users": "Пользователи",
     "traffic": "Трафик",
     "cluster": "Кластер",
@@ -191,7 +192,7 @@ export default {
     "quickHints": "Generated",
     "bind": "Bind address",
     "publicHost": "Public host",
-    "title": "Узлы",
+    "title": "Входящие подключения",
     "create": "Создать узел",
     "quickCreate": "Быстрое создание",
     "quickCreated": "Создано",

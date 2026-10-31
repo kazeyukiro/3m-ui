@@ -69,9 +69,9 @@ export const fetchServerRouting = () =>
   withNetworkRetry(() =>
     client.get<ServerRoutingConfig>('/config/server-routing').then((r) => r.data),
   );
-export const saveServerRouting = (cfg: ServerRoutingConfig) =>
+export const saveServerRouting = (cfg: Partial<Omit<ServerRoutingConfig, 'proxies'>>) =>
   withNetworkRetry(() =>
-    client.put<ServerRoutingConfig>('/config/server-routing', cfg).then((r) => r.data),
+    client.patch<ServerRoutingConfig>('/config/server-routing', cfg).then((r) => r.data),
   );
 
 export const fetchRuleProviderStatus = () =>

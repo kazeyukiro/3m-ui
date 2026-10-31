@@ -71,6 +71,13 @@ function useFeatureItems(): FeatureItem[] {
         keywords: ['nodes', 'inbound', 'node', '节点', '節點', '监听', '監聽', 'インバウンド'],
       },
       {
+        key: '/outbounds',
+        top: true,
+        label: t('nav.outbounds'),
+        icon: <IconNavRouting />,
+        keywords: ['outbound', 'proxy', 'egress', 'wireguard', 'warp', '出站', '代理'],
+      },
+      {
         key: '/users',
         top: true,
         label: users,

@@ -5,7 +5,8 @@ info:
   description: |
     REST API for the 3m-ui Mihomo management panel.
 
-    Server egress: GET/PUT /config/server-routing (serving Mihomo rules + warpDomains + ruleProviders).
+    Server egress: GET/PUT/PATCH /config/server-routing (serving Mihomo rules + warpDomains + ruleProviders).
+    Outbound management: /config/server-outbounds (serving Mihomo proxies, separate from client subscriptions).
     WARP account: GET/POST/DELETE /system/warp (injects outbound WARP at config apply).
     Client subscription rules: /config/rules and /config/groups (visual-config only).
     Batch import: POST /config/rules/parse — preview only, never persist.
@@ -1470,6 +1471,10 @@ paths:
                   proxies:
                     type: array
                     items: { type: object }
+                  disabledOutboundNames:
+                    type: array
+                    items: { type: string }
+                    description: Panel-only disabled outbound names; omitted from generated Mihomo YAML
                   proxyGroups:
                     type: array
                     items: { type: object }
@@ -1486,6 +1491,27 @@ paths:
                     items:
                       $ref: '#/components/schemas/RuleProvider'
                     description: Mihomo rule-providers (rule-set), written top-level at apply; referenced by RULE-SET rules
+    patch:
+      tags: [config]
+      summary: Update server routing without replacing managed outbounds
+      description: Omitted fields are preserved. Outbound definitions and disabled state are managed by /config/server-outbounds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxyGroups: { type: array, items: { type: object } }
+                rules: { type: array, items: { type: string } }
+                warpDomains: { type: array, items: { type: string } }
+                warpGlobal: { type: boolean }
+                ruleProviders:
+                  type: array
+                  items: { $ref: '#/components/schemas/RuleProvider' }
+      responses:
+        "200": { description: Saved ServerRoutingConfig }
+        "409": { description: A disabled or unconfigured outbound is referenced }
     put:
       tags: [config]
       summary: Save server egress routing
@@ -1507,6 +1533,118 @@ paths:
       responses:
         "200":
           description: Saved ServerRoutingConfig
+  /config/server-outbounds:
+    get:
+      tags: [config]
+      summary: List server outbound definitions and Settings-managed WARP
+      responses:
+        "200":
+          description: Outbound entries; WARP account secrets are excluded
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ServerOutbound' }
+    post:
+      tags: [config]
+      summary: Create a server outbound
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServerOutbound' }
+      responses:
+        "201": { description: Saved outbound; Apply is required to update Mihomo }
+        "400": { description: Invalid definition, duplicate name, or reserved name }
+    put:
+      tags: [config]
+      summary: Edit or rename an outbound and atomically update its references
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string }
+          description: Existing outbound name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServerOutbound' }
+      responses:
+        "200": { description: Saved outbound; Apply is required }
+        "400": { description: Invalid definition or Settings-managed WARP }
+        "404": { description: Outbound not found }
+        "409": { description: Cannot disable a referenced outbound }
+    delete:
+      tags: [config]
+      summary: Delete an unreferenced outbound
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Deleted; Apply is required }
+        "400": { description: WARP must be managed in Settings }
+        "404": { description: Outbound not found }
+        "409": { description: Error lists references that must be removed first }
+  /config/server-outbounds/connection-check:
+    post:
+      tags: [config]
+      summary: Test a saved outbound using an isolated Mihomo client
+      description: Uses saved protocol settings and dialer dependencies, including managed WARP. Does not apply configuration or reload the serving core. Test targets and timeouts are server-defined.
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Connection state, reason, checked_at, expires_at, source, address, target, delay_ms and diagnostic steps. Disabled outbounds return a disabled result. Credentials are never returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state, reason, checked_at, expires_at, source, steps]
+                properties:
+                  state: { type: string, enum: [available, unavailable, unknown, disabled] }
+                  reason: { type: string }
+                  checked_at: { type: string, format: date-time }
+                  expires_at: { type: string, format: date-time }
+                  source: { type: string, enum: [local] }
+                  address: { type: string }
+                  target: { type: string }
+                  delay_ms: { type: integer }
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        state: { type: string, enum: [passed, failed, unknown] }
+                        reason: { type: string }
+        "400": { description: Missing name or unavailable dialer dependency }
+        "404": { description: Outbound not found }
+        "503": { description: Mihomo service unavailable }
+  /config/server-outbounds/enabled:
+    post:
+      tags: [config]
+      summary: Atomically enable or disable selected outbounds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [names, enabled]
+              properties:
+                names: { type: array, minItems: 1, items: { type: string } }
+                enabled: { type: boolean }
+      responses:
+        "200": { description: Saved; Apply is required }
+        "400": { description: Invalid request or Settings-managed WARP }
+        "404": { description: An outbound does not exist; nothing was changed }
+        "409": { description: A referenced outbound cannot be disabled; nothing was changed }
   /config/rule-providers/status:
     get:
       tags: [config]
@@ -1613,6 +1751,26 @@ paths:
 
 components:
   schemas:
+
+    ServerOutbound:
+      type: object
+      required: [proxy, enabled]
+      properties:
+        proxy:
+          type: object
+          required: [name, type]
+          description: Flat Mihomo outbound fields; type is ss, socks5, tuic, etc. Endpoint and credentials depend on protocol. WireGuard may use peers instead of a root endpoint.
+          additionalProperties: true
+          properties:
+            name: { type: string }
+            type: { type: string }
+            server: { type: string }
+            port: { type: integer, minimum: 1, maximum: 65535 }
+        enabled: { type: boolean }
+        managed:
+          type: boolean
+          readOnly: true
+          description: True for the Settings-owned WARP account
 
     PanelSSLSettings:
       type: object
