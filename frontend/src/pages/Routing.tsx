@@ -124,7 +124,7 @@ const RoutingPage: React.FC = () => {
         fetchRules(),
         fetchProxies().catch(() => []),
         fetchServerRouting().catch(() => ({ rules: ['MATCH,DIRECT'], proxyGroups: [], proxies: [], warpDomains: [], warpGlobal: false, ruleProviders: [] })),
-        fetchOutbounds(),
+        fetchOutbounds().catch(() => []),
       ]);
       setGroups(Array.isArray(g) ? g : []);
       setServerTargets([...outbounds.filter(e => e.enabled).map(e => e.proxy.name), ...(sr.proxyGroups || []).map(g => g.name)]);
