@@ -5,6 +5,7 @@ import { useI18n } from '../i18n';
 import {
   IconNavDashboard,
   IconNavListeners,
+  IconNavOutbounds,
   IconNavUsers,
   IconNavShare,
   IconNavTraffic,
@@ -74,7 +75,7 @@ function useFeatureItems(): FeatureItem[] {
         key: '/outbounds',
         top: true,
         label: t('nav.outbounds'),
-        icon: <IconNavRouting />,
+        icon: <IconNavOutbounds />,
         keywords: ['outbound', 'proxy', 'egress', 'wireguard', 'warp', '出站', '代理'],
       },
       {

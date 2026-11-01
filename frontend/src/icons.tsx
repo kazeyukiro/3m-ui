@@ -13,7 +13,8 @@ import {
   Terminal,
   Boxes,
   Sparkles,
-  Route,
+  Signpost,
+  Router,
   Radio,
   Users,
   Share2,
@@ -139,11 +140,12 @@ function wrap(Icon: React.ComponentType<LucideProps>, displayName: string) {
 /* —— Navigation (sidebar / mobile) — unique glyphs —— */
 export const IconNavDashboard = wrap(LayoutDashboard, 'IconNavDashboard');
 export const IconNavListeners = wrap(Radio, 'IconNavListeners');
+export const IconNavOutbounds = wrap(Router, 'IconNavOutbounds');
 export const IconNavUsers = wrap(Users, 'IconNavUsers');
 export const IconNavShare = wrap(Share2, 'IconNavShare');
 export const IconNavTraffic = wrap(Activity, 'IconNavTraffic');
 export const IconNavCluster = wrap(Boxes, 'IconNavCluster');
-export const IconNavRouting = wrap(Route, 'IconNavRouting');
+export const IconNavRouting = wrap(Signpost, 'IconNavRouting');
 export const IconNavCore = wrap(Cpu, 'IconNavCore');
 export const IconNavLogs = wrap(Terminal, 'IconNavLogs');
 export const IconNavConfig = wrap(SlidersHorizontal, 'IconNavConfig');
