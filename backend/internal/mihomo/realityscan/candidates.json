@@ -381,5 +381,116 @@
         }
       }
     }
+  },
+  {
+    "hostname": "www.samba.org",
+    "sources": [
+      "https://www.samba.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "Samba project homepage; HTTP 200 HTML observed; direct hosting (Hetzner-range IP), no third-party CDN alias.",
+    "service_kind": "website",
+    "auto_select": true,
+    "review": {
+      "checked_at": "2026-11-02T15:21:00Z",
+      "vantage_point": "Probed from an automated cloud sandbox egress; not a production VPS deployment. Fresh node-side checks remain mandatory.",
+      "hosting_observation": "Observed CNAME: hr2-3.samba.org.; target IP: 144.76.82.148. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Checks are from one network vantage point only; latency, availability and hosting may differ on another node.",
+        "No arbitrary-SNI forwarding or bulk-content exhaustion test was performed; absence of known CDN signals is not proof of dedicated or abuse-proof hosting."
+      ],
+      "decision": "Enabled after probes and homepage inspection; fresh node-side checks remain mandatory.",
+      "probe": {
+        "target": "www.samba.org:443",
+        "server_name": "www.samba.org",
+        "latency_ms": 227,
+        "eligible": true,
+        "evidence": {
+          "cname": "hr2-3.samba.org.",
+          "ip": "144.76.82.148",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519",
+          "certificate_valid": true,
+          "certificate_expires": "2026-11-07T05:28:15Z",
+          "http_status": 200,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.ffmpeg.org",
+    "sources": [
+      "https://www.ffmpeg.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "FFmpeg project homepage; HTTP 200 HTML observed; direct hosting, no third-party CDN CNAME.",
+    "service_kind": "website",
+    "auto_select": true,
+    "review": {
+      "checked_at": "2026-11-02T15:21:00Z",
+      "vantage_point": "Probed from an automated cloud sandbox egress; not a production VPS deployment. Fresh node-side checks remain mandatory.",
+      "hosting_observation": "Observed CNAME: www.ffmpeg.org.; target IP: 79.124.17.100. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Checks are from one network vantage point only; latency, availability and hosting may differ on another node.",
+        "No arbitrary-SNI forwarding or bulk-content exhaustion test was performed; absence of known CDN signals is not proof of dedicated or abuse-proof hosting."
+      ],
+      "decision": "Enabled after probes and homepage inspection; fresh node-side checks remain mandatory.",
+      "probe": {
+        "target": "www.ffmpeg.org:443",
+        "server_name": "www.ffmpeg.org",
+        "latency_ms": 200,
+        "eligible": true,
+        "evidence": {
+          "cname": "www.ffmpeg.org.",
+          "ip": "79.124.17.100",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519",
+          "certificate_valid": true,
+          "certificate_expires": "2027-01-10T23:28:13Z",
+          "http_status": 200,
+          "cloudflare": false
+        }
+      }
+    }
+  },
+  {
+    "hostname": "www.opensuse.org",
+    "sources": [
+      "https://www.opensuse.org/",
+      "https://github.com/XTLS/REALITY/blob/main/README.md"
+    ],
+    "rationale": "openSUSE project homepage; served through the project's own reverse proxy (proxy-prg2.opensuse.org); HTTP 200, no third-party CDN signal.",
+    "service_kind": "website",
+    "auto_select": true,
+    "review": {
+      "checked_at": "2026-11-02T15:21:00Z",
+      "vantage_point": "Probed from an automated cloud sandbox egress; not a production VPS deployment. Fresh node-side checks remain mandatory.",
+      "hosting_observation": "Observed CNAME: proxy-prg2.opensuse.org.; target IP: 195.135.223.50. DNS/headers are observations, not a hosting ownership attestation.",
+      "known_risks": [
+        "Checks are from one network vantage point only; latency, availability and hosting may differ on another node.",
+        "No arbitrary-SNI forwarding or bulk-content exhaustion test was performed; absence of known CDN signals is not proof of dedicated or abuse-proof hosting."
+      ],
+      "decision": "Enabled after probes and homepage inspection; fresh node-side checks remain mandatory.",
+      "probe": {
+        "target": "www.opensuse.org:443",
+        "server_name": "www.opensuse.org",
+        "latency_ms": 602,
+        "eligible": true,
+        "evidence": {
+          "cname": "proxy-prg2.opensuse.org.",
+          "ip": "195.135.223.50",
+          "tls_version": "TLS 1.3",
+          "alpn": "h2",
+          "key_exchange": "X25519",
+          "certificate_valid": true,
+          "certificate_expires": "2027-01-29T23:42:48Z",
+          "http_status": 200,
+          "cloudflare": false
+        }
+      }
+    }
   }
 ]

@@ -310,12 +310,41 @@ Avoid unnecessary dependencies.
 Prefer simple and maintainable solutions.
 
 
-## Future Features
+## Feature Status
 
-The architecture should allow adding:
+Most originally-planned capabilities are already implemented. The list below
+separates what exists today from work that is still open.
 
-- Traffic statistics
-- Multiple Mihomo instances
-- Multi-user management
-- Docker deployment
-- Cluster management
+### Implemented
+
+- Listener / node management: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC,
+  AnyTLS, Snell, ShadowQUIC; REALITY, self-signed TLS, one-click batch certificates,
+  traffic ratio, transport-field mutual-exclusion validation
+- User management: one-click create (random user/pass/UUID, optional bind-all),
+  per-node metering (usage × node ratio), limits, expiry, grouping, subscription token
+- Subscription generation: Clash/Mihomo YAML, v2ray Base64 (`?target=v2ray`),
+  sing-box JSON, HTML subscription page
+- Config: generate → validate → apply, rollback to previous `config.yaml` on failure
+- Telegram alerts & admin commands
+- Multi-machine cluster: register remote panels, health check, node mirror sync, push
+- Security: JWT, forced password change on first login, TOTP, optional GitHub OAuth,
+  `web_path` prefix, credential encryption, CORS
+- Ops: core start/stop/update, Geo data, panel SSL/ACME (HTTP-01, DNS-01 wildcard),
+  backup, Cloudflare WARP one-click registration
+- DNS control UI (#105), Outbound management (#104)
+- REALITY target catalog: reviewed candidates in
+  `backend/internal/mihomo/realityscan/candidates.json` (see `realityscan/README.md`);
+  one-click creation pulls from `auto_select: true` entries only
+- i18n across 15+ locales
+- Traffic statistics dashboard
+
+### Open / possible future work
+
+- Audit-log viewer UI (backend `panellog` already records events)
+- Alert channels beyond Telegram (Webhook / Bark / DingTalk / Discord / email)
+- Listener templates / clone for fast same-shape node creation
+- One-click full backup/restore (config + users + subscriptions + certificates)
+- Traffic trend charts and per-user / per-node Top-N
+- Remove deprecated fields (DNS `geosite`, `warp_register` legacy `x/crypto`,
+  `mihomo/api` deprecated `Network`, `listener_user` legacy fields) before a Mihomo
+  upgrade breaks them

@@ -7,13 +7,16 @@ count requirement. Every entry includes its sources, rationale, service kind,
 `auto_select` decision, review time and vantage point, observed hosting signals,
 known risks, decision explanation, and the last probe's evidence.
 
-The initial 2026-09-07 review contains **11 entries, 3 enabled**:
+The reviewed catalog contains **14 entries, 6 enabled**:
 
 | Host | Automatic selection | Review basis |
 | --- | --- | --- |
 | www.libreoffice.org | Yes | Project homepage inspected; repeated local probes passed |
 | www.debian.org | Yes | Project homepage inspected; displayed ISO download uses cdimage.debian.org; repeated probes passed |
 | www.videolan.org | Yes | Project homepage inspected; displayed binary downloads use get.videolan.org; repeated probes passed |
+| www.samba.org | Yes | Project homepage inspected; direct hosting (Hetzner-range IP), no third-party CDN alias; repeated probes passed |
+| www.ffmpeg.org | Yes | Project homepage inspected; direct hosting, no third-party CDN CNAME; repeated probes passed |
+| www.opensuse.org | Yes | Project homepage inspected; served via the project's own reverse proxy; no third-party CDN signal; repeated probes passed |
 | www.gimp.org | No | Fastly DNS alias |
 | www.esa.int | No | cdnmix.net DNS alias; delivery behavior unreviewed |
 | www.cisco.com | No | akadns.net alias; conservative delivery-network DNS exclusion |
@@ -23,7 +26,7 @@ The initial 2026-09-07 review contains **11 entries, 3 enabled**:
 | www.fom-international.com | No | X-Served-By plus X-Timer cache signal |
 | www.r-project.org | No | Alias to a CRAN archive host; bulk-content exposure unreviewed |
 
-The three enabled entries were selected through **our own homepage review and
+The enabled entries were selected through **our own homepage review and
 network probes**, not copied from a published list of proven-safe REALITY sites.
 Their sources are the actual project websites and the upstream selection
 criteria. Historical suggestions are attributed individually where applicable:
