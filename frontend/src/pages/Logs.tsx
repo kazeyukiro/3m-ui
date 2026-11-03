@@ -1,13 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Card, List, Tag, Button, Space, Empty, Spin, message, theme, Tabs } from 'antd';
-import { IconRefreshList, IconClear } from '../icons';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Card, List, Tag, Button, Space, Empty, Spin, message, theme, Tabs, Input, Select } from 'antd';
+import { IconRefreshList, IconClear, IconDownload, IconSearch } from '../icons';
 import dayjs from 'dayjs';
 import client from '../api/client';
 import { useI18n } from '../i18n';
 import useIsMobile from '../hooks/useIsMobile';
 import PageHeader from '../components/PageHeader';
-
-interface LogEntry { timestamp: string; level: string; payload: string; }
+import { filterLogs, type LogEntry, type LogLevelFilter } from '../utils/logFilter';
 
 const levelColor: Record<string, string> = { debug: 'default', info: 'blue', warn: 'orange', warning: 'orange', error: 'red', fatal: 'red' };
 
@@ -21,6 +20,8 @@ const Logs: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [search, setSearch] = useState('');
+  const [level, setLevel] = useState<LogLevelFilter>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,16 +43,90 @@ const Logs: React.FC = () => {
     return () => clearInterval(id);
   }, [autoRefresh, load]);
 
+  const filtered = useMemo(() => filterLogs(logs, search, level), [logs, search, level]);
+
+  const exportCsv = useCallback(() => {
+    if (filtered.length === 0) {
+      message.warning(t('logs.exportEmpty', 'Nothing to export'));
+      return;
+    }
+    const header = ['timestamp', 'level', 'payload'].join(',');
+    const rows = filtered.map((l) =>
+      [l.timestamp, l.level, `"${(l.payload || '').replace(/"/g, '""')}"`].join(','),
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `3m-ui-${source}-logs-${dayjs().format('YYYYMMDD-HHmmss')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    message.success(
+      t('logs.exportSuccess', 'Exported {n} log lines').replace('{n}', String(filtered.length)),
+    );
+  }, [filtered, source, t]);
+
+  const toolbar = (
+    <Space style={{ marginBottom: 16 }} wrap>
+      <Input
+        allowClear
+        prefix={<IconSearch />}
+        placeholder={t('logs.search', 'Search')}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ width: isMobile ? '100%' : 260 }}
+      />
+      <Select<LogLevelFilter>
+        value={level}
+        onChange={(v) => setLevel(v)}
+        style={{ width: isMobile ? '100%' : 140 }}
+        options={[
+          { value: 'all', label: t('logs.all', 'All') },
+          { value: 'info', label: t('logs.levelInfo', 'INFO') },
+          { value: 'warning', label: t('logs.levelWarning', 'WARN') },
+          { value: 'error', label: t('logs.levelError', 'ERROR') },
+        ]}
+      />
+      <Button icon={<IconRefreshList />} onClick={load}>{t('common.refresh')}</Button>
+      <Button
+        icon={<IconClear />}
+        onClick={() => {
+          setLogs([]);
+          setSearch('');
+          setLevel('all');
+        }}
+      >
+        {t('logs.clear')}
+      </Button>
+      <Button icon={<IconDownload />} onClick={exportCsv}>{t('logs.export', 'Export')}</Button>
+      <Button
+        type={autoRefresh ? 'primary' : 'default'}
+        onClick={() => setAutoRefresh(!autoRefresh)}
+      >
+        {t('logs.autoRefresh')}: {autoRefresh ? t('common.enabled') : t('common.disabled')}
+      </Button>
+    </Space>
+  );
+
   const list = (
     <Card size={isMobile ? 'small' : 'default'}>
       {loading && logs.length === 0 ? (
         <Spin />
-      ) : logs.length === 0 ? (
-        <Empty description={t('logs.empty')} />
+      ) : filtered.length === 0 ? (
+        <Empty
+          description={
+            logs.length === 0
+              ? t('logs.empty')
+              : t('logs.noMatch', 'No matching logs')
+          }
+        />
       ) : (
         <List
           size="small"
-          dataSource={logs}
+          dataSource={filtered}
           renderItem={(log, i) => (
             <List.Item key={i} style={{ fontFamily: 'monospace', fontSize: 13 }}>
               <span style={{ color: token.colorTextTertiary, marginRight: 8 }}>
@@ -71,19 +146,10 @@ const Logs: React.FC = () => {
   return (
     <div>
       <PageHeader title={t('logs.title')} subtitle={t('logs.subtitle')} />
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Button icon={<IconRefreshList />} onClick={load}>{t('common.refresh')}</Button>
-        <Button icon={<IconClear />} onClick={() => setLogs([])}>{t('logs.clear')}</Button>
-        <Button
-          type={autoRefresh ? 'primary' : 'default'}
-          onClick={() => setAutoRefresh(!autoRefresh)}
-        >
-          {t('logs.autoRefresh')}: {autoRefresh ? t('common.enabled') : t('common.disabled')}
-        </Button>
-      </Space>
+      {toolbar}
       <Tabs
         activeKey={source}
-        onChange={(k) => { setSource(k as LogSource); setLogs([]); }}
+        onChange={(k) => { setSource(k as LogSource); setLogs([]); setSearch(''); setLevel('all'); }}
         items={[
           { key: 'mihomo', label: t('logs.tabCore') || 'Mihomo', children: list },
           { key: 'panel', label: t('logs.tabPanel') || 'Panel', children: list },

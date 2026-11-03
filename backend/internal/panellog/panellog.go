@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const maxLines = 500
+const maxLines = 2000
 
 var (
 	mu    sync.Mutex

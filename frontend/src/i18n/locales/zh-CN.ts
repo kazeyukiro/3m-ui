@@ -664,7 +664,16 @@ export default {
     "autoRefresh": "自动刷新",
     "clear": "清空",
     "tabCore": "Mihomo 核心",
-    "tabPanel": "面板进程"
+    "tabPanel": "面板进程",
+    "search": "搜索",
+    "all": "全部",
+    "levelInfo": "信息",
+    "levelWarning": "警告",
+    "levelError": "错误",
+    "export": "导出",
+    "exportEmpty": "没有可导出的日志",
+    "exportSuccess": "已导出 {n} 条日志",
+    "noMatch": "没有匹配的日志"
   },
   "config": {
     "title": "配置引擎",

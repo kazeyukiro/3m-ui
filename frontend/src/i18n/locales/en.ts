@@ -664,7 +664,16 @@ export default {
     "autoRefresh": "Auto refresh",
     "clear": "Clear",
     "tabCore": "Mihomo",
-    "tabPanel": "Panel"
+    "tabPanel": "Panel",
+    "search": "Search",
+    "all": "All",
+    "levelInfo": "INFO",
+    "levelWarning": "WARN",
+    "levelError": "ERROR",
+    "export": "Export",
+    "exportEmpty": "Nothing to export",
+    "exportSuccess": "Exported {n} log lines",
+    "noMatch": "No matching logs"
   },
   "config": {
     "title": "Config Engine",
