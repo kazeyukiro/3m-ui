@@ -1265,7 +1265,12 @@ const Settings: React.FC = () => {
                   // happened at runtime instead of a misleading green SSL on.
                   const state = String(sslStatus.runtime_state || (sslStatus.enabled ? 'configured' : 'off'));
                   const color = state === 'running' ? 'green' : state === 'fallback' ? 'red' : state === 'configured' ? 'orange' : 'default';
-                  const label = String(sslStatus.runtime_label || (sslStatus.enabled ? 'SSL on' : 'SSL off'));
+                  // Runtime copy is localised (issue #106): the API reports state,
+                  // never a pre-rendered English label.
+                  const label = state === 'running' ? t('settings.sslRuntimeRunning')
+                    : state === 'fallback' ? t('settings.sslRuntimeFallback')
+                    : state === 'configured' ? t('settings.sslRuntimeConfigured')
+                    : t('settings.sslRuntimeOff');
                   const entry = sslStatus.runtime_entry_url ? String(sslStatus.runtime_entry_url) : '';
                   return (
                     <Space direction="vertical" size={6} style={{ width: '100%', marginBottom: 12 }}>
@@ -1275,7 +1280,7 @@ const Settings: React.FC = () => {
                       </Space>
                       {entry ? (
                         <Text type="secondary">
-                          Entry:{' '}
+                          {t('settings.sslEntry')}:{' '}
                           <Typography.Link href={entry} target="_blank" rel="noopener noreferrer">{entry}</Typography.Link>
                         </Text>
                       ) : null}
@@ -1285,11 +1290,11 @@ const Settings: React.FC = () => {
                     </Space>
                   );
                 })()}
-                {sslStatus?.port_note ? (
-                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={String(sslStatus.port_note)} />
+                {sslStatus ? (
+                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('settings.sslPortNote')} />
                 ) : null}
-                {String(sslChallenge || '') === 'dns-01' && sslStatus?.dns01_note ? (
-                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={String(sslStatus.dns01_note)} />
+                {String(sslChallenge || '') === 'dns-01' && sslStatus ? (
+                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('settings.sslDns01Note')} />
                 ) : null}
                 <Form
                   form={sslForm}
@@ -1342,7 +1347,7 @@ const Settings: React.FC = () => {
                     <Select options={[{ value: 'cloudflare', label: 'Cloudflare' }]} />
                   </Form.Item>
                   <Form.Item name="dns_token" label={t('settings.sslDNSToken') || 'DNS API token'} tooltip={fieldTip(t, 'settings.sslDNSTokenHint')}>
-                    <Input.Password placeholder={sslStatus?.has_dns_token ? '•••••••• (saved)' : 'Cloudflare API token'} autoComplete="new-password" />
+                    <Input.Password placeholder={sslStatus?.has_dns_token ? `•••••••• (${t('common.saved')})` : 'Cloudflare API token'} autoComplete="new-password" />
                   </Form.Item>
                   <Form.Item name="dns_zone" label={t('settings.sslDNSZone') || 'DNS zone (optional)'} tooltip={fieldTip(t, 'settings.sslDNSZoneHint')}>
                     <Input placeholder="example.com" />
@@ -1371,8 +1376,8 @@ const Settings: React.FC = () => {
               </Card>
 
               <Card title={t('settings.certWizard') || 'Certificate wizard'}>
-                {sslStatus?.certbot_note ? (
-                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={String(sslStatus.certbot_note)} />
+                {sslStatus ? (
+                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('settings.sslCertbotNote')} />
                 ) : null}
                 <Form
                   form={acmeForm}
