@@ -324,5 +324,90 @@ class LifecycleTest(unittest.TestCase):
         self.assertFalse((self.base / 'mihomo').exists())
 
 
+class PanelURLTest(unittest.TestCase):
+    """The Panel URL line must honour server.public_url.
+
+    install.sh prints it after an update and 3m-ui.sh status prints it on
+    demand. Both probe the local egress IP when public_url is empty, but a
+    bound domain / NAT / reverse proxy takes precedence. Scripts are sourced,
+    never executed, so no host service, root identity or release is touched.
+    """
+
+    CASES = [
+        ('domain + 443',         'https://dzx1283.cc.cd',         443,  '',        'https://dzx1283.cc.cd/'),
+        ('domain trailing slash','https://dzx1283.cc.cd/',         443,  '',        'https://dzx1283.cc.cd/'),
+        ('no scheme',            'dzx1283.cc.cd',                 443,  '',        'https://dzx1283.cc.cd/'),
+        ('http + custom port',   'http://panel.example.com:8443', 8080, '',        'http://panel.example.com:8443/'),
+        ('domain + web_path',    'https://dzx1283.cc.cd',         443,  '/secret', 'https://dzx1283.cc.cd/secret/'),
+        ('literal null',         'null',                          443,  '',        'https://85.149.212.214/'),
+        ('empty string',         '',                              443,  '',        'https://85.149.212.214/'),
+        ('key absent',           None,                            443,  '',        'https://85.149.212.214/'),
+        ('fallback + web_path',  None,                            8080, '/abc123', 'http://85.149.212.214:8080/abc123/'),
+        ('pub https, port 8080', 'https://dzx1283.cc.cd',         8080, '',        'https://dzx1283.cc.cd/'),
+    ]
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='3m-panel-url-')
+        self.directory = Path(self.tmp.name)
+        bindir = self.directory / 'bin'
+        bindir.mkdir()
+        ip = bindir / 'ip'
+        ip.write_text('#!/bin/sh\n'
+                      'printf "1.1.1.1 via 10.0.0.1 dev eth0 src 85.149.212.214 uid 0\\n"\n')
+        ip.chmod(0o755)
+        self.env = dict(os.environ,
+                        PATH=str(bindir) + os.pathsep + os.environ['PATH'])
+        for name in ('install.sh', '3m-ui.sh'):
+            text = (SCRIPTS / name).read_text()
+            text = text.replace('set -eu\n', '', 1)
+            text = text.rsplit('main "$@"', 1)[0]
+            (self.directory / (name + '.src')).write_text(text)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_config(self, public_url, port, web_path):
+        lines = ['database:', '  path: /tmp/3m-ui-test.db',
+                 'server:', '  port: %d' % port]
+        if public_url is not None:
+            lines.append('  public_url: "%s"' % public_url)
+        lines.append('  web_path: "%s"' % web_path)
+        cfg = self.directory / 'config.yaml'
+        cfg.write_text('\n'.join(lines) + '\n')
+        return str(cfg)
+
+    def panel_url(self, script, cfg):
+        result = subprocess.run(
+            ['sh', '-c',
+             'CFG="$1"; shift; . "$0"; CONFIG_FILE="$CFG"; '
+             'printf "__URL__%s\\n" "$(panel_display_url)"',
+             str(self.directory / (script + '.src')), cfg],
+            env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        got = [line[len('__URL__'):] for line in result.stdout.splitlines()
+               if line.startswith('__URL__')]
+        self.assertEqual(len(got), 1, result.stdout)
+        return got[0]
+
+    def test_public_url_wins_for_both_scripts(self):
+        for label, pub, port, wp, expected in self.CASES:
+            with self.subTest(case=label):
+                cfg = self.write_config(pub, port, wp)
+                for script in ('install.sh', '3m-ui.sh'):
+                    with self.subTest(script=script):
+                        self.assertEqual(self.panel_url(script, cfg), expected)
+
+    def test_status_uses_the_same_url(self):
+        cfg = self.write_config('https://dzx1283.cc.cd', 443, '')
+        result = subprocess.run(
+            ['sh', '-c',
+             'CFG="$1"; shift; . "$0"; CONFIG_FILE="$CFG"; status',
+             str(self.directory / '3m-ui.sh.src'), cfg],
+            env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Panel URL: https://dzx1283.cc.cd/', result.stdout)
+        self.assertNotIn('Panel URL: https://85.149.212.214/', result.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()

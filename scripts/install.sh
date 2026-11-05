@@ -31,6 +31,49 @@ WORK=""
 say(){ printf '%s\n' "$*"; }
 err(){ say "Error: $*" >&2; exit 1; }
 command_exists(){ command -v "$1" >/dev/null 2>&1; }
+
+# Build the URL an operator should open in a browser. server.public_url wins
+# when configured (a bound domain, NAT or reverse proxy); only when it is
+# empty do we fall back to the probed primary IPv4. The panel base path is
+# appended in both cases, and port 443 implies https (80 redirects to it).
+panel_display_url() {
+  _pub=$(awk '
+    /^[^[:space:]#]/ { inblk = (/^server:/) }
+    inblk && $1 == "public_url:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+  ' "$CONFIG_FILE" 2>/dev/null | tr -d '"' | tr -d '[:space:]') || _pub=
+  case "$_pub" in '' | null | '~') _pub= ;; esac
+  _port=$(awk '
+    /^[^[:space:]#]/ { inblk = (/^server:/) }
+    inblk && $1 == "port:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+  ' "$CONFIG_FILE" 2>/dev/null | tr -d '"' | tr -d '[:space:]') || _port=
+  [ -n "$_port" ] || _port=8080
+  _path=$(awk '
+    /^[^[:space:]#]/ { inblk = (/^server:/) }
+    inblk && $1 == "web_path:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+  ' "$CONFIG_FILE" 2>/dev/null | tr -d '" ') || _path=
+  _path=${_path%/}
+  case "$_path" in
+    '' | /) _path='/' ;;
+    /*) _path="$_path/" ;;
+    *) _path="/$_path/" ;;
+  esac
+  if [ -n "$_pub" ]; then
+    _url=${_pub%/}
+    case "$_url" in
+      *://*) ;;
+      *) if [ "$_port" = 443 ]; then _url="https://$_url"; else _url="http://$_url"; fi ;;
+    esac
+  else
+    _ip=$(ip -4 route get 1.1.1.1 2>/dev/null |
+      awk '{ for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }') || _ip=
+    [ -n "$_ip" ] || _ip='<server-ip>'
+    if [ "$_port" = 443 ]; then _url="https://$_ip"; else _url="http://$_ip:$_port"; fi
+  fi
+  case "$_path" in
+    '/') printf '%s/' "$_url" ;;
+    *)   printf '%s%s' "$_url" "$_path" ;;
+  esac
+}
 usage(){ cat <<USAGE
 Usage: install.sh [VERSION] [--yes] [--no-mihomo]
        3m-ui update [VERSION] [--yes] [--no-mihomo]
@@ -719,34 +762,10 @@ main(){
   say 'New installations print a one-time administrator password above. Use 3m-ui reset-admin if it is lost.'
   say 'If you ever lock yourself out of the web UI (wrong port / SSL / listen address), SSH in and run: 3m-ui reset-config --panel --yes'
   say "Configuration: $CONFIG_FILE"
-  # The panel hides behind a random base path generated on first run, so print
-  # the full URL here: a fresh install would otherwise end with the operator
-  # hitting a 404 at their own bare domain.
-  panel_ip=$(ip -4 route get 1.1.1.1 2>/dev/null |
-    awk '{ for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }') || panel_ip=
-  [ -n "$panel_ip" ] || panel_ip='<server-ip>'
-  panel_port=$(awk '
-    /^[^[:space:]#]/ { inblk = (/^server:/) }
-    inblk && $1 == "port:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
-  ' "$CONFIG_FILE" 2>/dev/null) || panel_port=
-  [ -n "$panel_port" ] || panel_port=8080
-  panel_path=$(awk '
-    /^[^[:space:]#]/ { inblk = (/^server:/) }
-    inblk && $1 == "web_path:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
-  ' "$CONFIG_FILE" 2>/dev/null | tr -d '" ') || panel_path=
-  panel_path=${panel_path%/}
-  case "$panel_path" in
-    '' | /) panel_path='/' ;;
-    /*) panel_path="$panel_path/" ;;
-    *) panel_path="/$panel_path/" ;;
-  esac
-  # Port 443 means the panel terminates TLS itself (80 redirects to it), so
-  # print the URL you can actually open instead of an http:// one on :443.
-  if [ "$panel_port" = 443 ]; then
-    say "Panel URL: https://${panel_ip}${panel_path}"
-  else
-    say "Panel URL: http://${panel_ip}:${panel_port}${panel_path}"
-  fi
+  # Prefer the configured public URL (domain / NAT / reverse proxy); only
+  # fall back to the probed egress IP when it is unset. The random web_path
+  # is appended either way so a fresh install does not land on a 404.
+  say "Panel URL: $(panel_display_url)"
   say "Management: 3m-ui   Backup: $SNAPSHOT"
 }
 main "$@"

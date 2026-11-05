@@ -76,6 +76,31 @@ panel_web_path() {
   printf '%s' "$_wp"
 }
 
+# Build the URL an operator should open. server.public_url (a bound domain,
+# NAT or reverse proxy) wins; only when unset do we fall back to the probed
+# primary IPv4. Port 443 terminates TLS locally, so it implies https.
+panel_display_url() {
+  _p=$(panel_setting port 8080)
+  _wp=$(panel_web_path)
+  _pub=$(panel_setting public_url '' | tr -d '"' | tr -d '[:space:]')
+  case "$_pub" in '' | null | '~') _pub= ;; esac
+  if [ -n "$_pub" ]; then
+    _u=${_pub%/}
+    case "$_u" in
+      *://*) ;;
+      *) if [ "$_p" = 443 ]; then _u="https://$_u"; else _u="http://$_u"; fi ;;
+    esac
+  else
+    _h=$(server_ip)
+    [ -n "$_h" ] || _h='<server-ip>'
+    if [ "$_p" = 443 ]; then _u="https://$_h"; else _u="http://$_h:$_p"; fi
+  fi
+  case "$_wp" in
+    '/') printf '%s/' "$_u" ;;
+    *)   printf '%s%s' "$_u" "$_wp" ;;
+  esac
+}
+
 status() {
   case "$(init_system)" in
     systemd) systemctl --no-pager --full status "$SERVICE" || true ;;
@@ -95,16 +120,7 @@ status() {
   else
     say "Application binary not found: $APP_BIN"
   fi
-  _host=$(server_ip)
-  [ -n "$_host" ] || _host='<server-ip>'
-  _port=$(panel_setting port 8080)
-  # Port 443 means the panel terminates TLS itself (80 redirects to it), so
-  # print the URL you can actually open instead of an http:// one on :443.
-  if [ "$_port" = 443 ]; then
-    say "Panel URL: https://${_host}$(panel_web_path)"
-  else
-    say "Panel URL: http://${_host}:${_port}$(panel_web_path)"
-  fi
+  say "Panel URL: $(panel_display_url)"
 }
 
 logs() {
