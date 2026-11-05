@@ -191,6 +191,9 @@ const Settings: React.FC = () => {
   const [sslForm] = Form.useForm();
   const [subPageForm] = Form.useForm();
   const [sslStatus, setSslStatus] = useState<Record<string, unknown> | null>(null);
+  // Track the selected ACME challenge so DNS-01 hints can hide the port-80
+  // requirement (issue #106).
+  const sslChallenge = Form.useWatch('challenge', sslForm);
 
 
   useEffect(() => {
@@ -1257,11 +1260,37 @@ const Settings: React.FC = () => {
                   {t('settings.panelSSLHint') ||
                     'Enable HTTPS via Let’s Encrypt or manual cert. Restart panel after save.'}
                 </Text>
-                {sslStatus && (
-                  <Tag color={sslStatus.enabled ? 'green' : 'default'} style={{ marginBottom: 12 }}>
-                    {sslStatus.enabled ? 'SSL on' : 'SSL off'}
-                  </Tag>
-                )}
+                {sslStatus && (() => {
+                  // enabled=true only means "configured"; show what actually
+                  // happened at runtime instead of a misleading green SSL on.
+                  const state = String(sslStatus.runtime_state || (sslStatus.enabled ? 'configured' : 'off'));
+                  const color = state === 'running' ? 'green' : state === 'fallback' ? 'red' : state === 'configured' ? 'orange' : 'default';
+                  const label = String(sslStatus.runtime_label || (sslStatus.enabled ? 'SSL on' : 'SSL off'));
+                  const entry = sslStatus.runtime_entry_url ? String(sslStatus.runtime_entry_url) : '';
+                  return (
+                    <Space direction="vertical" size={6} style={{ width: '100%', marginBottom: 12 }}>
+                      <Space size={8} wrap>
+                        <Tag color={color}>{label}</Tag>
+                        {sslStatus.runtime_listen_addr ? <Text code>{String(sslStatus.runtime_listen_addr)}</Text> : null}
+                      </Space>
+                      {entry ? (
+                        <Text type="secondary">
+                          Entry:{' '}
+                          <Typography.Link href={entry} target="_blank" rel="noopener noreferrer">{entry}</Typography.Link>
+                        </Text>
+                      ) : null}
+                      {sslStatus.runtime_fallback_err ? (
+                        <Alert type="warning" showIcon message={String(sslStatus.runtime_fallback_err)} />
+                      ) : null}
+                    </Space>
+                  );
+                })()}
+                {sslStatus?.port_note ? (
+                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={String(sslStatus.port_note)} />
+                ) : null}
+                {String(sslChallenge || '') === 'dns-01' && sslStatus?.dns01_note ? (
+                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={String(sslStatus.dns01_note)} />
+                ) : null}
                 <Form
                   form={sslForm}
                   layout="vertical"
@@ -1281,9 +1310,10 @@ const Settings: React.FC = () => {
                         dns_token: values.dns_token || '',
                         dns_zone: values.dns_zone || '',
                       });
-                      message.success(t('settings.sslSaved') || 'SSL saved — restart panel');
                       const st = await client.get('/system/ssl/status');
                       setSslStatus(st.data || null);
+                      const nextEntry = values.enabled ? st.data?.https_entry_url : st.data?.http_entry_url;
+                      message.success(`${t('settings.sslSaved') || 'SSL saved — restart panel'}${nextEntry ? ` → ${String(nextEntry)}` : ''}`);
                     } catch (e: any) {
                       message.error(e.message || t('common.error'));
                     }
@@ -1292,7 +1322,9 @@ const Settings: React.FC = () => {
                   <Form.Item name="enabled" label={t('common.enabled')} valuePropName="checked" tooltip={fieldTip(t, 'settings.sslEnabledHint')}>
                     <Switch />
                   </Form.Item>
-                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.'} tooltip={fieldTip(t, 'settings.domainHint')}>
+                                    <Form.Item name="domain" label={t('settings.domainOrIP') || 'Domain or public IP'} extra={String(sslChallenge || '') === 'dns-01'
+                      ? (t('settings.sslChallengeHint') || 'DNS-01 does not need port 80.')
+                      : (t('settings.domainOrIPExtra') || 'Hostname, *.example.com (wildcard), or IPv4/IPv6. Wildcard requires DNS-01 + Cloudflare token.')} tooltip={fieldTip(t, 'settings.domainHint')}>
                     <Input placeholder="panel.example.com or *.example.com" />
                   </Form.Item>
                   <Form.Item name="email" label={t('settings.email')} tooltip={fieldTip(t, 'settings.sslEmailHint')}>
@@ -1319,7 +1351,8 @@ const Settings: React.FC = () => {
                   <Form.Item name="cache_dir" label={t('settings.acmeCacheDir') || 'ACME cache dir'} tooltip={fieldTip(t, 'settings.acmeCacheDirHint')}>
                     <Input placeholder="/var/lib/3m-ui/acme" />
                   </Form.Item>
-                  <Form.Item name="listen_http" label={t('settings.listenHttp') || 'HTTP listen'} tooltip={fieldTip(t, 'settings.listenHttpHint')}>
+                  <Form.Item name="listen_http" label={t('settings.listenHttp') || 'HTTP listen'} tooltip={fieldTip(t, 'settings.listenHttpHint')}
+                    extra={String(sslChallenge || '') === 'dns-01' ? (t('settings.sslChallengeHint') || '') : undefined}>
                     <Input placeholder=":80" />
                   </Form.Item>
                   <Form.Item name="listen_tls" label={t('settings.listenTls') || 'TLS listen'} tooltip={fieldTip(t, 'settings.listenTlsHint')}>
@@ -1338,6 +1371,9 @@ const Settings: React.FC = () => {
               </Card>
 
               <Card title={t('settings.certWizard') || 'Certificate wizard'}>
+                {sslStatus?.certbot_note ? (
+                  <Alert type="info" showIcon style={{ marginBottom: 12 }} message={String(sslStatus.certbot_note)} />
+                ) : null}
                 <Form
                   form={acmeForm}
                   layout="vertical"

@@ -66,12 +66,34 @@ func newDomainHTTPIssuer(domain, email, cacheDir string) (*domainHTTPIssuer, err
 		iss.cert = cert
 		log.Printf("panel SSL: loaded HTTP-01 cert for %s (expires %s)", domain, leafNotAfter(cert).Format(time.RFC3339))
 	} else {
-		if err := iss.obtain(); err != nil {
-			return nil, fmt.Errorf("panel SSL: obtain HTTP-01 cert for %s: %w", domain, err)
-		}
+		// Do NOT obtain synchronously here. NewManager runs before the
+		// permanent HTTP-01 challenge listener is bound; obtaining here made
+		// Let's Encrypt fetch the token while nothing was listening on :80,
+		// so first-time issuance always failed with "Connection refused"
+		// (issue #106). Manager.EnsureCertificate() performs the first
+		// issuance after app binds and verifies the challenge listener.
+		log.Printf("panel SSL: no cached HTTP-01 cert for %s; issuance deferred until challenge listener is bound", domain)
 	}
 	go iss.renewLoop()
 	return iss, nil
+}
+
+// hasCertificate reports whether a usable certificate is already loaded.
+func (iss *domainHTTPIssuer) hasCertificate() bool {
+	iss.mu.Lock()
+	defer iss.mu.Unlock()
+	return iss.cert != nil
+}
+
+// ensureCertificate performs the deferred first-time issuance. Callers MUST
+// bind the HTTP-01 challenge listener before invoking this.
+func (iss *domainHTTPIssuer) ensureCertificate() error {
+	iss.mu.Lock()
+	defer iss.mu.Unlock()
+	if iss.cert != nil {
+		return nil
+	}
+	return iss.obtainLocked()
 }
 
 func (iss *domainHTTPIssuer) certPath() string {

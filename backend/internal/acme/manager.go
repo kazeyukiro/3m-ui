@@ -330,6 +330,31 @@ func (m *Manager) MarkChallengeBound() {
 	}
 }
 
+// EnsureCertificate performs any certificate issuance that was deferred by
+// NewManager. For HTTP-01 domains the challenge listener must already be
+// bound and serving, otherwise the CA cannot fetch the token (issue #106).
+func (m *Manager) EnsureCertificate() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.settings.Enabled {
+		return nil
+	}
+	if m.domainHTTP != nil {
+		return m.domainHTTP.ensureCertificate()
+	}
+	// DNS-01 and manual certs do not need a local challenge listener; they
+	// are already resolved synchronously by their constructors.
+	return nil
+}
+
+// NeedsHTTP01Listener reports whether a bound HTTP-01 listener is required
+// before issuance (first-time domain HTTP-01 with no cached certificate).
+func (m *Manager) NeedsHTTP01Listener() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.domainHTTP != nil && !m.domainHTTP.hasCertificate()
+}
+
 func (m *Manager) Settings() Settings {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -367,29 +392,61 @@ func Status(db *gorm.DB) map[string]interface{} {
 		hasCache = err == nil && len(entries) > 0
 	}
 	manual := s.CertFile != "" && s.KeyFile != ""
+	// Runtime state is separate from the saved configuration: enabled=true
+	// does not mean HTTPS actually started (issue #106).
+	rt := GetRuntime()
+	publicURL, webPath := PublicURLAndWebPath()
+	var panelPort int
+	if cfg := config.GlobalConfig; cfg != nil {
+		panelPort = cfg.Server.Port
+	}
+	runtimeLabel := "HTTPS disabled"
+	switch rt.State {
+	case "configured":
+		runtimeLabel = "Enabled in settings — restart required"
+	case "running":
+		runtimeLabel = "HTTPS running"
+	case "fallback":
+		runtimeLabel = "SSL failed — running on plain HTTP"
+	}
 	return map[string]interface{}{
-		"enabled":       s.Enabled,
-		"domain":        s.Domain,
-		"email":         s.Email,
-		"cache_dir":     s.CacheDir,
-		"cert_file":     s.CertFile,
-		"key_file":      s.KeyFile,
-		"listen_http":   s.ListenHTTP,
-		"listen_tls":    s.ListenTLS,
-		"challenge":     s.Challenge,
-		"dns_provider":  s.DNSProvider,
-		"dns_zone":      s.DNSZone,
-		"has_dns_token": strings.TrimSpace(s.DNSToken) != "",
-		"mode":          modeLabel(s, manual),
-		"is_ip":         IsIPHost(s.Domain),
-		"is_wildcard":   IsWildcardDomain(s.Domain),
-		"has_cache":     hasCache,
-		"cert_path":     domainCertPath(s),
-		"ip_profile":    ipCertProfile,
-		"ip_note":       "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
-		"domain_note":   "Domain HTTP-01/DNS-01 certs auto-renew when fewer than 15 days remain (checked every 12h). Engine: acmez.",
-		"dns_note":      "Wildcard (*.example.com) and DNS-01 need a DNS API token (Cloudflare Zone.DNS Edit). Apex is included on wildcard certs.",
-		"engine":        "acmez",
+		"enabled":              s.Enabled,
+		"domain":               s.Domain,
+		"email":                s.Email,
+		"cache_dir":            s.CacheDir,
+		"cert_file":            s.CertFile,
+		"key_file":             s.KeyFile,
+		"listen_http":          s.ListenHTTP,
+		"listen_tls":           s.ListenTLS,
+		"challenge":            s.Challenge,
+		"dns_provider":         s.DNSProvider,
+		"dns_zone":             s.DNSZone,
+		"has_dns_token":        strings.TrimSpace(s.DNSToken) != "",
+		"mode":                 modeLabel(s, manual),
+		"is_ip":                IsIPHost(s.Domain),
+		"is_wildcard":          IsWildcardDomain(s.Domain),
+		"has_cache":            hasCache,
+		"cert_path":            domainCertPath(s),
+		"ip_profile":           ipCertProfile,
+		"ip_note":              "IP certs use Let's Encrypt shortlived (~6 days); auto-renew when <48h remain. Via acmez; validation HTTP-01 (:80) or TLS-ALPN-01 (:443).",
+		"domain_note":          "Domain HTTP-01/DNS-01 certs auto-renew when fewer than 15 days remain (checked every 12h). Engine: acmez.",
+		"dns_note":             "Wildcard (*.example.com) and DNS-01 need a DNS API token (Cloudflare Zone.DNS Edit). Apex is included on wildcard certs.",
+		"engine":               "acmez",
+		"runtime_state":        rt.State,
+		"runtime_protocol":     rt.Protocol,
+		"runtime_listen_addr":  rt.ListenAddr,
+		"runtime_entry_url":    rt.EntryURL,
+		"runtime_detail":       rt.Detail,
+		"runtime_fallback_err": rt.FallbackErr,
+		"runtime_label":        runtimeLabel,
+		"port_note":            "When HTTPS is running, ListenTLS is the real entry and the panel port is only the plain-HTTP fallback. HTTP listen serves ACME HTTP-01 and the HTTP→HTTPS redirect. Public panel URL only changes generated links, not local listeners — set it when NAT / reverse-proxy ports differ.",
+		"dns01_note":           "DNS-01 issuance does not need a public port 80. In this mode the HTTP listen field is only an optional HTTP→HTTPS redirect.",
+		"certbot_note":         "The built-in ACME above issues and renews the panel certificate automatically. This wizard only generates an external certbot command for you to run on the server; its webroot must already be served by an HTTP server, and installing / renewing that certificate is your responsibility.",
+		"panel_port":           panelPort,
+		"public_url":           publicURL,
+		"web_path":             webPath,
+		"https_entry_url":      EffectiveEntryURL(s, publicURL, webPath, s.ListenTLS, panelPort, true),
+		"http_entry_url":       EffectiveEntryURL(s, publicURL, webPath, fmt.Sprintf(":%d", panelPort), panelPort, false),
 	}
 }
 
