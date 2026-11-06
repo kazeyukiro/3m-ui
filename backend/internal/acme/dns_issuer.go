@@ -131,16 +131,11 @@ func newDNSIssuer(s Settings) (*dnsIssuer, error) {
 	return iss, nil
 }
 
-func (iss *dnsIssuer) certPath() string {
-	// File name cannot contain * on all filesystems — use safe key.
-	safe := strings.ReplaceAll(iss.domain, "*", "_wildcard_")
-	return filepath.Join(iss.cacheDir, "dns-"+safe+".crt")
+func (iss *dnsIssuer) paths() (string, string) {
+	return certificatePaths(iss.cacheDir, iss.domain, "", "", "dns")
 }
-
-func (iss *dnsIssuer) keyPath() string {
-	safe := strings.ReplaceAll(iss.domain, "*", "_wildcard_")
-	return filepath.Join(iss.cacheDir, "dns-"+safe+".key")
-}
+func (iss *dnsIssuer) certPath() string { c, _ := iss.paths(); return c }
+func (iss *dnsIssuer) keyPath() string  { _, k := iss.paths(); return k }
 
 func (iss *dnsIssuer) accountKeyPath() string {
 	return filepath.Join(iss.cacheDir, "dns-account.ec.key")

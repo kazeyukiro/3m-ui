@@ -130,12 +130,11 @@ func sanitizeIPFilename(ip string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(ip, ":", "_"), ".", "_")
 }
 
-func (iss *ipIssuer) certPath() string {
-	return filepath.Join(iss.cacheDir, "ip-"+sanitizeIPFilename(iss.ip)+"-cert.pem")
+func (iss *ipIssuer) paths() (string, string) {
+	return certificatePaths(iss.cacheDir, iss.ip, "", "", "ip")
 }
-func (iss *ipIssuer) keyPath() string {
-	return filepath.Join(iss.cacheDir, "ip-"+sanitizeIPFilename(iss.ip)+"-key.pem")
-}
+func (iss *ipIssuer) certPath() string { c, _ := iss.paths(); return c }
+func (iss *ipIssuer) keyPath() string  { _, k := iss.paths(); return k }
 func (iss *ipIssuer) accountKeyPath() string {
 	return filepath.Join(iss.cacheDir, "ip-account.key")
 }

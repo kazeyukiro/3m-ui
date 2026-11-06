@@ -368,14 +368,6 @@ func (s *Service) BatchApplyCertificate(in ApplyCertificateInput) (*ApplyCertifi
 	return out, nil
 }
 
-// sanitizeIPFilename converts an IP address to a filesystem-safe name.
-// Mirrors the logic in acme/ip_issuer.go:sanitizeIPFilename.
-func sanitizeIPFilename(ip string) string {
-	ip = strings.ReplaceAll(ip, ":", "_")
-	ip = strings.ReplaceAll(ip, ".", "_")
-	return ip
-}
-
 func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyPEM string, err error) {
 	certPEM = strings.TrimSpace(in.Certificate)
 	keyPEM = strings.TrimSpace(in.PrivateKey)
@@ -387,60 +379,17 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 		if loadErr != nil {
 			return "", "", fmt.Errorf("load panel SSL settings: %w", loadErr)
 		}
-		certFile = strings.TrimSpace(st.CertFile)
-		keyFile = strings.TrimSpace(st.KeyFile)
+		// Reuse the acme package's path rules — the same ones its issuers write
+		// to. #106 replaced autocert with acmez, so the old DirCache layout
+		// (<cacheDir>/<domain>, one concatenated PEM) no longer exists: every
+		// mode now writes two standard PEM files (http-/dns-/ip- prefixed).
+		certFile, keyFile = acme.CertificatePaths(st)
 		if certFile == "" || keyFile == "" {
-			// Panel is using ACME (autocert or IP cert), not manual PEM files.
-			// Try to read the IP certificate PEM files from the ACME cache dir.
-			// IP certs are stored as <cacheDir>/ip-<sanitized-ip>-cert.pem
-			// and <cacheDir>/ip-<sanitized-ip>-key.pem (standard PEM format).
-			// Domain ACME (panel PEM cache) stores certs in Go binary format
-			// (not PEM), so we can't extract PEM from there — fall through to
-			// the "paste PEM" error below.
-			if st.CacheDir != "" && st.Domain != "" {
-				ipCert := filepath.Join(st.CacheDir, "ip-"+sanitizeIPFilename(st.Domain)+"-cert.pem")
-				ipKey := filepath.Join(st.CacheDir, "ip-"+sanitizeIPFilename(st.Domain)+"-key.pem")
-				if _, e := os.Stat(ipCert); e == nil {
-					if _, e2 := os.Stat(ipKey); e2 == nil {
-						certFile = ipCert
-						keyFile = ipKey
-					}
-				}
-			}
-			if certFile == "" || keyFile == "" {
-				// Try panel ACME cache: the file <cacheDir>/<domain>
-				// contains a PEM block with PRIVATE KEY + CERTIFICATE
-				// concatenated (ACME cache format). Read it
-				// and split into separate cert/key PEM.
-				if st.CacheDir != "" && st.Domain != "" {
-					autocertCachePath := filepath.Join(st.CacheDir, st.Domain)
-					if data, e := os.ReadFile(autocertCachePath); e == nil {
-						pemStr := string(data)
-						if strings.Contains(pemStr, "PRIVATE KEY") && strings.Contains(pemStr, "CERTIFICATE") {
-							// Extract private key block
-							keyStart := strings.Index(pemStr, "-----BEGIN")
-							keyEndMarker := "-----END"
-							keyEndIdx := strings.Index(pemStr, keyEndMarker)
-							if keyEndIdx > keyStart {
-								// Find the newline after END
-								restAfterEnd := pemStr[keyEndIdx:]
-								newlineAfterEnd := strings.Index(restAfterEnd, "\n")
-								if newlineAfterEnd > 0 {
-									keyPEM = strings.TrimSpace(pemStr[keyStart : keyEndIdx+newlineAfterEnd])
-								}
-							}
-							// Extract certificate block(s)
-							certStart := strings.Index(pemStr, "-----BEGIN CERTIFICATE-----")
-							if certStart > 0 {
-								certPEM = strings.TrimSpace(pemStr[certStart:])
-							}
-							if certPEM != "" && keyPEM != "" {
-								return certPEM, keyPEM, nil
-							}
-						}
-					}
-				}
-				return "", "", fmt.Errorf("panel SSL uses ACME with domain %q. The autocert cache PEM was not found at %s/%s — the cert may not have been issued yet, or the panel was restarted before the first TLS handshake. Visit the panel over HTTPS once to trigger cert issuance, then retry. Alternatively, paste the certificate PEM below or use /etc/letsencrypt/live/<domain>/ paths.", st.Domain, st.CacheDir, st.Domain)
+			return "", "", fmt.Errorf("panel SSL has no certificate configured yet: enable panel SSL with a domain (or a manual PEM pair), then open the panel over HTTPS once to trigger issuance; alternatively paste the certificate PEM below")
+		}
+		for _, p := range []string{certFile, keyFile} {
+			if _, statErr := os.Stat(p); statErr != nil {
+				return "", "", fmt.Errorf("panel SSL certificate file %s is not available yet — ACME has not finished issuing it; open the panel over HTTPS once, then retry (or paste the PEM below): %w", p, statErr)
 			}
 		}
 	}
@@ -478,19 +427,39 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 	return certPEM, keyPEM, nil
 }
 
+var productionAllowedTLSPaths = []string{
+	"/etc/ssl/",
+	"/etc/3m-ui/",
+	"/var/lib/3m-ui/",
+	"/etc/letsencrypt/",
+	"/root/.acme.sh/",
+	"/etc/nginx/ssl/",
+	"/etc/caddy/certs/",
+}
+
+// extraAllowedTLSPaths lets unit tests point cert_file/key_file at t.TempDir().
+// Mirrors mihomo.AllowBinaryPathPrefixForTesting; production never sets it.
+var extraAllowedTLSPaths []string
+
+func AllowTLSPathPrefixForTesting(prefix string) (restore func()) {
+	prev := append([]string(nil), extraAllowedTLSPaths...)
+	clean := filepath.Clean(prefix)
+	if clean != "" && !strings.HasSuffix(clean, string(filepath.Separator)) {
+		clean += string(filepath.Separator)
+	}
+	extraAllowedTLSPaths = append(extraAllowedTLSPaths, clean)
+	return func() { extraAllowedTLSPaths = prev }
+}
+
 func isAllowedTLSPath(p string) bool {
 	clean := filepath.Clean(p)
-	prefixes := []string{
-		"/etc/ssl/",
-		"/etc/3m-ui/",
-		"/var/lib/3m-ui/",
-		"/etc/letsencrypt/",
-		"/root/.acme.sh/",
-		"/etc/nginx/ssl/",
-		"/etc/caddy/certs/",
-	}
-	for _, prefix := range prefixes {
+	for _, prefix := range productionAllowedTLSPaths {
 		if strings.HasPrefix(clean, prefix) {
+			return true
+		}
+	}
+	for _, prefix := range extraAllowedTLSPaths {
+		if prefix != "" && strings.HasPrefix(clean, prefix) {
 			return true
 		}
 	}

@@ -476,20 +476,76 @@ func LogHint(s Settings) {
 		s.Domain, s.ListenHTTP, s.ListenTLS, s.CacheDir)
 }
 
-func domainCertPath(s Settings) string {
-	if s.CertFile != "" {
-		return s.CertFile
+// certificatePaths is the single source of truth for panel TLS file names.
+// Issuers, the status API and the listener bulk-certificate feature all
+// resolve paths through here, so the names cannot drift apart again.
+//
+// mode is "manual", "ip", "dns" or "http". An empty pair means no certificate
+// has been configured yet (neither a manual PEM pair nor an ACME domain).
+func certificatePaths(cacheDir, domain, certFile, keyFile, mode string) (string, string) {
+	if certFile != "" || keyFile != "" {
+		return certFile, keyFile
+	}
+	if cacheDir == "" || domain == "" {
+		return "", ""
+	}
+	switch mode {
+	case "ip":
+		safe := sanitizeIPFilename(normalizeIPHost(domain))
+		return filepath.Join(cacheDir, "ip-"+safe+"-cert.pem"),
+			filepath.Join(cacheDir, "ip-"+safe+"-key.pem")
+	case "dns":
+		safe := strings.ReplaceAll(domain, "*", "_wildcard_")
+		return filepath.Join(cacheDir, "dns-"+safe+".crt"),
+			filepath.Join(cacheDir, "dns-"+safe+".key")
+	case "http":
+		d := strings.ToLower(domain)
+		return filepath.Join(cacheDir, "http-"+d+".crt"),
+			filepath.Join(cacheDir, "http-"+d+".key")
+	default:
+		return "", ""
+	}
+}
+
+// sslMode mirrors Manager.configure()'s issuer selection.
+func sslMode(s Settings) string {
+	if strings.TrimSpace(s.CertFile) != "" || strings.TrimSpace(s.KeyFile) != "" {
+		return "manual"
 	}
 	d := strings.TrimSpace(s.Domain)
 	if d == "" {
-		return s.CacheDir
+		return ""
 	}
 	if IsIPHost(d) {
-		return filepath.Join(s.CacheDir, "ip-"+strings.ReplaceAll(normalizeIPHost(d), ":", "_")+"-cert.pem")
+		return "ip"
 	}
-	if NeedsDNS01(s) || IsWildcardDomain(d) {
-		safe := strings.ReplaceAll(d, "*", "_wildcard_")
-		return filepath.Join(s.CacheDir, "dns-"+safe+".crt")
+	if NeedsDNS01(s) {
+		return "dns"
 	}
-	return filepath.Join(s.CacheDir, "http-"+strings.ToLower(d)+".crt")
+	return "http"
+}
+
+// CertificatePaths returns the on-disk PEM paths of the panel certificate and
+// private key for the current SSL mode: manual PEM files, or the acmez cache
+// files for IP / DNS-01 / HTTP-01 issuance. Both strings are empty when panel
+// SSL has no certificate configured yet.
+//
+// Exported so other packages (notably the listener bulk-certificate feature)
+// reuse the same rules instead of guessing file names.
+func CertificatePaths(s Settings) (certPath, keyPath string) {
+	return certificatePaths(
+		strings.TrimSpace(s.CacheDir),
+		strings.TrimSpace(s.Domain),
+		strings.TrimSpace(s.CertFile),
+		strings.TrimSpace(s.KeyFile),
+		sslMode(s),
+	)
+}
+
+func domainCertPath(s Settings) string {
+	c, _ := CertificatePaths(s)
+	if c == "" {
+		return s.CacheDir
+	}
+	return c
 }

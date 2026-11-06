@@ -96,13 +96,11 @@ func (iss *domainHTTPIssuer) ensureCertificate() error {
 	return iss.obtainLocked()
 }
 
-func (iss *domainHTTPIssuer) certPath() string {
-	return filepath.Join(iss.cacheDir, "http-"+iss.domain+".crt")
+func (iss *domainHTTPIssuer) paths() (string, string) {
+	return certificatePaths(iss.cacheDir, iss.domain, "", "", "http")
 }
-
-func (iss *domainHTTPIssuer) keyPath() string {
-	return filepath.Join(iss.cacheDir, "http-"+iss.domain+".key")
-}
+func (iss *domainHTTPIssuer) certPath() string { c, _ := iss.paths(); return c }
+func (iss *domainHTTPIssuer) keyPath() string  { _, k := iss.paths(); return k }
 
 func (iss *domainHTTPIssuer) accountKeyPath() string {
 	return filepath.Join(iss.cacheDir, "http-account.ec.key")
