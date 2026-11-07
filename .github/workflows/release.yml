@@ -220,6 +220,8 @@ jobs:
             echo "Other architectures are standalone panel builds for advanced installations."
             echo "Verify downloads against SHA256SUMS. SHA256SUMS.pem and SHA256SUMS.sig"
             echo "provide Sigstore keyless verification for this release workflow."
+            echo "SHA256SUMS.pem is base64-encoded; cosign reads it as-is. For PEM-only"
+            echo "tools (e.g. openssl), decode first: base64 -d SHA256SUMS.pem > SHA256SUMS.cert.pem"
             echo "Docker images are published to ghcr.io/<owner>/<repository>:<tag>."
             echo "The latest image and default installer follow stable releases only."
           } > release-notes.md
