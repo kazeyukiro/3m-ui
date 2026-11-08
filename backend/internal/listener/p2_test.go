@@ -1,9 +1,14 @@
 package listener
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,6 +181,88 @@ func TestResolveCertificatePairPastedPEMStillWorks(t *testing.T) {
 	})
 	if err != nil || cert != strings.TrimSpace(fixtureCertPEM) || key != strings.TrimSpace(fixtureKeyPEM) {
 		t.Fatalf("pasted PEM path broken: cert=%q key=%q err=%v", cert, key, err)
+	}
+}
+
+// makeLeafOnlyChain builds root -> intermediate -> leaf and returns the leaf
+// alone, the full chain, and the leaf's private key. No AIA URL is set so the
+// test never reaches the network.
+func makeLeafOnlyChain(t *testing.T) (leafPEM, fullPEM, keyPEM []byte) {
+	t.Helper()
+	serial := int64(10)
+	issue := func(tmpl *x509.Certificate, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) ([]byte, *x509.Certificate, *ecdsa.PrivateKey) {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serial++
+		tmpl.SerialNumber = big.NewInt(serial)
+		tmpl.NotBefore, tmpl.NotAfter = time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+		if parent == nil {
+			parent, parentKey = tmpl, key
+		}
+		der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, &key.PublicKey, parentKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cert, _ := x509.ParseCertificate(der)
+		return der, cert, key
+	}
+	encode := func(der []byte) []byte { return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}) }
+	rootDER, root, rootKey := issue(&x509.Certificate{
+		Subject: pkix.Name{CommonName: "Test Root"}, IsCA: true,
+		BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}, nil, nil)
+	intDER, inter, intKey := issue(&x509.Certificate{
+		Subject: pkix.Name{CommonName: "YE1"}, IsCA: true,
+		BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}, root, rootKey)
+	leafDER, _, leafKey := issue(&x509.Certificate{Subject: pkix.Name{CommonName: "node.example"}}, inter, intKey)
+	keyDER, err := x509.MarshalECPrivateKey(leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encode(leafDER),
+		append(append(append([]byte(nil), encode(leafDER)...), encode(intDER)...), encode(rootDER)...),
+		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+}
+
+func TestResolveCertificatePairCompletesLeafOnlyChain(t *testing.T) {
+	dir := t.TempDir()
+	t.Cleanup(AllowTLSPathPrefixForTesting(dir))
+	leafPEM, fullPEM, keyPEM := makeLeafOnlyChain(t)
+	certFile, keyFile := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	if err := os.WriteFile(certFile, leafPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "fullchain.cer"), fullPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, gotKey, err := resolveCertificatePair(&Service{}, ApplyCertificateInput{
+		CertFile: certFile, KeyFile: keyFile,
+	})
+	if err != nil {
+		t.Fatalf("certificate pair rejected: %v", err)
+	}
+	if _, err := tls.X509KeyPair([]byte(got), []byte(gotKey)); err != nil {
+		t.Fatalf("returned pair is not loadable: %v", err)
+	}
+	n, rest := 0, []byte(got)
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Fatalf("expected leaf + 2 intermediates after chain completion, got %d certificates", n)
 	}
 }
 

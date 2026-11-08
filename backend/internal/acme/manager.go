@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
@@ -210,6 +211,21 @@ func (m *Manager) configure() error {
 	return nil
 }
 
+// logChainStatus reports a chain-completion result once per load. Operators
+// need to know when only a leaf was found: that is the case clients may still
+// reject, and no silent downgrade should hide it.
+func logChainStatus(scope, certFile string, chain certutil.ChainStatus) {
+	if !chain.Checked {
+		return
+	}
+	switch {
+	case chain.Incomplete:
+		log.Printf("%s: %s contains only a leaf certificate and no matching fullchain/CA/AIA issuer was found; clients that do not fetch AIA intermediates may fail TLS verification", scope, certFile)
+	case chain.Source != "":
+		log.Printf("%s: completed certificate chain from %s (%d certificates)", scope, chain.Source, chain.Certificates)
+	}
+}
+
 // TLSConfig returns a *tls.Config suitable for https.Server, or nil if SSL is disabled.
 func (m *Manager) TLSConfig() (*tls.Config, error) {
 	m.mu.Lock()
@@ -222,11 +238,15 @@ func (m *Manager) TLSConfig() (*tls.Config, error) {
 		if !isAllowedCertKeyPath(s.CertFile) || !isAllowedCertKeyPath(s.KeyFile) {
 			return nil, fmt.Errorf("panel SSL: cert_file/key_file must be under an allowed directory")
 		}
-		cert, err := tls.LoadX509KeyPair(s.CertFile, s.KeyFile)
+		// Complete the chain before serving: browsers fetch missing AIA
+		// intermediates themselves, but Node.js / Go / Dart subscription
+		// clients do not, and fail with "unable to verify the first certificate".
+		cert, chain, err := certutil.LoadCertificateWithChain(s.CertFile, s.KeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("panel SSL: load cert: %w", err)
 		}
-		return &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}, nil
+		logChainStatus("panel SSL", s.CertFile, chain)
+		return &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}, nil
 	}
 	if m.ipIssuer != nil {
 		cert := m.ipIssuer.certificate()
@@ -400,27 +420,38 @@ func Status(db *gorm.DB) map[string]interface{} {
 	if cfg := config.GlobalConfig; cfg != nil {
 		panelPort = cfg.Server.Port
 	}
+	// Prefer the runtime result (the chain this process actually served) over a
+	// static re-read of the file: a leaf-only file can be completed in memory.
+	certPath := domainCertPath(s)
+	chainStatus := certutil.InspectChainFile(certPath)
+	if runtimeChain, ok := certutil.ChainStatusForPath(certPath); ok {
+		chainStatus = runtimeChain
+	}
 	// Display copy lives in the frontend i18n catalogue (issue #106). The API
 	// reports machine-readable runtime state only, so every UI language renders
 	// the same information through t() instead of receiving English strings.
 	return map[string]interface{}{
-		"enabled":              s.Enabled,
-		"domain":               s.Domain,
-		"email":                s.Email,
-		"cache_dir":            s.CacheDir,
-		"cert_file":            s.CertFile,
-		"key_file":             s.KeyFile,
-		"listen_http":          s.ListenHTTP,
-		"listen_tls":           s.ListenTLS,
-		"challenge":            s.Challenge,
-		"dns_provider":         s.DNSProvider,
-		"dns_zone":             s.DNSZone,
-		"has_dns_token":        strings.TrimSpace(s.DNSToken) != "",
-		"mode":                 modeLabel(s, manual),
-		"is_ip":                IsIPHost(s.Domain),
-		"is_wildcard":          IsWildcardDomain(s.Domain),
-		"has_cache":            hasCache,
-		"cert_path":            domainCertPath(s),
+		"enabled":       s.Enabled,
+		"domain":        s.Domain,
+		"email":         s.Email,
+		"cache_dir":     s.CacheDir,
+		"cert_file":     s.CertFile,
+		"key_file":      s.KeyFile,
+		"listen_http":   s.ListenHTTP,
+		"listen_tls":    s.ListenTLS,
+		"challenge":     s.Challenge,
+		"dns_provider":  s.DNSProvider,
+		"dns_zone":      s.DNSZone,
+		"has_dns_token": strings.TrimSpace(s.DNSToken) != "",
+		"mode":          modeLabel(s, manual),
+		"is_ip":         IsIPHost(s.Domain),
+		"is_wildcard":   IsWildcardDomain(s.Domain),
+		"has_cache":     hasCache,
+		"cert_path":     certPath,
+		// Machine-readable chain state. The frontend renders it through t();
+		// no English copy lives in the API (issue #106 convention).
+		"chain_status":         chainStatus,
+		"chain_source":         chainStatus.Source,
 		"ip_profile":           ipCertProfile,
 		"engine":               "acmez",
 		"runtime_state":        rt.State,

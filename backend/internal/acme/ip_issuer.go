@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/mholt/acmez/v3"
 	zacme "github.com/mholt/acmez/v3/acme"
 )
@@ -151,14 +152,17 @@ func leafNotAfter(cert *tls.Certificate) time.Time {
 }
 
 func (iss *ipIssuer) loadFromDisk() (*tls.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(iss.certPath(), iss.keyPath())
+	// acmez normally writes a full chain, but a hand-copied or migrated cache
+	// file may contain only the leaf. Complete it before serving.
+	cert, chain, err := certutil.LoadCertificateWithChain(iss.certPath(), iss.keyPath())
 	if err != nil {
 		return nil, err
 	}
-	if time.Until(leafNotAfter(&cert)) < time.Hour {
+	logChainStatus("panel SSL (IP certificate)", iss.certPath(), chain)
+	if time.Until(leafNotAfter(cert)) < time.Hour {
 		return nil, fmt.Errorf("cert expired or near expiry")
 	}
-	return &cert, nil
+	return cert, nil
 }
 
 func (iss *ipIssuer) obtain() error {

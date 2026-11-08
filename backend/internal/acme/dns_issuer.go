@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/mholt/acmez/v3"
 	zacme "github.com/mholt/acmez/v3/acme"
 )
@@ -150,11 +151,12 @@ func (iss *dnsIssuer) loadFromDisk() (*tls.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	c, err := tls.X509KeyPair(certPEM, keyPEM)
+	c, chain, err := certutil.LoadPEMPairWithChain(certPEM, keyPEM, iss.certPath())
 	if err != nil {
 		return nil, err
 	}
-	return &c, nil
+	logChainStatus("panel SSL (DNS-01 certificate)", iss.certPath(), chain)
+	return c, nil
 }
 
 func (iss *dnsIssuer) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {

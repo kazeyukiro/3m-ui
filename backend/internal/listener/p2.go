@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kazeyukiro/3m-ui/backend/internal/acme"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
 )
@@ -424,7 +425,18 @@ func resolveCertificatePair(s *Service, in ApplyCertificateInput) (certPEM, keyP
 	if !strings.Contains(keyPEM, "PRIVATE KEY") {
 		return "", "", fmt.Errorf("private_key does not look like a PEM private key")
 	}
-	return certPEM, keyPEM, nil
+	// A listener inherited from the panel (or pasted by the operator) may carry
+	// only the leaf certificate. Append the intermediates here so the generated
+	// subscription and the node's own TLS handshake both present a full chain
+	// instead of relying on skip-cert-verify on the client.
+	completed, chain := certutil.CompleteChainPEM([]byte(certPEM), certFile)
+	switch {
+	case chain.Incomplete:
+		log.Printf("listener certificate: only a leaf certificate is available and no chain source matched; clients that do not fetch AIA intermediates may fail TLS verification")
+	case chain.Source != "":
+		log.Printf("listener certificate: completed chain from %s (%d certificates)", chain.Source, chain.Certificates)
+	}
+	return string(completed), keyPEM, nil
 }
 
 var productionAllowedTLSPaths = []string{
