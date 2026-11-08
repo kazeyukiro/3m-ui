@@ -28,15 +28,15 @@ type User struct {
 	// Flow is the XTLS flow hint for VLESS clients.
 	Flow string `json:"flow,omitempty"`
 
-	TrafficLimit int64 `json:"traffic_limit"`
-	UploadBytes  int64 `json:"upload_bytes"`
-	DownloadBytes int64 `json:"download_bytes"`
-	IPLimit      int   `json:"ip_limit"`
-	ExpireAt     *time.Time `json:"expire_at,omitempty"`
-	Enabled      bool  `json:"enabled"`
-	Remark       string `json:"remark,omitempty"`
-	Group        string `json:"group,omitempty"`
-	TelegramID   int64  `json:"telegram_id,omitempty"`
+	TrafficLimit  int64      `json:"traffic_limit"`
+	UploadBytes   int64      `json:"upload_bytes"`
+	DownloadBytes int64      `json:"download_bytes"`
+	IPLimit       int        `json:"ip_limit"`
+	ExpireAt      *time.Time `json:"expire_at,omitempty"`
+	Enabled       bool       `json:"enabled"`
+	Remark        string     `json:"remark,omitempty"`
+	Group         string     `json:"group,omitempty"`
+	TelegramID    int64      `json:"telegram_id,omitempty"`
 	// SourceSubID is kept only for the report: subscription URLs are regenerated.
 	SourceSubID string `json:"-"`
 	// numericID is the source row id, used internally to rebuild split-layout
@@ -109,10 +109,10 @@ func (s *Snapshot) Counts() Counts {
 
 // Preview is returned by the dry-run endpoint; it never writes anything.
 type Preview struct {
-	Source  Source  `json:"source"`
-	Counts  Counts  `json:"counts"`
-	Users   []User  `json:"users"`
-	Nodes   []Node  `json:"nodes"`
+	Source   Source   `json:"source"`
+	Counts   Counts   `json:"counts"`
+	Users    []User   `json:"users"`
+	Nodes    []Node   `json:"nodes"`
 	Warnings []string `json:"warnings,omitempty"`
 	Skipped  []string `json:"skipped,omitempty"`
 	Tables   []string `json:"tables,omitempty"`
@@ -122,12 +122,12 @@ type Preview struct {
 
 // Result is returned after an import. Renamed lists collision resolutions.
 type Result struct {
-	Source        Source   `json:"source"`
-	UsersCreated  int      `json:"users_created"`
-	NodesCreated  int      `json:"nodes_created"`
-	BindingsCreated int    `json:"bindings_created"`
-	Renamed       []string `json:"renamed,omitempty"`
-	Skipped       []string `json:"skipped,omitempty"`
-	Warnings      []string `json:"warnings,omitempty"`
-	BackupFile    string   `json:"backup_file,omitempty"`
+	Source          Source   `json:"source"`
+	UsersCreated    int      `json:"users_created"`
+	NodesCreated    int      `json:"nodes_created"`
+	BindingsCreated int      `json:"bindings_created"`
+	Renamed         []string `json:"renamed,omitempty"`
+	Skipped         []string `json:"skipped,omitempty"`
+	Warnings        []string `json:"warnings,omitempty"`
+	BackupFile      string   `json:"backup_file,omitempty"`
 }

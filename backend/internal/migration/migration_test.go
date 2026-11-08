@@ -87,7 +87,10 @@ func xuiV2DB(t *testing.T) []byte {
 		"network": "ws", "security": "none",
 		"wsSettings": map[string]interface{}{"path": "/ws-path-1", "headers": map[string]interface{}{"Host": "cdn.example.com"}},
 	})
-	clientTraffics := []struct{ email string; up, down int64 }{
+	clientTraffics := []struct {
+		email    string
+		up, down int64
+	}{
 		{"alice", 1024, 2048}, {"bob", 10, 20},
 	}
 	stmts := []string{
