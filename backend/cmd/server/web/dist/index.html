@@ -1,35 +1,299 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="64x64" href="./favicon-64.png" />
-    <link rel="apple-touch-icon" href="./logo-192.png" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
-    <meta name="theme-color" content="#07152d" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="3m-ui" />
-    <!--
-      Security headers.
-      Note: <meta http-equiv> CSP is a defense-in-depth baseline; the
-      authoritative policy should still be sent by the backend / reverse
-      proxy as a real HTTP `Content-Security-Policy` response header
-      (meta tags cannot express `frame-ancestors`, but we set
-      X-Frame-Options DENY here as a belt-and-braces fallback).
-    -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';" />
-    <meta name="referrer" content="same-origin" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="Referrer-Policy" content="same-origin" />
-    <title>3m-ui · Mihomo Core Manager UI</title>
-    <script type="module" crossorigin src="./assets/index-Bd4Gr6_S.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-B1qC6uTc.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>3m-ui · Web frontend not embedded</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: #ffffff; color: #0f172a; padding: 2rem;
+      }
+      main { width: 100%; max-width: 44rem; line-height: 1.75; }
+      .bar { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; margin-bottom: 1rem; }
+      .bar label { font-size: .875rem; color: #64748b; }
+      select {
+        font: inherit; font-size: .875rem; color: #0f172a; background: #ffffff;
+        border: 1px solid #cbd5e1; border-radius: .5rem; padding: .35rem .6rem; cursor: pointer;
+      }
+      select:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+      .card { border: 1px solid #e2e8f0; border-radius: .75rem; padding: 2rem; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+      h1 { font-size: 1.5rem; margin: 0 0 .75rem; line-height: 1.35; }
+      p { margin: .625rem 0; color: #475569; }
+      code {
+        background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: .375rem;
+        padding: .1rem .4rem; font-size: .9em; color: #0f172a;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        direction: ltr; unicode-bidi: isolate;
+      }
+      pre {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: .5rem;
+        padding: .875rem 1rem; overflow-x: auto; direction: ltr; text-align: left;
+        white-space: pre-wrap;
+      }
+      pre code { background: none; border: none; padding: 0; font-size: .875rem; }
+      .note { font-size: .9rem; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: .875rem; margin-top: 1.25rem; }
+      html[dir="rtl"] .bar { justify-content: flex-start; }
+      @media (max-width: 480px) { .card { padding: 1.25rem; } body { padding: 1rem; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <main>
+      <div class="bar">
+        <label for="lang" data-i18n="lang">Language</label>
+        <select id="lang" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh-CN">简体中文</option>
+          <option value="zh-TW">繁體中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="ru">Русский</option>
+          <option value="pt-BR">Português</option>
+          <option value="vi">Tiếng Việt</option>
+          <option value="id">Bahasa Indonesia</option>
+          <option value="th">ไทย</option>
+          <option value="tr">Türkçe</option>
+          <option value="ar">العربية</option>
+          <option value="hi">हिन्दी</option>
+          <option value="pl">Polski</option>
+          <option value="uk">Українська</option>
+        </select>
+      </div>
+      <div class="card">
+        <h1 data-i18n="h1">3m-ui · Web frontend not embedded</h1>
+        <p data-i18n="lead">This binary contains only a placeholder in <code>backend/cmd/server/web/dist</code> and no Vite build output, so the panel UI cannot load.</p>
+        <p data-i18n="steps">Build the frontend and replace the embed directory first:</p>
+        <pre dir="ltr"><code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build
+rm -rf backend/cmd/server/web/dist
+cp -r frontend/dist backend/cmd/server/web/dist
+cd backend
+CGO_ENABLED=0 go build -tags sqlite_modernc -trimpath -ldflags='-s -w' -o ../3m-ui ./cmd/server</code></pre>
+        <p data-i18n="alt">Or run <code>make build-linux</code> from the repository root. Its <code>frontend-assets</code> target performs the steps above and writes per-architecture binaries to <code>dist/</code>.</p>
+        <p data-i18n="doc">See the build section in the <code>README</code>.</p>
+        <p class="note" data-i18n="note">A compatible <code>Mihomo</code> binary must also be installed locally, with its path set in the configuration.</p>
+      </div>
+    </main>
+    <script>
+      (function () {
+        var CODES = {
+          dist: '<code>backend/cmd/server/web/dist</code>',
+          make: '<code>make build-linux</code>',
+          target: '<code>frontend-assets</code>',
+          outdir: '<code>dist/</code>',
+          readme: '<code>README</code>',
+          mihomo: '<code>Mihomo</code>',
+          vite: '<code>Vite</code>'
+        };
+        var I18N = {
+          "en": {
+            title: "3m-ui · Web frontend not embedded", h1: "3m-ui · Web frontend not embedded", lang: "Language",
+            lead: "This binary contains only a placeholder in {{dist}} and no {{vite}} build output, so the panel UI cannot load.",
+            steps: "Build the frontend and replace the embed directory first:",
+            alt: "Or run {{make}} from the repository root. Its {{target}} target performs the steps above and writes per-architecture binaries to {{outdir}}.",
+            doc: "See the build section in the {{readme}}.",
+            note: "A compatible {{mihomo}} binary must also be installed locally, with its path set in the configuration."
+          },
+          "zh-CN": {
+            title: "3m-ui · 前端资源未嵌入", h1: "3m-ui · 前端资源未嵌入", lang: "语言",
+            lead: "这个二进制的 {{dist}} 里只有占位文件，没有 {{vite}} 构建产物，因此面板前端无法加载。",
+            steps: "请先构建前端并替换嵌入目录：",
+            alt: "也可以在仓库根目录执行 {{make}}，它的 {{target}} 目标会自动完成上述步骤，并把各架构的二进制输出到 {{outdir}}。",
+            doc: "详见 {{readme}} 的「从源码构建」。",
+            note: "另外需要本机已安装兼容的 {{mihomo}} 二进制，并在配置中指向它的路径。"
+          },
+          "zh-TW": {
+            title: "3m-ui · 前端資源未嵌入", h1: "3m-ui · 前端資源未嵌入", lang: "語言",
+            lead: "這個二進位檔的 {{dist}} 只有佔位檔，沒有 {{vite}} 建置產物，因此面板前端無法載入。",
+            steps: "請先建置前端並取代嵌入目錄：",
+            alt: "也可以在儲存庫根目錄執行 {{make}}，它的 {{target}} 目標會自動完成上述步驟，並將各架構的二進位檔輸出到 {{outdir}}。",
+            doc: "詳見 {{readme}} 的「從原始碼建置」。",
+            note: "此外本機需已安裝相容的 {{mihomo}} 二進位檔，並在設定中指向其路徑。"
+          },
+          "ja": {
+            title: "3m-ui · フロントエンドが埋め込まれていません", h1: "3m-ui · フロントエンドが埋め込まれていません", lang: "言語",
+            lead: "このバイナリの {{dist}} にはプレースホルダーしかなく、{{vite}} のビルド成果物が含まれていないため、パネル UI を読み込めません。",
+            steps: "まずフロントエンドをビルドし、埋め込みディレクトリを差し替えてください：",
+            alt: "またはリポジトリのルートで {{make}} を実行してください。{{target}} ターゲットが上記の手順を自動で行い、各アーキテクチャのバイナリを {{outdir}} に出力します。",
+            doc: "詳しくは {{readme}} のビルド手順を参照してください。",
+            note: "別途、互換性のある {{mihomo}} バイナリを本機にインストールし、設定でそのパスを指定する必要があります。"
+          },
+          "ko": {
+            title: "3m-ui · 프론트엔드가 포함되지 않았습니다", h1: "3m-ui · 프론트엔드가 포함되지 않았습니다", lang: "언어",
+            lead: "이 바이너리의 {{dist}} 에는 자리 표시자만 있고 {{vite}} 빌드 결과물이 없어 패널 UI를 불러올 수 없습니다.",
+            steps: "먼저 프론트엔드를 빌드하고 임베드 디렉터리를 교체하세요:",
+            alt: "또는 저장소 루트에서 {{make}} 를 실행하세요. {{target}} 타깃이 위 단계를 자동으로 수행하고 아키텍처별 바이너리를 {{outdir}} 에 출력합니다.",
+            doc: "자세한 내용은 {{readme}} 의 빌드 절차를 참고하세요.",
+            note: "또한 호환되는 {{mihomo}} 바이너리가 로컬에 설치되어 있어야 하며, 설정에서 해당 경로를 지정해야 합니다."
+          },
+          "es": {
+            title: "3m-ui · Frontend no incrustado", h1: "3m-ui · Frontend no incrustado", lang: "Idioma",
+            lead: "Este binario solo contiene un archivo de marcador de posición en {{dist}} y no incluye la compilación de {{vite}}, por lo que la interfaz del panel no puede cargarse.",
+            steps: "Primero compila el frontend y sustituye el directorio incrustado:",
+            alt: "O ejecuta {{make}} desde la raíz del repositorio: su objetivo {{target}} realiza los pasos anteriores y genera los binarios de cada arquitectura en {{outdir}}.",
+            doc: "Consulta la sección de compilación del {{readme}}.",
+            note: "También necesitas tener instalado localmente un binario de {{mihomo}} compatible y configurar su ruta."
+          },
+          "fr": {
+            title: "3m-ui · Frontend non intégré", h1: "3m-ui · Frontend non intégré", lang: "Langue",
+            lead: "Ce binaire ne contient qu'un fichier temporaire dans {{dist}} et aucune sortie de build {{vite}} : l'interface du panneau ne peut donc pas se charger.",
+            steps: "Commencez par compiler le frontend et remplacer le répertoire embarqué :",
+            alt: "Ou exécutez {{make}} à la racine du dépôt : la cible {{target}} effectue ces étapes et écrit les binaires par architecture dans {{outdir}}.",
+            doc: "Voir la section de compilation du {{readme}}.",
+            note: "Un binaire {{mihomo}} compatible doit également être installé localement et son chemin renseigné dans la configuration."
+          },
+          "de": {
+            title: "3m-ui · Frontend nicht eingebettet", h1: "3m-ui · Frontend nicht eingebettet", lang: "Sprache",
+            lead: "Dieses Binary enthält in {{dist}} nur eine Platzhalterdatei und keine {{vite}}-Build-Ausgabe, daher kann die Panel-Oberfläche nicht geladen werden.",
+            steps: "Baue zuerst das Frontend und ersetze das Einbettungsverzeichnis:",
+            alt: "Oder führe im Repository-Root {{make}} aus: Das Target {{target}} erledigt die obigen Schritte und schreibt die Binaries je Architektur nach {{outdir}}.",
+            doc: "Siehe den Build-Abschnitt in der {{readme}}.",
+            note: "Zusätzlich muss lokal eine kompatible {{mihomo}}-Binary installiert und ihr Pfad in der Konfiguration gesetzt sein."
+          },
+          "ru": {
+            title: "3m-ui · Фронтенд не встроен", h1: "3m-ui · Фронтенд не встроен", lang: "Язык",
+            lead: "В этом бинарном файле каталог {{dist}} содержит только заглушку и не содержит сборки {{vite}}, поэтому интерфейс панели не загружается.",
+            steps: "Сначала соберите фронтенд и замените каталог встраивания:",
+            alt: "Или выполните {{make}} в корне репозитория: цель {{target}} выполнит эти шаги и запишет бинарные файлы для каждой архитектуры в {{outdir}}.",
+            doc: "См. раздел сборки в {{readme}}.",
+            note: "Также на машине должен быть установлен совместимый бинарный файл {{mihomo}} с указанным в конфигурации путём."
+          },
+          "pt-BR": {
+            title: "3m-ui · Frontend não incorporado", h1: "3m-ui · Frontend não incorporado", lang: "Idioma",
+            lead: "Este binário contém apenas um arquivo de espaço reservado em {{dist}} e nenhum build do {{vite}}, portanto a interface do painel não pode carregar.",
+            steps: "Primeiro compile o frontend e substitua o diretório incorporado:",
+            alt: "Ou execute {{make}} na raiz do repositório: o alvo {{target}} executa as etapas acima e grava os binários por arquitetura em {{outdir}}.",
+            doc: "Consulte a seção de compilação no {{readme}}.",
+            note: "Também é necessário ter um binário {{mihomo}} compatível instalado localmente e configurar o seu caminho."
+          },
+          "vi": {
+            title: "3m-ui · Chưa nhúng frontend", h1: "3m-ui · Chưa nhúng frontend", lang: "Ngôn ngữ",
+            lead: "Tệp nhị phân này chỉ chứa một tệp giữ chỗ trong {{dist}} và không có kết quả build {{vite}}, vì vậy giao diện bảng điều khiển không tải được.",
+            steps: "Hãy build frontend và thay thế thư mục nhúng trước:",
+            alt: "Hoặc chạy {{make}} tại thư mục gốc của repository: target {{target}} sẽ tự thực hiện các bước trên và ghi các tệp nhị phân theo kiến trúc vào {{outdir}}.",
+            doc: "Xem phần hướng dẫn build trong {{readme}}.",
+            note: "Ngoài ra cần cài đặt sẵn một tệp nhị phân {{mihomo}} tương thích trên máy và khai báo đường dẫn trong cấu hình."
+          },
+          "id": {
+            title: "3m-ui · Frontend belum disematkan", h1: "3m-ui · Frontend belum disematkan", lang: "Bahasa",
+            lead: "Biner ini hanya berisi berkas placeholder di {{dist}} tanpa hasil build {{vite}}, sehingga antarmuka panel tidak dapat dimuat.",
+            steps: "Bangun frontend terlebih dahulu lalu ganti direktori sematan:",
+            alt: "Atau jalankan {{make}} dari root repositori: target {{target}} akan menjalankan langkah di atas dan menulis biner per arsitektur ke {{outdir}}.",
+            doc: "Lihat bagian build pada {{readme}}.",
+            note: "Selain itu, biner {{mihomo}} yang kompatibel harus sudah terpasang secara lokal dan jalurnya ditentukan dalam konfigurasi."
+          },
+          "th": {
+            title: "3m-ui · ยังไม่ได้ฝัง frontend", h1: "3m-ui · ยังไม่ได้ฝัง frontend", lang: "ภาษา",
+            lead: "ไบนารีนี้มีเพียงไฟล์แทนที่ใน {{dist}} และไม่มีผลลัพธ์จากการ build ด้วย {{vite}} จึงไม่สามารถโหลดหน้าต่างแผงควบคุมได้",
+            steps: "โปรด build frontend และแทนที่ไดเรกทอรีสำหรับฝังก่อน:",
+            alt: "หรือรัน {{make}} จากรากของ repository: เป้าหมาย {{target}} จะดำเนินการตามขั้นตอนข้างต้นและเขียนไบนารีแต่ละสถาปัตยกรรมลงใน {{outdir}}",
+            doc: "ดูส่วนการ build ใน {{readme}}",
+            note: "นอกจากนี้ต้องติดตั้งไบนารี {{mihomo}} ที่เข้ากันได้ไว้ในเครื่องและกำหนดพาธในคอนฟิก"
+          },
+          "tr": {
+            title: "3m-ui · Frontend gömülü değil", h1: "3m-ui · Frontend gömülü değil", lang: "Dil",
+            lead: "Bu ikili dosyada {{dist}} içinde yalnızca bir yer tutucu dosya var ve {{vite}} derleme çıktısı bulunmuyor; bu yüzden panel arayüzü yüklenemiyor.",
+            steps: "Önce frontend'i derleyin ve gömülü dizini değiştirin:",
+            alt: "Ya da depo kökünde {{make}} çalıştırın: {{target}} hedefi yukarıdaki adımları otomatik yapar ve her mimari için ikili dosyaları {{outdir}} altına yazar.",
+            doc: "Ayrıntılar için {{readme}} içindeki derleme bölümüne bakın.",
+            note: "Ayrıca makinede uyumlu bir {{mihomo}} ikili dosyası kurulu olmalı ve yolu yapılandırmada belirtilmelidir."
+          },
+          "ar": {
+            title: "3m-ui · لم يتم تضمين الواجهة الأمامية", h1: "3m-ui · لم يتم تضمين الواجهة الأمامية", lang: "اللغة",
+            lead: "يحتوي هذا الملف التنفيذي على ملف بديل فقط داخل {{dist}} دون مخرجات بناء {{vite}}، لذا لا يمكن تحميل واجهة اللوحة.",
+            steps: "ابنِ الواجهة الأمامية أولاً ثم استبدل دليل التضمين:",
+            alt: "أو شغّل {{make}} من جذر المستودع: هدف {{target}} ينفّذ الخطوات السابقة ويكتب الملفات التنفيذية لكل معمارية في {{outdir}}.",
+            doc: "راجع قسم البناء في {{readme}}.",
+            note: "كذلك يجب أن يكون ملف {{mihomo}} التنفيذي المتوافق مثبّتاً محلياً مع تحديد مساره في الإعدادات."
+          },
+          "hi": {
+            title: "3m-ui · फ़्रंटएंड एम्बेड नहीं है", h1: "3m-ui · फ़्रंटएंड एम्बेड नहीं है", lang: "भाषा",
+            lead: "इस बाइनरी में {{dist}} के भीतर केवल एक प्लेसहोल्डर फ़ाइल है और {{vite}} बिल्ड आउटपुट नहीं है, इसलिए पैनल UI लोड नहीं हो सकता।",
+            steps: "पहले फ़्रंटएंड बनाएँ और एम्बेड डायरेक्टरी बदलें:",
+            alt: "या रिपॉज़िटरी रूट से {{make}} चलाएँ: इसका {{target}} टारगेट उपरोक्त चरण स्वतः करता है और प्रत्येक आर्किटेक्चर के बाइनरी {{outdir}} में लिखता है।",
+            doc: "विवरण के लिए {{readme}} का बिल्ड अनुभाग देखें।",
+            note: "साथ ही मशीन पर संगत {{mihomo}} बाइनरी पहले से इंस्टॉल हो और कॉन्फ़िगरेशन में उसका पथ सेट हो।"
+          },
+          "pl": {
+            title: "3m-ui · Frontend nie został osadzony", h1: "3m-ui · Frontend nie został osadzony", lang: "Język",
+            lead: "Ten plik binarny zawiera w {{dist}} jedynie plik zastępczy i nie ma wyniku kompilacji {{vite}}, więc interfejs panelu nie może się wczytać.",
+            steps: "Najpierw zbuduj frontend i podmień katalog osadzania:",
+            alt: "Albo uruchom {{make}} w katalogu głównym repozytorium: cel {{target}} wykonuje powyższe kroki i zapisuje pliki binarne dla każdej architektury w {{outdir}}.",
+            doc: "Szczegóły w sekcji kompilacji w {{readme}}.",
+            note: "Wymagany jest także lokalnie zainstalowany zgodny plik binarny {{mihomo}} z ustawioną ścieżką w konfiguracji."
+          },
+          "uk": {
+            title: "3m-ui · Фронтенд не вбудовано", h1: "3m-ui · Фронтенд не вбудовано", lang: "Мова",
+            lead: "Цей бінарний файл містить у {{dist}} лише файл-заглушку без результату збірки {{vite}}, тому інтерфейс панелі не завантажується.",
+            steps: "Спочатку зберіть фронтенд і замініть каталог вбудовування:",
+            alt: "Або виконайте {{make}} у корені репозиторію: ціль {{target}} автоматично виконає ці кроки й запише бінарні файли для кожної архітектури до {{outdir}}.",
+            doc: "Див. розділ збірки в {{readme}}.",
+            note: "Також на машині має бути встановлений сумісний бінарний файл {{mihomo}} з указаним у конфігурації шляхом."
+          }
+        };
+        var KEYS = Object.keys(I18N);
+        var LEGACY = { "zh": "zh-CN", "zh-cn": "zh-CN", "zh-tw": "zh-TW", "pt": "pt-BR", "pt-br": "pt-BR" };
+        function normalize(raw) {
+          if (!raw) return null;
+          var s = String(raw).trim();
+          if (I18N[s]) return s;
+          var low = s.toLowerCase();
+          if (LEGACY[low]) return LEGACY[low];
+          var short = low.split("-")[0];
+          if (LEGACY[short]) return LEGACY[short];
+          for (var i = 0; i < KEYS.length; i++) {
+            if (KEYS[i].toLowerCase() === low || KEYS[i].toLowerCase().indexOf(short + "-") === 0) return KEYS[i];
+          }
+          for (var j = 0; j < KEYS.length; j++) {
+            if (KEYS[j].toLowerCase().split("-")[0] === short) return KEYS[j];
+          }
+          return null;
+        }
+        function detect() {
+          var url = null;
+          try { url = new URLSearchParams(location.search).get("lang"); } catch (e) {}
+          var saved = null;
+          try { saved = localStorage.getItem("3m-ui-locale"); } catch (e) {}
+          var nav = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language];
+          var candidates = [url, saved].concat(Array.prototype.slice.call(nav)).concat(["en"]);
+          for (var i = 0; i < candidates.length; i++) {
+            var hit = normalize(candidates[i]);
+            if (hit) return hit;
+          }
+          return "en";
+        }
+        function expand(s) {
+          return s.replace(/\{\{(\w+)\}\}/g, function (_, k) { return CODES[k] || ""; });
+        }
+        function apply(locale) {
+          var d = I18N[locale] || I18N.en;
+          document.title = d.title;
+          document.documentElement.lang = locale;
+          document.documentElement.dir = (locale === "ar") ? "rtl" : "ltr";
+          var nodes = document.querySelectorAll("[data-i18n]");
+          for (var i = 0; i < nodes.length; i++) {
+            var key = nodes[i].getAttribute("data-i18n");
+            if (d[key]) nodes[i].innerHTML = expand(d[key]);
+          }
+          var sel = document.getElementById("lang");
+          if (sel) sel.value = locale;
+        }
+        var sel = document.getElementById("lang");
+        if (sel) {
+          sel.addEventListener("change", function () {
+            var v = this.value;
+            try { localStorage.setItem("3m-ui-locale", v); } catch (e) {}
+            apply(v);
+          });
+        }
+        apply(detect());
+      })();
+    </script>
   </body>
 </html>
