@@ -1177,9 +1177,61 @@ paths:
     post:
       tags: [system]
       summary: Restore SQLite from multipart field `database`
+      description: |
+        Replaces the whole database (the panel exits so systemd restarts it).
+        Backups exported by other panels are rejected with 400 — use the
+        append-only migration import endpoints instead.
       responses:
         "200":
           description: Restored (restart required)
+        "400":
+          description: Not a valid backup, or a foreign panel backup
+  /system/backup/migrate/preview:
+    post:
+      tags: [system]
+      summary: Preview a 3x-ui / s-ui backup (dry-run, writes nothing)
+      description: |
+        Parses a foreign panel backup (raw SQLite, zip, gzip or tar.gz) into a
+        vendor-neutral snapshot and reports what an import would do. Credentials
+        are masked in the response. No database rows are written.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                database: { type: string, format: binary }
+      responses:
+        "200":
+          description: Preview (source, counts, users, nodes, warnings, skipped, tables)
+        "400":
+          description: Unsupported or corrupt backup
+  /system/backup/migrate/import:
+    post:
+      tags: [system]
+      summary: Append users / nodes / bindings from a 3x-ui / s-ui backup
+      description: |
+        Append-only migration: existing rows are never modified or removed. A
+        timestamped zip backup is written first; if that fails nothing is
+        imported. Name and UUID collisions are auto-renamed, credentials are
+        encrypted, sub_token values are regenerated, and every imported
+        listener is created disabled for manual review.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                database: { type: string, format: binary }
+      responses:
+        "200":
+          description: Import result (created counts, renamed, warnings, backup_file)
+        "400":
+          description: Unsupported backup or failed pre-import backup
   /system/restart:
     post:
       tags: [system]

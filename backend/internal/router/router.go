@@ -142,6 +142,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 		registerPanelServerRoutes(apiV1, cfg)
 		protocol.RegisterRoutes(apiV1)
 
+		system.SetMigrationValidator(mihomoConfig.ValidateListenerConfig)
 		system.NewHandler(d.systemService()).WithDB(db).WithWARPDelete(mihomoConfig.DeleteServerWARP).WithBackupPaths(cfg.Database.Path, cfg.Mihomo.Config).RegisterRoutes(apiV1.Group("/system"))
 		registerMihomoRoutes(apiV1, d)
 

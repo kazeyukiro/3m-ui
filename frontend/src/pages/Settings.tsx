@@ -53,6 +53,8 @@ import {
 import {
   downloadBackup,
   restoreDatabase,
+  previewMigration,
+  importMigration,
   openApiUrl,
   listLocalBackups,
   deleteLocalBackup,
@@ -61,6 +63,8 @@ import {
   checkUpdate,
   runUpdate,
   type LocalBackupItem,
+  type MigrationPreview,
+  type MigrationResult,
   type UpdateInfo,
   fetchWarpAccount,
   createWarpAccount,
@@ -132,6 +136,11 @@ const Settings: React.FC = () => {
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [cleanupKeep, setCleanupKeep] = useState(3);
   const [cleanupDays, setCleanupDays] = useState(7);
+  const [migrationFile, setMigrationFile] = useState<File | null>(null);
+  const [migrationPreview, setMigrationPreview] = useState<MigrationPreview | null>(null);
+  const [migrationResult, setMigrationResult] = useState<MigrationResult | null>(null);
+  const [migrationPreviewing, setMigrationPreviewing] = useState(false);
+  const [migrationImporting, setMigrationImporting] = useState(false);
 
   const formatBytes = (n: number) => {
     if (!n || n < 0) return '0 B';
@@ -1029,6 +1038,236 @@ const Settings: React.FC = () => {
                     <Button icon={<IconCloudUp />}>{t('settings.restoreBackup') || 'Restore'}</Button>
                   </Upload>
                 </Space>
+
+                <div
+                  className="settings-migration"
+                  style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(128,128,128,0.2)' }}
+                >
+                  <Typography.Text strong>
+                    {t('settings.migration', 'Migrate from another panel')}
+                  </Typography.Text>
+                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 12 }}>
+                    {t('settings.migrationHint', 'Import users and nodes from a 3x-ui or s-ui backup into 3m-ui (raw .db, .zip or .tar.gz). This is an append-only migration, not a full restore.')}
+                  </Typography.Paragraph>
+                  <Upload
+                    accept=".db,.sqlite,.sqlite3,.zip,.gz,.tgz,.tar.gz"
+                    showUploadList={false}
+                    beforeUpload={async (file) => {
+                      setMigrationPreviewing(true);
+                      try {
+                        const res = await previewMigration(file);
+                        setMigrationFile(file);
+                        setMigrationResult(null);
+                        setMigrationPreview(res);
+                      } catch (e: any) {
+                        message.error(e?.response?.data?.error || e?.message || t('common.error'));
+                      } finally {
+                        setMigrationPreviewing(false);
+                      }
+                      return false;
+                    }}
+                  >
+                    <Button icon={<IconCloudUp />} loading={migrationPreviewing}>
+                      {t('settings.migrationSelect', 'Select backup & preview')}
+                    </Button>
+                  </Upload>
+                  {migrationFile && (
+                    <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                      {migrationFile.name}
+                    </Typography.Text>
+                  )}
+                </div>
+
+                <Modal
+                  open={!!migrationPreview}
+                  title={t('settings.migrationPreviewTitle', 'Migration preview')}
+                  width={720}
+                  okText={t('settings.migrationConfirm', 'Confirm import')}
+                  cancelText={t('common.cancel') || 'Cancel'}
+                  confirmLoading={migrationImporting}
+                  okButtonProps={{
+                    disabled: !migrationPreview || (migrationPreview.counts.users + migrationPreview.counts.nodes) === 0,
+                  }}
+                  onCancel={() => { setMigrationPreview(null); setMigrationFile(null); }}
+                  onOk={async () => {
+                    if (!migrationFile) return;
+                    setMigrationImporting(true);
+                    try {
+                      const res = await importMigration(migrationFile);
+                      setMigrationResult(res);
+                      setMigrationPreview(null);
+                      setMigrationFile(null);
+                      message.success(t('settings.migrationDone', 'Migration complete'));
+                      void loadLocalBackups();
+                    } catch (e: any) {
+                      message.error(e?.response?.data?.error || e?.message || t('common.error'));
+                    } finally {
+                      setMigrationImporting(false);
+                    }
+                  }}
+                >
+                  {migrationPreview && (
+                    <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 4 }}>
+                      <Space wrap size={[8, 8]} style={{ marginBottom: 12 }}>
+                        <Tag color="blue">
+                          {t('settings.migrationSource', 'Source')}: {migrationPreview.source || '—'}
+                        </Tag>
+                        <Tag>{t('settings.migrationUsers', 'Users')}: {migrationPreview.counts.users}</Tag>
+                        <Tag>{t('settings.migrationNodes', 'Nodes')}: {migrationPreview.counts.nodes}</Tag>
+                        <Tag>{t('settings.migrationBindings', 'Bindings')}: {migrationPreview.counts.bindings}</Tag>
+                        <Tag color={migrationPreview.counts.warnings ? 'orange' : undefined}>
+                          {t('settings.migrationWarnings', 'Warnings')}: {migrationPreview.counts.warnings}
+                        </Tag>
+                        <Tag color={migrationPreview.counts.skipped ? 'orange' : undefined}>
+                          {t('settings.migrationSkipped', 'Skipped')}: {migrationPreview.counts.skipped}
+                        </Tag>
+                      </Space>
+
+                      <Alert
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 12 }}
+                        message={t('settings.migrationNoticeTitle', 'Please read before importing')}
+                        description={
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            <li>{t('settings.migrationNotice1', 'Append-only: existing data is never replaced. A timestamped backup is created automatically before importing.')}</li>
+                            <li>{t('settings.migrationNotice2', 'Imported nodes are disabled by default. Review each node protocol, port and TLS settings before enabling.')}</li>
+                            <li>{t('settings.migrationNotice3', 'Subscription URLs (sub_token) are regenerated; clients must re-import their subscription.')}</li>
+                            <li>{t('settings.migrationNotice4', '3x-ui / s-ui run on Xray / sing-box while 3m-ui runs on Mihomo. Node configs are best-effort mappings and must be checked manually.')}</li>
+                          </ul>
+                        }
+                      />
+
+                      {migrationPreview.nodes.length > 0 && (
+                        <>
+                          <Typography.Text strong style={{ fontSize: 12 }}>
+                            {t('settings.migrationNodeList', 'Nodes to import')}
+                          </Typography.Text>
+                          <Table
+                            size="small"
+                            rowKey={(r) => `${r.name}-${r.port}`}
+                            dataSource={migrationPreview.nodes}
+                            pagination={false}
+                            style={{ marginTop: 6, marginBottom: 12 }}
+                            locale={{ emptyText: t('common.empty') || 'No data' }}
+                            columns={[
+                              { title: t('common.name') || 'Name', dataIndex: 'name', ellipsis: true },
+                              { title: t('settings.migrationProtocol', 'Protocol'), dataIndex: 'protocol', width: 110 },
+                              { title: t('settings.migrationPort', 'Port'), dataIndex: 'port', width: 90 },
+                              {
+                                title: t('settings.migrationNotes', 'Notes'),
+                                dataIndex: 'notes',
+                                render: (v: string[] | undefined) =>
+                                  v && v.length ? (
+                                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                                      {v.map((n, i) => <li key={i}>{n}</li>)}
+                                    </ul>
+                                  ) : '—',
+                              },
+                            ]}
+                          />
+                        </>
+                      )}
+
+                      {!!migrationPreview.warnings?.length && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          style={{ marginBottom: 12 }}
+                          message={t('settings.migrationWarnings', 'Warnings')}
+                          description={
+                            <ul style={{ margin: 0, paddingLeft: 18 }}>
+                              {migrationPreview.warnings!.map((w, i) => <li key={i}>{w}</li>)}
+                            </ul>
+                          }
+                        />
+                      )}
+                      {!!migrationPreview.skipped?.length && (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message={t('settings.migrationSkipped', 'Skipped')}
+                          description={
+                            <ul style={{ margin: 0, paddingLeft: 18 }}>
+                              {migrationPreview.skipped!.map((s, i) => <li key={i}>{s}</li>)}
+                            </ul>
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
+                </Modal>
+
+                <Modal
+                  open={!!migrationResult}
+                  title={t('settings.migrationDone', 'Migration complete')}
+                  footer={
+                    <Button type="primary" onClick={() => setMigrationResult(null)}>
+                      {t('common.ok') || 'OK'}
+                    </Button>
+                  }
+                  onCancel={() => setMigrationResult(null)}
+                >
+                  {migrationResult && (
+                    <div>
+                      <Space wrap size={[8, 8]} style={{ marginBottom: 12 }}>
+                        <Tag color="green">{t('settings.migrationUsers', 'Users')}: {migrationResult.users_created}</Tag>
+                        <Tag color="green">{t('settings.migrationNodes', 'Nodes')}: {migrationResult.nodes_created}</Tag>
+                        <Tag color="green">{t('settings.migrationBindings', 'Bindings')}: {migrationResult.bindings_created}</Tag>
+                      </Space>
+                      {migrationResult.backup_file && (
+                        <Typography.Paragraph style={{ fontSize: 12 }}>
+                          {t('settings.migrationBackupFile', 'Pre-import backup')}: <Text code>{migrationResult.backup_file}</Text>
+                        </Typography.Paragraph>
+                      )}
+                      {!!migrationResult.renamed?.length && (
+                        <Alert
+                          type="info"
+                          showIcon
+                          style={{ marginBottom: 8 }}
+                          message={t('settings.migrationRenamed', 'Renamed due to conflicts')}
+                          description={
+                            <ul style={{ margin: 0, paddingLeft: 18 }}>
+                              {migrationResult.renamed!.map((r, i) => <li key={i}>{r}</li>)}
+                            </ul>
+                          }
+                        />
+                      )}
+                      {!!migrationResult.warnings?.length && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          style={{ marginBottom: 8 }}
+                          message={t('settings.migrationWarnings', 'Warnings')}
+                          description={
+                            <ul style={{ margin: 0, paddingLeft: 18 }}>
+                              {migrationResult.warnings!.map((w, i) => <li key={i}>{w}</li>)}
+                            </ul>
+                          }
+                        />
+                      )}
+                      {!!migrationResult.skipped?.length && (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message={t('settings.migrationSkipped', 'Skipped')}
+                          description={
+                            <ul style={{ margin: 0, paddingLeft: 18 }}>
+                              {migrationResult.skipped!.map((s, i) => <li key={i}>{s}</li>)}
+                            </ul>
+                          }
+                        />
+                      )}
+                      <Alert
+                        type="success"
+                        showIcon
+                        style={{ marginTop: 12 }}
+                        message={t('settings.migrationDisabledNote', 'Imported nodes are disabled. Review and enable them on the Listeners page.')}
+                      />
+                    </div>
+                  )}
+                </Modal>
+
                 <div className="settings-local-backups" style={{ marginTop: 16 }}>
                   <div
                     style={{

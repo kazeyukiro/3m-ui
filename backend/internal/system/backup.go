@@ -195,6 +195,13 @@ func RestoreDatabase(dbPath, mihomoCfgPath string, r io.Reader) (RestoreResult, 
 		return result, fmt.Errorf("backup file is empty or does not contain a database")
 	}
 
+	// A foreign panel backup is a valid SQLite file, but restoring it here
+	// would replace this panel's whole database. Reject it with a clear hint
+	// pointing at the append-only migration endpoint.
+	if err := guardForeignBackup(dbContent); err != nil {
+		return result, err
+	}
+
 	// Validate the SQLite magic header. SQLite files always start with the
 	// 16-byte string "SQLite format 3\0". Rejecting non-DB uploads here
 	// prevents the panel from boot-looping on a corrupt restore.

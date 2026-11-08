@@ -80,6 +80,75 @@ export const restoreDatabase = (file: File) => {
   return client.post('/system/backup/restore-db', fd);
 };
 
+// Migration import reads a backup exported by another panel (3x-ui / s-ui) and
+// appends its users and nodes without replacing the current database. Preview
+// is a dry-run; import writes in a single transaction after taking a backup.
+export interface MigrationPreviewUser {
+  username: string;
+  uuid?: string;
+  password?: string;
+  flow?: string;
+  traffic_limit: number;
+  upload_bytes: number;
+  download_bytes: number;
+  ip_limit: number;
+  expire_at?: string;
+  enabled: boolean;
+  remark?: string;
+  group?: string;
+  telegram_id?: number;
+}
+
+export interface MigrationPreviewNode {
+  name: string;
+  protocol: string;
+  port: string;
+  listen?: string;
+  config?: string;
+  tls?: boolean;
+  udp?: boolean;
+  public_host?: string;
+  access_sni?: string;
+  access_alpn?: string;
+  client_fingerprint?: string;
+  source_protocol?: string;
+  notes?: string[];
+}
+
+export interface MigrationPreview {
+  source: string;
+  counts: { users: number; nodes: number; bindings: number; warnings: number; skipped: number };
+  users: MigrationPreviewUser[];
+  nodes: MigrationPreviewNode[];
+  warnings?: string[];
+  skipped?: string[];
+  tables?: string[];
+  backup_file?: string;
+}
+
+export interface MigrationResult {
+  source: string;
+  users_created: number;
+  nodes_created: number;
+  bindings_created: number;
+  renamed?: string[];
+  skipped?: string[];
+  warnings?: string[];
+  backup_file?: string;
+}
+
+export const previewMigration = (file: File) => {
+  const fd = new FormData();
+  fd.append('database', file);
+  return client.post<MigrationPreview>('/system/backup/migrate/preview', fd).then((r) => r.data);
+};
+
+export const importMigration = (file: File) => {
+  const fd = new FormData();
+  fd.append('database', file);
+  return client.post<MigrationResult>('/system/backup/migrate/import', fd).then((r) => r.data);
+};
+
 export const openApiUrl = '/api/v1/openapi.yaml';
 
 

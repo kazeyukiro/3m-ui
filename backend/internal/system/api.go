@@ -57,6 +57,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.DELETE("/backups/:name", h.DeleteLocalBackup)
 	rg.POST("/backups/cleanup", h.CleanupLocalBackups)
 	rg.POST("/backup/restore-db", h.RestoreDatabase)
+	h.RegisterMigrationRoutes(rg)
 	rg.POST("/templates/reverse-proxy", h.ReverseProxy)
 	rg.POST("/templates/acme", h.ACME)
 	rg.POST("/geofiles/update", h.UpdateGeoFiles)
@@ -467,7 +468,11 @@ func (h *Handler) RestoreDatabase(c *gin.Context) {
 		// return 400 so the operator knows to fix the file, not the server.
 		errMsg := err.Error()
 		status := http.StatusInternalServerError
-		if strings.Contains(errMsg, "not a valid SQLite database") ||
+		if errors.Is(err, ErrForeignBackup) {
+			// A 3x-ui / s-ui backup is a valid SQLite file but would destroy
+			// this installation. Point the operator at the migration endpoint.
+			status = http.StatusBadRequest
+		} else if strings.Contains(errMsg, "not a valid SQLite database") ||
 			strings.Contains(errMsg, "does not contain a database") ||
 			strings.Contains(errMsg, "extract from zip") ||
 			strings.Contains(errMsg, "empty or does not contain") ||
