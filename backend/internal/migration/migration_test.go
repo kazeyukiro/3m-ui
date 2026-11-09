@@ -126,8 +126,12 @@ func TestParseXUI_V2(t *testing.T) {
 	if snap.Source != SourceXUI {
 		t.Fatalf("source = %q, want x-ui", snap.Source)
 	}
-	if len(snap.Users) != 4 {
-		t.Fatalf("users = %d, want 4 (2 per inbound)", len(snap.Users))
+	// The client email is a global subscriber identity in 3x-ui. alice and bob
+	// each appear on BOTH inbounds, so they must become 2 users (not 4) bound
+	// to 2 nodes each. Regression guard: duplicating them used to regenerate
+	// UUIDs and leave the original credentials as orphaned, unbound accounts.
+	if len(snap.Users) != 2 {
+		t.Fatalf("users = %d, want 2 (one per distinct email)", len(snap.Users))
 	}
 	if len(snap.Nodes) != 2 {
 		t.Fatalf("nodes = %d, want 2", len(snap.Nodes))
@@ -136,7 +140,20 @@ func TestParseXUI_V2(t *testing.T) {
 		t.Fatalf("skipped = %d, want 1 (wireguard)", len(snap.Skipped))
 	}
 	if len(snap.Bindings) != 4 {
-		t.Fatalf("bindings = %d, want 4", len(snap.Bindings))
+		t.Fatalf("bindings = %d, want 4 (2 users x 2 nodes)", len(snap.Bindings))
+	}
+	// Every user must be bound to both nodes with its original credential.
+	seen := map[string]int{}
+	for _, b := range snap.Bindings {
+		seen[b.UserRef]++
+	}
+	for _, u := range snap.Users {
+		if seen[u.Ref] != 2 {
+			t.Fatalf("user %q bound to %d nodes, want 2", u.Username, seen[u.Ref])
+		}
+		if u.UUID == "" {
+			t.Fatalf("user %q lost its UUID", u.Username)
+		}
 	}
 	var alice *User
 	for i := range snap.Users {
@@ -190,6 +207,88 @@ func TestParseXUI_V2(t *testing.T) {
 	}
 	if wsCfg["ws-path"] != "/ws-path-1" {
 		t.Fatalf("ws-path missing: %s", ws.Config)
+	}
+}
+
+// A single subscriber often appears on both a uuid-based (VLESS/VMess) and a
+// password-based (Trojan/SS) inbound. Both credentials must survive on the one
+// canonical user, and conflicting credentials must be reported, not silently
+// dropped. This is the regression guard for the duplicate-email bug.
+func TestParseXUI_V2_MergesCredentialsAcrossInbounds(t *testing.T) {
+	vless := mustJSON(t, map[string]interface{}{
+		"clients": []map[string]interface{}{
+			{"id": "11111111-1111-4111-8111-111111111111", "email": "shared", "enable": true, "totalGB": 5},
+		},
+	})
+	trojan := mustJSON(t, map[string]interface{}{
+		"clients": []map[string]interface{}{
+			{"password": "trojan-pw", "email": "shared", "enable": true, "limitIp": 3},
+		},
+	})
+	plain := mustJSON(t, map[string]interface{}{"network": "tcp", "security": "none"})
+	raw := newSourceDB(t, []string{
+		`CREATE TABLE inbounds (id INTEGER PRIMARY KEY AUTOINCREMENT, remark TEXT,
+			enable INTEGER, port INTEGER, protocol TEXT, settings TEXT, stream_settings TEXT, tag TEXT)`,
+		fmt.Sprintf(`INSERT INTO inbounds (id,remark,enable,port,protocol,settings,stream_settings,tag)
+			VALUES (1,'vless-in',1,443,'vless',%s,%s,'in-1')`, sqlStr(vless), sqlStr(plain)),
+		fmt.Sprintf(`INSERT INTO inbounds (id,remark,enable,port,protocol,settings,stream_settings,tag)
+			VALUES (2,'trojan-in',1,8443,'trojan',%s,%s,'in-2')`, sqlStr(trojan), sqlStr(plain)),
+	})
+	snap, err := Parse(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Users) != 1 {
+		t.Fatalf("users = %d, want 1 merged subscriber", len(snap.Users))
+	}
+	u := snap.Users[0]
+	if u.UUID != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("merged UUID lost: %q", u.UUID)
+	}
+	if u.Password != "trojan-pw" {
+		t.Fatalf("merged password lost: %q", u.Password)
+	}
+	if u.TrafficLimit != gibToBytes(5) || u.IPLimit != 3 {
+		t.Fatalf("non-credential fields not merged: %+v", u)
+	}
+	if len(snap.Bindings) != 2 {
+		t.Fatalf("bindings = %d, want 2 (one per inbound)", len(snap.Bindings))
+	}
+}
+
+// Conflicting credentials for one email are an unavoidable lossy case; the
+// import must keep the first and surface a warning for operator review.
+func TestParseXUI_V2_ReportsCredentialConflict(t *testing.T) {
+	first := mustJSON(t, map[string]interface{}{
+		"clients": []map[string]interface{}{{"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "email": "dup", "enable": true}},
+	})
+	second := mustJSON(t, map[string]interface{}{
+		"clients": []map[string]interface{}{{"id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "email": "dup", "enable": true}},
+	})
+	plain := mustJSON(t, map[string]interface{}{"network": "tcp", "security": "none"})
+	raw := newSourceDB(t, []string{
+		`CREATE TABLE inbounds (id INTEGER PRIMARY KEY AUTOINCREMENT, remark TEXT,
+			enable INTEGER, port INTEGER, protocol TEXT, settings TEXT, stream_settings TEXT, tag TEXT)`,
+		fmt.Sprintf(`INSERT INTO inbounds (id,remark,enable,port,protocol,settings,stream_settings,tag)
+			VALUES (1,'vless-1',1,443,'vless',%s,%s,'in-1')`, sqlStr(first), sqlStr(plain)),
+		fmt.Sprintf(`INSERT INTO inbounds (id,remark,enable,port,protocol,settings,stream_settings,tag)
+			VALUES (2,'vless-2',1,8443,'vless',%s,%s,'in-2')`, sqlStr(second), sqlStr(plain)),
+	})
+	snap, err := Parse(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Users) != 1 || snap.Users[0].UUID != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" {
+		t.Fatalf("must keep first credential: %+v", snap.Users)
+	}
+	found := false
+	for _, w := range snap.Warnings {
+		if strings.Contains(w, "conflicting UUIDs") || strings.Contains(w, "different credentials") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("credential conflict not reported: %v", snap.Warnings)
 	}
 }
 
@@ -419,19 +518,30 @@ func TestImportAppendRenameAndDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.UsersCreated != 4 || res.NodesCreated != 2 || res.BindingsCreated != 4 {
+	// alice/bob are each a single subscriber bound to both imported nodes.
+	// Only the username collision with the pre-existing "alice" is renamed;
+	// UUIDs must stay untouched (no self-collision from duplicated users).
+	if res.UsersCreated != 2 || res.NodesCreated != 2 || res.BindingsCreated != 4 {
 		t.Fatalf("result = %+v", res)
 	}
-	if len(res.Renamed) < 2 {
-		t.Fatalf("expected collision renames, got %v", res.Renamed)
+	// One username collision (pre-existing "alice") and one listener-name
+	// collision (pre-existing "VLESS-Reality-443"). Crucially, no credential
+	// UUID may be regenerated: the source UUIDs must survive the import.
+	if len(res.Renamed) != 2 {
+		t.Fatalf("expected 2 collision renames (user + listener), got %v", res.Renamed)
+	}
+	for _, r := range res.Renamed {
+		if strings.Contains(r, "UUID regenerated") {
+			t.Fatalf("source credential was regenerated: %v", res.Renamed)
+		}
 	}
 
 	var users []models.ProxyUser
 	if err := g.Order("id").Find(&users).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(users) != 5 {
-		t.Fatalf("users = %d, want 5", len(users))
+	if len(users) != 3 {
+		t.Fatalf("users = %d, want 3 (1 existing + 2 imported)", len(users))
 	}
 	if users[0].Username != "alice" || users[0].UUID != "existing-uuid" {
 		t.Fatalf("existing user was modified: %+v", users[0])

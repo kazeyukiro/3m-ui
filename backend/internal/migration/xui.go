@@ -26,6 +26,13 @@ func parseXUI(db *sql.DB, s schema) (*Snapshot, error) {
 	splitClients, splitLinks, splitOK := loadXUISplitClients(db, s)
 
 	nodeByID := make(map[int64]string)
+	// In the classic layout the client email is a global subscriber identity
+	// (the source panel keys client_traffics and subscriptions by email). The
+	// same email can appear in several inbounds: one subscription, many nodes.
+	// Keep a single User per email and bind it to every inbound it appears in.
+	userIndexByRef := make(map[string]int)
+	var credentialConflicts []string
+	conflictSeen := make(map[string]bool)
 	for _, row := range rows {
 		id := integer(row["id"])
 		srcProto := str(row["protocol"])
@@ -78,7 +85,19 @@ func parseXUI(db *sql.DB, s schema) (*Snapshot, error) {
 		if !splitOK {
 			for _, c := range decodeArray(settings["clients"]) {
 				u := xuiClient(c, srcProto, port, traffic)
-				snap.Users = append(snap.Users, u)
+				if idx, ok := userIndexByRef[u.Ref]; ok {
+					// Same subscriber on another inbound: fold credentials so
+					// one identity can authenticate on uuid- and password-based
+					// nodes alike, without creating a duplicate account.
+					if note := mergeXUIClient(&snap.Users[idx], u); note != "" && !conflictSeen[u.Ref] {
+						conflictSeen[u.Ref] = true
+						credentialConflicts = append(credentialConflicts,
+							fmt.Sprintf("client %q: %s", u.Username, note))
+					}
+				} else {
+					userIndexByRef[u.Ref] = len(snap.Users)
+					snap.Users = append(snap.Users, u)
+				}
 				snap.Bindings = append(snap.Bindings, Binding{UserRef: u.Ref, NodeRef: node.Ref})
 			}
 		}
@@ -101,8 +120,74 @@ func parseXUI(db *sql.DB, s schema) (*Snapshot, error) {
 		}
 	}
 
+	if len(credentialConflicts) > 0 {
+		snap.Warnings = append(snap.Warnings,
+			"Some subscribers use different credentials on different inbounds; only the first was kept. Review these nodes before enabling.")
+		snap.Warnings = append(snap.Warnings, credentialConflicts...)
+	}
 	snap.Warnings = append(snap.Warnings, xuiGlobalWarnings(snap)...)
 	return snap, nil
+}
+
+// mergeXUIClient folds a client entry that appears on another inbound into the
+// canonical user for the same email. A single ProxyUser carries one UUID and
+// one password: populating both lets the identity authenticate on uuid-based
+// (VLESS/VMess) and password-based (Trojan/SS/Hysteria2) nodes alike. Traffic
+// counters are already global per email, so they must not be summed here.
+// A non-empty return value flags a credential conflict that needs review.
+func mergeXUIClient(dst *User, src User) string {
+	var conflict string
+	if src.UUID != "" {
+		if dst.UUID == "" {
+			dst.UUID = src.UUID
+		} else if !strings.EqualFold(dst.UUID, src.UUID) {
+			conflict = "conflicting UUIDs across inbounds"
+		}
+	}
+	if src.Password != "" {
+		if dst.Password == "" {
+			dst.Password = src.Password
+		} else if dst.Password != src.Password {
+			conflict = "conflicting passwords across inbounds"
+		}
+	}
+	if dst.Flow == "" {
+		dst.Flow = src.Flow
+	}
+	if dst.IPLimit == 0 {
+		dst.IPLimit = src.IPLimit
+	}
+	if dst.TelegramID == 0 {
+		dst.TelegramID = src.TelegramID
+	}
+	if dst.ExpireAt == nil {
+		dst.ExpireAt = src.ExpireAt
+	}
+	if dst.Remark == "" {
+		dst.Remark = src.Remark
+	}
+	if dst.Group == "" {
+		dst.Group = src.Group
+	}
+	if dst.SourceSubID == "" {
+		dst.SourceSubID = src.SourceSubID
+	}
+	if src.TrafficLimit > dst.TrafficLimit {
+		dst.TrafficLimit = src.TrafficLimit
+	}
+	if src.UploadBytes > dst.UploadBytes {
+		dst.UploadBytes = src.UploadBytes
+	}
+	if src.DownloadBytes > dst.DownloadBytes {
+		dst.DownloadBytes = src.DownloadBytes
+	}
+	// A subscriber disabled on any inbound stays disabled; do not silently
+	// re-enable an account the source panel had turned off.
+	dst.Enabled = dst.Enabled && src.Enabled
+	if conflict != "" {
+		return conflict + "; kept the first credential"
+	}
+	return ""
 }
 
 // xuiTraffic holds per-client counters keyed by the client's email/identity.
