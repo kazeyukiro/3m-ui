@@ -460,7 +460,7 @@ paths:
 
   /users/{id}/node-traffic:
     get:
-      tags: [Users]
+      tags: [users]
       summary: Per-node traffic for a user (raw + billed via multiplier)
       security: [{ bearerAuth: [] }]
       parameters:
@@ -528,7 +528,7 @@ paths:
 
   /nodes/batch/certificate:
     post:
-      tags: [Nodes]
+      tags: [nodes]
       summary: Apply TLS certificate to multiple listeners
       description: |
         Writes certificate + private-key into each listener config.
@@ -1137,7 +1137,7 @@ paths:
           description: application/zip
   /system/backups:
     get:
-      tags: [System]
+      tags: [system]
       summary: List on-disk install/update backups
       security: [{ bearerAuth: [] }]
       responses:
@@ -1145,7 +1145,7 @@ paths:
           description: Backup list
   /system/backups/cleanup:
     post:
-      tags: [System]
+      tags: [system]
       summary: Cleanup on-disk backups by keep count and/or age
       security: [{ bearerAuth: [] }]
       requestBody:
@@ -1161,7 +1161,7 @@ paths:
           description: Cleanup result
   /system/backups/{name}:
     delete:
-      tags: [System]
+      tags: [system]
       summary: Delete one on-disk backup
       security: [{ bearerAuth: [] }]
       parameters:
@@ -1206,6 +1206,9 @@ paths:
       responses:
         "200":
           description: Preview (source, counts, users, nodes, warnings, skipped, tables)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationPreview" }
         "400":
           description: Unsupported or corrupt backup
   /system/backup/migrate/import:
@@ -1230,6 +1233,9 @@ paths:
       responses:
         "200":
           description: Import result (created counts, renamed, warnings, backup_file)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationResult" }
         "400":
           description: Unsupported backup or failed pre-import backup
   /system/restart:
@@ -1243,7 +1249,7 @@ paths:
         The web UI polls `/api/v1/health` and auto-reloads when the panel
         is back (typically 2-3 seconds).
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       responses:
         "200":
           description: Panel is restarting
@@ -1277,7 +1283,7 @@ paths:
 
         Pre-release URL: https://github.com/kazeyukiro/3m-ui/releases/tag/pre
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       responses:
         "200":
           description: Update information (both channels)
@@ -1336,7 +1342,7 @@ paths:
         (the update takes 30-60 seconds). The web UI polls `/api/v1/health`
         with a 120-second timeout and auto-reloads when the panel is back.
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       responses:
         "200":
           description: Update started
@@ -1607,7 +1613,7 @@ paths:
             schema: { $ref: '#/components/schemas/ServerOutbound' }
       responses:
         "201": { description: Saved outbound; Apply is required to update Mihomo }
-        "400": { description: Invalid definition, duplicate name, or reserved name }
+        "400": { description: "Invalid definition, duplicate name, or reserved name" }
     put:
       tags: [config]
       summary: Edit or rename an outbound and atomically update its references
@@ -2022,6 +2028,108 @@ components:
             redirect: { type: string }
             cloudflare: { type: boolean }
             delivery_signal: { type: string }
+    MigrationSource:
+      type: string
+      description: Detected source panel. These two endpoints only return x-ui or s-ui; a self backup or unknown format is rejected with 400.
+      example: x-ui
+
+    MigrationCounts:
+      type: object
+      required: [users, nodes, bindings, warnings, skipped]
+      properties:
+        users: { type: integer }
+        nodes: { type: integer }
+        bindings: { type: integer }
+        warnings: { type: integer }
+        skipped: { type: integer }
+
+    MigrationUser:
+      type: object
+      required: [username, traffic_limit, upload_bytes, download_bytes, ip_limit, enabled]
+      properties:
+        username: { type: string, description: Candidate login name; renamed on collision at import }
+        uuid: { type: string, description: Masked in preview responses }
+        password: { type: string, description: Masked in preview responses }
+        flow: { type: string, description: XTLS flow hint for VLESS clients }
+        traffic_limit: { type: integer, format: int64 }
+        upload_bytes: { type: integer, format: int64 }
+        download_bytes: { type: integer, format: int64 }
+        ip_limit: { type: integer }
+        expire_at: { type: string, format: date-time, nullable: true }
+        enabled: { type: boolean }
+        remark: { type: string }
+        group: { type: string }
+        telegram_id: { type: integer, format: int64 }
+
+    MigrationNode:
+      type: object
+      required: [name, protocol, port]
+      properties:
+        name: { type: string }
+        protocol: { type: string, description: Mapped Mihomo listener protocol }
+        port: { type: string }
+        listen: { type: string }
+        config: { type: string, description: Mihomo-schema JSON fragment; never contains users (bindings inject credentials) }
+        tls: { type: boolean }
+        udp: { type: boolean }
+        public_host: { type: string }
+        access_sni: { type: string }
+        access_alpn: { type: string }
+        client_fingerprint: { type: string }
+        source_protocol: { type: string, description: Original protocol name in the source backup }
+        notes:
+          type: array
+          items: { type: string }
+          description: Per-node caveats to review before enabling
+
+    MigrationPreview:
+      type: object
+      required: [source, counts, users, nodes]
+      properties:
+        source: { $ref: "#/components/schemas/MigrationSource" }
+        counts: { $ref: "#/components/schemas/MigrationCounts" }
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/MigrationUser" }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/MigrationNode" }
+        warnings:
+          type: array
+          items: { type: string }
+        skipped:
+          type: array
+          items: { type: string }
+        tables:
+          type: array
+          items: { type: string }
+          description: Source tables found, for diagnostics
+        backup_file:
+          type: string
+          description: Empty for a preview; set on a real import
+
+    MigrationResult:
+      type: object
+      required: [source, users_created, nodes_created, bindings_created]
+      properties:
+        source: { $ref: "#/components/schemas/MigrationSource" }
+        users_created: { type: integer }
+        nodes_created: { type: integer }
+        bindings_created: { type: integer }
+        renamed:
+          type: array
+          items: { type: string }
+          description: Collision resolutions (user / node names and UUIDs)
+        skipped:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        backup_file:
+          type: string
+          description: Timestamped zip snapshot written before the import
+
   parameters:
     IdPath:
       in: path
