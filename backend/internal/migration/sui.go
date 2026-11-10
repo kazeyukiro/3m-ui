@@ -3,6 +3,7 @@ package migration
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ func parseSUI(db *sql.DB, s schema) (*Snapshot, error) {
 		return nil, fmt.Errorf("read inbounds: %w", err)
 	}
 	nodeByID := make(map[int64]string)
+	nodeProtoByID := make(map[int64]string)
 	for _, row := range inboundRows {
 		id := integer(row["id"])
 		srcType := str(row["type"])
@@ -73,6 +75,7 @@ func parseSUI(db *sql.DB, s schema) (*Snapshot, error) {
 		}
 		snap.Nodes = append(snap.Nodes, node)
 		nodeByID[id] = node.Ref
+		nodeProtoByID[id] = proto
 	}
 
 	clientRows, err := queryRows(db, `SELECT * FROM clients`)
@@ -83,7 +86,20 @@ func parseSUI(db *sql.DB, s schema) (*Snapshot, error) {
 		cid := integer(row["id"])
 		name := firstNonEmpty(str(row["name"]), fmt.Sprintf("client-%d", cid))
 		cfgMap := decodeObject(row["config"])
-		u := suiClient(row, cfgMap, name, cid)
+
+		// Restrict credential selection to the protocols of the inbounds this
+		// client is actually bound to, so an unused config section cannot win.
+		boundIDs := decodeUintArray(row["inbounds"])
+		nodeProtocols := make([]string, 0, len(boundIDs))
+		for _, iid := range boundIDs {
+			if p, ok := nodeProtoByID[int64(iid)]; ok {
+				nodeProtocols = append(nodeProtocols, p)
+			}
+		}
+		u, conflict := suiClient(cfgMap, name, cid, nodeProtocols)
+		if conflict != "" {
+			snap.Warnings = append(snap.Warnings, conflict)
+		}
 
 		// Traffic and quota live on the client row itself.
 		u.UploadBytes = integer(row["up"])
@@ -95,7 +111,7 @@ func parseSUI(db *sql.DB, s schema) (*Snapshot, error) {
 		u.Group = str(row["group"])
 		snap.Users = append(snap.Users, u)
 
-		for _, iid := range decodeUintArray(row["inbounds"]) {
+		for _, iid := range boundIDs {
 			if ref, ok := nodeByID[int64(iid)]; ok {
 				snap.Bindings = append(snap.Bindings, Binding{UserRef: u.Ref, NodeRef: ref})
 			}
@@ -126,39 +142,168 @@ func loadSUITLS(db *sql.DB, s schema) map[int64]map[string]interface{} {
 	return out
 }
 
+// suiCredentialOrder is the fixed visit order for the per-protocol config map.
+// Go map iteration order is randomised; iterating the map directly made the
+// chosen UUID/Password depend on chance whenever a client carried different
+// credentials in several protocol sections. The s-ui subscription generator
+// reads one section per inbound ("vless" -> uuid, "trojan" -> password, ...),
+// so sections that describe uuid-based protocols come first, then the
+// password-based ones. "shadowsocks16" is the official config key for
+// 2022-blake3 shadowsocks (util/shadowsocks.go).
+var suiCredentialOrder = []string{
+	"vless", "vmess", "tuic", "anytls",
+	"trojan", "hysteria2", "hysteria", "shadowsocks16", "shadowsocks",
+	"naive", "socks", "http", "mixed",
+}
+
+// suiCredential is one credential value found in a protocol config section.
+// value is never rendered into warnings; only proto is.
+type suiCredential struct {
+	proto string
+	value string
+}
+
 // suiClient extracts credentials from the per-protocol config map. The map is
-// shaped like {"vless":{"uuid":"...","flow":"..."},"trojan":{"password":"..."}}.
-// We pick credentials for the protocol(s) the client is bound to; when only
-// one protocol config exists, that one wins.
-func suiClient(row map[string]interface{}, cfgMap map[string]interface{}, name string, cid int64) User {
+// shaped like {"vless":{"uuid":"...","flow":"..."},"trojan":{"password":"..."}}
+// and each section may carry its OWN credential (the source panel keeps them
+// independent). The target user model stores a single UUID and a single
+// Password for all of a user's bindings, so a client with different per-
+// protocol credentials cannot be reproduced losslessly. We resolve that
+// deterministically and return a human-readable conflict note (never containing
+// any credential value) that the caller surfaces as a warning.
+//
+// nodeProtocols lists the Mihomo protocols of the inbounds this client is bound
+// to; sections for protocols the client does not use are ignored, so a stray
+// config section cannot override the credential that actually gets used.
+func suiClient(cfgMap map[string]interface{}, name string, cid int64, nodeProtocols []string) (User, string) {
 	u := User{
 		Ref:         fmt.Sprintf("client:%d:%s", cid, name),
 		Username:    name,
 		numericID:   cid,
 		SourceSubID: name, // client name doubles as the subscription id
 	}
-	for key, raw := range cfgMap {
+
+	used := make(map[string]bool, len(nodeProtocols))
+	for _, p := range nodeProtocols {
+		used[strings.ToLower(strings.TrimSpace(p))] = true
+	}
+
+	// Collect every candidate credential in a stable order, tagging the source
+	// protocol so conflicts can be reported precisely.
+	var uuids, passwords []suiCredential
+	var flow string
+
+	consider := func(key string, raw interface{}) {
 		entry, ok := raw.(map[string]interface{})
 		if !ok {
-			continue
+			return
 		}
-		proto, supported := protocolMap(key)
+		proto, supported := suiConfigProtocol(key)
 		if !supported {
-			continue
+			return
+		}
+		// Only keep sections whose protocol the client actually uses (when we
+		// know the binding set). This keeps, e.g., an unused "vmess" section
+		// from overriding the vless UUID on a vless-only client.
+		if len(used) > 0 && !used[proto] {
+			return
 		}
 		if id := firstNonEmpty(str(entry["uuid"]), str(entry["id"])); id != "" {
-			if u.UUID == "" || strings.EqualFold(proto, "vless") || strings.EqualFold(proto, "vmess") {
-				u.UUID = id
-			}
+			uuids = append(uuids, suiCredential{key, id})
 		}
-		if pw := firstNonEmpty(str(entry["password"]), str(entry["auth_str"])); pw != "" && u.Password == "" {
-			u.Password = pw
+		if pw := firstNonEmpty(str(entry["password"]), str(entry["auth_str"])); pw != "" {
+			passwords = append(passwords, suiCredential{key, pw})
 		}
-		if f := str(entry["flow"]); f != "" && u.Flow == "" {
-			u.Flow = f
+		if flow == "" {
+			flow = str(entry["flow"])
 		}
 	}
-	return u
+
+	seen := make(map[string]bool, len(cfgMap))
+	for _, key := range suiCredentialOrder {
+		if raw, ok := cfgMap[key]; ok {
+			seen[strings.ToLower(key)] = true
+			consider(key, raw)
+		}
+	}
+	// Any protocol section not in the fixed order is still visited, but in a
+	// deterministic (sorted) order so it cannot introduce randomness either.
+	extra := make([]string, 0, len(cfgMap))
+	for key := range cfgMap {
+		if !seen[strings.ToLower(key)] {
+			extra = append(extra, key)
+		}
+	}
+	sort.Strings(extra)
+	for _, key := range extra {
+		consider(key, cfgMap[key])
+	}
+
+	if len(uuids) > 0 {
+		u.UUID = uuids[0].value
+	}
+	if len(passwords) > 0 {
+		u.Password = passwords[0].value
+	}
+	u.Flow = flow
+
+	return u, suiCredentialConflict(name, uuids, passwords)
+}
+
+// suiConfigProtocol maps an s-ui client-config section key to its Mihomo
+// listener protocol. The official "shadowsocks16" key (2022-blake3 shadowsocks,
+// see util/shadowsocks.go) is not a real inbound type, so protocolMap does not
+// know it; it shares the "shadowsocks" listener protocol.
+func suiConfigProtocol(key string) (string, bool) {
+	if strings.EqualFold(strings.TrimSpace(key), "shadowsocks16") {
+		return "shadowsocks", true
+	}
+	return protocolMap(key)
+}
+
+// suiCredentialConflict builds a warning (never embedding credential values)
+// when several protocol sections disagree on a UUID or a password. The target
+// panel keeps one credential pair per user, so the operator must reconcile the
+// affected protocols before enabling those listeners.
+func suiCredentialConflict(name string, uuids, passwords []suiCredential) string {
+	distinct := func(in []suiCredential) (map[string]bool, bool) {
+		vals := make(map[string]bool, len(in))
+		for _, c := range in {
+			vals[c.value] = true
+		}
+		return vals, len(vals) > 1
+	}
+	uVals, uConflict := distinct(uuids)
+	pVals, pConflict := distinct(passwords)
+	if !uConflict && !pConflict {
+		return ""
+	}
+	var parts []string
+	if uConflict {
+		protos := conflictProtocols(uuids, uVals)
+		parts = append(parts, fmt.Sprintf("%d different UUIDs across %s", len(uVals), strings.Join(protos, "/")))
+	}
+	if pConflict {
+		protos := conflictProtocols(passwords, pVals)
+		parts = append(parts, fmt.Sprintf("%d different passwords across %s", len(pVals), strings.Join(protos, "/")))
+	}
+	return fmt.Sprintf("client %q has %s; this panel keeps one UUID and one Password per user, so only the first protocol's credential was kept — review and re-enter the credential on the other protocols' listeners before enabling them",
+		name, strings.Join(parts, " and "))
+}
+
+func conflictProtocols(cs []suiCredential, distinct map[string]bool) []string {
+	if len(distinct) < 2 {
+		return nil
+	}
+	out := []string{}
+	seen := map[string]bool{}
+	for _, c := range cs {
+		if !seen[c.proto] {
+			seen[c.proto] = true
+			out = append(out, c.proto)
+		}
+	}
+	return out
 }
 
 func suiInboundConfig(proto, srcType string, opts, tls map[string]interface{}) (map[string]interface{}, []string) {
@@ -191,13 +336,17 @@ func suiInboundConfig(proto, srcType string, opts, tls map[string]interface{}) (
 			if k := nestedString(reality, "private_key"); k != "" {
 				rc["private-key"] = k
 			}
-			if sid := nestedString(reality, "short_id"); sid != "" {
-				rc["short-id"] = []interface{}{sid}
+			// sing-box stores short_id as a list; some panels wrote a bare
+			// string. Normalise both into the list Mihomo expects, without
+			// stringifying an array (which used to yield "[...]" literally).
+			if ids := suiStringList(reality["short_id"]); len(ids) > 0 {
+				rc["short-id"] = ids
 			}
 			hs := nestedObject(reality, "handshake")
 			if server := nestedString(hs, "server"); server != "" {
 				dest := server
-				if p := integer(hs["port"]); p > 0 {
+				// sing-box uses server_port; older dumps used port.
+				if p := firstPositive(integer(hs["server_port"]), integer(hs["port"])); p > 0 {
 					dest = fmt.Sprintf("%s:%d", server, p)
 				}
 				rc["dest"] = dest
@@ -220,11 +369,22 @@ func suiInboundConfig(proto, srcType string, opts, tls map[string]interface{}) (
 		if down := integer(opts["down_mbps"]); down > 0 {
 			cfg["down"] = fmt.Sprintf("%d Mbps", down)
 		}
-		if obfs := nestedString(opts, "obfs"); obfs != "" {
-			cfg["obfs"] = obfs
-		}
-		if pw := nestedString(opts, "obfs_password"); pw != "" {
-			cfg["obfs-password"] = pw
+		// Official s-ui keeps obfs as an object {"type","password"}; older or
+		// flattened dumps used a bare string plus a sibling obfs_password.
+		if obfs := nestedObject(opts, "obfs"); obfs != nil {
+			if t := nestedString(obfs, "type"); t != "" {
+				cfg["obfs"] = t
+			}
+			if pw := nestedString(obfs, "password"); pw != "" {
+				cfg["obfs-password"] = pw
+			}
+		} else {
+			if t := nestedString(opts, "obfs"); t != "" {
+				cfg["obfs"] = t
+			}
+			if pw := nestedString(opts, "obfs_password"); pw != "" {
+				cfg["obfs-password"] = pw
+			}
 		}
 	}
 	if proto == "shadowsocks" {
@@ -263,6 +423,49 @@ func suiStrings(in []interface{}) []string {
 		}
 	}
 	return out
+}
+
+// suiStringList normalises a JSON value that is either a string, a list of
+// strings, or nil into a []interface{} suitable for a Mihomo list field. It
+// never stringifies a whole array (which would embed literal "[" and "]").
+func suiStringList(v interface{}) []interface{} {
+	switch x := v.(type) {
+	case string:
+		if s := strings.TrimSpace(x); s != "" {
+			return []interface{}{s}
+		}
+	case []byte:
+		if s := strings.TrimSpace(string(x)); s != "" {
+			return []interface{}{s}
+		}
+	case []interface{}:
+		out := make([]interface{}, 0, len(x))
+		for _, item := range x {
+			if s := str(item); strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		out := make([]interface{}, 0, len(x))
+		for _, s := range x {
+			if strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// firstPositive returns the first argument greater than zero.
+func firstPositive(values ...int64) int64 {
+	for _, v := range values {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0
 }
 
 func suiGlobalWarnings(snap *Snapshot) []string {
