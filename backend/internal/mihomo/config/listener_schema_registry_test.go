@@ -27,8 +27,8 @@ func TestMihomoListenerSchemaRejectsNonListenerProtocols(t *testing.T) {
 
 func TestMihomoListenerSchemaIncludesFieldsUsedByForms(t *testing.T) {
 	cases := map[string][]string{
-		"shadowsocks": {"cipher", "password", "simple-obfs", "shadow-tls", "res-tls", "jls-config", "kcp-tun", "mux-option"},
-		"snell":       {"psk", "version", "obfs-opts", "shadow-tls", "res-tls", "jls-config"},
+		"shadowsocks": {"cipher", "password", "users", "simple-obfs", "shadow-tls", "res-tls", "jls-config", "kcp-tun", "mux-option"},
+		"snell":       {"psk", "version", "mode", "obfs-opts", "shadow-tls", "res-tls", "jls-config"},
 		"vless":       {"users", "ws-path", "grpc-service-name", "xhttp-config", "reality-config"},
 		"vmess":       {"users", "ws-path", "grpc-service-name", "mekya-config", "mkcp-config", "reality-config"},
 		"trojan":      {"users", "ws-path", "grpc-service-name", "reality-config", "ss-option"},

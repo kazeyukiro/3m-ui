@@ -11,6 +11,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/credentials"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	mihomoConfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
 )
 
 func ValidateNode(l *models.Listener) error {
@@ -160,6 +161,8 @@ var mapUserProtocols = map[string]bool{
 	"mieru":     true,
 	"tuic":      true,
 	"tuic-v5":   true,
+	// mihomo v1.19.34: shadowsocks `users` is a username→password map.
+	"shadowsocks": true,
 }
 
 func joinField(prefix, field string) string {
@@ -171,11 +174,48 @@ func joinField(prefix, field string) string {
 
 func validateProtocolSpecific(proto string, cfg map[string]interface{}) error {
 	switch proto {
+	case "shadowsocks":
+		// Explicit multi-user opt-in (mihomo v1.19.34). A config without a
+		// users map keeps the historical single-password behaviour.
+		if _, _, err := protocol.ValidateSSMultiUser(cfg); err != nil {
+			return err
+		}
 	case "anytls":
 		return validateAnyTLS(cfg)
 	case "snell":
-		if value, ok := numeric(cfg["version"]); ok && (value < 1 || value > 5) {
-			return fmt.Errorf("snell version must be between 1 and 5")
+		// mihomo v1.19.34 raises the supported Snell version ceiling to 6 and
+		// adds a v6-only `mode` field (default / unshaped / unsafe-raw).
+		if value, ok := numeric(cfg["version"]); ok && (value < 1 || value > 6) {
+			return fmt.Errorf("snell version must be between 1 and 6")
+		}
+		version := 4
+		if value, ok := numeric(cfg["version"]); ok {
+			version = int(value)
+		}
+		mode, _ := cfg["mode"].(string)
+		mode = strings.ToLower(strings.TrimSpace(mode))
+		if mode != "" {
+			if version != 6 {
+				return fmt.Errorf("snell mode is only supported on version 6")
+			}
+			switch mode {
+			case "default", "unshaped", "unsafe-raw":
+			default:
+				return fmt.Errorf("snell mode must be default, unshaped, or unsafe-raw")
+			}
+		}
+		if version == 6 {
+			if obfs, ok := cfg["obfs-opts"].(map[string]interface{}); ok {
+				obfsMode, _ := obfs["mode"].(string)
+				obfsMode = strings.ToLower(strings.TrimSpace(obfsMode))
+				if obfsMode == "http" || obfsMode == "tls" {
+					return fmt.Errorf("snell version 6 does not support obfs mode %s", obfsMode)
+				}
+			}
+			psk, _ := cfg["psk"].(string)
+			if n := len([]byte(strings.TrimSpace(psk))); n < 12 || n > 255 {
+				return fmt.Errorf("snell version 6 requires a psk of 12 to 255 bytes (got %d)", n)
+			}
 		}
 	case "hysteria2":
 		if obfs, ok := cfg["obfs"].(string); ok && obfs != "" && obfs != "salamander" {

@@ -101,14 +101,26 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 			case "sudoku":
 				field = "key"
 			}
-			secret := ""
-			if v, ok := cfg[field].(string); ok && strings.TrimSpace(v) != "" {
-				secret = strings.TrimSpace(v)
-			} else if len(credentials) > 0 && credentials[0].Password != "" {
-				secret = credentials[0].Password
-			}
-			if secret != "" {
-				cfg[field] = secret
+			if proto == "shadowsocks" {
+				if _, ok := protocol.SSConfigUsers(cfg); ok {
+					// Explicit multi-user (mihomo v1.19.34): resolve the client
+					// password for this subscriber and strip the server-side
+					// users map so the ss:// link carries the right secret.
+					username := ""
+					if len(credentials) > 0 {
+						username = credentials[0].Username
+					}
+					pass, found := protocol.ResolveSSClientPassword(cfg, username)
+					if !found {
+						return nil, fmt.Errorf("shadowsocks multi-user: no password configured for subscriber %q", username)
+					}
+					cfg["password"] = pass
+					delete(cfg, "users")
+				} else {
+					applySingleSecretForExport(cfg, field, credentials)
+				}
+			} else {
+				applySingleSecretForExport(cfg, field, credentials)
 			}
 
 		default:
@@ -149,4 +161,18 @@ func ClientURIsWithCredentials(listener models.Listener, host string, credential
 	}
 	listener.Config = string(encoded)
 	return ClientURIs(listener, host)
+}
+
+// applySingleSecretForExport mirrors the runtime single-secret resolution:
+// config secret first, otherwise the subscriber's own password.
+func applySingleSecretForExport(cfg map[string]interface{}, field string, credentials []user.Credential) {
+	secret := ""
+	if v, ok := cfg[field].(string); ok && strings.TrimSpace(v) != "" {
+		secret = strings.TrimSpace(v)
+	} else if len(credentials) > 0 && credentials[0].Password != "" {
+		secret = credentials[0].Password
+	}
+	if secret != "" {
+		cfg[field] = secret
+	}
 }

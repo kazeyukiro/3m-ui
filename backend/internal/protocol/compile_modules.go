@@ -129,10 +129,22 @@ func (ShadowsocksCompiler) Compile(in CompileInput) (map[string]interface{}, err
 	// so disabling UDP in the panel is preserved instead of silently falling
 	// back to the core default after each config regeneration.
 	m["udp"] = in.UDP
-	// Mihomo's SS listener holds exactly one password, but panels routinely
-	// bind several users to a listener. Resolve deterministically instead of
-	// skipping the whole listener ("supports one password" used to take every
-	// credential on the node offline):
+	// Explicit multi-user opt-in (mihomo v1.19.34). A listener without a
+	// `users` map keeps the historical single-password behaviour unchanged.
+	if users, mode, err := ValidateSSMultiUser(in.Config); err != nil {
+		return nil, err
+	} else if len(users) > 0 {
+		m["users"] = users
+		if mode == "aead" {
+			// AEAD multi-user requires an empty top-level password.
+			delete(m, "password")
+		}
+		return m, nil
+	}
+	// Single-password listeners: panels routinely bind several users to a
+	// listener. Resolve deterministically instead of skipping the whole
+	// listener ("supports one password" used to take every credential on the
+	// node offline):
 	//   config password present → keep it (matches URI/client exports)
 	//   config password absent  → fall back to the first bound user
 	if pw, _ := m["password"].(string); strings.TrimSpace(pw) == "" {

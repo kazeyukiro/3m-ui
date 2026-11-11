@@ -54,7 +54,12 @@ func AutofillListenerDefaults(l *models.Listener) error {
 			cipher = "aes-128-gcm"
 			cfg["cipher"] = cipher
 		}
-		if pass, _ := cfg["password"].(string); strings.TrimSpace(pass) == "" {
+		// mihomo v1.19.34: with an explicit users map, AEAD methods must keep
+		// the top-level password empty (the client password comes from users),
+		// while 2022-blake3-aes-* methods need it as the server PSK.
+		if hasExplicitSSUsers(cfg) && !strings.HasPrefix(cipher, "2022-blake3-") {
+			delete(cfg, "password")
+		} else if pass, _ := cfg["password"].(string); strings.TrimSpace(pass) == "" {
 			cfg["password"] = ssPasswordForCipher(cipher)
 		}
 	case "shadowquic":
@@ -78,7 +83,7 @@ func AutofillListenerDefaults(l *models.Listener) error {
 		if psk, _ := cfg["psk"].(string); strings.TrimSpace(psk) == "" {
 			cfg["psk"] = randomPassword(16)
 		}
-		// Mihomo requires a valid snell version (1-4). Default to 4 when unset
+		// Mihomo requires a valid snell version (1-6 since v1.19.34). Default to 4 when unset
 		// so listeners created from the panel are not rejected by mihomo.
 		// Stored as a JSON number (int) so it round-trips to YAML `version: 4`
 		// and passes the numeric() validator in node.ValidateListenerConfig.
@@ -732,4 +737,17 @@ func firstNonEmptyToken(tok interface{}) string {
 		}
 	}
 	return ""
+}
+
+// hasExplicitSSUsers reports whether the config carries a non-empty
+// multi-user map (the explicit opt-in introduced by mihomo v1.19.34).
+func hasExplicitSSUsers(cfg map[string]interface{}) bool {
+	switch m := cfg["users"].(type) {
+	case map[string]interface{}:
+		return len(m) > 0
+	case map[string]string:
+		return len(m) > 0
+	default:
+		return false
+	}
 }

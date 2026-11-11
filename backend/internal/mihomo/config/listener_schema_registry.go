@@ -110,7 +110,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	"shadowsocks": {
 		Protocol: "shadowsocks",
 		Fields: listenerFields(
-			"cipher", "password", "udp", "simple-obfs", "shadow-tls", "res-tls", "jls-config", "kcp-tun", "mux-option",
+			"cipher", "password", "users", "udp", "simple-obfs", "shadow-tls", "res-tls", "jls-config", "kcp-tun", "mux-option",
 		),
 		NestedFields: listenerNested(
 			"simple-obfs.enable", "simple-obfs.mode",
@@ -123,7 +123,7 @@ var MihomoListenerSchemas = map[string]ListenerSchema{
 	},
 	"snell": {
 		Protocol: "snell",
-		Fields:   listenerFields("psk", "version", "udp", "obfs-opts", "shadow-tls", "res-tls", "jls-config"),
+		Fields:   listenerFields("psk", "version", "mode", "udp", "obfs-opts", "shadow-tls", "res-tls", "jls-config"),
 		NestedFields: listenerNested(
 			"obfs-opts.mode", "obfs-opts.host",
 			"shadow-tls.enable", "shadow-tls.version", "shadow-tls.password", "shadow-tls.users", "shadow-tls.handshake.dest", "shadow-tls.handshake.proxy",

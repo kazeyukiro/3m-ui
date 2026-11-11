@@ -95,9 +95,11 @@ func DecodeNodeModel(l models.Listener, users []UserCred) (NodeModel, error) {
 			ALPN:        alpn,
 		}
 	case "shadowsocks":
+		ssUsers, _ := SSConfigUsers(cfg)
 		n.Shadowsocks = &ShadowsocksSpec{
 			Cipher:   strFrom(cfg, "cipher"),
 			Password: strFrom(cfg, "password"),
+			Users:    ssUsers,
 			UDP:      n.UDP || boolFrom(cfg, "udp"),
 		}
 	case "hysteria2":

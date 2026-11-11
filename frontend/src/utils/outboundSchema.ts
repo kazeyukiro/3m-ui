@@ -1,4 +1,4 @@
-// Outbound option fields from MetaCubeX/mihomo v1.19.33 adapter/outbound.
+// Outbound option fields from MetaCubeX/mihomo v1.19.34 adapter/outbound.
 // This is the project distribution baseline (distribution/mihomo.env).
 // Keep protocol and shared option structs aligned when updating the bundled core.
 export type OutboundFieldKind = 'string' | 'number' | 'boolean' | 'strings' | 'numbers' | 'object' | 'objects' | 'stringMap' | 'stringListMap' | 'map';
@@ -51,6 +51,7 @@ export const OUTBOUND_OBJECTS: Record<string, readonly OutboundField[]> = {
     ["psk", "string"],
     ["udp", "boolean"],
     ["version", "number"],
+    ["mode", "string"],
     ["reuse", "boolean"],
     ["obfs-opts", "map"],
     ["client-fingerprint", "string"],

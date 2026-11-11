@@ -122,7 +122,8 @@ type TrojanSpec struct {
 
 type ShadowsocksSpec struct {
 	Cipher   string
-	Password string // when not using per-user creds
+	Password string            // single-password listener, or the server PSK for 2022 multi-user
+	Users    map[string]string // explicit multi-user map (mihomo v1.19.34)
 	UDP      bool
 }
 

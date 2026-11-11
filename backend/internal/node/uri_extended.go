@@ -26,6 +26,16 @@ func snellURIs(name, host, port string, cfg map[string]interface{}) ([]string, e
 			params["obfs-host"] = host
 		}
 	}
+	// mihomo v1.19.34: `mode` is a Snell v6-only option and must match the
+	// client (default / unshaped / unsafe-raw).
+	if mode := stringValue(cfg["mode"], ""); mode != "" {
+		params["mode"] = mode
+	}
+	// mihomo v1.19.34: `mode` is a Snell v6-only option and must match the
+	// client (default / unshaped / unsafe-raw).
+	if mode := stringValue(cfg["mode"], ""); mode != "" {
+		params["mode"] = mode
+	}
 	if b, ok := cfg["udp"].(bool); ok && b {
 		params["udp"] = "1"
 	}

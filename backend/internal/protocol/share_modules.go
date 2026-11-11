@@ -268,7 +268,20 @@ func (ShadowsocksCompiler) BuildShare(in ShareInput) (Share, error) {
 		return Share{}, err
 	}
 	pass := in.User.Password
-	if pass == "" {
+	if len(spec.Users) > 0 {
+		// Explicit multi-user (mihomo v1.19.34): the client password comes
+		// from the users map, not from the panel user credential. For
+		// 2022-blake3-aes-* the client uses "serverPSK:userPSK".
+		userPSK, ok := spec.Users[strings.TrimSpace(in.User.Username)]
+		if !ok || userPSK == "" {
+			return Share{}, fmt.Errorf("shadowsocks multi-user: no password configured for %q", in.User.Username)
+		}
+		if IsSS2022MultiUserCipher(spec.Cipher) {
+			pass = spec.Password + ":" + userPSK
+		} else {
+			pass = userPSK
+		}
+	} else if pass == "" {
 		pass = spec.Password
 	}
 	if spec.Cipher == "" || pass == "" {

@@ -338,6 +338,15 @@ export function configToFormValues(raw: string | undefined | null): Record<strin
     values.token = cfg.token.join(',');
   }
 
+  // mihomo v1.19.34: an explicit Shadowsocks users map (username -> password)
+  // is stored as a JSON object, so the scalar loop above skips it. Expose it
+  // as editable text for the Shadowsocks form only.
+  if (cfg.users && typeof cfg.users === 'object' && !Array.isArray(cfg.users)) {
+    values.ss_users = Object.entries(cfg.users)
+      .map(([u, p]) => `${u}: ${String(p)}`)
+      .join('\n');
+  }
+
   // users managed elsewhere
   delete values.users;
   delete values['shadow-tls'];
@@ -446,21 +455,47 @@ export function formValuesToConfig(
   switch (protocol) {
     case 'shadowsocks':
       set('cipher', values.cipher);
-      set('password', values.password);
+      {
+        // mihomo v1.19.34 explicit opt-in multi-user. One `username: password`
+        // per line. AEAD methods need an empty top-level password; the
+        // 2022-blake3-aes-* methods keep it as the server PSK.
+        const raw = typeof values.ss_users === 'string' ? values.ss_users : '';
+        const users: Record<string, string> = {};
+        for (const line of raw.split(/\r?\n/)) {
+          const s = line.trim();
+          const i = s.indexOf(':');
+          if (i <= 0) continue;
+          const name = s.slice(0, i).trim();
+          const pass = s.slice(i + 1).trim();
+          if (name && pass) users[name] = pass;
+        }
+        if (Object.keys(users).length > 0) {
+          cfg.users = users;
+          if (!String(values.cipher || '').startsWith('2022-blake3-')) {
+            delete cfg.password;
+          } else {
+            set('password', values.password);
+          }
+        } else {
+          set('password', values.password);
+        }
+      }
       break;
     case 'snell':
       set('psk', values.psk);
       {
         const ver = toInt(values.version);
         if (ver !== undefined) set('version', ver);
-      }
-      // Mihomo rejects obfs-opts without Host; only emit a complete block.
-      {
-        const mode = typeof values.obfs_opts_mode === 'string' ? values.obfs_opts_mode.trim() : '';
-        const host = typeof values.obfs_opts_host === 'string' ? values.obfs_opts_host.trim() : '';
-        if (mode && host) {
-          const o = cleanObj({ mode, host });
-          if (o) cfg['obfs-opts'] = o;
+        // mihomo v1.19.34: `mode` is a Snell v6-only field.
+        set('mode', values.snell_mode);
+        // v6 replaces the simple-obfs layer; http/tls obfs is rejected there.
+        if (ver !== 6) {
+          const mode = typeof values.obfs_opts_mode === 'string' ? values.obfs_opts_mode.trim() : '';
+          const host = typeof values.obfs_opts_host === 'string' ? values.obfs_opts_host.trim() : '';
+          if (mode && host) {
+            const o = cleanObj({ mode, host });
+            if (o) cfg['obfs-opts'] = o;
+          }
         }
       }
       break;
@@ -1046,6 +1081,9 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
           <Form.Item name="password" label={t('listeners.password')} tooltip={fieldTip(t, 'listeners.passwordHint')}>
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={() => gen('ss-password', form.getFieldValue('cipher'))}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
+          <Form.Item name="ss_users" label={t('listeners.ssUsers')} tooltip={fieldTip(t, 'listeners.ssUsersHint', 'One username: password per line (mihomo v1.19.34 multi-user).')}>
+            <Input.TextArea rows={3} placeholder={'alice: password1\nbob: password2'} />
+          </Form.Item>
         </>
       )}
 
@@ -1056,7 +1094,15 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
             <Input.Password placeholder="auto" addonAfter={<Button type="link" size="small" onClick={async () => { const d = await generateMaterial({ kind: 'password' }); form.setFieldsValue({ psk: d.password }); }}>{t('common.generate') || 'Generate'}</Button>} />
           </Form.Item>
           <Form.Item name="version" label={t('listeners.snellVersion')} initialValue={4} tooltip={fieldTip(t, 'listeners.versionHint')}>
-            <Select options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))} />
+            <Select options={[1, 2, 3, 4, 5, 6].map((v) => ({ value: v, label: String(v) }))} />
+          </Form.Item>
+          <Form.Item name="snell_mode" label={t('listeners.snellMode')} tooltip={fieldTip(t, 'listeners.snellModeHint', 'Snell v6 only: default / unshaped / unsafe-raw.')}>
+            <Select allowClear options={[{ value: 'default', label: 'default' }, { value: 'unshaped', label: 'unshaped' }, { value: 'unsafe-raw', label: 'unsafe-raw' }]} />
+          </Form.Item>
+          <Form.Item noStyle dependencies={['version']}>
+            {({ getFieldValue }) => (Number(getFieldValue('version')) === 6 ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 8 }} message={t('listeners.snellV6Hint') || 'Snell version 6 does not support obfs-opts http/tls and requires a psk of 12 to 255 bytes.'} />
+            ) : null)}
           </Form.Item>
           <Form.Item name="obfs_opts_mode" label={t('listeners.obfsOptsMode')} tooltip={fieldTip(t, 'listeners.obfsOptsHint', 'Leave both empty to disable. Mode and host must be set together.')}>
             <Select allowClear options={[{ value: 'http', label: 'http' }, { value: 'tls', label: 'tls' }]} />
