@@ -595,11 +595,14 @@ func hopFormatLoon(v string) string {
 
 // ---- Surge ----
 
-// surgeTransportOK reports whether Surge's transport vocabulary covers the
-// node's transport. manual.nssurge.com policies/vmess and policies/trojan
-// document ws (with ws-path / ws-headers) as the only optional transport
-// layer — there is no grpc / xhttp / http option, so those links must degrade
-// to a comment instead of a silently wrong plain-TLS node.
+// surgeTransportOK reports whether Surge's VMess / Trojan transport
+// vocabulary covers the node's transport. manual.nssurge.com policies/vmess
+// and policies/trojan document ws (with ws-path / ws-headers) as the only
+// optional transport layer — there is no grpc / xhttp / http option, so those
+// links must degrade to a comment instead of a silently wrong plain-TLS node.
+// VLESS is deliberately NOT covered here: policies/vless.html (Surge iOS
+// 6.0.0+ / Mac 6.12.0+) adds gRPC alongside RAW and WebSocket, handled by
+// surgeVLESSUnsupported and the vless renderer branch.
 func surgeTransportOK(typ string) bool {
 	switch typ {
 	case "", "tcp", "none", "ws":
@@ -688,6 +691,71 @@ func renderSurgeNode(n *shareNode) string {
 			}
 		}
 		parts := append([]string{tag, "vmess", n.Host, n.Port}, params...)
+		b.WriteString(joinNodeLine(parts))
+	case "vless":
+		// manual.nssurge.com/policies/vless.html — Surge iOS 6.0.0+ /
+		// Mac 6.12.0+ implements the VLESS client, including REALITY and the
+		// XTLS Vision flow. Declaration syntax:
+		//   Name = vless, <host>, <port>, username=<id>[, parameter=value, ...]
+		// Combinations Surge cannot express are degraded to a comment by
+		// surgeSkipMsg (see surgeVLESSUnsupported) before reaching here.
+		params := []string{"username=" + quoteValue(n.Password)}
+		security := strings.ToLower(strings.TrimSpace(n.Params["security"]))
+		// The official share-link mapping sets reality-public-key whenever the
+		// link carries security=reality/pbk; the public key itself is what
+		// enables REALITY ("implies TLS"), so tls=true is not emitted.
+		reality := security == "reality" || strings.TrimSpace(n.Params["pbk"]) != ""
+		switch strings.ToLower(strings.TrimSpace(n.Params["type"])) {
+		case "", "tcp", "raw", "none":
+			// RAW (TCP): no transport keyword is emitted.
+		case "ws":
+			params = append(params, "ws=true")
+			if p := shareParam(n.Params, "path"); p != "" {
+				params = append(params, "ws-path="+quoteValue(p))
+			}
+			if h := shareParam(n.Params, "host"); h != "" {
+				params = append(params, "ws-headers="+quoteValue("Host:"+h))
+			}
+		case "grpc":
+			params = append(params, "grpc=true")
+			if sn := shareParam(n.Params, "serviceName"); sn != "" {
+				params = append(params, "grpc-service-name="+quoteValue(sn))
+			}
+			if strings.EqualFold(shareParam(n.Params, "mode"), "multi") {
+				params = append(params, "grpc-mode=multi")
+			}
+			if auth := shareParam(n.Params, "authority"); auth != "" {
+				params = append(params, "grpc-authority="+quoteValue(auth))
+			}
+		default:
+			// XHTTP / HTTPUpgrade / mKCP and friends have no Surge VLESS
+			// representation; the skip check degrades them first, and this is
+			// a defensive guard for direct renderer calls.
+			return ""
+		}
+		if reality {
+			params = append(params, "reality-public-key="+quoteValue(shareParam(n.Params, "pbk")))
+			if sid := shareParam(n.Params, "sid"); sid != "" {
+				params = append(params, "reality-short-id="+quoteValue(sid))
+			}
+		} else if security == "tls" {
+			params = append(params, "tls=true")
+		}
+		if sni := shareParam(n.Params, "sni"); sni != "" {
+			params = append(params, "sni="+sni)
+		}
+		if flow := shareParam(n.Params, "flow"); flow != "" {
+			params = append(params, "flow="+flow)
+		}
+		if alpn := shareParam(n.Params, "alpn"); alpn != "" {
+			params = append(params, "alpn="+quoteValue(alpn))
+		}
+		// REALITY verifies the certificate through its own handshake, so
+		// skip-cert-verify and certificate pinning do not apply.
+		if !reality && shareInsecure(n.Params) {
+			params = append(params, "skip-cert-verify=true")
+		}
+		parts := append([]string{tag, "vless", n.Host, n.Port}, params...)
 		b.WriteString(joinNodeLine(parts))
 	case "trojan":
 		if !surgeTransportOK(n.Params["type"]) {
@@ -1176,13 +1244,71 @@ func surgeVMessOK(method string) bool {
 	return false
 }
 
-// surgeSkipMsg reports nodes Surge cannot express at all: VLESS (absent from
-// Surge's protocol list) and reality transports (no public-key/short-id
-// parameters exist in Surge's TLS argument set).
+// surgeVLESSUnsupported reports VLESS combinations Surge cannot express,
+// per manual.nssurge.com/policies/vless.html (Surge iOS 6.0.0+ / Mac 6.12.0+).
+//
+// Supported combinations documented on that page:
+//
+//	Transport   Security            Vision flow
+//	RAW (TCP)   none, TLS, REALITY   With TLS or REALITY
+//	WebSocket   none, TLS            No
+//	gRPC        TLS, REALITY         No
+//
+// "XHTTP, HTTPUpgrade and mKCP transports and VLESS Encryption are not
+// supported." Vision requires TLS 1.3 (tls=true or REALITY) and cannot be
+// used with WebSocket; gRPC requires tls=true or REALITY. REALITY is enabled
+// by reality-public-key, so a reality link without pbk cannot be expressed.
+func surgeVLESSUnsupported(n *shareNode) (string, bool) {
+	p := n.Params
+	typ := strings.ToLower(strings.TrimSpace(p["type"]))
+	switch typ {
+	case "", "tcp", "raw", "none", "ws", "grpc":
+	default:
+		return "Surge VLESS 不支持该传输（仅 RAW / WebSocket / gRPC）", true
+	}
+	// VLESS Encryption (mlkem768x25519plus...) is unsupported; only the
+	// share-link compatibility value "none" is accepted.
+	if enc := strings.TrimSpace(p["encryption"]); enc != "" && !strings.EqualFold(enc, "none") {
+		return "Surge VLESS 不支持 VLESS Encryption", true
+	}
+	sec := strings.ToLower(strings.TrimSpace(p["security"]))
+	reality := sec == "reality" || strings.TrimSpace(p["pbk"]) != ""
+	tls := sec == "tls"
+	flow := strings.TrimSpace(p["flow"])
+	switch typ {
+	case "ws":
+		if reality {
+			return "Surge VLESS 的 WebSocket 不支持 REALITY", true
+		}
+		if flow != "" {
+			return "Surge VLESS 的 Vision flow 不支持 WebSocket", true
+		}
+	case "grpc":
+		if !tls && !reality {
+			return "Surge VLESS 的 gRPC 需 TLS 或 REALITY", true
+		}
+		if flow != "" {
+			return "Surge VLESS 的 Vision flow 不支持 gRPC", true
+		}
+	default: // RAW / TCP
+		if flow != "" && !tls && !reality {
+			return "Surge VLESS 的 Vision flow 需 TLS 或 REALITY", true
+		}
+	}
+	if reality && strings.TrimSpace(p["pbk"]) == "" {
+		return "Surge VLESS 的 REALITY 缺 reality-public-key", true
+	}
+	return "", false
+}
+
+// surgeSkipMsg reports nodes Surge cannot express. VLESS is now supported
+// (iOS 6.0.0+ / Mac 6.12.0+) but only within the official combination matrix;
+// REALITY on Trojan / VMess remains unsupported because those two Surge
+// policies document no reality-public-key / reality-short-id parameters.
 func surgeSkipMsg(n *shareNode) (string, bool) {
 	switch n.Protocol {
 	case "vless":
-		return "Surge 不支持 VLESS 协议", true
+		return surgeVLESSUnsupported(n)
 	case "trojan", "vmess":
 		if n.Params["security"] == "reality" {
 			return "Surge 不支持 REALITY 传输", true

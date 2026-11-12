@@ -283,8 +283,11 @@ func TestRenderSurgeTUICv4(t *testing.T) {
 }
 
 func TestSurgeSkipMsg(t *testing.T) {
-	if reason, skip := surgeSkipMsg(&shareNode{Protocol: "vless", Params: map[string]string{}}); !skip || !strings.Contains(reason, "VLESS") {
-		t.Fatalf("surge should skip vless: skip=%v reason=%q", skip, reason)
+	// Surge iOS 6.0.0+ / Mac 6.12.0+ supports VLESS; a plain RAW VLESS node
+	// must no longer be commented out. The combination matrix is covered in
+	// client_apple_surge_vless_test.go.
+	if _, skip := surgeSkipMsg(&shareNode{Protocol: "vless", Params: map[string]string{}}); skip {
+		t.Fatal("surge should now keep a plain vless node")
 	}
 	if reason, skip := surgeSkipMsg(&shareNode{Protocol: "trojan", Params: map[string]string{"security": "reality"}}); !skip || !strings.Contains(reason, "REALITY") {
 		t.Fatalf("surge should skip reality trojan: skip=%v reason=%q", skip, reason)
