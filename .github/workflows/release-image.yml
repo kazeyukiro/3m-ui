@@ -138,14 +138,67 @@ jobs:
           IS_LATEST: ${{ inputs.latest }}
         run: |
           set -euo pipefail
+          # docker manifest talks to the registry through the Docker CLI's own
+          # credential store, the same path docker push uses in this job.
+          # buildx imagetools create resolves its sources through BuildKit and
+          # containerd instead, and on the Docker 29 + containerd image store
+          # runners that path reached the registry without a readable token and
+          # failed with "insufficient_scope: authorization failed" even though
+          # the push right before it succeeded.
+          SOURCES=()
           for ARCH in amd64 arm64; do
             docker load --input "verified-images/3m-ui-$ARCH.tar"
             STAGING="$IMAGE:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$ARCH"
             docker tag local/3m-ui:smoke "$STAGING"
             docker push "$STAGING"
-            docker image inspect "$STAGING" --format '{{index .RepoDigests 0}}' >> image-digests
+            SOURCES+=("$STAGING")
+            docker image inspect "$STAGING" --format '{{index .RepoDigests 0}}' | sed 's/^.*@//' >> image-digests
           done
           mapfile -t DIGESTS < image-digests
-          TAGS=(--tag "$IMAGE:$IMAGE_TAG")
-          if [ "$IS_LATEST" = true ]; then TAGS+=(--tag "$IMAGE:latest"); fi
-          docker buildx imagetools create "${TAGS[@]}" "${DIGESTS[@]}"
+
+          # ghcr occasionally answers a just-created tag with a transient error,
+          # so give each read a few attempts before calling it missing.
+          read_manifest() {
+            local target="$1" attempt out
+            for attempt in 1 2 3 4 5; do
+              if out=$(docker manifest inspect "$target" 2>/dev/null); then
+                printf '%s' "$out"
+                return 0
+              fi
+              sleep 3
+            done
+            return 1
+          }
+
+          publish_list() {
+            local target="$1"
+            if read_manifest "$target" >/dev/null; then
+              # A rolling tag such as latest already exists: replace its entries.
+              docker manifest create --amend "$target" "${SOURCES[@]}"
+            else
+              docker manifest rm "$target" >/dev/null 2>&1 || true
+              docker manifest create "$target" "${SOURCES[@]}"
+            fi
+            docker manifest push --purge "$target"
+          }
+
+          publish_list "$IMAGE:$IMAGE_TAG"
+          if [ "$IS_LATEST" = true ]; then publish_list "$IMAGE:latest"; fi
+
+          # Read the index back from the registry and prove it points at the
+          # digests verified above rather than at anything rebuilt later.
+          if ! INDEX=$(read_manifest "$IMAGE:$IMAGE_TAG"); then
+            echo "could not read back $IMAGE:$IMAGE_TAG from the registry" >&2
+            exit 1
+          fi
+          for DIGEST in "${DIGESTS[@]}"; do
+            case "$INDEX" in
+              *"\"digest\": \"$DIGEST\""*) ;;
+              *)
+                echo "published index $IMAGE:$IMAGE_TAG is missing verified digest $DIGEST" >&2
+                echo "$INDEX" >&2
+                exit 1
+                ;;
+            esac
+          done
+          echo "published $IMAGE:$IMAGE_TAG from verified digests: ${DIGESTS[*]}"
