@@ -110,7 +110,7 @@ func TestRenderLoonHysteria2Salamander(t *testing.T) {
 	got := renderLoonNode(n)
 	// Real-world Loon: server-ports must be present even without port hopping,
 	// so a single-port node renders server-ports="<main port>".
-	want := `loon-node = Hysteria2,85.149.212.214,13290,pw,sni=cdn.example.com,skip-cert-verify=true,alpn=h3,salamander-password=obfspw123,server-ports="13290",download-bandwidth=200,udp=true,block-quic=false`
+	want := `loon-node = Hysteria2,85.149.212.214,13290,"pw",sni=cdn.example.com,skip-cert-verify=true,alpn=h3,salamander-password=obfspw123,server-ports="13290",download-bandwidth=200,udp=true,block-quic=false`
 	if got != want {
 		t.Fatalf("loon line:\n got %q\nwant %q", got, want)
 	}
@@ -124,7 +124,7 @@ func TestRenderLoonHysteria2ServerPortsSinglePort(t *testing.T) {
 	if !strings.Contains(got, `server-ports="13290"`) {
 		t.Fatalf("loon server-ports must always be rendered, got %q", got)
 	}
-	if !strings.HasPrefix(got, `node = Hysteria2,85.149.212.214,13290,pw,`) {
+	if !strings.HasPrefix(got, `node = Hysteria2,85.149.212.214,13290,"pw",`) {
 		t.Fatalf("loon line prefix wrong: %q", got)
 	}
 }
@@ -160,7 +160,7 @@ func TestRenderLoonAnyTLSRealitySkipped(t *testing.T) {
 	if strings.Contains(got, "public-key") || strings.Contains(got, "short-id") || strings.Contains(got, "over-tls") {
 		t.Fatalf("loon anytls must not carry reality/tls args: %s", got)
 	}
-	if !strings.Contains(got, "AnyTLS,at.example.com,443,pw") || !strings.Contains(got, "sni=www.microsoft.com") {
+	if !strings.Contains(got, `AnyTLS,at.example.com,443,"pw"`) || !strings.Contains(got, "sni=www.microsoft.com") {
 		t.Fatalf("loon anytls base args missing: %s", got)
 	}
 }
@@ -176,7 +176,7 @@ func TestRenderLoonSSPlugin(t *testing.T) {
 func TestRenderLoonVLESSReality(t *testing.T) {
 	n, _ := parseShareURI("vless://uuid@vless.example.com:443?security=reality&pbk=PUBKEY&sid=4f3a&flow=xtls-rprx-vision&sni=www.example.com#r")
 	got := renderLoonNode(n)
-	for _, frag := range []string{"VLESS", "transport=tcp", "over-tls=true", "public-key=PUBKEY", "short-id=4f3a", "flow=xtls-rprx-vision", "udp=true"} {
+	for _, frag := range []string{"VLESS", "transport=tcp", "over-tls=true", `public-key="PUBKEY"`, "short-id=4f3a", "flow=xtls-rprx-vision", "udp=true"} {
 		if !strings.Contains(got, frag) {
 			t.Fatalf("loon vless missing %q: %s", frag, got)
 		}
@@ -243,14 +243,31 @@ func TestRenderSurgeHysteria2(t *testing.T) {
 
 func TestRenderSurgeVmessWS(t *testing.T) {
 	n, _ := parseShareURI("vmess://eyJ2IjoiMiIsInBzIjoidjEiLCJhZGQiOiJ2bS5leGFtcGxlLmNvbSIsInBvcnQiOiI0NDMiLCJpZCI6IjUyMzk2ZTA2LTA0MWEtNGNjMi1iZTVjLTg1MjVlYjQ1NzgwOSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoibm9uZSIsInRscyI6InRscyIsInNuaSI6InZtLmV4YW1wbGUuY29tIiwiaG9zdCI6ImNkbi5leGFtcGxlLmNvbSIsInBhdGgiOiIvd3MifQ==#v1")
-	got := renderSurgeNode(n)
-	for _, frag := range []string{"vmess,vm.example.com,443", "username=52396e06", "vmess-aead=true", "ws=true", "ws-path=/ws", "ws-headers=Host:cdn.example.com", "tls=true"} {
-		if !strings.Contains(got, frag) {
-			t.Fatalf("surge vmess missing %q: %s", frag, got)
-		}
+	// scy=auto is the panel's default but has NO documented Surge
+	// encrypt-method counterpart (policies/vmess.html lists only aes-128-gcm
+	// and chacha20-ietf-poly1305). Per the user's decision, a value outside a
+	// documented closed set degrades the WHOLE line to a comment.
+	reason, skip := surgeSkipMsg(n)
+	if !skip || !strings.Contains(reason, "aes-128-gcm") {
+		t.Fatalf("scy=auto vmess must degrade: skip=%v reason=%q", skip, reason)
 	}
-	if strings.Contains(got, "method=") || strings.Contains(got, "uuid=") {
-		t.Fatalf("surge vmess should not use method=/uuid=: %s", got)
+	if got := renderSurgeNode(n); got != "" {
+		t.Fatalf("degraded vmess must render empty: %s", got)
+	}
+	// With a documented cipher the same WS+TLS node renders cleanly and never
+	// invents vmess-aead: the manual says it "must match the server's setting"
+	// and gives no rule to derive it from the cipher.
+	n.Method = "chacha20-ietf-poly1305"
+	got := renderSurgeNode(n)
+	mustContain(t, got,
+		"vmess,vm.example.com,443", "username=52396e06",
+		"encrypt-method=chacha20-ietf-poly1305", "ws=true",
+		"ws-path=/ws", "ws-headers=Host:cdn.example.com", "tls=true")
+	// "encrypt-method=" is the documented Surge name; only the QX-style bare
+	// "method=" key would be wrong here.
+	mustNotContain(t, got, "vmess-aead", "uuid=")
+	if strings.Contains(got, ",method=") {
+		t.Fatalf("surge vmess must not use QX-style method=: %s", got)
 	}
 }
 

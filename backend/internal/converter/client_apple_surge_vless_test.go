@@ -162,11 +162,9 @@ func TestSurgeVLESS_UnsupportedMatrix(t *testing.T) {
 		uri  string
 		want string // substring of the degradation reason
 	}{
-		{"xhttp", "vless://u@h:443?type=xhttp&path=/x&security=tls&encryption=none#x", "传输"},
 		{"httpupgrade", "vless://u@h:443?type=httpupgrade&security=tls&encryption=none#hu", "传输"},
 		{"mkcp", "vless://u@h:443?type=mkcp&security=tls&encryption=none#k", "传输"},
 		{"kcp", "vless://u@h:443?type=kcp&security=tls&encryption=none#k2", "传输"},
-		{"vless-encryption", "vless://u@h:443?security=tls&encryption=mlkem768x25519plus#enc", "VLESS Encryption"},
 		{"vision-over-ws", "vless://u@h:443?type=ws&path=/v&security=tls&flow=xtls-rprx-vision&encryption=none#vw", "WebSocket"},
 		{"vision-over-grpc", "vless://u@h:443?type=grpc&serviceName=gs&security=tls&flow=xtls-rprx-vision&encryption=none#vg", "gRPC"},
 		{"grpc-without-tls", "vless://u@h:443?type=grpc&serviceName=gs&encryption=none#gt", "gRPC"},
@@ -187,12 +185,10 @@ func TestSurgeVLESS_UnsupportedMatrix(t *testing.T) {
 			if !strings.Contains(reason, c.want) {
 				t.Fatalf("reason %q lacks %q", reason, c.want)
 			}
-			// The renderer itself must also refuse to silently emit a bad line.
-			if got := renderSurgeNode(n); c.name == "xhttp" || c.name == "httpupgrade" ||
-				c.name == "mkcp" || c.name == "kcp" {
-				if got != "" {
-					t.Fatalf("unknown transport must render empty, got: %s", got)
-				}
+			// Every degraded node must also be refused by the renderer itself,
+			// so a bad combination can never reach a policy line.
+			if got := renderSurgeNode(n); got != "" {
+				t.Fatalf("degraded node must render empty, got: %s", got)
 			}
 		})
 	}

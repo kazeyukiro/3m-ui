@@ -355,6 +355,194 @@ func commentLine(name, reason string) string {
 	return fmt.Sprintf("# %s: %s", name, reason)
 }
 
+// ---- Documented value sets (strict alignment) ---------------------------
+//
+// Every closed set below is transcribed verbatim from the official manuals.
+// A share link carrying a value outside one of these sets is degraded to a
+// comment line instead of being rendered with an undocumented parameter.
+//
+//   Surge: manual.nssurge.com/policies/{vless,vmess,trojan,shadowsocks,
+//          hysteria2,tuic,anytls,tls}.html
+//   Loon:  nsloon.app/docs/Node (zh) / nsloon.app/en/docs/Node (en)
+
+// surgeVLESSFlows - policies/vless.html: "Optional, `xtls-rprx-vision` or
+// `xtls-rprx-vision-udp443`".
+var surgeVLESSFlows = map[string]bool{
+	"xtls-rprx-vision":        true,
+	"xtls-rprx-vision-udp443": true,
+}
+
+// surgeGRPCModes - policies/vless.html: "Optional, `gun` or `multi`,
+// default: `gun`".
+var surgeGRPCModes = map[string]bool{"gun": true, "multi": true}
+
+// surgeVMessMethods - policies/vmess.html: "Optional, `aes-128-gcm` or
+// `chacha20-ietf-poly1305`, default: `aes-128-gcm`". The share-link value
+// `auto` (the panel's default) has NO Surge counterpart.
+var surgeVMessMethods = map[string]bool{
+	"aes-128-gcm":            true,
+	"chacha20-ietf-poly1305": true,
+}
+
+// surgeSSMethods - policies/shadowsocks.html "Supported values" (verbatim).
+var surgeSSMethods = map[string]bool{
+	"2022-blake3-aes-128-gcm": true, "2022-blake3-aes-256-gcm": true,
+	"aes-128-gcm": true, "aes-192-gcm": true, "aes-256-gcm": true,
+	"chacha20-ietf-poly1305": true, "xchacha20-ietf-poly1305": true,
+	"rc4": true, "rc4-md5": true,
+	"aes-128-cfb": true, "aes-192-cfb": true, "aes-256-cfb": true,
+	"aes-128-ctr": true, "aes-192-ctr": true, "aes-256-ctr": true,
+	"salsa20": true, "chacha20": true, "chacha20-ietf": true, "none": true,
+}
+
+// surgeObfsModes - policies/shadowsocks.html: "Optional, `http` or `tls`".
+var surgeObfsModes = map[string]bool{"http": true, "tls": true}
+
+// surgeHy2Obfs - policies/hysteria2.html documents salamander-password and
+// gecko-password only ("mutually exclusive").
+var surgeHy2Obfs = map[string]bool{"salamander": true, "gecko": true}
+
+// loonVMessCiphers - docs/Node VMess: "加密方式支持 `none`、`auto`、
+// `aes-128-cfb`、`aes-128-gcm`、`chacha20-ietf-poly1305`".
+var loonVMessCiphers = map[string]bool{
+	"none": true, "auto": true, "aes-128-cfb": true,
+	"aes-128-gcm": true, "chacha20-ietf-poly1305": true,
+}
+
+// loonVLESSFlows - docs/Node VLESS: "`flow` 当前支持 `xtls-rprx-vision`".
+var loonVLESSFlows = map[string]bool{"xtls-rprx-vision": true}
+
+// loonObfsNames - docs/Node Shadowsocks: "`obfs-name` Simple Obfs 类型：
+// `none`、`http`、`tls`".
+var loonObfsNames = map[string]bool{"none": true, "http": true, "tls": true}
+
+// loonHy2Obfs - docs/Node Hysteria 2 documents salamander-password only;
+// there is no gecko-password parameter on that page.
+var loonHy2Obfs = map[string]bool{"salamander": true}
+
+// surgeVLESSXHTTPModes - policies/vless.html: "xhttp-mode: Optional,
+// `auto`, `packet-up`, `stream-up` or `stream-one`, default: `auto`".
+// The share-link `mode` field maps to grpc-mode for type=grpc and to
+// xhttp-mode for type=xhttp; both sets are checked by surgeVLESSUnsupported.
+var surgeVLESSXHTTPModes = map[string]bool{
+	"auto": true, "packet-up": true, "stream-up": true, "stream-one": true,
+}
+
+// surgeVLESSEncPrefix - policies/vless.html: the `encryption` value is the
+// client string printed by `xray vlessenc`, shaped
+// `mlkem768x25519plus.<mode>.<handshake>[.<padding>].<key>...`. `none` (or an
+// absent value) is the documented default. Any other value is outside the
+// documented grammar and degrades instead of being emitted as-is.
+const surgeVLESSEncPrefix = "mlkem768x25519plus."
+
+// loonSSMethods - nsloon.app/docs/Node Shadowsocks "支持的加密方式" (verbatim).
+// Unlike Surge, Loon's list does NOT include `none`.
+var loonSSMethods = map[string]bool{
+	"2022-blake3-aes-128-gcm": true, "2022-blake3-aes-256-gcm": true,
+	"aes-128-gcm": true, "aes-192-gcm": true, "aes-256-gcm": true,
+	"chacha20-ietf-poly1305": true, "xchacha20-ietf-poly1305": true,
+	"rc4": true, "rc4-md5": true,
+	"aes-128-cfb": true, "aes-192-cfb": true, "aes-256-cfb": true,
+	"aes-128-ctr": true, "aes-192-ctr": true, "aes-256-ctr": true,
+	"bf-cfb":           true,
+	"camellia-128-cfb": true, "camellia-192-cfb": true, "camellia-256-cfb": true,
+	"cast5-cfb": true, "des-cfb": true, "idea-cfb": true, "rc2-cfb": true,
+	"seed-cfb": true, "salsa20": true, "chacha20": true, "chacha20-ietf": true,
+}
+
+func inSet(set map[string]bool, v string) bool {
+	return set[strings.ToLower(strings.TrimSpace(v))]
+}
+
+// surgeShortIDOK - policies/vless.html: "reality-short-id ... up to 16
+// hexadecimal digits". An empty value is valid (the parameter is optional).
+func surgeShortIDOK(v string) bool {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return true
+	}
+	if len(v) > 16 {
+		return false
+	}
+	for _, c := range v {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+// wsPathOK - policies/vmess.html and policies/trojan.html: "ws-path ...
+// It must start with `/`". VLESS inherits it ("See VMess for ws-path").
+func wsPathOK(v string) bool {
+	v = strings.TrimSpace(v)
+	return v == "" || strings.HasPrefix(v, "/")
+}
+
+// ssPluginObfs returns the `obfs=` value of a SIP003 plugin string.
+func ssPluginObfs(plugin string) string {
+	for _, seg := range strings.Split(plugin, ";") {
+		seg = strings.TrimSpace(seg)
+		k, v, _ := strings.Cut(seg, "=")
+		if strings.EqualFold(k, "obfs") {
+			return v
+		}
+	}
+	return ""
+}
+
+// docQuote wraps a Loon positional credential the way every declaration
+// form and example in docs/Node does: `Shadowsocks,server,port,cipher,
+// "password"` / `VMess,server,port,cipher,"UUID"` / `VLESS,server,port,
+// "UUID"` / `Trojan,server,port,"password"`.
+func docQuote(v string) string {
+	return `"` + strings.ReplaceAll(v, `"`, "") + `"`
+}
+
+// loonSkipMsg reports nodes Loon cannot express per docs/Node. The three
+// empirical behaviours (AnyTLS REALITY downgrade, single-port server-ports,
+// Trojan REALITY over-tls) are deliberately kept - see renderLoonNode.
+func loonSkipMsg(n *shareNode) (string, bool) {
+	switch n.Protocol {
+	case "tuic":
+		// docs/Node lists no TUIC policy at all.
+		return "Loon 暂不支持 TUIC 协议", true
+	case "hysteria2":
+		if obfs := shareParam(n.Params, "obfs"); obfs == "gecko" {
+			return "Loon 暂不支持 Hysteria2 Gecko 混淆（文档仅 salamander）", true
+		} else if obfs != "" && !inSet(loonHy2Obfs, obfs) {
+			return "Loon Hysteria2 混淆方式不在文档支持列表", true
+		}
+	case "vmess":
+		if !inSet(loonVMessCiphers, n.Method) {
+			return "Loon VMess 加密方式不在文档支持列表", true
+		}
+	case "vless":
+		if f := shareParam(n.Params, "flow"); f != "" && !inSet(loonVLESSFlows, f) {
+			return "Loon VLESS flow 仅支持 xtls-rprx-vision", true
+		}
+	case "ss":
+		if !inSet(loonSSMethods, n.Method) {
+			return "Loon SS 加密方式不在文档支持列表", true
+		}
+		if o := ssPluginObfs(n.Params["plugin"]); o != "" && !inSet(loonObfsNames, o) {
+			return "Loon SS obfs-name 仅支持 none / http / tls", true
+		}
+	case "anytls":
+		if t := n.Params["type"]; t != "" && t != "tcp" && t != "none" {
+			// docs/Node AnyTLS documents no transport= argument.
+			return "Loon AnyTLS 仅支持 TCP", true
+		}
+	}
+	switch n.Protocol {
+	case "vmess", "vless", "trojan":
+		if !loonTransportOK(n.Params["type"]) {
+			return "Loon 暂不支持该传输（VMess/VLESS: tcp/ws/http；Trojan: tcp/ws）", true
+		}
+	}
+	return "", false
+}
+
 // ---- Loon ----
 
 // loonTransportOK reports whether Loon's transport= vocabulary covers the
@@ -371,12 +559,25 @@ func loonTransportOK(typ string) bool {
 }
 
 // renderLoonNode renders one share node in Loon [Proxy] grammar.
+// Declaration forms from docs/Node put every positional credential in
+// double quotes and place `transport=` immediately after it:
+//
+//	Shadowsocks,server,port,cipher,"password",…
+//	VMess,server,port,cipher,"UUID",transport=…,alterId=0,path=…,host=…
+//	VLESS,server,port,"UUID",transport=…,flow=…,public-key="…",…
+//	Trojan,server,port,"password",transport=…,path=…,host=…,alpn=…
+//	Hysteria2,server,port,"password",…
+//	AnyTLS,server,port,"password",…
 func renderLoonNode(n *shareNode) string {
+	// Never emit a line the documented grammar cannot express.
+	if _, unsupported := loonSkipMsg(n); unsupported {
+		return ""
+	}
 	var b strings.Builder
 	tag := quoteValue(n.Name)
 	switch n.Protocol {
 	case "hysteria2":
-		parts := []string{tag, "Hysteria2", n.Host, n.Port, quoteValue(n.Password)}
+		parts := []string{tag, "Hysteria2", n.Host, n.Port, docQuote(n.Password)}
 		if sni := shareParam(n.Params, "sni", "peer"); sni != "" {
 			parts = append(parts, "sni="+sni)
 		}
@@ -386,27 +587,18 @@ func renderLoonNode(n *shareNode) string {
 		if alpn := shareParam(n.Params, "alpn"); alpn != "" {
 			parts = append(parts, "alpn="+quoteValue(alpn))
 		}
-		// Loon only documents salamander obfuscation for Hysteria 2; gecko is
-		// absent from nsloon.app/docs/Node, so a gecko node degrades to a
-		// comment line instead of a broken salamander password.
-		if obfs := shareParam(n.Params, "obfs"); obfs == "salamander" {
+		// docs/Node Hysteria 2 documents salamander-password only.
+		if shareParam(n.Params, "obfs") == "salamander" {
 			if pw := shareParam(n.Params, "obfs-password"); pw != "" {
 				parts = append(parts, "salamander-password="+quoteValue(pw))
 			}
-		} else if obfs == "gecko" {
-			return ""
 		}
-		// Loon documents server-ports as comma-separated entries with colon
-		// ranges ("20000:20100"). Real-world testing shows Loon's Hysteria 2
-		// plugin only dials when server-ports is present — a single-port node
-		// must carry server-ports="<main port>" as well, so always render it
-		// (mport range when the share URI has one, the main port otherwise).
+		// Empirical (kept): Loon's Hysteria 2 plugin only dials when
+		// server-ports is present, so a single-port node carries it too.
 		ports := hopFormatLoon(shareParam(n.Params, "mport"))
 		if ports == "" {
 			ports = n.Port
 		}
-		// Always quote the value: Loon's docs show server-ports="20000:20100"
-		// and real single-port nodes need server-ports="13290".
 		parts = append(parts, `server-ports="`+strings.ReplaceAll(ports, `"`, "")+`"`)
 		if bw := mbpsValue(shareParam(n.Params, "down", "up")); bw != "" {
 			parts = append(parts, "download-bandwidth="+bw)
@@ -417,67 +609,74 @@ func renderLoonNode(n *shareNode) string {
 		if n.Method == "" {
 			return ""
 		}
-		parts := []string{tag, "Shadowsocks", n.Host, n.Port, n.Method, quoteValue(n.Password)}
+		parts := []string{tag, "Shadowsocks", n.Host, n.Port, n.Method, docQuote(n.Password)}
 		parts = append(parts, loonSSPlugin(n.Params["plugin"])...)
 		parts = append(parts, "udp=true", "block-quic=false")
 		b.WriteString(joinNodeLine(parts))
 	case "vmess":
-		if !loonTransportOK(n.Params["type"]) {
-			return ""
-		}
-		parts := []string{tag, "VMess", n.Host, n.Port, quoteValue(n.Method), quoteValue(n.Password)}
+		parts := []string{tag, "VMess", n.Host, n.Port, n.Method, docQuote(n.Password)}
 		transport := "tcp"
+		path, host := "", ""
 		switch n.Params["type"] {
 		case "ws", "http":
 			transport = n.Params["type"]
-			// "host and path apply to WebSocket or HTTP transports" (docs).
-			parts = append(parts, "path="+quoteValue(shareParam(n.Params, "path")))
-			if host := shareParam(n.Params, "host"); host != "" {
-				parts = append(parts, "host="+host)
-			}
+			path = shareParam(n.Params, "path")
+			host = shareParam(n.Params, "host")
 		}
 		parts = append(parts, "transport="+transport, "alterId=0")
-		b.WriteString(loonTLSTail(parts, n.Params, shareParam(n.Params, "flow")))
-	case "vless":
-		if !loonTransportOK(n.Params["type"]) {
-			return ""
+		if path != "" {
+			parts = append(parts, "path="+quoteValue(path))
 		}
-		parts := []string{tag, "VLESS", n.Host, n.Port, quoteValue(n.Password)}
+		if host != "" {
+			parts = append(parts, "host="+host)
+		}
+		// docs/Node defines `flow` under VLESS only and shows no `alpn`
+		// parameter on VMess/VLESS lines - pass "" for both.
+		b.WriteString(loonTLSTail(parts, n.Params, "", ""))
+	case "vless":
+		parts := []string{tag, "VLESS", n.Host, n.Port, docQuote(n.Password)}
 		transport := "tcp"
+		path, host := "", ""
 		switch n.Params["type"] {
 		case "ws", "http":
 			transport = n.Params["type"]
-			parts = append(parts, "path="+quoteValue(shareParam(n.Params, "path")))
-			if host := shareParam(n.Params, "host"); host != "" {
-				parts = append(parts, "host="+host)
-			}
+			path = shareParam(n.Params, "path")
+			host = shareParam(n.Params, "host")
 		}
 		parts = append(parts, "transport="+transport)
-		b.WriteString(loonTLSTail(parts, n.Params, shareParam(n.Params, "flow")))
-	case "trojan":
-		if !loonTransportOK(n.Params["type"]) {
-			return ""
+		if path != "" {
+			parts = append(parts, "path="+quoteValue(path))
 		}
-		parts := []string{tag, "Trojan", n.Host, n.Port, quoteValue(n.Password)}
+		if host != "" {
+			parts = append(parts, "host="+host)
+		}
+		b.WriteString(loonTLSTail(parts, n.Params, shareParam(n.Params, "flow"), ""))
+	case "trojan":
+		parts := []string{tag, "Trojan", n.Host, n.Port, docQuote(n.Password)}
 		transport := "tcp"
+		path, host := "", ""
 		switch n.Params["type"] {
 		case "ws", "http":
-			// Loon docs: trojan supports tcp and ws, "for compatibility,
-			// transport=http is handled as WebSocket".
+			// docs/Node: "兼容配置中的 `transport=http` 会按 WebSocket 处理".
 			transport = "ws"
-			parts = append(parts, "path="+quoteValue(shareParam(n.Params, "path")))
-			if host := shareParam(n.Params, "host"); host != "" {
-				parts = append(parts, "host="+host)
-			}
+			path = shareParam(n.Params, "path")
+			host = shareParam(n.Params, "host")
 		}
 		parts = append(parts, "transport="+transport)
-		b.WriteString(loonTLSTail(parts, n.Params, ""))
-	case "anytls":
-		if t := n.Params["type"]; t != "" && t != "tcp" && t != "none" {
-			// Loon's AnyTLS section documents plain tcp only.
-			return ""
+		if path != "" {
+			parts = append(parts, "path="+quoteValue(path))
 		}
-		parts := []string{tag, "AnyTLS", n.Host, n.Port, quoteValue(n.Password)}
+		if host != "" {
+			parts = append(parts, "host="+host)
+		}
+		// docs/Node Trojan examples carry `alpn` (WS: alpn="h2,http/1.1";
+		// REALITY: alpn=h2). VMess/VLESS examples do not.
+		b.WriteString(loonTLSTail(parts, n.Params, "", shareParam(n.Params, "alpn")))
+	case "anytls":
+		// Empirical (kept): docs/Node documents public-key/short-id for
+		// AnyTLS REALITY, but a real-device check found Loon reliably
+		// parses only the password-only form, so REALITY args are dropped.
+		parts := []string{tag, "AnyTLS", n.Host, n.Port, docQuote(n.Password)}
 		if sni := shareParam(n.Params, "sni"); sni != "" {
 			parts = append(parts, "sni="+sni)
 		}
@@ -492,31 +691,40 @@ func renderLoonNode(n *shareNode) string {
 	return b.String()
 }
 
-// loonTLSTail appends the shared Loon TLS / Reality arguments to a node line.
-func loonTLSTail(parts []string, params map[string]string, flow string) string {
-	switch params["security"] {
-	case "tls":
-		parts = append(parts, "over-tls=true")
-	case "reality":
-		parts = append(parts, "over-tls=true")
+// loonTLSTail appends the shared Loon TLS / REALITY arguments in the order
+// used by the official docs/Node examples: flow, public-key, short-id,
+// over-tls, sni, alpn, skip-cert-verify, udp, block-quic.
+//
+// `flow` is VLESS-only (docs/Node VLESS: "`flow` 当前支持
+// `xtls-rprx-vision`"); `alpn` appears only in the Trojan and Hysteria 2
+// examples. Pass "" for either when the protocol does not document it, so
+// no undocumented parameter can reach a policy line. `public-key` is a
+// REALITY parameter (docs/Node: "public-key 和 short-id 用于 Reality") and
+// is never emitted for a plain TLS node.
+func loonTLSTail(parts []string, params map[string]string, flow, alpn string) string {
+	security := strings.ToLower(strings.TrimSpace(params["security"]))
+	if flow != "" {
+		parts = append(parts, "flow="+flow)
+	}
+	if security == "reality" {
 		if pbk := shareParam(params, "pbk"); pbk != "" {
-			parts = append(parts, "public-key="+quoteValue(pbk))
+			parts = append(parts, "public-key="+docQuote(pbk))
 		}
 		if sid := shareParam(params, "sid"); sid != "" {
 			parts = append(parts, "short-id="+sid)
 		}
 	}
-	if flow != "" {
-		parts = append(parts, "flow="+flow)
+	if security == "tls" || security == "reality" {
+		parts = append(parts, "over-tls=true")
 	}
 	if sni := shareParam(params, "sni"); sni != "" {
 		parts = append(parts, "sni="+sni)
 	}
+	if alpn != "" {
+		parts = append(parts, "alpn="+quoteValue(alpn))
+	}
 	if shareInsecure(params) {
 		parts = append(parts, "skip-cert-verify=true")
-	}
-	if pbk := shareParam(params, "pbk"); pbk != "" && params["security"] != "reality" {
-		parts = append(parts, "public-key="+quoteValue(pbk))
 	}
 	parts = append(parts, "udp=true", "block-quic=false")
 	return joinNodeLine(parts)
@@ -601,8 +809,8 @@ func hopFormatLoon(v string) string {
 // optional transport layer — there is no grpc / xhttp / http option, so those
 // links must degrade to a comment instead of a silently wrong plain-TLS node.
 // VLESS is deliberately NOT covered here: policies/vless.html (Surge iOS
-// 6.0.0+ / Mac 6.12.0+) adds gRPC alongside RAW and WebSocket, handled by
-// surgeVLESSUnsupported and the vless renderer branch.
+// 6.0.0+ / Mac 6.12.0+) adds gRPC and XHTTP alongside RAW and WebSocket,
+// handled by surgeVLESSUnsupported and the vless renderer branch.
 func surgeTransportOK(typ string) bool {
 	switch typ {
 	case "", "tcp", "none", "ws":
@@ -612,11 +820,21 @@ func surgeTransportOK(typ string) bool {
 }
 
 // renderSurgeNode renders one share node in Surge [Proxy] grammar.
+// Syntax, parameters and closed value sets come from
+// manual.nssurge.com/policies/{vless,vmess,trojan,shadowsocks,hysteria2,
+// tuic,anytls,tls}.html. Anything surgeSkipMsg rejects is never rendered,
+// so an undocumented value can never reach a policy line.
 func renderSurgeNode(n *shareNode) string {
+	if _, unsupported := surgeSkipMsg(n); unsupported {
+		return ""
+	}
 	var b strings.Builder
 	tag := quoteValue(n.Name)
 	switch n.Protocol {
 	case "hysteria2":
+		// policies/hysteria2.html: password, download-bandwidth,
+		// port-hopping, port-hopping-interval, salamander-password,
+		// gecko-password; shared TLS params (sni, skip-cert-verify, alpn).
 		parts := []string{tag, "hysteria2", n.Host, n.Port, "password=" + quoteValue(n.Password)}
 		if sni := shareParam(n.Params, "sni", "peer"); sni != "" {
 			parts = append(parts, "sni="+sni)
@@ -627,16 +845,20 @@ func renderSurgeNode(n *shareNode) string {
 		if alpn := shareParam(n.Params, "alpn"); alpn != "" {
 			parts = append(parts, "alpn="+quoteValue(alpn))
 		}
-		if obfs := shareParam(n.Params, "obfs"); obfs == "salamander" {
+		// The two obfuscation modes are mutually exclusive; surgeSkipMsg
+		// already rejected any other value.
+		switch shareParam(n.Params, "obfs") {
+		case "salamander":
 			if pw := shareParam(n.Params, "obfs-password"); pw != "" {
 				parts = append(parts, "salamander-password="+quoteValue(pw))
 			}
-		} else if obfs == "gecko" {
+		case "gecko":
 			if pw := shareParam(n.Params, "obfs-password"); pw != "" {
 				parts = append(parts, "gecko-password="+quoteValue(pw))
 			}
 		}
 		if hop := shareParam(n.Params, "mport"); hop != "" {
+			// "port-hopping: separated by semicolons (e.g. 1234;5000-6000)".
 			parts = append(parts, "port-hopping="+quoteValue(hopFormatSemicolon(hop)))
 		}
 		if bw := mbpsValue(shareParam(n.Params, "down", "up")); bw != "" {
@@ -647,27 +869,22 @@ func renderSurgeNode(n *shareNode) string {
 		if n.Method == "" {
 			return ""
 		}
-		parts := []string{tag, "ss", n.Host, n.Port, "encrypt-method=" + n.Method, "password=" + quoteValue(n.Password)}
+		parts := []string{tag, "ss", n.Host, n.Port, "encrypt-method=" + strings.ToLower(n.Method), "password=" + quoteValue(n.Password)}
 		parts = append(parts, surgeSSPlugin(n.Params["plugin"])...)
 		parts = append(parts, "udp-relay=true")
 		b.WriteString(joinNodeLine(parts))
 	case "vmess":
-		// Surge vmess syntax: username=<UUID>[, encrypt-method=|vmess-aead=true].
-		// Methods outside aes-128-gcm/chacha20-ietf-poly1305 are dropped
-		// upstream by surgeSkipMsg (Surge has no representation).
 		if !surgeTransportOK(n.Params["type"]) {
 			return ""
 		}
+		// policies/vmess.html: `username=<UUID>[, parameter=value, ...]`.
+		// encrypt-method is optional with exactly two documented values and
+		// defaults to aes-128-gcm. vmess-aead is an INDEPENDENT boolean that
+		// "must match the server's setting" - the manual gives no rule to
+		// derive it from the cipher, so it is never emitted.
 		params := []string{"username=" + n.Password}
-		switch strings.ToLower(n.Method) {
-		case "chacha20-ietf-poly1305":
-			params = append(params, "encrypt-method="+n.Method)
-		case "aes-128-gcm":
-			params = append(params, "encrypt-method="+n.Method)
-		default:
-			// "" / auto / other aead defaults: Surge's default is aes-128-gcm
-			// with the AEAD handshake, matching our nodes.
-			params = append(params, "vmess-aead=true")
+		if m := strings.ToLower(strings.TrimSpace(n.Method)); surgeVMessMethods[m] {
+			params = append(params, "encrypt-method="+m)
 		}
 		if n.Params["type"] == "ws" {
 			params = append(params, "ws=true")
@@ -675,6 +892,7 @@ func renderSurgeNode(n *shareNode) string {
 				params = append(params, "ws-path="+quoteValue(p))
 			}
 			if h := shareParam(n.Params, "host"); h != "" {
+				// "ws-headers: pipe-separated Header:Value pairs".
 				params = append(params, "ws-headers="+quoteValue("Host:"+h))
 			}
 		}
@@ -693,17 +911,14 @@ func renderSurgeNode(n *shareNode) string {
 		parts := append([]string{tag, "vmess", n.Host, n.Port}, params...)
 		b.WriteString(joinNodeLine(parts))
 	case "vless":
-		// manual.nssurge.com/policies/vless.html — Surge iOS 6.0.0+ /
-		// Mac 6.12.0+ implements the VLESS client, including REALITY and the
-		// XTLS Vision flow. Declaration syntax:
-		//   Name = vless, <host>, <port>, username=<id>[, parameter=value, ...]
-		// Combinations Surge cannot express are degraded to a comment by
-		// surgeSkipMsg (see surgeVLESSUnsupported) before reaching here.
+		// policies/vless.html - syntax, combination matrix and the
+		// share-link mapping table. All closed sets are checked by
+		// surgeVLESSUnsupported via surgeSkipMsg before we get here.
 		params := []string{"username=" + quoteValue(n.Password)}
 		security := strings.ToLower(strings.TrimSpace(n.Params["security"]))
-		// The official share-link mapping sets reality-public-key whenever the
-		// link carries security=reality/pbk; the public key itself is what
-		// enables REALITY ("implies TLS"), so tls=true is not emitted.
+		// The official share-link mapping sets reality-public-key whenever
+		// the link carries security=reality/pbk; the public key itself is
+		// what enables REALITY ("implies TLS"), so tls=true is not emitted.
 		reality := security == "reality" || strings.TrimSpace(n.Params["pbk"]) != ""
 		switch strings.ToLower(strings.TrimSpace(n.Params["type"])) {
 		case "", "tcp", "raw", "none":
@@ -721,16 +936,28 @@ func renderSurgeNode(n *shareNode) string {
 			if sn := shareParam(n.Params, "serviceName"); sn != "" {
 				params = append(params, "grpc-service-name="+quoteValue(sn))
 			}
-			if strings.EqualFold(shareParam(n.Params, "mode"), "multi") {
+			if mode := strings.ToLower(shareParam(n.Params, "mode")); mode == "multi" {
 				params = append(params, "grpc-mode=multi")
 			}
 			if auth := shareParam(n.Params, "authority"); auth != "" {
 				params = append(params, "grpc-authority="+quoteValue(auth))
 			}
+		case "xhttp", "splithttp":
+			// policies/vless.html share-link table: type=xhttp (or splithttp),
+			// path, host, mode -> xhttp=true, xhttp-path, xhttp-host, xhttp-mode.
+			// The mode value was validated against the documented closed set by
+			// surgeVLESSUnsupported before we get here.
+			params = append(params, "xhttp=true")
+			if p := shareParam(n.Params, "path"); p != "" {
+				params = append(params, "xhttp-path="+quoteValue(p))
+			}
+			if h := shareParam(n.Params, "host"); h != "" {
+				params = append(params, "xhttp-host="+quoteValue(h))
+			}
+			if mode := strings.ToLower(shareParam(n.Params, "mode")); mode != "" {
+				params = append(params, "xhttp-mode="+mode)
+			}
 		default:
-			// XHTTP / HTTPUpgrade / mKCP and friends have no Surge VLESS
-			// representation; the skip check degrades them first, and this is
-			// a defensive guard for direct renderer calls.
 			return ""
 		}
 		if reality {
@@ -747,11 +974,19 @@ func renderSurgeNode(n *shareNode) string {
 		if flow := shareParam(n.Params, "flow"); flow != "" {
 			params = append(params, "flow="+flow)
 		}
+		// VLESS Encryption (policies/vless.html `encryption`; share-link table
+		// `encryption` -> `encryption`). `none` is the documented default and
+		// carries no parameter of its own.
+		if enc := shareParam(n.Params, "encryption"); enc != "" && !strings.EqualFold(enc, "none") {
+			params = append(params, "encryption="+quoteValue(enc))
+		}
+		// "alpn" is in the VLESS share-link mapping table; tls.html calls it
+		// a shared TLS parameter and says to quote multi-entry values.
 		if alpn := shareParam(n.Params, "alpn"); alpn != "" {
 			params = append(params, "alpn="+quoteValue(alpn))
 		}
-		// REALITY verifies the certificate through its own handshake, so
-		// skip-cert-verify and certificate pinning do not apply.
+		// VLESS page: with REALITY, "skip-cert-verify and certificate
+		// pinning do not apply".
 		if !reality && shareInsecure(n.Params) {
 			params = append(params, "skip-cert-verify=true")
 		}
@@ -761,6 +996,8 @@ func renderSurgeNode(n *shareNode) string {
 		if !surgeTransportOK(n.Params["type"]) {
 			return ""
 		}
+		// policies/trojan.html: `password=<password>` is required; ws /
+		// ws-path / ws-headers are the only protocol-specific parameters.
 		params := []string{"password=" + quoteValue(n.Password)}
 		if n.Params["type"] == "ws" {
 			params = append(params, "ws=true")
@@ -771,11 +1008,11 @@ func renderSurgeNode(n *shareNode) string {
 				params = append(params, "ws-headers="+quoteValue("Host:"+h))
 			}
 		}
+		// Trojan always connects over TLS, so the shared TLS parameters on
+		// policies/tls.html apply: sni, alpn, skip-cert-verify.
 		if sni := shareParam(n.Params, "sni"); sni != "" {
 			params = append(params, "sni="+sni)
 		}
-		// alpn is a shared TLS parameter (surfaces on the Trojan full example
-		// as alpn="h2,http/1.1"); Surge quotes multi-entry values itself.
 		if alpn := shareParam(n.Params, "alpn"); alpn != "" {
 			params = append(params, "alpn="+quoteValue(alpn))
 		}
@@ -785,10 +1022,8 @@ func renderSurgeNode(n *shareNode) string {
 		parts := append([]string{tag, "trojan", n.Host, n.Port}, params...)
 		b.WriteString(joinNodeLine(parts))
 	case "anytls":
-		if t := n.Params["type"]; t != "" && t != "tcp" && t != "none" {
-			// Surge's AnyTLS policy documents plain tcp only.
-			return ""
-		}
+		// policies/anytls.html: `password` (required), `reuse` (optional).
+		// AnyTLS always uses TLS, so all shared TLS parameters apply.
 		parts := []string{tag, "anytls", n.Host, n.Port, "password=" + quoteValue(n.Password)}
 		if sni := shareParam(n.Params, "sni"); sni != "" {
 			parts = append(parts, "sni="+sni)
@@ -801,9 +1036,8 @@ func renderSurgeNode(n *shareNode) string {
 		}
 		b.WriteString(joinNodeLine(parts))
 	case "tuic":
-		// Surge splits TUIC into two keywords: tuic (v4, token) and
-		// tuic-v5 (v5, uuid + password). The v5 share URI carries the UUID
-		// in userinfo, the v4 URI carries the bare token as the password.
+		// policies/tuic.html: `tuic` (v4, token) and `tuic-v5` (uuid +
+		// password). alpn defaults to h3; port-hopping is shared.
 		kw := "tuic"
 		parts := []string{tag, kw, n.Host, n.Port}
 		if n.User != "" {
@@ -833,6 +1067,9 @@ func renderSurgeNode(n *shareNode) string {
 	return b.String()
 }
 
+// surgeSSPlugin maps a SIP003 plugin string onto the parameters documented
+// on policies/shadowsocks.html: obfs (http|tls), obfs-host, and obfs-uri
+// ("Only meaningful with `obfs=http`").
 func surgeSSPlugin(plugin string) []string {
 	out := []string{}
 	if plugin == "" {
@@ -860,7 +1097,9 @@ func surgeSSPlugin(plugin string) []string {
 	if host != "" {
 		out = append(out, "obfs-host="+quoteValue(host))
 	}
-	if uri != "" {
+	// "obfs-uri: The URI used in the obfuscation request. Only meaningful
+	// with obfs=http." Never emit it for obfs=tls or when obfs is absent.
+	if uri != "" && strings.EqualFold(obfs, "http") {
 		out = append(out, "obfs-uri="+quoteValue(uri))
 	}
 	return out
@@ -1214,34 +1453,26 @@ func generateAppleClientSubscription(t appleClientTarget, db *gorm.DB, pu models
 
 // GenerateUserLoonSubscription exports the user's share links as a Loon
 // subscription ([Proxy] section, one node per line).
+// GenerateUserLoonSubscription exports the user's share links as a Loon
+// subscription ([Proxy] section, one node per line).
 func GenerateUserLoonSubscription(db *gorm.DB, pu models.ProxyUser, req *http.Request, gen URIGenerator) ([]byte, error) {
 	return generateAppleClientSubscription(appleClientTarget{
-		client: "loon",
-		render: renderLoonNode,
-		header: []string{"[Proxy]"},
-		skipMsg: func(n *shareNode) (string, bool) {
-			if n.Protocol == "tuic" {
-				return "Loon 暂不支持 TUIC 协议", true
-			}
-			if n.Protocol == "hysteria2" && shareParam(n.Params, "obfs") == "gecko" {
-				// Loon's Hysteria 2 section documents salamander-password only.
-				return "Loon 暂不支持 Hysteria2 Gecko 混淆", true
-			}
-			return "", false
-		},
+		client:  "loon",
+		render:  renderLoonNode,
+		header:  []string{"[Proxy]"},
+		skipMsg: loonSkipMsg,
 	}, db, pu, req, gen)
 }
 
 // surgeVMessOK reports whether a VMess encryption method has a Surge
-// counterpart. manual.nssurge.com vmess page: "Optional, aes-128-gcm or
-// chacha20-ietf-poly1305, default: aes-128-gcm" — anything else has no
-// Surge representation and must degrade to a comment, not a broken line.
+// counterpart. policies/vmess.html: "Optional, `aes-128-gcm` or
+// `chacha20-ietf-poly1305`, default: `aes-128-gcm`". An empty value means
+// the optional parameter was not supplied, so Surge's default applies.
+// The share-link value `auto` is deliberately NOT accepted: it has no
+// documented Surge representation and degrades to a comment.
 func surgeVMessOK(method string) bool {
-	switch strings.ToLower(strings.TrimSpace(method)) {
-	case "aes-128-gcm", "chacha20-ietf-poly1305", "auto", "":
-		return true
-	}
-	return false
+	m := strings.ToLower(strings.TrimSpace(method))
+	return m == "" || surgeVMessMethods[m]
 }
 
 // surgeVLESSUnsupported reports VLESS combinations Surge cannot express,
@@ -1258,41 +1489,100 @@ func surgeVMessOK(method string) bool {
 // supported." Vision requires TLS 1.3 (tls=true or REALITY) and cannot be
 // used with WebSocket; gRPC requires tls=true or REALITY. REALITY is enabled
 // by reality-public-key, so a reality link without pbk cannot be expressed.
+// Closed value sets (flow, reality-short-id, grpc-mode, ws-path) are also
+// checked here so no undocumented value can be emitted.
+// surgeVLESSUnsupported reports VLESS combinations Surge cannot express,
+// per manual.nssurge.com/policies/vless.html (Surge iOS 6.0.0+ /
+// Mac 6.12.0+). The four-row matrix is transcribed verbatim from that page:
+//
+//	Transport   Security            Vision flow
+//	RAW (TCP)   none, TLS, REALITY   With TLS, REALITY or VLESS Encryption
+//	WebSocket   none, TLS            With VLESS Encryption
+//	gRPC        TLS, REALITY         No
+//	XHTTP       none, TLS, REALITY   With VLESS Encryption
+//
+// "VLESS Encryption can be added to any of these combinations. HTTPUpgrade
+// and mKCP transports are not supported." (verbatim) - neither XHTTP nor
+// VLESS Encryption is unsupported; both are implemented by renderSurgeNode.
+//
+// Closed value sets (flow, reality-short-id, grpc-mode, xhttp-mode, ws-path,
+// encryption) are checked here so no undocumented value can be emitted.
 func surgeVLESSUnsupported(n *shareNode) (string, bool) {
 	p := n.Params
 	typ := strings.ToLower(strings.TrimSpace(p["type"]))
 	switch typ {
-	case "", "tcp", "raw", "none", "ws", "grpc":
+	case "", "tcp", "raw", "none", "ws", "grpc", "xhttp", "splithttp":
 	default:
-		return "Surge VLESS 不支持该传输（仅 RAW / WebSocket / gRPC）", true
+		// Only HTTPUpgrade and mKCP are ruled out by the manual.
+		return "Surge VLESS 不支持该传输（HTTPUpgrade / mKCP 不受支持）", true
 	}
-	// VLESS Encryption (mlkem768x25519plus...) is unsupported; only the
-	// share-link compatibility value "none" is accepted.
-	if enc := strings.TrimSpace(p["encryption"]); enc != "" && !strings.EqualFold(enc, "none") {
-		return "Surge VLESS 不支持 VLESS Encryption", true
+	// encryption: "Optional, default: none". A real VLESS Encryption value is
+	// the mlkem768x25519plus.* client string printed by `xray vlessenc`.
+	enc := strings.TrimSpace(p["encryption"])
+	if enc != "" && !strings.EqualFold(enc, "none") &&
+		!strings.HasPrefix(enc, surgeVLESSEncPrefix) {
+		return "Surge VLESS encryption 值不符合官方 mlkem768x25519plus.* 格式", true
+	}
+	hasEnc := enc != "" && !strings.EqualFold(enc, "none")
+	// "flow: Optional, xtls-rprx-vision or xtls-rprx-vision-udp443".
+	flow := strings.TrimSpace(p["flow"])
+	if flow != "" && !inSet(surgeVLESSFlows, flow) {
+		return "Surge VLESS flow 仅支持 xtls-rprx-vision / xtls-rprx-vision-udp443", true
+	}
+	// "reality-short-id: up to 16 hexadecimal digits".
+	if sid := strings.TrimSpace(p["sid"]); !surgeShortIDOK(sid) {
+		return "Surge VLESS reality-short-id 须为不超过 16 位十六进制", true
+	}
+	// The share-link `mode` field maps to grpc-mode for type=grpc and to
+	// xhttp-mode for type=xhttp; each has its own documented closed set.
+	mode := strings.TrimSpace(p["mode"])
+	switch typ {
+	case "grpc":
+		if mode != "" && !inSet(surgeGRPCModes, mode) {
+			return "Surge VLESS grpc-mode 仅支持 gun / multi", true
+		}
+	case "xhttp", "splithttp":
+		if mode != "" && !inSet(surgeVLESSXHTTPModes, mode) {
+			return "Surge VLESS xhttp-mode 仅支持 auto / packet-up / stream-up / stream-one", true
+		}
+	}
+	// "ws-path ... It must start with `/`" (inherited from the VMess page).
+	// The XHTTP page states no such requirement for xhttp-path, so none is
+	// imposed here.
+	if typ == "ws" {
+		if pth := strings.TrimSpace(p["path"]); pth != "" && !wsPathOK(pth) {
+			return "Surge ws-path 须以 / 开头", true
+		}
 	}
 	sec := strings.ToLower(strings.TrimSpace(p["security"]))
 	reality := sec == "reality" || strings.TrimSpace(p["pbk"]) != ""
 	tls := sec == "tls"
-	flow := strings.TrimSpace(p["flow"])
 	switch typ {
 	case "ws":
+		// WebSocket security is none or TLS only.
 		if reality {
 			return "Surge VLESS 的 WebSocket 不支持 REALITY", true
 		}
-		if flow != "" {
-			return "Surge VLESS 的 Vision flow 不支持 WebSocket", true
+		// Vision over WebSocket requires VLESS Encryption.
+		if flow != "" && !hasEnc {
+			return "Surge VLESS 的 Vision flow 在 WebSocket 上需 VLESS Encryption", true
+		}
+	case "xhttp", "splithttp":
+		// XHTTP security is none, TLS or REALITY; Vision needs Encryption.
+		if flow != "" && !hasEnc {
+			return "Surge VLESS 的 Vision flow 在 XHTTP 上需 VLESS Encryption", true
 		}
 	case "grpc":
+		// gRPC requires TLS or REALITY and never supports Vision.
 		if !tls && !reality {
 			return "Surge VLESS 的 gRPC 需 TLS 或 REALITY", true
 		}
 		if flow != "" {
 			return "Surge VLESS 的 Vision flow 不支持 gRPC", true
 		}
-	default: // RAW / TCP
-		if flow != "" && !tls && !reality {
-			return "Surge VLESS 的 Vision flow 需 TLS 或 REALITY", true
+	default: // RAW / TCP: Vision needs TLS, REALITY or VLESS Encryption.
+		if flow != "" && !tls && !reality && !hasEnc {
+			return "Surge VLESS 的 Vision flow 需 TLS / REALITY / VLESS Encryption", true
 		}
 	}
 	if reality && strings.TrimSpace(p["pbk"]) == "" {
@@ -1301,20 +1591,45 @@ func surgeVLESSUnsupported(n *shareNode) (string, bool) {
 	return "", false
 }
 
-// surgeSkipMsg reports nodes Surge cannot express. VLESS is now supported
-// (iOS 6.0.0+ / Mac 6.12.0+) but only within the official combination matrix;
-// REALITY on Trojan / VMess remains unsupported because those two Surge
-// policies document no reality-public-key / reality-short-id parameters.
+// surgeSkipMsg reports nodes Surge cannot express. Every rejection points at
+// a documented constraint, and the renderer calls this too, so a value
+// outside a documented closed set can never appear on a policy line.
 func surgeSkipMsg(n *shareNode) (string, bool) {
 	switch n.Protocol {
 	case "vless":
 		return surgeVLESSUnsupported(n)
 	case "trojan", "vmess":
-		if n.Params["security"] == "reality" {
-			return "Surge 不支持 REALITY 传输", true
+		// policies/trojan.html and policies/vmess.html document no
+		// reality-public-key / reality-short-id parameters.
+		if strings.EqualFold(n.Params["security"], "reality") {
+			return "Surge 不支持 REALITY 传输（trojan / vmess 无 reality-public-key）", true
+		}
+		if !surgeTransportOK(n.Params["type"]) {
+			return "Surge 仅支持 WS 传输（trojan / vmess）", true
+		}
+		if pth := shareParam(n.Params, "path"); pth != "" && !wsPathOK(pth) {
+			return "Surge ws-path 须以 / 开头", true
 		}
 		if n.Protocol == "vmess" && !surgeVMessOK(n.Method) {
 			return "Surge VMess 仅支持 aes-128-gcm / chacha20-ietf-poly1305 加密", true
+		}
+	case "ss":
+		if !inSet(surgeSSMethods, n.Method) {
+			return "Surge SS 加密方式不在文档支持列表", true
+		}
+		if o := ssPluginObfs(n.Params["plugin"]); o != "" && o != "none" && !inSet(surgeObfsModes, o) {
+			return "Surge SS obfs 仅支持 http / tls", true
+		}
+	case "hysteria2":
+		if o := shareParam(n.Params, "obfs"); o != "" && !inSet(surgeHy2Obfs, o) {
+			return "Surge Hysteria2 混淆仅支持 salamander / gecko", true
+		}
+	case "anytls":
+		// policies/anytls.html documents only `password` and `reuse`; there
+		// is no transport parameter, so a non-TCP link cannot be expressed
+		// without silently dropping the transport.
+		if t := strings.ToLower(strings.TrimSpace(n.Params["type"])); t != "" && t != "tcp" && t != "none" {
+			return "Surge AnyTLS 仅支持 TCP（文档只有 password / reuse）", true
 		}
 	}
 	return "", false
