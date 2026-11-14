@@ -34,8 +34,8 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if first["interface_name"] != "singbox_tun" {
 		t.Fatalf("interface_name: %#v", first["interface_name"])
 	}
-	if first["dns_mode"] != "hijack" {
-		t.Fatalf("dns_mode: %#v", first["dns_mode"])
+	if _, has := first["dns_mode"]; has {
+		t.Fatalf("dns_mode is sing-box 1.14+ only; emitting it breaks 1.12/1.13 decode: %#v", first)
 	}
 	dns, ok := parsed["dns"].(map[string]interface{})
 	if !ok || dns["final"] != "google" {
@@ -59,8 +59,11 @@ func TestBuildSingboxSubscriptionDocIncludesTUN(t *testing.T) {
 	if _, ok := route["default_domain_resolver"]; !ok {
 		t.Fatalf("missing default_domain_resolver: %#v", route)
 	}
-	if _, ok := parsed["http_clients"]; !ok {
-		t.Fatalf("missing http_clients")
+	if _, ok := parsed["http_clients"]; ok {
+		t.Fatalf("http_clients is sing-box 1.14+ only; emitting it breaks 1.12/1.13 decode")
+	}
+	if _, ok := route["default_http_client"]; ok {
+		t.Fatalf("route.default_http_client is sing-box 1.14+ only; emitting it breaks 1.12/1.13 decode")
 	}
 	if first["auto_route"] != true {
 		t.Fatalf("auto_route: %#v", first["auto_route"])

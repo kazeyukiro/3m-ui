@@ -132,59 +132,197 @@ func GenerateUserSingboxSubscription(db *gorm.DB, pu models.ProxyUser, req *http
 			"default":   tagNames[0],
 		},
 	)
-	doc := buildSingboxSubscriptionDoc(outbounds)
+	style := singboxDocStyleForRequest(req)
+	if style == singboxDocModern {
+		log.Printf("sing-box subscription: user %s reports core >= 1.14, emitting explicit remote rule-set HTTP client", pu.Username)
+	}
+	doc := buildSingboxDoc(outbounds, style)
 	return json.MarshalIndent(doc, "", "  ")
 }
 
-// buildSingboxSubscriptionDoc follows wuziwei client sb-1.15 bridge template
-// for CN/overseas split, using jsDelivr remote rule-sets (no panel hosting).
-// Ref: https://github.com/wuziwei/sing-box-config-template (client sb-1.15 bridge)
+// singboxDocStyle selects the field set that matches the requesting core.
+//
+// The two styles exist because sing-box 1.12/1.13 hard-reject a document that
+// carries 1.14 fields (`json: unknown field`), while 1.14+ deprecates the
+// implicit default HTTP client used for remote rule-sets and removes it in
+// 1.16.0. There is no single document that satisfies both, so the style is
+// chosen from the client's core version.
+type singboxDocStyle int
+
+const (
+	// singboxDocLegacy omits every 1.14-only field: playable on 1.12/1.13.
+	// Remote rule-sets fall back to the implicit default HTTP client, which
+	// sing-box warns about on 1.14+.
+	singboxDocLegacy singboxDocStyle = iota
+	// singboxDocModern declares the remote rule-set HTTP client explicitly,
+	// which is what 1.14+ requires once the implicit behaviour is gone.
+	singboxDocModern
+)
+
+// singboxModernCoreMinor is the first 1.14 release line. `http_clients` and
+// `route.default_http_client` were both introduced in sing-box 1.14.0.
+const singboxModernCoreMinor = 14
+
+// singboxDocStyleForRequest picks the document style for an incoming request.
+//
+// Priority: explicit query override, then the core version advertised in the
+// User-Agent, then the conservative legacy style. SFA sends
+// "SFA (sing-box 1.14.4; language zh_CN)"; libbox defaults to
+// "sing-box/<version>". Unknown or version-less agents keep the legacy style so
+// that older cores are never handed a document they cannot decode.
+func singboxDocStyleForRequest(req *http.Request) singboxDocStyle {
+	if req == nil {
+		return singboxDocLegacy
+	}
+	if v := strings.TrimSpace(req.URL.Query().Get("sbver")); v != "" {
+		if major, minor, ok := parseSingboxVersion(v); ok {
+			if major > 1 || (major == 1 && minor >= singboxModernCoreMinor) {
+				return singboxDocModern
+			}
+			return singboxDocLegacy
+		}
+	}
+	if major, minor, ok := singboxVersionFromUA(req.UserAgent()); ok {
+		if major > 1 || (major == 1 && minor >= singboxModernCoreMinor) {
+			return singboxDocModern
+		}
+	}
+	return singboxDocLegacy
+}
+
+// singboxVersionFromUA extracts the core version advertised in a User-Agent.
+// It only accepts a version that directly follows "sing-box", so unrelated
+// numbers elsewhere in the string are not mistaken for the core version.
+func singboxVersionFromUA(ua string) (major, minor int, ok bool) {
+	lower := strings.ToLower(ua)
+	for _, marker := range []string{"sing-box", "singbox"} {
+		idx := strings.Index(lower, marker)
+		if idx < 0 {
+			continue
+		}
+		rest := lower[idx+len(marker):]
+		rest = strings.TrimLeft(rest, " /v")
+		if major, minor, ok = parseSingboxVersion(rest); ok {
+			return major, minor, true
+		}
+	}
+	return 0, 0, false
+}
+
+// parseSingboxVersion reads a leading "<major>.<minor>" pair.
+func parseSingboxVersion(s string) (major, minor int, ok bool) {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		major = major*10 + int(s[i]-'0')
+		i++
+	}
+	if i == 0 || i >= len(s) || s[i] != '.' {
+		return 0, 0, false
+	}
+	i++
+	start := i
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		minor = minor*10 + int(s[i]-'0')
+		i++
+	}
+	if i == start {
+		return 0, 0, false
+	}
+	return major, minor, true
+}
+
+// buildSingboxSubscriptionDoc renders the legacy (1.12+) document. See
+// buildSingboxDoc for the compatibility floor and the reason two styles exist.
 func buildSingboxSubscriptionDoc(outbounds []map[string]interface{}) map[string]interface{} {
-	return map[string]interface{}{
+	return buildSingboxDoc(outbounds, singboxDocLegacy)
+}
+
+// buildSingboxDoc renders a CN/overseas split config with jsDelivr remote
+// rule-sets (no panel hosting).
+//
+// Compatibility floor is sing-box 1.12.0, verified by running `sing-box check`
+// against real 1.12.8 / 1.13.4 / 1.14.4 builds. `dns.servers[].predefined` is
+// 1.12+, which is why 1.11 cannot be supported without the removed legacy DNS
+// format.
+//
+// Two styles are needed because 1.12/1.13 reject a document containing 1.14
+// fields outright, while 1.14 deprecates the implicit default HTTP client used
+// to download remote rule-sets and removes it in 1.16.0:
+//
+//	legacy → no `http_clients` / `route.default_http_client`; 1.14 logs
+//	         "implicit default HTTP client ... is deprecated".
+//	modern → both fields declared; verified to start on 1.14.4 with no warning.
+//
+// `detour` names the proxy selector rather than `direct`, because a `direct`
+// outbound without dial options is rejected with "detour to an empty direct
+// outbound makes no sense"; pointing at the selector also reproduces exactly
+// what the implicit client did (download through the final outbound), so the
+// modern document changes no behaviour.
+func buildSingboxDoc(outbounds []map[string]interface{}, style singboxDocStyle) map[string]interface{} {
+	route := map[string]interface{}{
+		"rules":                   defaultSingboxRouteRules(),
+		"rule_set":                defaultSingboxRemoteRuleSets(),
+		"final":                   "proxy",
+		"auto_detect_interface":   true,
+		"default_domain_resolver": "ali",
+	}
+	doc := map[string]interface{}{
 		"log": map[string]interface{}{
 			"level": "warn",
-		},
-		"http_clients": []map[string]interface{}{
-			{
-				"tag":                       "default",
-				"version":                   2,
-				"stream_receive_window":     0,
-				"connection_receive_window": 0,
-			},
 		},
 		"dns": defaultSingboxDNS(),
 		"inbounds": []map[string]interface{}{
 			defaultSingboxTUNInbound(),
 		},
 		"outbounds": outbounds,
-		"route": map[string]interface{}{
-			"rules":                   defaultSingboxRouteRules(),
-			"rule_set":                defaultSingboxRemoteRuleSets(),
-			"final":                   "proxy",
-			"auto_detect_interface":   true,
-			"default_domain_resolver": "ali",
-			"default_http_client":     "default",
+		"route":     route,
+	}
+	if style == singboxDocModern {
+		doc["http_clients"] = defaultSingboxHTTPClients()
+		route["default_http_client"] = "default"
+	}
+	return doc
+}
+
+// defaultSingboxHTTPClients declares the HTTP client sing-box uses to fetch
+// remote rule-sets (1.14.0+). Only documented fields are emitted: `tag` plus
+// `version` (HTTP/2 is the documented default) and `detour` (a dial field).
+func defaultSingboxHTTPClients() []map[string]interface{} {
+	return []map[string]interface{}{
+		{
+			"tag":     "default",
+			"version": 2,
+			"detour":  "proxy",
 		},
 	}
 }
 
-// defaultSingboxRemoteRuleSets — MetaCubeX geosite/geoip via jsDelivr (template style).
+// defaultSingboxRemoteRuleSets — MetaCubeX geosite/geoip via jsDelivr.
+//
+// One rule_set per tag: `route.rule_set[].tag` is a string in every sing-box
+// release up to 1.13, so the multi-tag form (`"tag": [...]` plus a `{tag}`
+// placeholder in `url`) is rejected there — and a literal `{tag}` URL never
+// resolves at runtime. Emitting one entry per tag keeps the document valid from
+// 1.12 through 1.14+ while producing the same five rule-sets.
 func defaultSingboxRemoteRuleSets() []map[string]interface{} {
-	return []map[string]interface{}{
-		{
+	geosite := []string{"apple@cn", "microsoft@cn", "category-games@cn", "cn"}
+	out := make([]map[string]interface{}, 0, len(geosite)+1)
+	for _, tag := range geosite {
+		out = append(out, map[string]interface{}{
 			"type":            "remote",
-			"tag":             []string{"apple@cn", "microsoft@cn", "category-games@cn", "cn"},
-			"url":             "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/{tag}.srs",
+			"tag":             tag,
+			"url":             "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/" + tag + ".srs",
 			"update_interval": "48h",
-		},
-		{
-			"type":            "remote",
-			"tag":             "cn_ip",
-			"format":          "binary",
-			"url":             "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-			"update_interval": "48h",
-		},
+		})
 	}
+	out = append(out, map[string]interface{}{
+		"type":            "remote",
+		"tag":             "cn_ip",
+		"format":          "binary",
+		"url":             "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+		"update_interval": "48h",
+	})
+	return out
 }
 
 // defaultSingboxDNS — CN domains → AliDNS; else Google DoH via proxy (template simplified).
@@ -259,7 +397,6 @@ func defaultSingboxTUNInbound() map[string]interface{} {
 		"mtu":            9000,
 		"auto_route":     true,
 		"strict_route":   true,
-		"dns_mode":       "hijack",
 	}
 }
 

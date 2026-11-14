@@ -4,11 +4,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/gorm"
 )
@@ -251,6 +251,18 @@ func (h *Handler) ResetTraffic(c *gin.Context) {
 
 var _ = models.Listener{}
 
+// subscriptionURL builds the public subscription link shown to operators.
+//
+// It goes through config.GetSubscriptionURL so the Share page, the
+// /users/export-links output and the per-format links (subscription_singbox, …)
+// all agree: PUBLIC_URL and a custom sub_path win over the host the admin
+// happens to be using. Building it from c.Request.Host alone produced links
+// pointing at an internal/admin host for proxied deployments, which clients
+// then failed to fetch.
+func subscriptionURL(c *gin.Context, token string) string {
+	return config.GetSubscriptionURL(config.GlobalConfig, c.Request, token, "")
+}
+
 func (h *Handler) GetSubscription(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {
@@ -262,22 +274,7 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if xf := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xf != "" {
-		if i := strings.IndexByte(xf, ','); i >= 0 {
-			xf = xf[:i]
-		}
-		xf = strings.ToLower(strings.TrimSpace(xf))
-		if xf == "https" || xf == "http" {
-			scheme = xf
-		}
-	}
-	base := scheme + "://" + c.Request.Host
-	subURL := base + "/api/v1/client/sub/" + url.PathEscape(token)
-	c.JSON(http.StatusOK, gin.H{"token": token, "url": subURL})
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": subscriptionURL(c, token)})
 }
 
 func (h *Handler) RotateSubscription(c *gin.Context) {
@@ -290,22 +287,7 @@ func (h *Handler) RotateSubscription(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if xf := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xf != "" {
-		if i := strings.IndexByte(xf, ','); i >= 0 {
-			xf = xf[:i]
-		}
-		xf = strings.ToLower(strings.TrimSpace(xf))
-		if xf == "https" || xf == "http" {
-			scheme = xf
-		}
-	}
-	base := scheme + "://" + c.Request.Host
-	subURL := base + "/api/v1/client/sub/" + url.PathEscape(token)
-	c.JSON(http.StatusOK, gin.H{"token": token, "url": subURL})
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": subscriptionURL(c, token)})
 }
 
 // DeleteDepleted removes expired / over-quota proxy users (remove expired or over-quota users).
