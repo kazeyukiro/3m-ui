@@ -34,7 +34,9 @@ export default {
       "ipv6": "Tunnel IPv6 address",
       "peers": "WireGuard peers"
     }
-  },
+  ,    "configNoYaml": "Configuration generation returned no YAML",
+    "valueType": "Value type",
+},
   "realityScan": {
     "required": "Choose a REALITY target or enter one manually.",
     "placeholder": "Target hostname:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Current",
     "searchNavigate": "Navigate",
     "searchSelect": "Select"
-  },
+  ,    "main": "Main",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Previous",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Missing",
     "deleted": "Deleted",
-  },
+      "failed": "failed",
+    "admin": "Admin",
+    "qrCode": "QR code",
+    "isRequired": "is required",
+    "url": "URL",
+    "off": "off",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Mihomo Core Management Console",
@@ -593,7 +602,12 @@ export default {
     "wsHostHint": "Host header in client subscription (CDN). Leave empty to use SNI or public host automatically.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "generate failed",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1",
+    "sudokuKeyHint": "Leave empty to auto-generate",
+    "encryptionPlaceholder": "client export only",
+    "realityDestRequired": "REALITY destination is required",
+},
   "core": {
     "title": "Core",
     "subtitle": "Mihomo core status and control.",
@@ -887,7 +901,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = unlimited",
+    "zeroOff": "0 = off",
+},
   "traffic": {
     "title": "Traffic",
     "subtitle": "Live connections and traffic usage.",
@@ -1044,7 +1060,19 @@ export default {
     "warpDomainsHintShort": "Requires WARP account in Settings",
     "warpDomainsHint": "One per line: host, domain:/full:/keyword:/geosite:. On blur/save these become DOMAIN-* rules targeting WARP in the list below. Then Generate & apply.",
     "groupDeleted": "Group deleted"
-  },
+  ,    "rpBehavior": "behavior",
+    "rpFormat": "format",
+    "rpUrlRequired": "Required for type=http",
+    "rpPathDefault": "Optional; default ./rule-providers/{name}.{format}",
+    "rpInterval": "interval (s)",
+    "rpProxyDownload": "proxy (download)",
+    "rpPayload": "payload (inline, one per line)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Interval (s)",
+    "missingType": "missing type",
+    "missingTarget": "missing target",
+    "missingPayload": "missing payload",
+},
   "settings": {
     "navPanel": "Panel / UI",
     "navAccess": "Access profile",
@@ -1335,7 +1363,10 @@ export default {
     "restoreTimeout": "Panel did not come back in 30s; please refresh manually.",
     "switchToPre": "Switch to pre-release channel",
     "switchToStable": "Switch to stable channel",
-  },
+      "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "webPathPrefix": "Web path prefix",
+},
   "share": {
     "title": "Share / Subscription",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1350,5 +1381,6 @@ export default {
     "subHtml": "Info page (HTML)",
     "exportAll": "Export all subscription links",
     "exported": "Exported subscription links"
-  },
+  ,    "exportFailed": "export failed",
+},
 } as const;

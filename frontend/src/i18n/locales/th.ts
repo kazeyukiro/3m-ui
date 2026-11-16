@@ -34,7 +34,9 @@ export default {
       "ipv6": "ที่อยู่ทันเนล IPv6",
       "peers": "เพียร์ WireGuard"
     }
-  },
+  ,    "configNoYaml": "การสร้างการกำหนดค่าไม่ส่งคืน YAML",
+    "valueType": "ประเภทค่า",
+},
   "realityScan": {
     "required": "เลือกเป้าหมาย REALITY หรือกรอกเอง",
     "placeholder": "โฮสต์เป้าหมาย:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "ปัจจุบัน",
     "searchNavigate": "นำทาง",
     "searchSelect": "เปิด"
-  },
+  ,    "main": "หลัก",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "ก่อนหน้า",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "ขาด",
     "deleted": "ลบแล้ว",
-  },
+      "failed": "ล้มเหลว",
+    "admin": "ผู้ดูแลระบบ",
+    "qrCode": "รหัส QR",
+    "isRequired": "เป็นสิ่งที่จำเป็น",
+    "url": "URL",
+    "off": "ปิด",
+},
   "login": {
     "title": "เข้าสู่ระบบ",
     "subtitle": "แผง Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "ส่วนหัว Host ในการสมัครสมาชิกไคลเอนต์ (CDN) เว้นว่างเพื่อใช้ SNI หรือโฮสต์สาธารณะอัตโนมัติ",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "สร้างไม่สำเร็จ",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 แบบดูอัลสแตก: :: · เฉพาะ: 2001:db8::1",
+    "sudokuKeyHint": "เว้นว่างเพื่อสร้างอัตโนมัติ",
+    "encryptionPlaceholder": "เฉพาะการส่งออกไคลเอนต์",
+    "realityDestRequired": "จำเป็นต้องระบุปลายทาง REALITY",
+},
   "core": {
     "title": "คอร์",
     "subtitle": "สถานะและการควบคุมคอร์ Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = ไม่จำกัด",
+    "zeroOff": "0 = ปิด",
+},
   "traffic": {
     "title": "ทราฟฟิก",
     "subtitle": "การเชื่อมต่อสดและการใช้ทราฟฟิก",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "หนึ่งบรรทัดต่อรายการ: host หรือ domain:/full:/keyword:/geosite: เมื่อเบลอหรือบันทึกจะกลายเป็นกฎ DOMAIN-* ที่ชี้ไป WARP ในรายการด้านล่าง แล้วกดสร้างและใช้",
     "groupDeleted": "ลบกลุ่มแล้ว",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "พฤติกรรม",
+    "rpFormat": "รูปแบบ",
+    "rpUrlRequired": "จำเป็นสำหรับ type=http",
+    "rpPathDefault": "ไม่บังคับ; ค่าเริ่มต้น ./rule-providers/{name}.{format}",
+    "rpInterval": "ช่วงเวลา (วิ)",
+    "rpProxyDownload": "พร็อกซี (ดาวน์โหลด)",
+    "rpPayload": "เพย์โหลด (แบบอินไลน์ หนึ่งรายการต่อบรรทัด)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "ช่วงเวลา (วิ)",
+    "missingType": "ขาดประเภท",
+    "missingTarget": "ขาดเป้าหมาย",
+    "missingPayload": "ขาดเพย์โหลด",
+},
   "settings": {
     "navPanel": "แผงควบคุม / UI",
     "navAccess": "โปรไฟล์การเข้าถึง",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "สลับไปช่องทางพรีรีลีส",
     "switchToStable": "สลับไปช่องทางเสถียร",
 
-  },
+      "clientId": "ID ไคลเอนต์",
+    "clientSecret": "ความลับของไคลเอนต์",
+    "webPathPrefix": "คำนำหน้าเส้นทางเว็บ",
+},
   "share": {
     "title": "แชร์",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "หน้าข้อมูล (HTML)",
     "exportAll": "ส่งออกลิงก์สมัครทั้งหมด",
     "exported": "ส่งออกลิงก์สมัครแล้ว"
-  },
+  ,    "exportFailed": "ส่งออกไม่สำเร็จ",
+},
 } as const;

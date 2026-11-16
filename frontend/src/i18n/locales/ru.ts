@@ -34,7 +34,9 @@ export default {
       "ipv6": "Туннельный адрес IPv6",
       "peers": "Пиры WireGuard"
     }
-  },
+  ,    "configNoYaml": "При создании конфигурации не возвращён YAML",
+    "valueType": "Тип значения",
+},
   "realityScan": {
     "required": "Выберите цель REALITY или введите вручную.",
     "placeholder": "Имя хоста:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Текущий",
     "searchNavigate": "Навигация",
     "searchSelect": "Открыть"
-  },
+  ,    "main": "Главная",
+},
   "common": {
     "advanced": "Дополнительно",
     "prev": "Назад",
@@ -124,7 +127,13 @@ export default {
     "bound": "Привязан",
     "missing": "Отсутствует",
     "deleted": "Удалено",
-  },
+      "failed": "ошибка",
+    "admin": "Администратор",
+    "qrCode": "QR-код",
+    "isRequired": "обязательно",
+    "url": "URL",
+    "off": "выкл.",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Консоль управления ядром Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "Заголовок Host в подписке клиента (CDN). Пусто — автоматически SNI или публичный хост.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "ошибка создания",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 с двойным стеком: :: · конкретный: 2001:db8::1",
+    "sudokuKeyHint": "Оставьте пустым для автоматической генерации",
+    "encryptionPlaceholder": "только для экспорта клиента",
+    "realityDestRequired": "Требуется адрес назначения REALITY",
+},
   "core": {
     "title": "Ядро",
     "subtitle": "Состояние и управление ядром Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = без ограничений",
+    "zeroOff": "0 = выключено",
+},
   "traffic": {
     "title": "Трафик",
     "subtitle": "Живые соединения и использование трафика",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "По одному на строку: хост, domain:/full:/keyword:/geosite:. После потери фокуса/сохранения они превращаются в правила DOMAIN-* с целью WARP в списке ниже. Затем «Сгенерировать и применить».",
     "groupDeleted": "Группа удалена",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "поведение",
+    "rpFormat": "формат",
+    "rpUrlRequired": "Обязательно для type=http",
+    "rpPathDefault": "Необязательно; по умолчанию ./rule-providers/{name}.{format}",
+    "rpInterval": "интервал (с)",
+    "rpProxyDownload": "прокси (загрузка)",
+    "rpPayload": "полезная нагрузка (встроенно, одна на строку)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Интервал (с)",
+    "missingType": "отсутствует тип",
+    "missingTarget": "отсутствует цель",
+    "missingPayload": "отсутствует полезная нагрузка",
+},
   "settings": {
     "navPanel": "Панель / UI",
     "navAccess": "Профиль доступа",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Переключиться на канал предварительных выпусков",
     "switchToStable": "Переключиться на стабильный канал",
 
-  },
+      "clientId": "ID клиента",
+    "clientSecret": "Секрет клиента",
+    "webPathPrefix": "Префикс веб-пути",
+},
   "share": {
     "title": "Поделиться",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Инфо-страница (HTML)",
     "exportAll": "Экспортировать все ссылки подписки",
     "exported": "Ссылки подписки экспортированы"
-  },
+  ,    "exportFailed": "ошибка экспорта",
+},
 } as const;

@@ -34,7 +34,9 @@ export default {
       "ipv6": "टनल IPv6 पता",
       "peers": "WireGuard पीयर"
     }
-  },
+  ,    "configNoYaml": "कॉन्फ़िगरेशन निर्माण ने YAML नहीं लौटाया",
+    "valueType": "मान प्रकार",
+},
   "realityScan": {
     "required": "REALITY लक्ष्य चुनें या मैन्युअल दर्ज करें।",
     "placeholder": "लक्ष्य होस्टनाम:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "वर्तमान",
     "searchNavigate": "नेविगेट",
     "searchSelect": "खोलें"
-  },
+  ,    "main": "मुख्य",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "पिछला",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "अनुपस्थित",
     "deleted": "हटाया गया",
-  },
+      "failed": "विफल",
+    "admin": "प्रशासक",
+    "qrCode": "QR कोड",
+    "isRequired": "आवश्यक है",
+    "url": "URL",
+    "off": "बंद",
+},
   "login": {
     "title": "लॉगिन",
     "subtitle": "Mihomo पैनल",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "क्लाइंट सदस्यता में Host हेडर (CDN)। SNI या सार्वजनिक होस्ट स्वतः उपयोग करने के लिए खाली छोड़ें।",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "निर्माण विफल",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 डुअल-स्टैक: :: · विशिष्ट: 2001:db8::1",
+    "sudokuKeyHint": "स्वतः उत्पन्न करने के लिए खाली छोड़ें",
+    "encryptionPlaceholder": "केवल क्लाइंट निर्यात",
+    "realityDestRequired": "REALITY गंतव्य आवश्यक है",
+},
   "core": {
     "title": "कोर",
     "subtitle": "Mihomo कोर स्थिति और नियंत्रण",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = असीमित",
+    "zeroOff": "0 = बंद",
+},
   "traffic": {
     "title": "ट्रैफ़िक",
     "subtitle": "लाइव कनेक्शन और ट्रैफ़िक उपयोग",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "प्रति पंक्ति एक: host, domain:/full:/keyword:/geosite:। ब्लर/सेव पर ये नीचे सूची में WARP को लक्ष्य करने वाले DOMAIN-* नियम बन जाते हैं। फिर जनरेट और अप्लाई करें।",
     "groupDeleted": "समूह हटाया गया",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "व्यवहार",
+    "rpFormat": "प्रारूप",
+    "rpUrlRequired": "type=http के लिए आवश्यक",
+    "rpPathDefault": "वैकल्पिक; डिफ़ॉल्ट ./rule-providers/{name}.{format}",
+    "rpInterval": "अंतराल (से)",
+    "rpProxyDownload": "प्रॉक्सी (डाउनलोड)",
+    "rpPayload": "पेयलोड (इनलाइन, प्रति पंक्ति एक)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "अंतराल (से)",
+    "missingType": "प्रकार अनुपलब्ध",
+    "missingTarget": "लक्ष्य अनुपलब्ध",
+    "missingPayload": "पेयलोड अनुपलब्ध",
+},
   "settings": {
     "navPanel": "पैनल / UI",
     "navAccess": "एक्सेस प्रोफ़ाइल",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "प्री-रिलीज़ चैनल पर जाएँ",
     "switchToStable": "स्थिर चैनल पर जाएँ",
 
-  },
+      "clientId": "क्लाइंट आईडी",
+    "clientSecret": "क्लाइंट सीक्रेट",
+    "webPathPrefix": "वेब पथ उपसर्ग",
+},
   "share": {
     "title": "शेयर",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "जानकारी पेज (HTML)",
     "exportAll": "सभी सब्सक्रिप्शन लिंक निर्यात",
     "exported": "सब्सक्रिप्शन लिंक निर्यात"
-  },
+  ,    "exportFailed": "निर्यात विफल",
+},
 } as const;

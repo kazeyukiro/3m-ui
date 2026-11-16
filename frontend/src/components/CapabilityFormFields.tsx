@@ -39,7 +39,7 @@ function renderFields(
         name={f.path}
         label={f.label}
         tooltip={fieldTip(t, tipKey, f.description || undefined)}
-        rules={!transientRequired && f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} is required` }] : undefined}
+        rules={!transientRequired && f.required ? [{ required: true, whitespace: f.type === 'string' || f.type === 'text' || f.type === 'secret', message: `${f.label} ${t('common.isRequired')}` }] : undefined}
         valuePropName={f.type === 'boolean' ? 'checked' : 'value'}
       >
         <FieldInput field={f} />

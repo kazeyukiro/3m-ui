@@ -34,7 +34,9 @@ export default {
       "ipv6": "Тунельна адреса IPv6",
       "peers": "Піри WireGuard"
     }
-  },
+  ,    "configNoYaml": "Генерування конфігурації не повернуло YAML",
+    "valueType": "Тип значення",
+},
   "realityScan": {
     "required": "Оберіть ціль REALITY або введіть вручну.",
     "placeholder": "Ім’я хоста:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Поточна",
     "searchNavigate": "Навігація",
     "searchSelect": "Відкрити"
-  },
+  ,    "main": "Головна",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Назад",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Відсутнє",
     "deleted": "Видалено",
-  },
+      "failed": "помилка",
+    "admin": "Адміністратор",
+    "qrCode": "QR-код",
+    "isRequired": "є обов'язковим",
+    "url": "URL",
+    "off": "вимкнено",
+},
   "login": {
     "title": "Вхід",
     "subtitle": "Панель Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "Заголовок Host у підписці клієнта (CDN). Порожньо — автоматично SNI або публічний хост.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "помилка створення",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 з подвійним стеком: :: · конкретний: 2001:db8::1",
+    "sudokuKeyHint": "Залиште порожнім для автоматичної генерації",
+    "encryptionPlaceholder": "лише експорт клієнта",
+    "realityDestRequired": "Потрібен пункт призначення REALITY",
+},
   "core": {
     "title": "Ядро",
     "subtitle": "Стан і керування ядром Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = без обмежень",
+    "zeroOff": "0 = вимкнено",
+},
   "traffic": {
     "title": "Трафік",
     "subtitle": "Живі з’єднання та використання трафіку",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "По одному на рядок: хост, domain:/full:/keyword:/geosite:. Після втрати фокусу/збереження вони стають правилами DOMAIN-* з ціллю WARP у списку нижче. Потім «Згенерувати і застосувати».",
     "groupDeleted": "Групу видалено",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "поведінка",
+    "rpFormat": "формат",
+    "rpUrlRequired": "Обов'язково для type=http",
+    "rpPathDefault": "Необов'язково; типово ./rule-providers/{name}.{format}",
+    "rpInterval": "інтервал (с)",
+    "rpProxyDownload": "проксі (завантаження)",
+    "rpPayload": "корисне навантаження (вбудовано, одне на рядок)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Інтервал (с)",
+    "missingType": "відсутній тип",
+    "missingTarget": "відсутня ціль",
+    "missingPayload": "відсутнє навантаження",
+},
   "settings": {
     "navPanel": "Панель / UI",
     "navAccess": "Профіль доступу",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Перейти на канал попередніх випусків",
     "switchToStable": "Перейти на стабільний канал",
 
-  },
+      "clientId": "ID клієнта",
+    "clientSecret": "Секрет клієнта",
+    "webPathPrefix": "Префікс веб-шляху",
+},
   "share": {
     "title": "Поділитися",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Сторінка інформації (HTML)",
     "exportAll": "Експортувати всі посилання підписки",
     "exported": "Посилання підписки експортовано"
-  },
+  ,    "exportFailed": "помилка експорту",
+},
 } as const;

@@ -34,7 +34,9 @@ export default {
       "ipv6": "Adres tunelu IPv6",
       "peers": "Peery WireGuard"
     }
-  },
+  ,    "configNoYaml": "Generowanie konfiguracji nie zwróciło YAML",
+    "valueType": "Typ wartości",
+},
   "realityScan": {
     "required": "Wybierz cel REALITY lub wpisz ręcznie.",
     "placeholder": "Nazwa hosta:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Bieżąca",
     "searchNavigate": "Nawiguj",
     "searchSelect": "Otwórz"
-  },
+  ,    "main": "Główne",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Wstecz",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Brakuje",
     "deleted": "Usunięto",
-  },
+      "failed": "niepowodzenie",
+    "admin": "Administrator",
+    "qrCode": "Kod QR",
+    "isRequired": "jest wymagane",
+    "url": "URL",
+    "off": "wyłączone",
+},
   "login": {
     "title": "Logowanie",
     "subtitle": "Panel Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "Nagłówek Host w subskrypcji klienta (CDN). Puste, aby automatycznie użyć SNI lub hosta publicznego.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "generowanie nie powiodło się",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 podwójny stos: :: · konkretny: 2001:db8::1",
+    "sudokuKeyHint": "Pozostaw puste, aby wygenerować automatycznie",
+    "encryptionPlaceholder": "tylko eksport klienta",
+    "realityDestRequired": "Wymagany jest cel REALITY",
+},
   "core": {
     "title": "Rdzeń",
     "subtitle": "Status i sterowanie jądrem Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = bez ograniczeń",
+    "zeroOff": "0 = wyłączone",
+},
   "traffic": {
     "title": "Ruch",
     "subtitle": "Połączenia na żywo i użycie ruchu",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "Jeden na wiersz: host, domain:/full:/keyword:/geosite:. Po utracie fokusu/zapisie stają się regułami DOMAIN-* kierującymi na WARP na liście poniżej. Potem wygeneruj i zastosuj.",
     "groupDeleted": "Usunięto grupę",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "zachowanie",
+    "rpFormat": "format",
+    "rpUrlRequired": "Wymagane dla type=http",
+    "rpPathDefault": "Opcjonalne; domyślnie ./rule-providers/{name}.{format}",
+    "rpInterval": "interwał (s)",
+    "rpProxyDownload": "proxy (pobieranie)",
+    "rpPayload": "ładunek (w wierszu, jeden na linię)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Interwał (s)",
+    "missingType": "brak typu",
+    "missingTarget": "brak celu",
+    "missingPayload": "brak ładunku",
+},
   "settings": {
     "navPanel": "Panel / UI",
     "navAccess": "Profil dostępu",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Przełącz na kanał wersji wstępnych",
     "switchToStable": "Przełącz na kanał stabilny",
 
-  },
+      "clientId": "Identyfikator klienta",
+    "clientSecret": "Sekret klienta",
+    "webPathPrefix": "Prefiks ścieżki web",
+},
   "share": {
     "title": "Udostępnij",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Strona informacyjna (HTML)",
     "exportAll": "Eksportuj wszystkie linki subskrypcji",
     "exported": "Wyeksportowano linki subskrypcji"
-  },
+  ,    "exportFailed": "eksport nie powiódł się",
+},
 } as const;

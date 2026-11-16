@@ -34,7 +34,9 @@ export default {
       "ipv6": "Địa chỉ tunnel IPv6",
       "peers": "Peer WireGuard"
     }
-  },
+  ,    "configNoYaml": "Tạo cấu hình không trả về YAML",
+    "valueType": "Loại giá trị",
+},
   "realityScan": {
     "required": "Chọn mục tiêu REALITY hoặc nhập thủ công.",
     "placeholder": "Tên host:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Hiện tại",
     "searchNavigate": "Điều hướng",
     "searchSelect": "Mở"
-  },
+  ,    "main": "Chính",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Trước",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Thiếu",
     "deleted": "Đã xóa",
-  },
+      "failed": "thất bại",
+    "admin": "Quản trị viên",
+    "qrCode": "Mã QR",
+    "isRequired": "là bắt buộc",
+    "url": "URL",
+    "off": "tắt",
+},
   "login": {
     "title": "Đăng nhập",
     "subtitle": "Panel Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "Tiêu đề Host trong đăng ký máy khách (CDN). Để trống để tự dùng SNI hoặc host công khai.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "tạo thất bại",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 song stack: :: · cụ thể: 2001:db8::1",
+    "sudokuKeyHint": "Để trống để tự động tạo",
+    "encryptionPlaceholder": "chỉ xuất cho client",
+    "realityDestRequired": "Yêu cầu địa chỉ đích REALITY",
+},
   "core": {
     "title": "Core",
     "subtitle": "Trạng thái và điều khiển lõi Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = không giới hạn",
+    "zeroOff": "0 = tắt",
+},
   "traffic": {
     "title": "Lưu lượng",
     "subtitle": "Kết nối trực tiếp và sử dụng lưu lượng",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "Mỗi dòng một mục: host hoặc domain:/full:/keyword:/geosite:. Khi blur/lưu sẽ thành quy tắc DOMAIN-* hướng WARP trong danh sách bên dưới. Sau đó Tạo & áp dụng.",
     "groupDeleted": "Đã xóa nhóm",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "hành vi",
+    "rpFormat": "định dạng",
+    "rpUrlRequired": "Bắt buộc với type=http",
+    "rpPathDefault": "Tùy chọn; mặc định ./rule-providers/{name}.{format}",
+    "rpInterval": "khoảng cách (s)",
+    "rpProxyDownload": "proxy (tải xuống)",
+    "rpPayload": "tải trọng (nội tuyến, mỗi dòng một)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Khoảng cách (s)",
+    "missingType": "thiếu loại",
+    "missingTarget": "thiếu mục tiêu",
+    "missingPayload": "thiếu tải trọng",
+},
   "settings": {
     "navPanel": "Panel / UI",
     "navAccess": "Hồ sơ truy cập",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Chuyển sang kênh pre-release",
     "switchToStable": "Chuyển sang kênh ổn định",
 
-  },
+      "clientId": "ID khách hàng",
+    "clientSecret": "Khách hàng bí mật",
+    "webPathPrefix": "Tiền tố đường dẫn web",
+},
   "share": {
     "title": "Chia sẻ",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Trang thông tin (HTML)",
     "exportAll": "Xuất tất cả liên kết đăng ký",
     "exported": "Đã xuất liên kết đăng ký"
-  },
+  ,    "exportFailed": "xuất thất bại",
+},
 } as const;

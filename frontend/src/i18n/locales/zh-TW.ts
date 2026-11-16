@@ -34,7 +34,9 @@ export default {
       "ipv6": "隧道 IPv6 位址",
       "peers": "WireGuard 對等節點"
     }
-  },
+  ,    "configNoYaml": "設定產生未返回 YAML",
+    "valueType": "值類型",
+},
   "realityScan": {
     "required": "請選擇 Reality 目標或手動填寫。",
     "placeholder": "目標網域:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "目前",
     "searchNavigate": "切換",
     "searchSelect": "開啟"
-  },
+  ,    "main": "主導覽",
+},
   "common": {
     "advanced": "進階選項",
     "prev": "上一步",
@@ -124,7 +127,13 @@ export default {
     "bound": "已綁定",
     "missing": "缺失",
     "deleted": "已刪除",
-  },
+      "failed": "失敗",
+    "admin": "管理員",
+    "qrCode": "二維碼",
+    "isRequired": "為必填欄位",
+    "url": "URL",
+    "off": "關閉",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Mihomo 核心管理控制台",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "用戶端訂閱中的 Host 標頭（CDN）。留空時自動使用 SNI 或公開主機。",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "產生失敗",
+    "bindAddressTip": "IPv4：0.0.0.0 · IPv6 雙堆疊：:: · 指定位址：2001:db8::1",
+    "sudokuKeyHint": "留空則自動產生",
+    "encryptionPlaceholder": "僅供用戶端匯出",
+    "realityDestRequired": "必須填寫 REALITY 目標位址",
+},
   "core": {
     "title": "核心管理",
     "subtitle": "Mihomo 核心狀態与控制。",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = 不限",
+    "zeroOff": "0 = 關閉",
+},
   "traffic": {
     "title": "流量监控",
     "subtitle": "实时連線与流量统计。",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "每行一條：網域，或 domain:/full:/keyword:/geosite:。失去焦點／儲存後會寫入下方規則清單（目標 WARP），然後請「產生並套用」。",
     "groupDeleted": "策略组已刪除",
     "templates": "模板"
-  },
+  ,    "rpBehavior": "行為",
+    "rpFormat": "格式",
+    "rpUrlRequired": "type=http 時必填",
+    "rpPathDefault": "選填；預設 ./rule-providers/{name}.{format}",
+    "rpInterval": "間隔（秒）",
+    "rpProxyDownload": "代理（下載）",
+    "rpPayload": "內容（內嵌，每行一條）",
+    "groupUrl": "URL（url-test）",
+    "groupInterval": "間隔（秒）",
+    "missingType": "缺少類型",
+    "missingTarget": "缺少目標",
+    "missingPayload": "缺少內容",
+},
   "settings": {
     "navPanel": "面板 / 外观",
     "navAccess": "访问档案",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "切換到預發布通道",
     "switchToStable": "切換到穩定通道",
 
-  },
+      "clientId": "用戶端 ID",
+    "clientSecret": "用戶端密鑰",
+    "webPathPrefix": "Web 路徑前綴",
+},
   "share": {
     "title": "分享 / 訂閱",
     "subtitle": "统一查看使用者訂閱連結与已綁定節點的分享 URI。",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "訂閱資訊页 (HTML)",
     "exportAll": "匯出全部訂閱連結",
     "exported": "已匯出訂閱連結"
-  },
+  ,    "exportFailed": "匯出失敗",
+},
 } as const;

@@ -150,6 +150,21 @@ export const useI18n = () => {
   return ctx;
 };
 
+/**
+ * Translate outside React components (stores, event handlers, module helpers).
+ * Reads the active locale from localStorage and follows the same fallback chain
+ * as the hook: active locale -> en -> explicit fallback -> key.
+ */
+export function tStatic(key: string, fallback?: string): string {
+  const locale = (typeof localStorage !== 'undefined' && normalizeLocale(localStorage.getItem('3m-ui-locale'))) || 'en';
+  return (
+    resolveKey(translations[locale], key) ??
+    (locale !== 'en' ? resolveKey(translations.en, key) : undefined) ??
+    fallback ??
+    key
+  );
+}
+
 
 /** Tooltip text only when translation is real — never the raw key or a generic wiki stub. */
 export function fieldTip(

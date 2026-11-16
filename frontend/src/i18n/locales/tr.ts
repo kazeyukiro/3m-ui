@@ -34,7 +34,9 @@ export default {
       "ipv6": "Tünel IPv6 adresi",
       "peers": "WireGuard peer'ları"
     }
-  },
+  ,    "configNoYaml": "Yapılandırma oluşturma YAML döndürmedi",
+    "valueType": "Değer türü",
+},
   "realityScan": {
     "required": "REALITY hedefi seçin veya elle girin.",
     "placeholder": "Hedef ana bilgisayar:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Geçerli",
     "searchNavigate": "Gezin",
     "searchSelect": "Aç"
-  },
+  ,    "main": "Ana",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Önceki",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Eksik",
     "deleted": "Silindi",
-  },
+      "failed": "başarısız",
+    "admin": "Yönetici",
+    "qrCode": "QR kodu",
+    "isRequired": "gerekli",
+    "url": "URL",
+    "off": "kapalı",
+},
   "login": {
     "title": "Giriş",
     "subtitle": "Mihomo paneli",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "İstemci aboneliğinde Host başlığı (CDN). SNI veya genel hostun otomatik kullanılması için boş bırakın.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "oluşturma başarısız",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 çift yığın: :: · belirli: 2001:db8::1",
+    "sudokuKeyHint": "Otomatik oluşturmak için boş bırakın",
+    "encryptionPlaceholder": "yalnızca istemci dışa aktarımı",
+    "realityDestRequired": "REALITY hedefi gerekli",
+},
   "core": {
     "title": "Çekirdek",
     "subtitle": "Mihomo çekirdek durumu ve denetimi",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = sınırsız",
+    "zeroOff": "0 = kapalı",
+},
   "traffic": {
     "title": "Trafik",
     "subtitle": "Canlı bağlantılar ve trafik kullanımı",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "Her satıra bir tane: host, domain:/full:/keyword:/geosite:. Kaydederken aşağıdaki listede WARP’ı hedefleyen DOMAIN-* kurallarına dönüşür. Ardından oluşturup uygulayın.",
     "groupDeleted": "Grup silindi",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "davranış",
+    "rpFormat": "biçim",
+    "rpUrlRequired": "type=http için zorunlu",
+    "rpPathDefault": "İsteğe bağlı; varsayılan ./rule-providers/{name}.{format}",
+    "rpInterval": "aralık (s)",
+    "rpProxyDownload": "vekil (indirme)",
+    "rpPayload": "yük (satır içi, satır başına bir)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Aralık (s)",
+    "missingType": "tür eksik",
+    "missingTarget": "hedef eksik",
+    "missingPayload": "yük eksik",
+},
   "settings": {
     "navPanel": "Panel / UI",
     "navAccess": "Erişim profili",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Ön sürüm kanalına geç",
     "switchToStable": "Kararlı kanala geç",
 
-  },
+      "clientId": "İstemci kimliği",
+    "clientSecret": "İstemci sırrı",
+    "webPathPrefix": "Web yolu öneki",
+},
   "share": {
     "title": "Paylaş",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Bilgi sayfası (HTML)",
     "exportAll": "Tüm abonelik bağlantılarını dışa aktar",
     "exported": "Abonelik bağlantıları dışa aktarıldı"
-  },
+  ,    "exportFailed": "dışa aktarma başarısız",
+},
 } as const;

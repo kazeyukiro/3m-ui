@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { fetchOutbounds, saveOutbound, deleteOutbound, setOutboundsEnabled, testOutboundConnection, type ServerOutbound } from '../api/outbounds';
 import type { ConnectionCheck } from '../api/listenerRuntime';
 import { generateConfig, applyConfigYAML } from '../api/config';
+import { tStatic } from '../i18n';
 
 interface OutboundState {
   entries: ServerOutbound[];
@@ -52,7 +53,7 @@ export const useOutboundStore = create<OutboundState>((set) => ({
     set({ applying: true });
     try {
       const generated = await generateConfig();
-      if (!generated.config) throw new Error(generated.message || 'Configuration generation returned no YAML');
+      if (!generated.config) throw new Error(generated.message || tStatic('outbounds.configNoYaml'));
       await applyConfigYAML(generated.config);
     } finally { set({ applying: false }); }
   },

@@ -169,7 +169,7 @@ function useFeatureItems(): FeatureItem[] {
       { key: '/settings?section=security', group: settings, label: t('settings.totp') || '2FA / TOTP', icon: <IconNavSettings />, keywords: ['2fa', 'totp', 'mfa', 'otp', '双因素', '二步验证', '二步驗證'] },
       { key: '/settings?section=security', group: settings, label: t('settings.githubOAuth') || 'GitHub OAuth', icon: <IconNavSettings />, keywords: ['github', 'oauth', 'GitHub登录', 'GitHub登入'] },
       { key: '/settings?section=security', group: settings, label: t('settings.backup') || 'Backup & restore', icon: <IconNavSettings />, keywords: ['backup', 'restore', 'snapshot', '备份', '備份', '恢复', '還原', '数据库'] },
-      { key: '/settings?section=security', group: settings, label: 'Web path prefix', icon: <IconNavSettings />, keywords: ['web_path', 'path prefix', '隐藏路径', '面板路径', 'secret path'] },
+      { key: '/settings?section=security', group: settings, label: t('settings.webPathPrefix'), icon: <IconNavSettings />, keywords: ['web_path', 'path prefix', '隐藏路径', '面板路径', 'secret path'] },
       // Settings · subscription / ssl / network / traffic / ops
       { key: '/settings?section=subscription', group: settings, label: t('settings.navSubscription') || 'Subscription page', icon: <IconNavSettings />, keywords: ['sub page', '订阅页', '訂閱頁', '模板'] },
       { key: '/settings?section=ssl', group: settings, label: t('settings.navSSL') || 'Certificate / SSL', icon: <IconNavSettings />, keywords: ['tls', 'cert', 'acme', '证书', '證書', 'https', 'ssl', 'letsencrypt'] },

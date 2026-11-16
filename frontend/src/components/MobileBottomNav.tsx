@@ -81,7 +81,7 @@ const MobileBottomNav: React.FC = () => {
 
   return (
     <>
-      <nav className="app-bottom-nav" aria-label="Main">
+      <nav className="app-bottom-nav" aria-label={t('nav.main')}>
         {primary.map((item) => {
           const active = isActive(item.key);
           return (

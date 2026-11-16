@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button, Card, Collapse, Form, Input, InputNumber, Select, Space, Switch, message } from 'antd';
 import { IconAddNode, IconDelete } from '../icons';
-import { useI18n } from '../i18n';
+import { useI18n, tStatic } from '../i18n';
 import { OUTBOUND_OBJECTS, type OutboundField } from '../utils/outboundSchema';
 
 type MapKind = 'stringMap' | 'stringListMap' | 'map';
@@ -33,7 +33,7 @@ function FlexibleValue({ value, onChange }: { value: any; onChange: (value: any)
   const kind = Array.isArray(value) ? 'list' : value !== null && typeof value === 'object' ? 'object' : typeof value;
   const defaults: Record<string, any> = { string: '', number: 0, boolean: false, list: [], object: {} };
   return <Space orientation="vertical" style={{ width: '100%' }}>
-    <Select aria-label="Value type" value={kind} options={Object.keys(defaults).map(v => ({ value: v, label: v }))} onChange={v => onChange(defaults[v])} style={{ width: 130 }} />
+    <Select aria-label={tStatic('outbounds.valueType')} value={kind} options={Object.keys(defaults).map(v => ({ value: v, label: v }))} onChange={v => onChange(defaults[v])} style={{ width: 130 }} />
     {kind === 'object' ? <ValueMap kind="map" value={value} onChange={onChange} />
       : kind === 'list' ? <Select mode="tags" style={{ width: '100%' }} value={value.map(String)} onChange={v => onChange(v)} />
       : kind === 'boolean' ? <Switch checked={value} onChange={onChange} />

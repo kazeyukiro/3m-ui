@@ -153,7 +153,7 @@ export function serializeRules(rows: RuleRow[]): string[] {
   return rows.map(serializeRule).filter((s) => s.length > 0);
 }
 
-export type RuleIssue = { index: number; message: string };
+export type RuleIssue = { index: number; message: string; key: string; recommended?: boolean };
 
 export function validateRules(rows: RuleRow[]): RuleIssue[] {
   const issues: RuleIssue[] = [];
@@ -161,21 +161,21 @@ export function validateRules(rows: RuleRow[]): RuleIssue[] {
     if (row.raw) return;
     const type = (row.type || '').toUpperCase();
     if (!type) {
-      issues.push({ index, message: 'missing type' });
+      issues.push({ index, message: 'missing type', key: 'routing.missingType' });
       return;
     }
     if (!(row.target || '').trim()) {
-      issues.push({ index, message: 'missing target' });
+      issues.push({ index, message: 'missing target', key: 'routing.missingTarget' });
     }
     if (type !== 'MATCH' && !(row.payload || '').trim()) {
-      issues.push({ index, message: 'missing payload' });
+      issues.push({ index, message: 'missing payload', key: 'routing.missingPayload' });
     }
   });
   if (rows.length) {
     const last = rows[rows.length - 1];
     const lastType = (last.raw ? last.raw.split(',')[0] : last.type || '').toUpperCase();
     if (lastType !== 'MATCH') {
-      issues.push({ index: rows.length - 1, message: 'last rule should be MATCH (recommended)' });
+      issues.push({ index: rows.length - 1, message: 'last rule should be MATCH (recommended)', key: 'routing.ruleWarnMatch', recommended: true });
     }
   }
   return issues;

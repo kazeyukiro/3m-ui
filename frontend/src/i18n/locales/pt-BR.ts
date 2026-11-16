@@ -34,7 +34,9 @@ export default {
       "ipv6": "Endereço IPv6 do túnel",
       "peers": "Pares WireGuard"
     }
-  },
+  ,    "configNoYaml": "A geração da configuração não retornou YAML",
+    "valueType": "Tipo de valor",
+},
   "realityScan": {
     "required": "Escolha um alvo REALITY ou digite manualmente.",
     "placeholder": "Hostname:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Atual",
     "searchNavigate": "Navegar",
     "searchSelect": "Abrir"
-  },
+  ,    "main": "Principal",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Anterior",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Ausente",
     "deleted": "Excluído",
-  },
+      "failed": "falha",
+    "admin": "Administrador",
+    "qrCode": "Código QR",
+    "isRequired": "é obrigatório",
+    "url": "URL",
+    "off": "desativado",
+},
   "login": {
     "title": "Entrar",
     "subtitle": "Painel Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "Cabeçalho Host na assinatura do cliente (CDN). Vazio para usar SNI ou host público automaticamente.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "falha ao gerar",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 dupla pilha: :: · específico: 2001:db8::1",
+    "sudokuKeyHint": "Deixe vazio para gerar automaticamente",
+    "encryptionPlaceholder": "apenas exportação do cliente",
+    "realityDestRequired": "O destino REALITY é obrigatório",
+},
   "core": {
     "title": "Core",
     "subtitle": "Status e controle do núcleo Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = ilimitado",
+    "zeroOff": "0 = desativado",
+},
   "traffic": {
     "title": "Tráfego",
     "subtitle": "Conexões ao vivo e uso de tráfego",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "Um por linha: host, domain:/full:/keyword:/geosite:. Ao sair do campo ou salvar, viram regras DOMAIN-* com destino WARP na lista abaixo. Depois gere e aplique.",
     "groupDeleted": "Grupo excluído",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "comportamento",
+    "rpFormat": "formato",
+    "rpUrlRequired": "Obrigatório para type=http",
+    "rpPathDefault": "Opcional; padrão ./rule-providers/{name}.{format}",
+    "rpInterval": "intervalo (s)",
+    "rpProxyDownload": "proxy (download)",
+    "rpPayload": "payload (embutido, um por linha)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Intervalo (s)",
+    "missingType": "tipo ausente",
+    "missingTarget": "destino ausente",
+    "missingPayload": "payload ausente",
+},
   "settings": {
     "navPanel": "Painel / UI",
     "navAccess": "Perfil de acesso",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Mudar para o canal de pré-lançamento",
     "switchToStable": "Mudar para o canal estável",
 
-  },
+      "clientId": "ID do cliente",
+    "clientSecret": "Segredo do cliente",
+    "webPathPrefix": "Prefixo do caminho web",
+},
   "share": {
     "title": "Compartilhar",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Página de informações (HTML)",
     "exportAll": "Exportar todos os links de assinatura",
     "exported": "Links de assinatura exportados"
-  },
+  ,    "exportFailed": "falha ao exportar",
+},
 } as const;

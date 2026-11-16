@@ -725,7 +725,7 @@ const Users: React.FC = () => {
                         }}
                         trigger={['click']}
                       >
-                        <Button type="text" icon={<IconMore />} aria-label="actions" />
+                        <Button type="text" icon={<IconMore />} aria-label={t('common.actions')} />
                       </Dropdown>
                     </div>
                   </div>
@@ -778,7 +778,7 @@ const Users: React.FC = () => {
             label={t('users.trafficLimitGB') || 'Traffic limit (GB)'}
             tooltip={t('users.trafficLimitHint') || '0 = unlimited. Counts billed traffic (raw × node multiplier).'}
           >
-            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder="0 = unlimited" />
+            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder={t('users.zeroUnlimited')} />
           </Form.Item>
           <Form.Item
             name="ip_limit"
@@ -810,10 +810,10 @@ const Users: React.FC = () => {
             <Input placeholder="tag1,tag2" allowClear />
           </Form.Item>
           <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays', 'Traffic reset cycle (days)')} extra={t('users.trafficResetDaysHint', '0 = off')} tooltip={fieldTip(t, 'users.traffic_reset_daysHint')}>
-            <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
+            <InputNumber min={0} style={{ width: '100%' }} placeholder={t('users.zeroOff')} />
           </Form.Item>
           <Form.Item name="expire_renew_days" label={t('users.expireRenewDays', 'Expire renew cycle (days)')} extra={t('users.expireRenewDaysHint', '0 = off')} tooltip={fieldTip(t, 'users.expire_renew_daysHint')}>
-            <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = off" />
+            <InputNumber min={0} style={{ width: '100%' }} placeholder={t('users.zeroOff')} />
           </Form.Item>
           <Form.Item name="remark" label={t('users.remark') || 'Remark'} tooltip={fieldTip(t, 'users.remarkHint')}>
             <Input maxLength={255} />

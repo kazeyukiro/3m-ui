@@ -135,7 +135,7 @@ const SharePage: React.FC = () => {
     } catch (e: any) {
       setUriMap((m) => ({
         ...m,
-        [nodeId]: { uris: [], loading: false, error: e.message || 'failed' },
+        [nodeId]: { uris: [], loading: false, error: e.message || t('common.failed') },
       }));
     }
   };
@@ -201,7 +201,7 @@ const SharePage: React.FC = () => {
                 <span>{n.name}</span>
                 <Tag>{n.protocol}</Tag>
                 <Tag>{n.port}</Tag>
-                {!n.enabled && <Tag color="default">off</Tag>}
+                {!n.enabled && <Tag color="default">{t('common.off')}</Tag>}
               </Space>
             ),
             children: (
@@ -240,7 +240,7 @@ const SharePage: React.FC = () => {
               await copyText(lines.join('\n'));
               message.success(`${t('share.exported', 'Exported subscription links')} (${res.count})`);
             } catch (e: any) {
-              message.error(e?.message || 'export failed');
+              message.error(e?.message || t('share.exportFailed'));
             }
           }}
         >
@@ -262,7 +262,7 @@ const SharePage: React.FC = () => {
             onChange={(v) => setUserId(v)}
             options={users.map((u) => ({
               value: u.id,
-              label: `${u.username}${u.remark ? ` (${u.remark})` : ''}${u.enabled === false ? ' [off]' : ''}`,
+              label: `${u.username}${u.remark ? ` (${u.remark})` : ''}${u.enabled === false ? ` [${t('common.off')}]` : ''}`,
             }))}
           />
           {selected && (

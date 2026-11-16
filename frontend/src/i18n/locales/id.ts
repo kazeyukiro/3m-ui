@@ -34,7 +34,9 @@ export default {
       "ipv6": "Alamat tunnel IPv6",
       "peers": "Peer WireGuard"
     }
-  },
+  ,    "configNoYaml": "Pembuatan konfigurasi tidak mengembalikan YAML",
+    "valueType": "Jenis nilai",
+},
   "realityScan": {
     "required": "Pilih target REALITY atau isi manual.",
     "placeholder": "Hostname target:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Saat ini",
     "searchNavigate": "Navigasi",
     "searchSelect": "Buka"
-  },
+  ,    "main": "Utama",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "Sebelumnya",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "Hilang",
     "deleted": "Dihapus",
-  },
+      "failed": "gagal",
+    "admin": "Administrator",
+    "qrCode": "Kode QR",
+    "isRequired": "wajib diisi",
+    "url": "URL",
+    "off": "mati",
+},
   "login": {
     "title": "Masuk",
     "subtitle": "Panel Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "Header Host pada langganan klien (CDN). Biarkan kosong untuk memakai SNI atau host publik otomatis.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "pembuatan gagal",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 dual-stack: :: · spesifik: 2001:db8::1",
+    "sudokuKeyHint": "Kosongkan untuk membuat otomatis",
+    "encryptionPlaceholder": "hanya ekspor klien",
+    "realityDestRequired": "Tujuan REALITY wajib diisi",
+},
   "core": {
     "title": "Core",
     "subtitle": "Status dan kontrol inti Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = tanpa batas",
+    "zeroOff": "0 = mati",
+},
   "traffic": {
     "title": "Lalu lintas",
     "subtitle": "Koneksi langsung dan penggunaan lalu lintas",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "Satu per baris: host, domain:/full:/keyword:/geosite:. Saat blur/simpan, ini menjadi aturan DOMAIN-* yang mengarah ke WARP di daftar bawah. Lalu Buat & terapkan.",
     "groupDeleted": "Grup dihapus",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "perilaku",
+    "rpFormat": "format",
+    "rpUrlRequired": "Wajib untuk type=http",
+    "rpPathDefault": "Opsional; bawaan ./rule-providers/{name}.{format}",
+    "rpInterval": "interval (s)",
+    "rpProxyDownload": "proxy (unduh)",
+    "rpPayload": "payload (sebaris, satu per baris)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Interval (s)",
+    "missingType": "jenis tidak ada",
+    "missingTarget": "target tidak ada",
+    "missingPayload": "payload tidak ada",
+},
   "settings": {
     "navPanel": "Panel / UI",
     "navAccess": "Profil akses",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Beralih ke kanal prarilis",
     "switchToStable": "Beralih ke kanal stabil",
 
-  },
+      "clientId": "ID klien",
+    "clientSecret": "Rahasia klien",
+    "webPathPrefix": "Awalan jalur web",
+},
   "share": {
     "title": "Bagikan",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Halaman info (HTML)",
     "exportAll": "Ekspor semua tautan langganan",
     "exported": "Tautan langganan diekspor"
-  },
+  ,    "exportFailed": "ekspor gagal",
+},
 } as const;

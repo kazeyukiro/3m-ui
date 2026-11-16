@@ -34,7 +34,9 @@ export default {
       "ipv6": "トンネル IPv6 アドレス",
       "peers": "WireGuard ピア"
     }
-  },
+  ,    "configNoYaml": "設定の生成で YAML が返されませんでした",
+    "valueType": "値の種類",
+},
   "realityScan": {
     "required": "Reality ターゲットを選択するか手動で入力してください。",
     "placeholder": "ターゲットホスト名:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "現在",
     "searchNavigate": "移動",
     "searchSelect": "開く"
-  },
+  ,    "main": "メイン",
+},
   "common": {
     "advanced": "詳細設定",
     "prev": "前へ",
@@ -124,7 +127,13 @@ export default {
     "bound": "紐付け済み",
     "missing": "不足",
     "deleted": "削除済み",
-  },
+      "failed": "失敗",
+    "admin": "管理者",
+    "qrCode": "QRコード",
+    "isRequired": "は必須です",
+    "url": "URL",
+    "off": "オフ",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Mihomo コア管理コンソール",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "クライアント購読の Host ヘッダー（CDN）。空にすると SNI または公開ホストを自動使用します。",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "生成失敗",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 デュアルスタック: :: · 指定: 2001:db8::1",
+    "sudokuKeyHint": "空欄の場合は自動生成",
+    "encryptionPlaceholder": "クライアント書き出しのみ",
+    "realityDestRequired": "REALITY の宛先が必要です",
+},
   "core": {
     "title": "コア管理",
     "subtitle": "Mihomo コアの状態と制御",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = 無制限",
+    "zeroOff": "0 = オフ",
+},
   "traffic": {
     "title": "トラフィック",
     "subtitle": "リアルタイム接続とトラフィック使用量",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "1 行に 1 件：ドメイン、または domain:/full:/keyword:/geosite:。フォーカス解除・保存時に下の規則一覧へ（ターゲット WARP）書き込まれます。その後「生成して適用」してください。",
     "groupDeleted": "グループを削除しました",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "動作",
+    "rpFormat": "形式",
+    "rpUrlRequired": "type=http の場合は必須",
+    "rpPathDefault": "任意；既定値 ./rule-providers/{name}.{format}",
+    "rpInterval": "間隔（秒）",
+    "rpProxyDownload": "プロキシ（ダウンロード）",
+    "rpPayload": "ペイロード（直接入力、1行につき1項目）",
+    "groupUrl": "URL（url-test）",
+    "groupInterval": "間隔（秒）",
+    "missingType": "タイプがありません",
+    "missingTarget": "ターゲットがありません",
+    "missingPayload": "ペイロードがありません",
+},
   "settings": {
     "navPanel": "パネル / UI",
     "navAccess": "アクセスプロファイル",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "プレリリースチャンネルに切り替え",
     "switchToStable": "安定チャンネルに切り替え",
 
-  },
+      "clientId": "クライアント ID",
+    "clientSecret": "クライアントシークレット",
+    "webPathPrefix": "Web パスのプレフィックス",
+},
   "share": {
     "title": "共有",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "情報ページ (HTML)",
     "exportAll": "すべての購読リンクをエクスポート",
     "exported": "購読リンクをエクスポートしました"
-  },
+  ,    "exportFailed": "エクスポート失敗",
+},
 } as const;

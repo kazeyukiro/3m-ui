@@ -34,7 +34,9 @@ export default {
       "ipv6": "Adresse IPv6 du tunnel",
       "peers": "Pairs WireGuard"
     }
-  },
+  ,    "configNoYaml": "La génération de la configuration n'a renvoyé aucun YAML",
+    "valueType": "Type de valeur",
+},
   "realityScan": {
     "required": "Choisissez une cible REALITY ou saisissez-en une manuellement.",
     "placeholder": "Nom d’hôte cible:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "Actuel",
     "searchNavigate": "Naviguer",
     "searchSelect": "Ouvrir"
-  },
+  ,    "main": "Principal",
+},
   "common": {
     "advanced": "Avancé",
     "prev": "Précédent",
@@ -124,7 +127,13 @@ export default {
     "bound": "Lié",
     "missing": "Manquant",
     "deleted": "Supprimé",
-  },
+      "failed": "échec",
+    "admin": "Administrateur",
+    "qrCode": "Code QR",
+    "isRequired": "est requis",
+    "url": "URL",
+    "off": "désactivé",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Console de gestion du noyau Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "En-tête Host dans l'abonnement client (CDN). Vide pour utiliser automatiquement SNI ou l'hôte public.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "échec de la génération",
+    "bindAddressTip": "IPv4 : 0.0.0.0 · IPv6 double pile : :: · spécifique : 2001:db8::1",
+    "sudokuKeyHint": "Laissez vide pour générer automatiquement",
+    "encryptionPlaceholder": "export client uniquement",
+    "realityDestRequired": "La destination REALITY est requise",
+},
   "core": {
     "title": "Gestion du noyau",
     "subtitle": "État et contrôle du noyau Mihomo",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = illimité",
+    "zeroOff": "0 = désactivé",
+},
   "traffic": {
     "title": "Trafic",
     "subtitle": "Connexions en direct et utilisation du trafic",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "Un par ligne : hôte, domain:/full:/keyword:/geosite:. À la perte de focus ou à l’enregistrement, ils deviennent des règles DOMAIN-* ciblant WARP dans la liste ci-dessous. Générez et appliquez ensuite.",
     "groupDeleted": "Groupe supprimé",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "comportement",
+    "rpFormat": "format",
+    "rpUrlRequired": "Requis pour type=http",
+    "rpPathDefault": "Facultatif ; valeur par défaut ./rule-providers/{name}.{format}",
+    "rpInterval": "intervalle (s)",
+    "rpProxyDownload": "proxy (téléchargement)",
+    "rpPayload": "charge utile (en ligne, une par ligne)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "Intervalle (s)",
+    "missingType": "type manquant",
+    "missingTarget": "cible manquante",
+    "missingPayload": "charge utile manquante",
+},
   "settings": {
     "navPanel": "Panneau / UI",
     "navAccess": "Profil d'accès",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "Passer au canal préversion",
     "switchToStable": "Passer au canal stable",
 
-  },
+      "clientId": "Identifiant client",
+    "clientSecret": "Secret client",
+    "webPathPrefix": "Préfixe du chemin web",
+},
   "share": {
     "title": "Partager",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "Page d’info (HTML)",
     "exportAll": "Exporter tous les liens d’abonnement",
     "exported": "Liens d’abonnement exportés"
-  },
+  ,    "exportFailed": "échec de l'export",
+},
 } as const;

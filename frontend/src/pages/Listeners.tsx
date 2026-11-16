@@ -341,7 +341,7 @@ const columns = [
                           }}
                           trigger={['click']}
                         >
-                          <Button type="text" icon={<IconMore />} aria-label="actions" />
+                          <Button type="text" icon={<IconMore />} aria-label={t('common.actions')} />
                         </Dropdown>
                       </div>
                     </div>
@@ -369,7 +369,7 @@ const columns = [
             otherwise both rules fire and AntD renders the same "required" message twice.
             `whitespace` makes a spaces-only value count as empty too. */}
         <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, whitespace: true, message: t('listeners.portRequired') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.resolve(); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portFormat'))); return Promise.resolve(); } }]}><Input placeholder="443" addonAfter={!editing ? <Button type="link" size="small" onClick={regeneratePort}>{t('listeners.randomPort')}</Button> : undefined} /></Form.Item>
-        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip="IPv4: 0.0.0.0 · IPv6 dual-stack: :: · specific: 2001:db8::1"><Input placeholder="0.0.0.0 or ::" /></Form.Item>
+        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip={t('listeners.bindAddressTip')}><Input placeholder="0.0.0.0 or ::" /></Form.Item>
         <Form.Item name="enabled" label={runtimeText.enabledSetting} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         <Form.Item
           name="traffic_multiplier"

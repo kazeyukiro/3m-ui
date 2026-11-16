@@ -36,7 +36,7 @@ const HeaderBar: React.FC<Props> = ({ collapsed, setCollapsed }) => {
     { key: 'system', label: t('settings.system') },
   ];
 
-  const displayName = username || 'Admin';
+  const displayName = username || t('common.admin');
   const shortName = displayName.length > 8 ? `${displayName.slice(0, 8)}…` : displayName;
 
   return (

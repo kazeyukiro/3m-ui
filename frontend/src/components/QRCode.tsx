@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useI18n } from '../i18n';
 import QRCodeLib from 'qrcode';
 
 interface QRCodeProps {
@@ -19,6 +20,7 @@ interface QRCodeProps {
  */
 export default function QRCode({ value, size = 160, className }: QRCodeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!canvasRef.current || !value) return;
@@ -41,7 +43,7 @@ export default function QRCode({ value, size = 160, className }: QRCodeProps) {
       height={size}
       className={className}
       role="img"
-      aria-label="QR code"
+      aria-label={t('common.qrCode')}
     />
   );
 }

@@ -4,7 +4,7 @@ import { message,
 } from 'antd';
 import { generateMaterial } from '../api/listeners';
 import { IconRemoveField, IconAddField } from '../icons';
-import { useI18n, fieldTip } from '../i18n';
+import { useI18n, fieldTip, tStatic } from '../i18n';
 import RealityTargetFields from './RealityTargetFields';
 
 const { Text } = Typography;
@@ -697,7 +697,7 @@ export function formValuesToConfig(
   if (realityOn) {
     // Always emit reality-config so backend Autofill can fill empty private-key / short-id.
     const dest = (values.reality_dest && String(values.reality_dest).trim()) || '';
-    if (!dest) throw new Error('REALITY destination is required');
+    if (!dest) throw new Error(tStatic('listeners.realityDestRequired'));
     const reality: Record<string, any> = { dest, 'private-key': values.reality_private_key || '' };
     if (values.reality_short_id != null && values.reality_short_id !== '') {
       reality['short-id'] = values.reality_short_id;
@@ -991,7 +991,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       }
       message.success(t('common.generated') || 'Generated');
     } catch (e: any) {
-      message.error(e?.message || 'generate failed');
+      message.error(e?.message || t('listeners.generateFailed'));
     }
   };
   if (!protocol) {
@@ -1172,7 +1172,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
             label={t('listeners.encryption') || 'encryption (client)'}
             tooltip={fieldTip(t, 'listeners.encryptionHint', 'Client-only; used in subscription export, not inbound YAML.')}
           >
-            <Input.TextArea rows={2} placeholder="client export only" />
+            <Input.TextArea rows={2} placeholder={t('listeners.encryptionPlaceholder')} />
           </Form.Item>
         </>
       )}
@@ -1389,7 +1389,7 @@ const ListenerConfigFields: React.FC<Props> = ({ protocol, autoSelectReality = f
       {protocol === 'sudoku' && (
         <>
           <Divider titlePlacement="start" plain>{t('listeners.sectionProtocol')}</Divider>
-          <Form.Item name="key" label={t('listeners.sudokuKey')} tooltip="Leave empty to auto-generate">
+          <Form.Item name="key" label={t('listeners.sudokuKey')} tooltip={t('listeners.sudokuKeyHint')}>
             <Input.Password />
           </Form.Item>
           <Form.Item name="aead-method" label={t('listeners.aeadMethod')} tooltip={fieldTip(t, 'listeners.aead-methodHint')}>

@@ -943,10 +943,10 @@ const Settings: React.FC = () => {
                   <Form.Item name="enabled" label={t('settings.githubOAuthEnable') || 'Enable'} valuePropName="checked" tooltip={fieldTip(t, 'settings.githubOAuthEnableHint')}>
                     <Switch />
                   </Form.Item>
-                  <Form.Item name="client_id" label="Client ID" rules={[{ required: false }]} tooltip={fieldTip(t, 'settings.githubClientIdHint')}>
+                  <Form.Item name="client_id" label={t('settings.clientId')} rules={[{ required: false }]} tooltip={fieldTip(t, 'settings.githubClientIdHint')}>
                     <Input placeholder="Ov23..." autoComplete="off" />
                   </Form.Item>
-                  <Form.Item name="client_secret" label="Client Secret" tooltip={fieldTip(t, 'settings.githubClientSecretHint')}>
+                  <Form.Item name="client_secret" label={t('settings.clientSecret')} tooltip={fieldTip(t, 'settings.githubClientSecretHint')}>
                     <Input.Password placeholder="github_oauth_..." autoComplete="new-password" />
                   </Form.Item>
                   <Form.Item

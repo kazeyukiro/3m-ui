@@ -285,14 +285,14 @@ const RoutingPage: React.FC = () => {
   const onSaveRules = async () => {
     const current = scope === 'server' ? serverRules : rules;
     const issues = validateRules(current);
-    const hard = issues.filter((i) => !i.message.includes('recommended'));
+    const hard = issues.filter((i) => !i.recommended);
     if (hard.length) {
       message.error(
         (t('routing.ruleInvalid') || 'Invalid rules') +
           ': #' +
           (hard[0].index + 1) +
           ' ' +
-          hard[0].message,
+          t(hard[0].key, hard[0].message),
       );
       return;
     }
@@ -681,10 +681,10 @@ const RoutingPage: React.FC = () => {
             destroyOnHidden
           >
             <Form form={rpForm} layout="vertical" size="small">
-              <Form.Item name="name" label="name" rules={[{ required: true }]}>
+              <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
                 <Input placeholder="gfw" />
               </Form.Item>
-              <Form.Item name="type" label="type" initialValue="http">
+              <Form.Item name="type" label={t('common.type')} initialValue="http">
                 <Select
                   options={[
                     { value: 'http', label: 'http' },
@@ -693,7 +693,7 @@ const RoutingPage: React.FC = () => {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="behavior" label="behavior" initialValue="domain">
+              <Form.Item name="behavior" label={t('routing.rpBehavior')} initialValue="domain">
                 <Select
                   options={[
                     { value: 'domain', label: 'domain' },
@@ -702,7 +702,7 @@ const RoutingPage: React.FC = () => {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="format" label="format" initialValue="mrs">
+              <Form.Item name="format" label={t('routing.rpFormat')} initialValue="mrs">
                 <Select
                   options={[
                     { value: 'mrs', label: 'mrs' },
@@ -711,19 +711,19 @@ const RoutingPage: React.FC = () => {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="url" label="url" extra="Required for type=http">
+              <Form.Item name="url" label={t('common.url', 'URL')} extra={t('routing.rpUrlRequired')}>
                 <Input placeholder="https://..." />
               </Form.Item>
-              <Form.Item name="path" label="path" extra="Optional; default ./rule-providers/{name}.{format}">
+              <Form.Item name="path" label={t('listeners.path')} extra={t('routing.rpPathDefault')}>
                 <Input placeholder="./rule-providers/gfw.mrs" />
               </Form.Item>
-              <Form.Item name="interval" label="interval (s)" initialValue={86400}>
+              <Form.Item name="interval" label={t('routing.rpInterval')} initialValue={86400}>
                 <InputNumber min={60} style={{ width: '100%' }} />
               </Form.Item>
-              <Form.Item name="proxy" label="proxy (download)" initialValue="DIRECT">
+              <Form.Item name="proxy" label={t('routing.rpProxyDownload')} initialValue="DIRECT">
                 <Input placeholder="DIRECT" />
               </Form.Item>
-              <Form.Item name="payload" label="payload (inline, one per line)">
+              <Form.Item name="payload" label={t('routing.rpPayload')}>
                 <Input.TextArea rows={3} placeholder="DOMAIN-SUFFIX,example.com" />
               </Form.Item>
             </Form>
@@ -1012,10 +1012,10 @@ const RoutingPage: React.FC = () => {
               options={targetOptions}
             />
           </Form.Item>
-          <Form.Item name="url" label="URL (url-test)">
+          <Form.Item name="url" label={t('routing.groupUrl')}>
             <Input placeholder="http://www.gstatic.com/generate_204" />
           </Form.Item>
-          <Form.Item name="interval" label="Interval (s)">
+          <Form.Item name="interval" label={t('routing.groupInterval')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Form>

@@ -34,7 +34,9 @@ export default {
       "ipv6": "عنوان النفق IPv6",
       "peers": "نظراء WireGuard"
     }
-  },
+  ,    "configNoYaml": "لم يُرجع إنشاء التكوين أي YAML",
+    "valueType": "نوع القيمة",
+},
   "realityScan": {
     "required": "اختر هدف REALITY أو أدخله يدويًا.",
     "placeholder": "اسم المضيف:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "الحالي",
     "searchNavigate": "تنقل",
     "searchSelect": "فتح"
-  },
+  ,    "main": "الرئيسية",
+},
   "common": {
     "advanced": "Advanced",
     "prev": "السابق",
@@ -124,7 +127,13 @@ export default {
     "bound": "Bound",
     "missing": "مفقود",
     "deleted": "تم الحذف",
-  },
+      "failed": "فشل",
+    "admin": "المسؤول",
+    "qrCode": "رمز QR",
+    "isRequired": "مطلوب",
+    "url": "URL",
+    "off": "متوقف",
+},
   "login": {
     "title": "تسجيل الدخول",
     "subtitle": "لوحة Mihomo",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "ترويسة Host في اشتراك العميل (CDN). اتركها فارغة لاستخدام SNI أو المضيف العام تلقائياً.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "فشل الإنشاء",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 مزدوج المكدس: :: · محدد: 2001:db8::1",
+    "sudokuKeyHint": "اتركه فارغًا للإنشاء التلقائي",
+    "encryptionPlaceholder": "تصدير العميل فقط",
+    "realityDestRequired": "مطلوب وجهة REALITY",
+},
   "core": {
     "title": "النواة",
     "subtitle": "حالة نواة Mihomo والتحكم بها",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = غير محدود",
+    "zeroOff": "0 = متوقف",
+},
   "traffic": {
     "title": "المرور",
     "subtitle": "الاتصالات الحية واستخدام البيانات",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "سطر لكل نطاق: host أو domain:/full:/keyword:/geosite:. عند فقدان التركيز/الحفظ تتحول إلى قواعد DOMAIN-* تستهدف WARP في القائمة أدناه. ثم أنشئ وطبّق.",
     "groupDeleted": "تم حذف المجموعة",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "السلوك",
+    "rpFormat": "التنسيق",
+    "rpUrlRequired": "مطلوب لـ type=http",
+    "rpPathDefault": "اختياري؛ الافتراضي ./rule-providers/{name}.{format}",
+    "rpInterval": "الفاصل (ث)",
+    "rpProxyDownload": "الوكيل (التنزيل)",
+    "rpPayload": "الحمولة (مضمنة، واحدة لكل سطر)",
+    "groupUrl": "URL (url-test)",
+    "groupInterval": "الفاصل (ث)",
+    "missingType": "النوع مفقود",
+    "missingTarget": "الهدف مفقود",
+    "missingPayload": "الحمولة مفقودة",
+},
   "settings": {
     "navPanel": "اللوحة / الواجهة",
     "navAccess": "ملف الوصول",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "التبديل إلى قناة الإصدارات التجريبية",
     "switchToStable": "التبديل إلى القناة المستقرة",
 
-  },
+      "clientId": "معرّف العميل",
+    "clientSecret": "سر العميل",
+    "webPathPrefix": "بادئة مسار الويب",
+},
   "share": {
     "title": "مشاركة",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "صفحة المعلومات (HTML)",
     "exportAll": "تصدير كل روابط الاشتراك",
     "exported": "تم تصدير روابط الاشتراك"
-  },
+  ,    "exportFailed": "فشل التصدير",
+},
 } as const;

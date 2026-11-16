@@ -43,7 +43,7 @@ import { useI18n } from '../i18n';
 import PageHeader from '../components/PageHeader';
 import useIsMobile from '../hooks/useIsMobile';
 
-const errMsg = (e: any) => e?.message || e?.response?.data?.error || 'failed';
+const errMsg = (e: any, t: (key: string, fallback?: string) => string) => e?.message || e?.response?.data?.error || t('common.failed');
 
 const ClusterPage: React.FC = () => {
   const { t } = useI18n();
@@ -84,7 +84,7 @@ const ClusterPage: React.FC = () => {
     try {
       setData(await fetchCluster());
     } catch (e: any) {
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     } finally {
       setLoading(false);
     }
@@ -107,7 +107,7 @@ const ClusterPage: React.FC = () => {
       const list = await fetchListeners();
       setLocalNodes(Array.isArray(list) ? list : []);
     } catch (e: any) {
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
       setLocalNodes([]);
     } finally {
       setLocalNodesLoading(false);
@@ -127,7 +127,7 @@ const ClusterPage: React.FC = () => {
       setPushPreview(JSON.stringify(payload, null, 2));
     } catch (e: any) {
       setPushPreview('');
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     }
   };
 
@@ -186,7 +186,7 @@ const ClusterPage: React.FC = () => {
         },
       });
     } catch (e: any) {
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     } finally {
       setPushBusy(false);
     }
@@ -200,7 +200,7 @@ const ClusterPage: React.FC = () => {
       setRemoteServerId(id);
       message.success(t('cluster.nodesLoaded') || 'Loaded remote nodes');
     } catch (e: any) {
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     }
   };
 
@@ -219,7 +219,7 @@ const ClusterPage: React.FC = () => {
       remoteForm.resetFields();
       await loadRemoteNodes(remoteServerId);
     } catch (e: any) {
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     }
   };
 
@@ -230,7 +230,7 @@ const ClusterPage: React.FC = () => {
       message.success(t('cluster.remoteDeleted') || 'Deleted');
       await loadRemoteNodes(remoteServerId);
     } catch (e: any) {
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     }
   };
 
@@ -250,7 +250,7 @@ const ClusterPage: React.FC = () => {
       load();
     } catch (e: any) {
       if (e?.errorFields) return;
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     }
   };
 
@@ -283,7 +283,7 @@ const ClusterPage: React.FC = () => {
       load();
     } catch (e: any) {
       if (e?.errorFields) return;
-      message.error(errMsg(e));
+      message.error(errMsg(e, t));
     }
   };
 
@@ -332,7 +332,7 @@ const ClusterPage: React.FC = () => {
                 message.success(t('cluster.healthDone') || 'Health checked');
                 load();
               } catch (e: any) {
-                message.error(errMsg(e));
+                message.error(errMsg(e, t));
               }
             }}
           >
@@ -350,7 +350,7 @@ const ClusterPage: React.FC = () => {
                 setDashData(await fetchRemoteDashboard(r.id));
                 setDashOpen(true);
               } catch (e: any) {
-                message.error(errMsg(e));
+                message.error(errMsg(e, t));
               }
             }}
           >
@@ -367,7 +367,7 @@ const ClusterPage: React.FC = () => {
                 await syncRemoteNodes(r.id);
                 message.success(t('cluster.syncDone') || 'Synced');
               } catch (e: any) {
-                message.error(errMsg(e));
+                message.error(errMsg(e, t));
               }
             }}
           >
@@ -386,7 +386,7 @@ const ClusterPage: React.FC = () => {
                 setRemoteUsers(Array.isArray(u) ? u : u?.items || []);
                 setUsersOpen(true);
               } catch (e: any) {
-                message.error(errMsg(e));
+                message.error(errMsg(e, t));
               }
             }}
           >
@@ -400,7 +400,7 @@ const ClusterPage: React.FC = () => {
                 await remoteRestartCore(r.id);
                 message.success(t('cluster.restarted') || 'Core restarted');
               } catch (e: any) {
-                message.error(errMsg(e));
+                message.error(errMsg(e, t));
               }
             }}
           >
@@ -423,7 +423,7 @@ const ClusterPage: React.FC = () => {
                 message.success(t('cluster.deleted') || 'Deleted');
                 load();
               } catch (e: any) {
-                message.error(errMsg(e));
+                message.error(errMsg(e, t));
               }
             }}
           >
@@ -447,7 +447,7 @@ const ClusterPage: React.FC = () => {
                   setData(await healthAllCluster());
                   message.success(t('cluster.healthAllDone') || 'Health check done');
                 } catch (e: any) {
-                  message.error(errMsg(e));
+                  message.error(errMsg(e, t));
                 }
               }}
             >
@@ -562,10 +562,10 @@ const ClusterPage: React.FC = () => {
             <Input placeholder={t('cluster.colName') || 'Name'} />
           </Form.Item>
           <Form.Item name="protocol" rules={[{ required: true }]} initialValue="vless">
-            <Input placeholder="protocol" style={{ width: 100 }} />
+            <Input placeholder={t('listeners.protocol')} style={{ width: 100 }} />
           </Form.Item>
           <Form.Item name="port" rules={[{ required: true }]}>
-            <Input placeholder="port" style={{ width: 90 }} />
+            <Input placeholder={t('common.port')} style={{ width: 90 }} />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" icon={<IconAddNode />}>
@@ -613,7 +613,7 @@ const ClusterPage: React.FC = () => {
                     await remoteStartCore(ctrlId!);
                     message.success(t('cluster.operationOk') || t('common.ok'));
                   } catch (e: any) {
-                    message.error(errMsg(e));
+                    message.error(errMsg(e, t));
                   }
                 }}
               >
@@ -627,7 +627,7 @@ const ClusterPage: React.FC = () => {
                     await remoteStopCore(ctrlId!);
                     message.success(t('cluster.operationOk') || t('common.ok'));
                   } catch (e: any) {
-                    message.error(errMsg(e));
+                    message.error(errMsg(e, t));
                   }
                 }}
               >
@@ -641,7 +641,7 @@ const ClusterPage: React.FC = () => {
                     await remoteRestartCore(ctrlId!);
                     message.success(t('cluster.operationOk') || t('common.ok'));
                   } catch (e: any) {
-                    message.error(errMsg(e));
+                    message.error(errMsg(e, t));
                   }
                 }}
               >
@@ -729,7 +729,7 @@ const ClusterPage: React.FC = () => {
             }}
             options={localNodes.map((n) => ({
               value: normalizeId(n),
-              label: `${n.name} · ${n.protocol || '?'} · :${n.port || '?'}${n.enabled ? '' : ' (off)'}`,
+              label: `${n.name} · ${n.protocol || '?'} · :${n.port || '?'}${n.enabled ? '' : ` (${t('common.off')})`}`,
             }))}
             notFoundContent={
               localNodesLoading

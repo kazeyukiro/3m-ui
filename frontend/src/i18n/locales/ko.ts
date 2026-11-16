@@ -34,7 +34,9 @@ export default {
       "ipv6": "터널 IPv6 주소",
       "peers": "WireGuard 피어"
     }
-  },
+  ,    "configNoYaml": "구성 생성에서 YAML이 반환되지 않았습니다",
+    "valueType": "값 유형",
+},
   "realityScan": {
     "required": "Reality 대상을 선택하거나 수동으로 입력하세요.",
     "placeholder": "대상 호스트명:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "현재",
     "searchNavigate": "이동",
     "searchSelect": "열기"
-  },
+  ,    "main": "메인",
+},
   "common": {
     "advanced": "고급",
     "prev": "이전",
@@ -124,7 +127,13 @@ export default {
     "bound": "연결됨",
     "missing": "누락",
     "deleted": "삭제됨",
-  },
+      "failed": "실패",
+    "admin": "관리자",
+    "qrCode": "QR 코드",
+    "isRequired": "은(는) 필수입니다",
+    "url": "URL",
+    "off": "꺼짐",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Mihomo 코어 관리 콘솔",
@@ -592,7 +601,12 @@ export default {
     "wsHostHint": "클라이언트 구독의 Host 헤더 (CDN). 비우면 SNI 또는 공개 호스트를 자동 사용합니다.",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "생성 실패",
+    "bindAddressTip": "IPv4: 0.0.0.0 · IPv6 듀얼 스택: :: · 지정: 2001:db8::1",
+    "sudokuKeyHint": "비워 두면 자동 생성",
+    "encryptionPlaceholder": "클라이언트 내보내기 전용",
+    "realityDestRequired": "REALITY 대상이 필요합니다",
+},
   "core": {
     "title": "코어 관리",
     "subtitle": "Mihomo 코어 상태 및 제어",
@@ -886,7 +900,9 @@ export default {
     "enabledHint": "Disabled users cannot authenticate or pull subscription.",
     "bind_all_listenersHint": "When on, user is allowed on every node; when off, pick nodes explicitly.",
 
-  },
+      "zeroUnlimited": "0 = 무제한",
+    "zeroOff": "0 = 꺼짐",
+},
   "traffic": {
     "title": "트래픽",
     "subtitle": "실시간 연결 및 트래픽 사용량",
@@ -1043,7 +1059,19 @@ export default {
     "warpDomainsHint": "한 줄에 하나: 호스트 또는 domain:/full:/keyword:/geosite:. 포커스 해제/저장 시 아래 규칙 목록에 WARP 대상 규칙으로 추가됩니다. 그런 다음 생성 및 적용을 누르세요.",
     "groupDeleted": "그룹이 삭제되었습니다",
     "templates": "Templates"
-  },
+  ,    "rpBehavior": "동작",
+    "rpFormat": "형식",
+    "rpUrlRequired": "type=http일 때 필수",
+    "rpPathDefault": "선택 사항; 기본값 ./rule-providers/{name}.{format}",
+    "rpInterval": "간격(초)",
+    "rpProxyDownload": "프록시(다운로드)",
+    "rpPayload": "페이로드(인라인, 한 줄에 하나)",
+    "groupUrl": "URL(url-test)",
+    "groupInterval": "간격(초)",
+    "missingType": "유형 누락",
+    "missingTarget": "대상 누락",
+    "missingPayload": "페이로드 누락",
+},
   "settings": {
     "navPanel": "패널 / UI",
     "navAccess": "액세스 프로필",
@@ -1334,7 +1362,10 @@ export default {
     "switchToPre": "프리릴리스 채널로 전환",
     "switchToStable": "안정 채널로 전환",
 
-  },
+      "clientId": "클라이언트 ID",
+    "clientSecret": "클라이언트 시크릿",
+    "webPathPrefix": "웹 경로 접두사",
+},
   "share": {
     "title": "공유",
     "subtitle": "Unified view of subscription URLs and per-node share URIs for a user.",
@@ -1349,5 +1380,6 @@ export default {
     "subHtml": "정보 페이지 (HTML)",
     "exportAll": "모든 구독 링크 내보내기",
     "exported": "구독 링크를 내보냈습니다"
-  },
+  ,    "exportFailed": "내보내기 실패",
+},
 } as const;

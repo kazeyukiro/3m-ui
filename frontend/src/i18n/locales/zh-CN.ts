@@ -34,7 +34,9 @@ export default {
       "ipv6": "隧道 IPv6 地址",
       "peers": "WireGuard 对等节点"
     }
-  },
+  ,    "configNoYaml": "配置生成未返回 YAML",
+    "valueType": "值类型",
+},
   "realityScan": {
     "required": "请选择 Reality 目标或手动填写。",
     "placeholder": "目标域名:443",
@@ -72,7 +74,8 @@ export default {
     "searchCurrent": "当前",
     "searchNavigate": "切换",
     "searchSelect": "打开"
-  },
+  ,    "main": "主导航",
+},
   "common": {
     "advanced": "高级选项",
     "prev": "上一步",
@@ -124,7 +127,13 @@ export default {
     "bound": "已绑定",
     "missing": "缺失",
     "deleted": "已删除",
-  },
+      "failed": "失败",
+    "admin": "管理员",
+    "qrCode": "二维码",
+    "isRequired": "为必填项",
+    "url": "URL",
+    "off": "关闭",
+},
   "login": {
     "title": "3M-UI",
     "subtitle": "Mihomo 核心管理控制台",
@@ -593,7 +602,12 @@ export default {
     "wsHostHint": "写入客户端订阅的 Host 头（CDN 常用）。留空则自动用 SNI 或公网 Host。",
     "wsHostPlaceholder": "cdn.example.com",
 
-  },
+      "generateFailed": "生成失败",
+    "bindAddressTip": "IPv4：0.0.0.0 · IPv6 双栈：:: · 指定地址：2001:db8::1",
+    "sudokuKeyHint": "留空则自动生成",
+    "encryptionPlaceholder": "仅用于客户端导出",
+    "realityDestRequired": "必须填写 REALITY 目标地址",
+},
   "core": {
     "title": "核心管理",
     "subtitle": "Mihomo 核心状态与控制",
@@ -887,7 +901,9 @@ export default {
     "enabledHint": "关闭后无法认证或拉取订阅。",
     "bind_all_listenersHint": "开启则绑定全部节点；关闭则需手动勾选节点。",
 
-  },
+      "zeroUnlimited": "0 = 不限",
+    "zeroOff": "0 = 关闭",
+},
   "traffic": {
     "title": "流量监控",
     "subtitle": "实时连接与流量统计",
@@ -1044,7 +1060,19 @@ export default {
     "warpDomainsHintShort": "需先在设置中注册 WARP 账户",
     "warpDomainsHint": "每行一条：域名或 domain:/full:/keyword:/geosite:。失焦/保存后会写入下方规则列表（目标 WARP）。然后请生成并应用。",
     "groupDeleted": "策略组已删除"
-  },
+  ,    "rpBehavior": "行为",
+    "rpFormat": "格式",
+    "rpUrlRequired": "type=http 时必填",
+    "rpPathDefault": "可选；默认 ./rule-providers/{name}.{format}",
+    "rpInterval": "间隔（秒）",
+    "rpProxyDownload": "代理（下载）",
+    "rpPayload": "内容（内联，每行一条）",
+    "groupUrl": "URL（url-test）",
+    "groupInterval": "间隔（秒）",
+    "missingType": "缺少类型",
+    "missingTarget": "缺少目标",
+    "missingPayload": "缺少内容",
+},
   "settings": {
     "navPanel": "面板 / 外观",
     "navAccess": "访问档案",
@@ -1335,7 +1363,10 @@ export default {
     "restoreTimeout": "面板 30 秒内未恢复，请手动刷新页面。",
     "switchToPre": "切换到预发布通道",
     "switchToStable": "切换到稳定通道",
-  },
+      "clientId": "客户端 ID",
+    "clientSecret": "客户端密钥",
+    "webPathPrefix": "Web 路径前缀",
+},
   "share": {
     "title": "分享 / 订阅",
     "subtitle": "统一查看用户订阅链接与已绑定节点的分享 URI",
@@ -1350,5 +1381,6 @@ export default {
     "subHtml": "订阅信息页 (HTML)",
     "exportAll": "导出全部订阅链接",
     "exported": "已导出订阅链接"
-  },
+  ,    "exportFailed": "导出失败",
+},
 } as const;
