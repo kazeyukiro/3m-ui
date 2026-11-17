@@ -1,7 +1,10 @@
 package app
 
 import (
+	"log"
+
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/healthcheck"
 	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
 	dbconfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
@@ -28,6 +31,7 @@ type Container struct {
 	ConfigEngine      *dbconfig.ConfigEngine
 	TelegramBot       *telegram.Bot
 	TelegramScheduler *telegram.Scheduler
+	HealthMonitor     *healthcheck.Monitor
 }
 
 func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
@@ -60,6 +64,19 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 	tgScheduler := telegram.NewScheduler(db, mihomoSvc, userSvc, systemSvc, cfg.Database.Path, cfg.Mihomo.Config)
 	tgScheduler.Start()
 
+	// Tunnel health watchdog. Opt-in: it only probes/restarts when persisted
+	// settings have Enabled=true. The adapter uses the mihomo.Service API so
+	// all existing restart guards (core-update busy, config validation,
+	// lifecycle serialization) are honoured.
+	healthCore := &healthCoreAdapter{svc: mihomoSvc}
+	healthMonitor := healthcheck.NewMonitor(nil, healthCore)
+	if saved, err := healthcheck.LoadSettings(db); err == nil {
+		healthMonitor.Apply(saved)
+	} else {
+		log.Printf("[WARNING] load tunnel health settings failed: %v; monitor stays disabled", err)
+	}
+	healthMonitor.Start()
+
 	return &Container{
 		DB:                db,
 		Config:            cfg,
@@ -74,6 +91,7 @@ func NewContainer(db *gorm.DB, cfg *config.Config) *Container {
 		ConfigEngine:      dbconfig.NewConfigEngine(db),
 		TelegramBot:       tgBot,
 		TelegramScheduler: tgScheduler,
+		HealthMonitor:     healthMonitor,
 	}
 }
 
@@ -88,6 +106,7 @@ func (c *Container) RouterDeps() router.Deps {
 		Node:             c.Node,
 		Listener:         c.Listener,
 		System:           c.System,
+		HealthMonitor:    c.HealthMonitor,
 	}
 }
 
@@ -113,5 +132,8 @@ func (c *Container) Shutdown() {
 	}
 	if c.TelegramScheduler != nil {
 		c.TelegramScheduler.Stop()
+	}
+	if c.HealthMonitor != nil {
+		c.HealthMonitor.Stop()
 	}
 }

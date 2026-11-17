@@ -22,6 +22,7 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/cluster"
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/docs"
+	"github.com/kazeyukiro/3m-ui/backend/internal/healthcheck"
 	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
 	mihomoConfig "github.com/kazeyukiro/3m-ui/backend/internal/mihomo/config"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
@@ -148,6 +149,7 @@ func SetupRouterWithDeps(d Deps) *gin.Engine {
 
 		user.NewHandler(d.userService()).RegisterRoutes(apiV1.Group("/users"))
 		telegram.NewHandler(db).RegisterRoutes(apiV1.Group("/telegram"))
+		healthcheck.NewHandler(db, d.HealthMonitor).RegisterRoutes(apiV1.Group("/tunnel-health"))
 		acme.NewHandler(db).RegisterRoutes(apiV1.Group("/system"))
 		subpage.NewHandler(db).RegisterRoutes(apiV1.Group("/system"))
 		cluster.NewHandler(cluster.NewService(db)).RegisterRoutes(apiV1.Group("/cluster"))

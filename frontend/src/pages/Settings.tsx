@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Card,
   Button,
@@ -71,6 +71,7 @@ import {
   deleteWarpAccount,
 } from '../api/system';
 import { fetchTelegramSettings, saveTelegramSettings, testTelegram, setTelegramCommands, TelegramSettings } from '../api/telegram';
+import { fetchTunnelHealthSettings, saveTunnelHealthSettings, fetchTunnelHealthStatus, testTunnelHealth, TunnelHealthSettings } from '../api/tunnelHealth';
 import client from '../api/client';
 import { setupTOTP, enableTOTP, disableTOTP, fetchMe, fetchGithubOAuthSettings, saveGithubOAuthSettings } from '../api/auth';
 import QRCode from '../components/QRCode';
@@ -1876,7 +1877,10 @@ const Settings: React.FC = () => {
           )}
 
           {section === 'ops' && (
-            <SystemOpsCard />
+            <Space direction="vertical" style={{ width: '100%' }} size="large">
+              <TunnelHealthCard />
+              <SystemOpsCard />
+            </Space>
           )}
 
           {section === 'about' && (
@@ -2205,6 +2209,127 @@ function AboutPanelVersion({ subtitle }: { subtitle: string }) {
         </Text>
       ) : null}
     </Space>
+  );
+}
+
+// TunnelHealthCard: opt-in watchdog that probes a URL through the tunnel and
+// restarts the Mihomo core after repeated failures. Kept self-contained so the
+// large Settings page state stays untouched.
+function TunnelHealthCard() {
+  const { t } = useI18n();
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState<{ consecutive_failures: number; total_restarts: number; last_probe: string; last_restart: string; last_error: string } | null>(null);
+
+  const tr = (key: string, fallback: string) => t(key, fallback);
+
+  const loadStatus = useCallback(() => {
+    fetchTunnelHealthStatus()
+      .then((s) => setStatus(s))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchTunnelHealthSettings()
+      .then((s) => form.setFieldsValue(s))
+      .catch((e: any) => message.error(e?.message || tr('common.error', 'Error')));
+    loadStatus();
+    const timer = window.setInterval(loadStatus, 10000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const onSave = async () => {
+    const values = await form.validateFields();
+    setLoading(true);
+    try {
+      await saveTunnelHealthSettings(values as TunnelHealthSettings);
+      message.success(tr('settings.thSaved', 'Tunnel health settings saved'));
+      loadStatus();
+    } catch (e: any) {
+      message.error(e?.message || tr('common.error', 'Error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onTest = async () => {
+    const values = form.getFieldsValue();
+    setTesting(true);
+    try {
+      const res = await testTunnelHealth(values);
+      if (res?.ok) {
+        message.success(tr('settings.thTestOk', 'Probe succeeded') + (res.elapsed_ms != null ? ` (${res.elapsed_ms} ms)` : ''));
+      } else {
+        message.error(tr('settings.thTestFail', 'Probe failed') + (res?.error ? `: ${res.error}` : ''));
+      }
+    } catch (e: any) {
+      message.error(e?.message || tr('common.error', 'Error'));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Card
+      title={<>{tr('settings.thTitle', 'Tunnel Health Watchdog')}</>}
+      extra={
+        status && (status.total_restarts > 0 || status.consecutive_failures > 0) ? (
+          <Tag color={status.consecutive_failures > 0 ? 'warning' : 'default'}>
+            {tr('settings.thFailures', 'Consecutive failures')}: {status.consecutive_failures} · {tr('settings.thRestarts', 'Restarts')}: {status.total_restarts}
+          </Tag>
+        ) : undefined
+      }
+    >
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message={tr('settings.thWarnTitle', 'Restart drops all connected clients')}
+        description={tr('settings.thWarnHint', 'This watchdog restarts the Mihomo core after consecutive probe failures. It is disabled by default; enable it only when you understand that every restart briefly disconnects all clients.')}
+      />
+      <Form form={form} layout="vertical" initialValues={{
+        enabled: false,
+        url: 'https://www.cloudflare.com/cdn-cgi/trace',
+        proxy_url: '',
+        interval: 30, timeout: 10, failures: 3, cooldown: 300,
+      }}>
+        <Form.Item name="enabled" label={tr('settings.thEnable', 'Enable tunnel health monitor')} valuePropName="checked" tooltip={tr('settings.thEnableHint', 'Periodically probe the URL through the tunnel and restart the core after repeated failures.')}>
+          <Switch />
+        </Form.Item>
+        <Form.Item name="url" label={tr('settings.thUrl', 'Probe URL')} rules={[{ required: true, message: tr('settings.thUrlRequired', 'Enter a probe URL') }]} tooltip={tr('settings.thUrlHint', 'A small URL that should be reachable while the tunnel is healthy.')}>
+          <Input placeholder="https://www.cloudflare.com/cdn-cgi/trace" />
+        </Form.Item>
+        <Form.Item name="proxy_url" label={tr('settings.thProxy', 'Probe through proxy')} tooltip={tr('settings.thProxyHint', 'Optional local inbound to route the probe through, e.g. socks5://127.0.0.1:1080. Leave empty to test host connectivity only.')}>
+          <Input placeholder={tr('settings.thProxyPlaceholder', 'socks5://127.0.0.1:1080 (optional)')} allowClear />
+        </Form.Item>
+        <Space size="large" wrap style={{ display: 'flex' }}>
+          <Form.Item name="interval" label={tr('settings.thInterval', 'Interval (s)')} tooltip={tr('settings.thIntervalHint', 'Seconds between probes. Default 30.')}>
+            <InputNumber min={1} max={86400} style={{ width: 140 }} />
+          </Form.Item>
+          <Form.Item name="timeout" label={tr('settings.thTimeout', 'Timeout (s)')} tooltip={tr('settings.thTimeoutHint', 'Per-probe timeout in seconds. Default 10.')}>
+            <InputNumber min={1} max={300} style={{ width: 140 }} />
+          </Form.Item>
+          <Form.Item name="failures" label={tr('settings.thFailures', 'Failures')} tooltip={tr('settings.thFailuresHint', 'Consecutive failures before restarting. Default 3.')}>
+            <InputNumber min={1} max={1000} style={{ width: 140 }} />
+          </Form.Item>
+          <Form.Item name="cooldown" label={tr('settings.thCooldown', 'Cooldown (s)')} tooltip={tr('settings.thCooldownHint', 'Minimum seconds between two restarts. Default 300 (5 min).')}>
+            <InputNumber min={1} max={86400} style={{ width: 140 }} />
+          </Form.Item>
+        </Space>
+        <Space wrap>
+          <Button type="primary" onClick={onSave} loading={loading}>{tr('common.save', 'Save')}</Button>
+          <Button onClick={onTest} loading={testing}>{tr('settings.thTest', 'Test probe')}</Button>
+        </Space>
+      </Form>
+      {status && status.last_probe ? (
+        <div style={{ marginTop: 16, fontSize: 12, color: '#888' }}>
+          {tr('settings.thLastProbe', 'Last probe')}: {status.last_probe}
+          {status.last_restart ? ` · ${tr('settings.thLastRestart', 'Last restart')}: ${status.last_restart}` : ''}
+          {status.last_error ? <div style={{ color: '#d29922', marginTop: 4 }}>{status.last_error}</div> : null}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

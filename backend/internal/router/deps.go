@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/healthcheck"
 	"github.com/kazeyukiro/3m-ui/backend/internal/listener"
 	"github.com/kazeyukiro/3m-ui/backend/internal/mihomo"
 	"github.com/kazeyukiro/3m-ui/backend/internal/node"
@@ -22,6 +23,7 @@ type Deps struct {
 	Node             *node.Service
 	Listener         *listener.Service
 	System           *system.Service
+	HealthMonitor    *healthcheck.Monitor
 }
 
 func (d Deps) mihomoService() *mihomo.Service       { return d.Mihomo }
