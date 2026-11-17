@@ -1807,8 +1807,188 @@ paths:
         "200":
           description: yaml
 
+
+  /tunnel-health/settings:
+    get:
+      tags: [system]
+      summary: Get tunnel health watchdog settings
+      description: |
+        Returns the persisted watchdog configuration stored under the `tunnel_health` panel setting.
+        Missing or out-of-range values are normalised before being returned; an empty probe URL falls
+        back to the default.
+      responses:
+        "200":
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TunnelHealthSettings'
+        "500":
+          description: Settings could not be loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+    put:
+      tags: [system]
+      summary: Update tunnel health watchdog settings
+      description: |
+        Persists and normalises the settings, then applies them to the running monitor immediately.
+        The watchdog is off by default because each core restart drops all connected clients; a large
+        failure threshold avoids a restart on a transient probe hiccup. Changing settings resets the
+        consecutive-failure counter, so a threshold change alone cannot trigger an immediate restart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TunnelHealthSettings'
+      responses:
+        "200":
+          description: Saved and applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  settings:
+                    $ref: '#/components/schemas/TunnelHealthSettings'
+        "400":
+          description: Invalid JSON body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        "500":
+          description: Settings could not be saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+  /tunnel-health/status:
+    get:
+      tags: [system]
+      summary: Get live tunnel health watchdog status
+      description: |
+        Snapshot of the running watchdog: consecutive failures, cumulative restarts and the
+        timestamps of the last probe, restart and error. Returns an empty object when no monitor
+        is attached. Probes and restarts run only while the core is up; a manually stopped core is
+        never brought back by the watchdog.
+      responses:
+        "200":
+          description: Current monitor snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TunnelHealthStatus'
+  /tunnel-health/test:
+    post:
+      tags: [system]
+      summary: Run a single tunnel health probe
+      description: |
+        Executes one probe using the active settings, or the settings supplied in the request body,
+        and reports the result without triggering a restart. It does not require the core to be
+        running, so the URL and proxy can be validated before enabling the watchdog. A response
+        status below 500 counts as success (400-499 are treated as a healthy tunnel); 500 and above,
+        network errors, TLS errors and timeouts count as failure.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TunnelHealthSettings'
+      responses:
+        "200":
+          description: Probe result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, elapsed_ms]
+                properties:
+                  ok: { type: boolean }
+                  elapsed_ms: { type: integer, description: Probe duration in milliseconds }
+                  error:
+                    type: string
+                    description: Present only when ok is false
+        "400":
+          description: Invalid JSON body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        "500":
+          description: Active settings could not be loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+
 components:
   schemas:
+
+    TunnelHealthSettings:
+      type: object
+      description: Tunnel health watchdog configuration. Values outside the stated ranges fall back to defaults.
+      properties:
+        enabled:
+          type: boolean
+          default: false
+          description: Whether the watchdog is active
+        url:
+          type: string
+          default: https://www.cloudflare.com/cdn-cgi/trace
+          description: HTTP(S) probe target; empty falls back to the default
+        proxy_url:
+          type: string
+          default: ""
+          description: Optional http/https/socks5/socks5h proxy address for the probe; empty means direct
+        interval:
+          type: integer
+          minimum: 1
+          maximum: 86400
+          default: 30
+          description: Seconds between probes
+        timeout:
+          type: integer
+          minimum: 1
+          maximum: 300
+          default: 10
+          description: Seconds per probe
+        failures:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 3
+          description: Consecutive failures before a core restart
+        cooldown:
+          type: integer
+          minimum: 1
+          maximum: 86400
+          default: 300
+          description: Minimum seconds between two restarts
+    TunnelHealthStatus:
+      type: object
+      description: Runtime snapshot of the tunnel health watchdog. Timestamps use RFC 3339.
+      properties:
+        enabled: { type: boolean }
+        interval: { type: integer, description: Configured probe interval in seconds }
+        consecutive_failures: { type: integer }
+        total_restarts: { type: integer, format: int64 }
+        last_probe: { type: string, description: Timestamp of the most recent probe; empty if none }
+        last_restart: { type: string, description: Timestamp of the most recent core restart; empty if none }
+        last_error: { type: string, description: Most recent probe or restart error; empty if none }
 
     ServerOutbound:
       type: object
