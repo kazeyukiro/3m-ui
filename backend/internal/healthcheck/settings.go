@@ -19,19 +19,19 @@ const settingKey = "tunnel_health"
 // Defaults mirror the documented 3x-ui tunnel health monitor semantics:
 // the watchdog is opt-in because a core restart drops every connected client.
 const (
-	DefaultURL       = "https://www.cloudflare.com/cdn-cgi/trace"
-	DefaultInterval  = 30 // seconds
-	DefaultTimeout   = 10 // seconds
-	DefaultFailures  = 3
-	DefaultCooldown  = 300 // seconds (5m)
-	MinInterval      = 1
-	MinTimeout       = 1
-	MinFailures      = 1
-	MinCooldown      = 1
-	MaxInterval      = 86400
-	MaxTimeout       = 300
-	MaxFailures      = 1000
-	MaxCooldown      = 86400
+	DefaultURL      = "https://www.cloudflare.com/cdn-cgi/trace"
+	DefaultInterval = 30 // seconds
+	DefaultTimeout  = 10 // seconds
+	DefaultFailures = 3
+	DefaultCooldown = 300 // seconds (5m)
+	MinInterval     = 1
+	MinTimeout      = 1
+	MinFailures     = 1
+	MinCooldown     = 1
+	MaxInterval     = 86400
+	MaxTimeout      = 300
+	MaxFailures     = 1000
+	MaxCooldown     = 86400
 )
 
 // Settings controls the tunnel health watchdog.

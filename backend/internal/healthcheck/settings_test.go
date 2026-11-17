@@ -3,9 +3,9 @@ package healthcheck
 import (
 	"testing"
 
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
 )
 
 func openTestDB(t *testing.T) *gorm.DB {
