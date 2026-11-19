@@ -559,10 +559,90 @@ func TestRenderQuanXAlpnPassthrough(t *testing.T) {
 	}
 }
 
-func TestRenderQuanXHysteria2Skipped(t *testing.T) {
+func TestRenderQuanXHysteria2(t *testing.T) {
+	// QX Hysteria 2 grammar follows Sub-Store's QX producer (producers/qx.js).
 	n, _ := parseShareURI("hy2://pw@85.149.212.214:13290#hy2")
-	if renderQuanXNode(n) != "" {
-		t.Fatalf("QX must not render hysteria2: %s", renderQuanXNode(n))
+	got := renderQuanXNode(n)
+	for _, want := range []string{
+		"hysteria2=85.149.212.214:13290",
+		"password=pw",
+		"udp-relay=true",
+		"tag=hy2",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("QX hysteria2 missing %q in %s", want, got)
+		}
+	}
+}
+
+func TestRenderQuanXHysteria2Full(t *testing.T) {
+	// Mirrors Sub-Store text.spec.js "round-trips Quantumult X Hysteria 2
+	// options" — all fields present on the link are emitted in order.
+	uri := "hysteria2://pwd@example.com:443?sni=apple.com&alpn=h3&" +
+		"mport=443,20000-50000&hop-interval=30&obfs=salamander&obfs-password=obfskey&" +
+		"tls-pubkey-sha256=abcdef&tls-no-session-ticket=true&tls-no-session-reuse=false&" +
+		"tls-fingerprint=deadbeef&down=100&insecure=1&test-url=https://check.example.com/ping#hy2"
+	n, _ := parseShareURI(uri)
+	got := renderQuanXNode(n)
+	for _, want := range []string{
+		"hysteria2=example.com:443",
+		"password=pwd",
+		"port-hopping=443,20000-50000",
+		"port-hopping-interval=30",
+		"salamander-password=obfskey",
+		"tls-host=apple.com",
+		"tls-pubkey-sha256=abcdef",
+		"tls-alpn=026833", // h3 -> length byte 0x02 + "h3"
+		"tls-no-session-ticket=true",
+		"tls-no-session-reuse=false",
+		"tls-cert-sha256=deadbeef",
+		"tls-verification=false",
+		"download-bandwidth=100",
+		"udp-relay=true",
+		"server_check_url=https://check.example.com/ping",
+		"tag=hy2",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("QX hysteria2 full missing %q in %s", want, got)
+		}
+	}
+}
+
+func TestRenderQuanXHysteria2HopIntervalBounds(t *testing.T) {
+	// QX only accepts 5–3600s; out-of-range values are dropped, not guessed.
+	for _, tc := range []struct {
+		interval string
+		want     bool
+	}{
+		{"1", false}, {"5", true}, {"3600", true}, {"3601", false},
+	} {
+		uri := "hysteria2://pwd@h:443?mport=2000-3000&hop-interval=" + tc.interval + "#hy2"
+		n, _ := parseShareURI(uri)
+		got := renderQuanXNode(n)
+		has := strings.Contains(got, "port-hopping-interval="+tc.interval)
+		if has != tc.want {
+			t.Fatalf("hop-interval=%s: emitted=%v want=%v in %s", tc.interval, has, tc.want, got)
+		}
+		if !strings.Contains(got, "port-hopping=2000-3000") {
+			t.Fatalf("hop-interval=%s: lost port-hopping in %s", tc.interval, got)
+		}
+	}
+}
+
+func TestRenderQuanXHysteria2RejectsNonSalamanderObfs(t *testing.T) {
+	// Sub-Store throws "only supports Salamander obfuscation"; we degrade.
+	n, _ := parseShareURI("hysteria2://pwd@h:443?obfs=gecko&obfs-password=x#hy2")
+	if got := renderQuanXNode(n); got != "" {
+		t.Fatalf("QX hysteria2 must reject non-salamander obfs: %s", got)
+	}
+}
+
+func TestRenderQuanXHysteria2SecureOmitsVerification(t *testing.T) {
+	// A secure (non-insecure) link must not carry tls-verification=false.
+	n, _ := parseShareURI("hysteria2://pwd@h:443?sni=apple.com#hy2")
+	got := renderQuanXNode(n)
+	if strings.Contains(got, "tls-verification") {
+		t.Fatalf("secure link must omit tls-verification: %s", got)
 	}
 }
 

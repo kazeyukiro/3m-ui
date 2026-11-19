@@ -1158,6 +1158,12 @@ func renderQuanXNode(n *shareNode) string {
 	head := fmt.Sprintf("%s=%s:%s", quanxProtoKeyword(n.Protocol), n.Host, n.Port)
 	params := []string{}
 	switch n.Protocol {
+	case "hysteria2":
+		// QX Hysteria 2 line grammar follows Sub-Store's QX producer
+		// (producers/qx.js hysteria2()). The fields and their order mirror
+		// that implementation; a value is emitted only when the share link
+		// actually carries its source, so nothing is invented.
+		return renderQuanXHysteria2(n)
 	case "ss":
 		if n.Method == "" {
 			return ""
@@ -1210,6 +1216,87 @@ func renderQuanXNode(n *shareNode) string {
 	params = append(params, tr...)
 	params = append(params, "udp-relay=true", "tag="+quoteValue(n.Name))
 	return head + ", " + strings.Join(params, ", ")
+}
+
+// renderQuanXHysteria2 renders a Hysteria 2 node in QX [server_local] grammar.
+// Field names, values and their order follow Sub-Store's QX producer
+// (backend/src/core/proxy-utils/producers/qx.js, function hysteria2). Only
+// parameters actually present in the share link are emitted; the TLS/obfs
+// options the panel does not export are simply omitted rather than guessed.
+// Any obfs value other than "salamander" is rejected, matching Sub-Store's
+// "QX Hysteria 2 only supports Salamander obfuscation" guard.
+func renderQuanXHysteria2(n *shareNode) string {
+	if obfs := shareParam(n.Params, "obfs"); obfs != "" && !strings.EqualFold(obfs, "salamander") {
+		return ""
+	}
+	head := fmt.Sprintf("%s=%s:%s", quanxProtoKeyword(n.Protocol), n.Host, n.Port)
+	parts := []string{head}
+	// password is required for a Hysteria 2 node; without it the line is
+	// meaningless, so degrade instead of emitting an empty password.
+	if n.Password == "" {
+		return ""
+	}
+	parts = append(parts, "password="+quoteValue(n.Password))
+
+	// port-hopping: the panel carries hop ports in "mport" (comma- or
+	// semicolon-separated); Sub-Store spells them comma-separated.
+	if hop := shareParam(n.Params, "mport", "port-hopping", "ports"); hop != "" {
+		hop = strings.ReplaceAll(hop, ";", ",")
+		// QX parses port-hopping as a comma-separated port list (see the QX
+		// grammar's port_hopping rule), so the value is left unquoted — this
+		// matches Sub-Store's producer exactly.
+		parts = append(parts, "port-hopping="+hop)
+	}
+	// port-hopping-interval is only valid within QX's 5–3600s window.
+	if raw := shareParam(n.Params, "hop-interval", "port-hopping-interval"); raw != "" {
+		if v, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil && v >= 5 && v <= 3600 {
+			parts = append(parts, "port-hopping-interval="+strconv.Itoa(v))
+		}
+	}
+	// Salamander obfuscation password.
+	if obfs := shareParam(n.Params, "obfs"); strings.EqualFold(obfs, "salamander") {
+		if pw := shareParam(n.Params, "obfs-password"); pw != "" {
+			parts = append(parts, "salamander-password="+quoteValue(pw))
+		}
+	}
+	// TLS parameters — emitted only when the share link carries a source.
+	if sni := shareParam(n.Params, "sni", "peer"); sni != "" {
+		parts = append(parts, "tls-host="+sni)
+	}
+	if pk := shareParam(n.Params, "tls-pubkey-sha256", "pinSHA256"); pk != "" {
+		parts = append(parts, "tls-pubkey-sha256="+pk)
+	}
+	// tls-alpn takes an explicit tls-alpn verbatim, otherwise hex-encodes
+	// the alpn list exactly like Sub-Store's encodeQxAlpn / quanxAlpnHex.
+	if raw := shareParam(n.Params, "tls-alpn"); raw != "" {
+		parts = append(parts, "tls-alpn="+raw)
+	} else if alpn := shareParam(n.Params, "alpn"); alpn != "" {
+		if hexed := quanxAlpnHex(alpn); hexed != "" {
+			parts = append(parts, "tls-alpn="+hexed)
+		}
+	}
+	for _, key := range []string{"tls-no-session-ticket", "tls-no-session-reuse"} {
+		if v := shareParam(n.Params, key); v != "" {
+			parts = append(parts, key+"="+v)
+		}
+	}
+	if fp := shareParam(n.Params, "tls-fingerprint", "tls-cert-sha256"); fp != "" {
+		parts = append(parts, "tls-cert-sha256="+fp)
+	}
+	// tls-verification mirrors Sub-Store's !skip-cert-verify: an insecure
+	// link renders tls-verification=false; a secure link omits the field.
+	if shareInsecure(n.Params) {
+		parts = append(parts, "tls-verification=false")
+	}
+	if bw := mbpsValue(shareParam(n.Params, "down", "up", "download-bandwidth")); bw != "" {
+		parts = append(parts, "download-bandwidth="+bw)
+	}
+	parts = append(parts, "udp-relay=true")
+	if url := shareParam(n.Params, "test-url", "server_check_url"); url != "" {
+		parts = append(parts, "server_check_url="+url)
+	}
+	parts = append(parts, "tag="+quoteValue(n.Name))
+	return strings.Join(parts, ", ")
 }
 
 // quanxProtoKeyword maps the panel protocol name to QX's [server_local]
@@ -1700,8 +1787,6 @@ func GenerateUserQuanXSubscription(db *gorm.DB, pu models.ProxyUser, req *http.R
 		header: []string{"[server_local]"},
 		skipMsg: func(n *shareNode) (string, bool) {
 			switch n.Protocol {
-			case "hysteria2":
-				return "Quantumult X 不支持 Hysteria2 协议", true
 			case "tuic":
 				return "Quantumult X 不支持 TUIC 协议", true
 			}
