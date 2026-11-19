@@ -412,6 +412,13 @@ var loonVMessCiphers = map[string]bool{
 // loonVLESSFlows - docs/Node VLESS: "`flow` 当前支持 `xtls-rprx-vision`".
 var loonVLESSFlows = map[string]bool{"xtls-rprx-vision": true}
 
+// loonXHTTPModes - docs/Node XHTTP "基础参数": "xhttp-mode 支持 auto、
+// packet-up、stream-up、stream-one，默认 auto". The share-link `mode` field
+// maps to xhttp-mode for type=xhttp (same mapping as Surge's manual).
+var loonXHTTPModes = map[string]bool{
+	"auto": true, "packet-up": true, "stream-up": true, "stream-one": true,
+}
+
 // loonObfsNames - docs/Node Shadowsocks: "`obfs-name` Simple Obfs 类型：
 // `none`、`http`、`tls`".
 var loonObfsNames = map[string]bool{"none": true, "http": true, "tls": true}
@@ -537,7 +544,14 @@ func loonSkipMsg(n *shareNode) (string, bool) {
 	switch n.Protocol {
 	case "vmess", "vless", "trojan":
 		if !loonTransportOK(n.Params["type"]) {
-			return "Loon 暂不支持该传输（VMess/VLESS: tcp/ws/http；Trojan: tcp/ws）", true
+			return "Loon 暂不支持该传输（VMess/VLESS: tcp/ws/http/xhttp；Trojan: tcp/ws/xhttp）", true
+		}
+		// docs/Node XHTTP: xhttp-mode is a closed set. A value outside it
+		// degrades the whole line instead of silently falling back to auto.
+		if n.Params["type"] == "xhttp" {
+			if m := shareParam(n.Params, "mode"); m != "" && !inSet(loonXHTTPModes, m) {
+				return "Loon XHTTP xhttp-mode 仅支持 auto/packet-up/stream-up/stream-one", true
+			}
 		}
 	}
 	return "", false
@@ -546,13 +560,13 @@ func loonSkipMsg(n *shareNode) (string, bool) {
 // ---- Loon ----
 
 // loonTransportOK reports whether Loon's transport= vocabulary covers the
-// node's transport. nsloon.app/en/docs/Node: VMess/VLESS support tcp, ws and
-// http ("host and path apply to WebSocket or HTTP transports"); Trojan
-// supports tcp and ws. grpc / xhttp / quic / kcp have no Loon line at all and
+// node's transport. nsloon.app/docs/Node (zh/en): VLESS and VMess support
+// tcp, ws, http and xhttp; Trojan supports tcp, ws and xhttp (transport=http
+// is handled as WebSocket). grpc / quic / kcp have no Loon line at all and
 // must degrade to a comment instead of a silently wrong tcp node.
 func loonTransportOK(typ string) bool {
 	switch typ {
-	case "", "tcp", "none", "ws", "http":
+	case "", "tcp", "none", "ws", "http", "xhttp":
 		return true
 	}
 	return false
@@ -617,11 +631,20 @@ func renderLoonNode(n *shareNode) string {
 		parts := []string{tag, "VMess", n.Host, n.Port, n.Method, docQuote(n.Password)}
 		transport := "tcp"
 		path, host := "", ""
+		alpn, xhttpMode := "", ""
 		switch n.Params["type"] {
 		case "ws", "http":
 			transport = n.Params["type"]
 			path = shareParam(n.Params, "path")
 			host = shareParam(n.Params, "host")
+		case "xhttp":
+			// docs/Node XHTTP example: VMess uses AEAD + alterId=0 with
+			// transport=xhttp, path, host, alpn and xhttp-mode.
+			transport = "xhttp"
+			path = shareParam(n.Params, "path")
+			host = shareParam(n.Params, "host")
+			alpn = shareParam(n.Params, "alpn")
+			xhttpMode = shareParam(n.Params, "mode")
 		}
 		parts = append(parts, "transport="+transport, "alterId=0")
 		if path != "" {
@@ -630,18 +653,29 @@ func renderLoonNode(n *shareNode) string {
 		if host != "" {
 			parts = append(parts, "host="+host)
 		}
-		// docs/Node defines `flow` under VLESS only and shows no `alpn`
-		// parameter on VMess/VLESS lines - pass "" for both.
-		b.WriteString(loonTLSTail(parts, n.Params, "", ""))
+		// docs/Node defines `flow` under VLESS only - VMess never emits it.
+		// `alpn` and `xhttp-mode` appear on the XHTTP examples; pass "" for
+		// non-XHTTP lines so no undocumented parameter reaches the policy.
+		b.WriteString(loonTLSTail(parts, n.Params, "", alpn, xhttpMode))
 	case "vless":
 		parts := []string{tag, "VLESS", n.Host, n.Port, docQuote(n.Password)}
 		transport := "tcp"
 		path, host := "", ""
+		flow, alpn, xhttpMode := shareParam(n.Params, "flow"), "", ""
 		switch n.Params["type"] {
 		case "ws", "http":
 			transport = n.Params["type"]
 			path = shareParam(n.Params, "path")
 			host = shareParam(n.Params, "host")
+		case "xhttp":
+			// docs/Node XHTTP example: transport=xhttp, path, host, alpn,
+			// xhttp-mode. "VLESS nodes omit flow" under XHTTP - clear it.
+			transport = "xhttp"
+			path = shareParam(n.Params, "path")
+			host = shareParam(n.Params, "host")
+			alpn = shareParam(n.Params, "alpn")
+			xhttpMode = shareParam(n.Params, "mode")
+			flow = ""
 		}
 		parts = append(parts, "transport="+transport)
 		if path != "" {
@@ -650,17 +684,25 @@ func renderLoonNode(n *shareNode) string {
 		if host != "" {
 			parts = append(parts, "host="+host)
 		}
-		b.WriteString(loonTLSTail(parts, n.Params, shareParam(n.Params, "flow"), ""))
+		b.WriteString(loonTLSTail(parts, n.Params, flow, alpn, xhttpMode))
 	case "trojan":
 		parts := []string{tag, "Trojan", n.Host, n.Port, docQuote(n.Password)}
 		transport := "tcp"
 		path, host := "", ""
+		xhttpMode := ""
 		switch n.Params["type"] {
 		case "ws", "http":
 			// docs/Node: "兼容配置中的 `transport=http` 会按 WebSocket 处理".
 			transport = "ws"
 			path = shareParam(n.Params, "path")
 			host = shareParam(n.Params, "host")
+		case "xhttp":
+			// docs/Node XHTTP example: Trojan uses TLS/REALITY with
+			// transport=xhttp, path, host, alpn and xhttp-mode.
+			transport = "xhttp"
+			path = shareParam(n.Params, "path")
+			host = shareParam(n.Params, "host")
+			xhttpMode = shareParam(n.Params, "mode")
 		}
 		parts = append(parts, "transport="+transport)
 		if path != "" {
@@ -670,8 +712,8 @@ func renderLoonNode(n *shareNode) string {
 			parts = append(parts, "host="+host)
 		}
 		// docs/Node Trojan examples carry `alpn` (WS: alpn="h2,http/1.1";
-		// REALITY: alpn=h2). VMess/VLESS examples do not.
-		b.WriteString(loonTLSTail(parts, n.Params, "", shareParam(n.Params, "alpn")))
+		// XHTTP: alpn=h2; REALITY: alpn=h2). VMess/VLESS only on XHTTP.
+		b.WriteString(loonTLSTail(parts, n.Params, "", shareParam(n.Params, "alpn"), xhttpMode))
 	case "anytls":
 		// Empirical (kept): docs/Node documents public-key/short-id for
 		// AnyTLS REALITY, but a real-device check found Loon reliably
@@ -693,15 +735,15 @@ func renderLoonNode(n *shareNode) string {
 
 // loonTLSTail appends the shared Loon TLS / REALITY arguments in the order
 // used by the official docs/Node examples: flow, public-key, short-id,
-// over-tls, sni, alpn, skip-cert-verify, udp, block-quic.
+// over-tls, sni, alpn, xhttp-mode, skip-cert-verify, udp, block-quic.
 //
 // `flow` is VLESS-only (docs/Node VLESS: "`flow` 当前支持
-// `xtls-rprx-vision`"); `alpn` appears only in the Trojan and Hysteria 2
-// examples. Pass "" for either when the protocol does not document it, so
-// no undocumented parameter can reach a policy line. `public-key` is a
-// REALITY parameter (docs/Node: "public-key 和 short-id 用于 Reality") and
-// is never emitted for a plain TLS node.
-func loonTLSTail(parts []string, params map[string]string, flow, alpn string) string {
+// `xtls-rprx-vision`") and is omitted under XHTTP ("VLESS nodes omit flow").
+// `alpn` and `xhttp-mode` appear on the XHTTP / Trojan examples; pass "" for
+// non-applicable lines so no undocumented parameter reaches a policy line.
+// `public-key` is a REALITY parameter (docs/Node: "public-key 和 short-id 用于
+// Reality") and is never emitted for a plain TLS node.
+func loonTLSTail(parts []string, params map[string]string, flow, alpn, xhttpMode string) string {
 	security := strings.ToLower(strings.TrimSpace(params["security"]))
 	if flow != "" {
 		parts = append(parts, "flow="+flow)
@@ -722,6 +764,9 @@ func loonTLSTail(parts []string, params map[string]string, flow, alpn string) st
 	}
 	if alpn != "" {
 		parts = append(parts, "alpn="+quoteValue(alpn))
+	}
+	if xhttpMode != "" {
+		parts = append(parts, "xhttp-mode="+xhttpMode)
 	}
 	if shareInsecure(params) {
 		parts = append(parts, "skip-cert-verify=true")
@@ -1475,22 +1520,6 @@ func surgeVMessOK(method string) bool {
 	return m == "" || surgeVMessMethods[m]
 }
 
-// surgeVLESSUnsupported reports VLESS combinations Surge cannot express,
-// per manual.nssurge.com/policies/vless.html (Surge iOS 6.0.0+ / Mac 6.12.0+).
-//
-// Supported combinations documented on that page:
-//
-//	Transport   Security            Vision flow
-//	RAW (TCP)   none, TLS, REALITY   With TLS or REALITY
-//	WebSocket   none, TLS            No
-//	gRPC        TLS, REALITY         No
-//
-// "XHTTP, HTTPUpgrade and mKCP transports and VLESS Encryption are not
-// supported." Vision requires TLS 1.3 (tls=true or REALITY) and cannot be
-// used with WebSocket; gRPC requires tls=true or REALITY. REALITY is enabled
-// by reality-public-key, so a reality link without pbk cannot be expressed.
-// Closed value sets (flow, reality-short-id, grpc-mode, ws-path) are also
-// checked here so no undocumented value can be emitted.
 // surgeVLESSUnsupported reports VLESS combinations Surge cannot express,
 // per manual.nssurge.com/policies/vless.html (Surge iOS 6.0.0+ /
 // Mac 6.12.0+). The four-row matrix is transcribed verbatim from that page:

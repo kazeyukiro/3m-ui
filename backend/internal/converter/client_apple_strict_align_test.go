@@ -340,3 +340,101 @@ func TestStrict_Loon_KeptEmpiricalBehaviours(t *testing.T) {
 	tr, _ := parseShareURI("trojan://pw@h:443?security=reality&pbk=PK&sid=abcd&sni=www.example.com#tr")
 	mustContain(t, renderLoonNode(tr), "over-tls=true", `public-key="PK"`)
 }
+
+// ---- Loon XHTTP: official docs/Node XHTTP examples (verbatim fields) -------
+//
+// nsloon.app/docs/Node and /en/docs/Node declare XHTTP a transport for VLESS,
+// VMess and Trojan. Every parameter name/value asserted below is transcribed
+// from those pages; no undocumented field is emitted.
+
+func TestStrict_LoonVLESS_XHTTPOfficialExample(t *testing.T) {
+	// Official: VLESS-XHTTP = VLESS,vless.example.com,443,"uuid",
+	//   transport=xhttp,path=/xhttp,host=vless.example.com,over-tls=true,
+	//   sni=vless.example.com,alpn=h2,xhttp-mode=packet-up,udp=true
+	n, err := parseShareURI("vless://52396e06-041a-4cc2-be5c-8525eb457809@vless.example.com:443" +
+		"?type=xhttp&path=/xhttp&host=vless.example.com&security=tls&sni=vless.example.com" +
+		"&alpn=h2&mode=packet-up#VLESS-XHTTP")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if _, skip := loonSkipMsg(n); skip {
+		t.Fatal("official VLESS XHTTP example must not degrade")
+	}
+	got := renderLoonNode(n)
+	mustContain(t, got,
+		`VLESS-XHTTP = VLESS,vless.example.com,443,"52396e06-041a-4cc2-be5c-8525eb457809"`,
+		"transport=xhttp", "path=/xhttp", "host=vless.example.com",
+		"over-tls=true", "sni=vless.example.com", "alpn=h2",
+		"xhttp-mode=packet-up", "udp=true")
+	// "VLESS nodes omit flow" under XHTTP, and Loon has no encryption field.
+	mustNotContain(t, got, "flow=", "encryption=")
+}
+
+func TestStrict_LoonVLESS_XHTTPOmitsFlow(t *testing.T) {
+	// Even if a share link carries flow, the XHTTP example omits it.
+	n, _ := parseShareURI("vless://u@v.example.com:443?type=xhttp&path=/x" +
+		"&flow=xtls-rprx-vision&security=tls&mode=auto#x")
+	got := renderLoonNode(n)
+	mustContain(t, got, "transport=xhttp", "xhttp-mode=auto")
+	mustNotContain(t, got, "flow=")
+}
+
+func TestStrict_LoonVMess_XHTTPOfficialExample(t *testing.T) {
+	// Official: VMess-XHTTP = VMess,...,aes-128-gcm,"uuid",alterId=0,
+	//   transport=xhttp,path=/xhttp,host=...,alpn=http/1.1,xhttp-mode=stream-up
+	n := &shareNode{
+		Name: "VMess-XHTTP", Protocol: "vmess", Host: "vmess.example.com",
+		Port: "443", Password: "52396e06-041a-4cc2-be5c-8525eb457809",
+		Method: "aes-128-gcm",
+		Params: map[string]string{
+			"type": "xhttp", "path": "/xhttp", "host": "vmess.example.com",
+			"security": "tls", "sni": "vmess.example.com", "alpn": "http/1.1", "mode": "stream-up",
+		},
+	}
+	if _, skip := loonSkipMsg(n); skip {
+		t.Fatal("official VMess XHTTP example must not degrade")
+	}
+	got := renderLoonNode(n)
+	mustContain(t, got,
+		`VMess-XHTTP = VMess,vmess.example.com,443,aes-128-gcm,"52396e06-041a-4cc2-be5c-8525eb457809"`,
+		"alterId=0", "transport=xhttp", "path=/xhttp", "host=vmess.example.com",
+		"alpn=http/1.1", "xhttp-mode=stream-up", "over-tls=true")
+}
+
+func TestStrict_LoonTrojan_XHTTPOfficialExample(t *testing.T) {
+	// Official: Trojan-XHTTP = Trojan,...,"password",transport=xhttp,
+	//   path=/xhttp,host=...,alpn=h2,xhttp-mode=stream-one,udp=true
+	n, err := parseShareURI("trojan://password@trojan.example.com:443" +
+		"?type=xhttp&path=/xhttp&host=trojan.example.com&sni=trojan.example.com" +
+		"&alpn=h2&mode=stream-one#Trojan-XHTTP")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if _, skip := loonSkipMsg(n); skip {
+		t.Fatal("official Trojan XHTTP example must not degrade")
+	}
+	got := renderLoonNode(n)
+	mustContain(t, got,
+		`Trojan-XHTTP = Trojan,trojan.example.com,443,"password"`,
+		"transport=xhttp", "path=/xhttp", "host=trojan.example.com",
+		"sni=trojan.example.com", "alpn=h2", "xhttp-mode=stream-one", "udp=true")
+}
+
+func TestStrict_LoonXHTTPModesClosedSet(t *testing.T) {
+	// docs/Node: auto, packet-up, stream-up, stream-one. An out-of-set mode
+	// degrades the whole line; it must not silently fall back to auto.
+	for _, mode := range []string{"auto", "packet-up", "stream-up", "stream-one"} {
+		n, _ := parseShareURI("vless://u@h:443?type=xhttp&path=/x&mode=" + mode + "#m")
+		if reason, skip := loonSkipMsg(n); skip {
+			t.Fatalf("xhttp-mode=%s must be accepted: %s", mode, reason)
+		}
+		mustContain(t, renderLoonNode(n), "xhttp-mode="+mode)
+	}
+	bad, _ := parseShareURI("vless://u@h:443?type=xhttp&path=/x&mode=bogus#m")
+	if reason, skip := loonSkipMsg(bad); !skip || !strings.Contains(reason, "xhttp-mode") {
+		t.Fatalf("xhttp-mode=bogus must degrade: skip=%v reason=%q", skip, reason)
+	}
+	if got := renderLoonNode(bad); got != "" {
+		t.Fatalf("degraded xhttp node must render empty: %s", got)
+	}
+}
