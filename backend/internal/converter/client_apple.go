@@ -1524,11 +1524,12 @@ func clientShareLinks(db *gorm.DB, pu models.ProxyUser, req *http.Request, gen U
 
 // appleClientTarget selects the target grammar for the shared generator.
 type appleClientTarget struct {
-	client  string                          // loon / surge / quanx
-	render  func(*shareNode) string         // node-line renderer
-	header  []string                        // section header lines
-	footer  func(names []string) []string   // optional trail (Surge group)
-	skipMsg func(*shareNode) (string, bool) // optional unsupported-protocol reason
+	client           string                          // loon / surge / quanx
+	render           func(*shareNode) string         // node-line renderer
+	header           []string                        // section header lines
+	footer           func(names []string) []string   // optional trail (Surge group)
+	skipMsg          func(*shareNode) (string, bool) // optional unsupported-protocol reason
+	omitSkipComments bool                            // Sub-Store alignment: drop unsupported/empty nodes silently
 }
 
 func generateAppleClientSubscription(t appleClientTarget, db *gorm.DB, pu models.ProxyUser, req *http.Request, gen URIGenerator) ([]byte, error) {
@@ -1549,7 +1550,9 @@ func generateAppleClientSubscription(t appleClientTarget, db *gorm.DB, pu models
 	for _, link := range links {
 		node, perr := parseShareURI(link)
 		if perr != nil {
-			lines = append(lines, fmt.Sprintf("# unparsable share link skipped: %v", perr))
+			if !t.omitSkipComments {
+				lines = append(lines, fmt.Sprintf("# unparsable share link skipped: %v", perr))
+			}
 			continue
 		}
 		name := node.Name
@@ -1562,13 +1565,17 @@ func generateAppleClientSubscription(t appleClientTarget, db *gorm.DB, pu models
 		}
 		if t.skipMsg != nil {
 			if reason, unsupported := t.skipMsg(node); unsupported {
-				lines = append(lines, commentLine(name, reason))
+				if !t.omitSkipComments {
+					lines = append(lines, commentLine(name, reason))
+				}
 				continue
 			}
 		}
 		line := t.render(node)
 		if line == "" {
-			lines = append(lines, commentLine(name, t.client+" renderer could not represent this node"))
+			if !t.omitSkipComments {
+				lines = append(lines, commentLine(name, t.client+" renderer could not represent this node"))
+			}
 			continue
 		}
 		// Only nodes that actually rendered may be referenced by footer
@@ -1589,10 +1596,11 @@ func generateAppleClientSubscription(t appleClientTarget, db *gorm.DB, pu models
 // subscription ([Proxy] section, one node per line).
 func GenerateUserLoonSubscription(db *gorm.DB, pu models.ProxyUser, req *http.Request, gen URIGenerator) ([]byte, error) {
 	return generateAppleClientSubscription(appleClientTarget{
-		client:  "loon",
-		render:  renderLoonNode,
-		header:  []string{"[Proxy]"},
-		skipMsg: loonSkipMsg,
+		client:           "loon",
+		render:           renderLoonNodeSS,
+		header:           []string{"[Proxy]"},
+		skipMsg:          ssLoonSkipMsg,
+		omitSkipComments: true,
 	}, db, pu, req, gen)
 }
 
@@ -1756,10 +1764,11 @@ func surgeSkipMsg(n *shareNode) (string, bool) {
 // policy that points at every node).
 func GenerateUserSurgeSubscription(db *gorm.DB, pu models.ProxyUser, req *http.Request, gen URIGenerator) ([]byte, error) {
 	return generateAppleClientSubscription(appleClientTarget{
-		client:  "surge",
-		render:  renderSurgeNode,
-		header:  []string{"[General]", "", "[Proxy]"},
-		skipMsg: surgeSkipMsg,
+		client:           "surge",
+		render:           renderSurgeNodeSS,
+		header:           []string{"[General]", "", "[Proxy]"},
+		skipMsg:          ssSurgeSkipMsg,
+		omitSkipComments: true,
 		footer: func(names []string) []string {
 			group := "3m-ui"
 			kept := make([]string, 0, len(names))
@@ -1782,15 +1791,10 @@ func GenerateUserSurgeSubscription(db *gorm.DB, pu models.ProxyUser, req *http.R
 // X subscription ([server_local] section, one node per line).
 func GenerateUserQuanXSubscription(db *gorm.DB, pu models.ProxyUser, req *http.Request, gen URIGenerator) ([]byte, error) {
 	return generateAppleClientSubscription(appleClientTarget{
-		client: "quanx",
-		render: renderQuanXNode,
-		header: []string{"[server_local]"},
-		skipMsg: func(n *shareNode) (string, bool) {
-			switch n.Protocol {
-			case "tuic":
-				return "Quantumult X 不支持 TUIC 协议", true
-			}
-			return "", false
-		},
+		client:           "quanx",
+		render:           renderQuanXNodeSS,
+		header:           []string{"[server_local]"},
+		skipMsg:          ssQXSkipMsg,
+		omitSkipComments: true,
 	}, db, pu, req, gen)
 }
