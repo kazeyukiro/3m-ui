@@ -7,9 +7,9 @@ import (
 	"github.com/kazeyukiro/3m-ui/backend/internal/user"
 )
 
-// Verified against Sub-Store 2.44.31 ClashMeta producer: a proxy without an
-// explicit udp value is emitted with udp:true, and a tcp-based trojan carries
-// network:tcp.
+// Verified against Sub-Store 2.44.31 ClashMeta producer across all 12
+// exportable protocols: a proxy without an explicit udp value is emitted with
+// udp:true, and TCP-based trojan/vless/vmess carry network:tcp.
 func TestClientProxyDefaultsMatchSubStore(t *testing.T) {
 	creds := []user.Credential{{Username: "alice", Password: "secret"}}
 	cases := []struct {
@@ -18,6 +18,8 @@ func TestClientProxyDefaultsMatchSubStore(t *testing.T) {
 		wantNetwork      string
 	}{
 		{"shadowsocks", `{"cipher":"aes-256-gcm","password":"secret"}`, false, ""},
+		{"vmess", `{"cipher":"auto"}`, true, "tcp"},
+		{"vless", `{}`, true, "tcp"},
 		{"trojan", `{"password":"secret"}`, true, "tcp"},
 		{"hysteria2", `{"password":"secret"}`, true, ""},
 		{"tuic", `{"token":"secret"}`, true, ""},
@@ -27,7 +29,11 @@ func TestClientProxyDefaultsMatchSubStore(t *testing.T) {
 		t.Run(tc.protocol, func(t *testing.T) {
 			var c []user.Credential
 			if tc.needCreds {
-				c = creds
+				if tc.protocol == "vmess" || tc.protocol == "vless" {
+					c = []user.Credential{{Username: "alice", Password: "secret", UUID: "b831381d-6324-4d53-ad4f-8cda48b30811"}}
+				} else {
+					c = creds
+				}
 			}
 			proxies, err := listenerToProxies(models.Listener{
 				Name: tc.protocol, Protocol: tc.protocol, Port: "443", Config: tc.config,
