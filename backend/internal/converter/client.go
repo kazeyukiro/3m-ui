@@ -691,6 +691,18 @@ func listenerToProxies(l models.Listener, server string, credentials []user.Cred
 		// Mihomo and every client reject a scalar alpn; the panel schema once
 		// allowed one through (P1-4). Normalize whatever survived the branches.
 		normalizeClientAlpn(p)
+		// Match Sub-Store's ClashMeta producer defaults. Verified against
+		// Sub-Store 2.44.31: proxies that do not carry an explicit `udp` value
+		// are emitted with `udp:true`, and tcp-based trojan gets `network:tcp`.
+		// Note: the listener UDP toggle is a server-side capability switch and
+		// does not emit client `udp:false`, so an off toggle still gets udp:true
+		// here — the Sub-Store "default udp on" behaviour (user-confirmed).
+		if p["udp"] == nil {
+			p["udp"] = true
+		}
+		if p["type"] == "trojan" && p["network"] == nil {
+			p["network"] = "tcp"
+		}
 	}
 	return result, nil
 }
