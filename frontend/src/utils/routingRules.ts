@@ -1,0 +1,404 @@
+/** Structured Mihomo routing rules helpers. */
+
+export type RuleRow = {
+  key: string;
+  type: string;
+  payload: string;
+  target: string;
+  noResolve: boolean;
+  /** Exact trailing param for lossless round-trip ('src' implies no-resolve in mihomo). */
+  param?: 'no-resolve' | 'src';
+  /** If set, serialize as-is (unparsed advanced rule). */
+  raw?: string;
+};
+
+export const RULE_TYPES = [
+  'DOMAIN',
+  'DOMAIN-SUFFIX',
+  'DOMAIN-KEYWORD',
+  'GEOIP',
+  'GEOSITE',
+  'IP-CIDR',
+  'IP-CIDR6',
+  'SRC-IP-CIDR',
+  'DST-PORT',
+  'SRC-PORT',
+  'PROCESS-NAME',
+  'RULE-SET',
+  'MATCH',
+] as const;
+
+let keySeq = 0;
+export function newRuleKey(): string {
+  keySeq += 1;
+  return `r-${Date.now()}-${keySeq}`;
+}
+
+/**
+ * Rule types whose payload may itself contain commas (mihomo
+ * ParseRulePayload): the target is the LAST field and everything between
+ * type and target is the payload. These cannot be represented by the
+ * structured editor row, so they round-trip as raw lines.
+ */
+export const COMMA_PAYLOAD_TYPES = [
+  'NOT',
+  'OR',
+  'AND',
+  'SUB-RULE',
+  'DOMAIN-REGEX',
+  'PROCESS-NAME-REGEX',
+  'PROCESS-PATH-REGEX',
+] as const;
+
+/** Rule types that accept no-resolve / src params (mihomo rules/parser.go). */
+export const PARAM_RULE_TYPES = [
+  'GEOIP',
+  'SRC-GEOIP',
+  'IP-ASN',
+  'SRC-IP-ASN',
+  'IP-CIDR',
+  'IP-CIDR6',
+  'SRC-IP-CIDR',
+  'IP-SUFFIX',
+  'SRC-IP-SUFFIX',
+  'RULE-SET',
+] as const;
+
+export function emptyRule(partial?: Partial<RuleRow>): RuleRow {
+  return {
+    key: newRuleKey(),
+    type: 'DOMAIN-SUFFIX',
+    payload: '',
+    target: 'DIRECT',
+    noResolve: false,
+    ...partial,
+  };
+}
+
+/** Parse a Mihomo rule line into a structured row. */
+export function parseRuleLine(line: string): RuleRow {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return emptyRule({ type: 'MATCH', target: 'DIRECT' });
+  }
+  const parts = trimmed.split(',').map((p) => p.trim());
+  if (parts.length === 0) {
+    return emptyRule({ raw: trimmed });
+  }
+  const type = (parts[0] || '').toUpperCase();
+  if (type === 'MATCH') {
+    return emptyRule({
+      type: 'MATCH',
+      payload: '',
+      target: parts[1] || 'DIRECT',
+      noResolve: false,
+    });
+  }
+  // Comma-payload types (logic rules, regex rules) cannot be split into
+  // type/payload/target without corrupting the line — keep them raw.
+  if ((COMMA_PAYLOAD_TYPES as readonly string[]).includes(type)) {
+    return emptyRule({ type: 'DOMAIN-SUFFIX', payload: '', target: 'DIRECT', raw: trimmed });
+  }
+  // TYPE,payload,target[,no-resolve]
+  if (parts.length >= 3) {
+    const params = parts.slice(3).map((p) => p.toLowerCase());
+    const param = params.includes('src') ? 'src' : params.includes('no-resolve') ? 'no-resolve' : undefined;
+    return emptyRule({
+      type,
+      payload: parts[1] || '',
+      target: parts[2] || 'DIRECT',
+      noResolve: param === 'no-resolve',
+      ...(param ? { param } : {}),
+    });
+  }
+  // TYPE,target only (unusual) or unparsed
+  if (parts.length === 2 && RULE_TYPES.includes(type as (typeof RULE_TYPES)[number])) {
+    return emptyRule({ type, payload: '', target: parts[1], noResolve: false });
+  }
+  return emptyRule({ type: 'DOMAIN-SUFFIX', payload: '', target: 'DIRECT', raw: trimmed });
+}
+
+export function serializeRule(row: RuleRow): string {
+  if (row.raw && row.raw.trim()) {
+    return row.raw.trim();
+  }
+  const type = (row.type || 'MATCH').toUpperCase();
+  const target = (row.target || 'DIRECT').trim() || 'DIRECT';
+  if (type === 'MATCH') {
+    return `MATCH,${target}`;
+  }
+  const payload = (row.payload || '').trim();
+  let s = `${type},${payload},${target}`;
+  if ((PARAM_RULE_TYPES as readonly string[]).includes(type)) {
+    if (row.param) {
+      s += `,${row.param}`;
+    } else if (row.noResolve) {
+      s += ',no-resolve';
+    }
+  }
+  return s;
+}
+
+export function parseRulesText(text: string): RuleRow[] {
+  // Comments and blank lines are skipped, mirroring the backend import parser.
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+  if (!lines.length) return [emptyRule({ type: 'MATCH', target: 'DIRECT' })];
+  return lines.map(parseRuleLine);
+}
+
+export function serializeRules(rows: RuleRow[]): string[] {
+  return rows.map(serializeRule).filter((s) => s.length > 0);
+}
+
+export type RuleIssue = { index: number; message: string; key: string; recommended?: boolean };
+
+export function validateRules(rows: RuleRow[]): RuleIssue[] {
+  const issues: RuleIssue[] = [];
+  rows.forEach((row, index) => {
+    if (row.raw) return;
+    const type = (row.type || '').toUpperCase();
+    if (!type) {
+      issues.push({ index, message: 'missing type', key: 'routing.missingType' });
+      return;
+    }
+    if (!(row.target || '').trim()) {
+      issues.push({ index, message: 'missing target', key: 'routing.missingTarget' });
+    }
+    if (type !== 'MATCH' && !(row.payload || '').trim()) {
+      issues.push({ index, message: 'missing payload', key: 'routing.missingPayload' });
+    }
+  });
+  if (rows.length) {
+    const last = rows[rows.length - 1];
+    const lastType = (last.raw ? last.raw.split(',')[0] : last.type || '').toUpperCase();
+    if (lastType !== 'MATCH') {
+      issues.push({ index: rows.length - 1, message: 'last rule should be MATCH (recommended)', key: 'routing.ruleWarnMatch', recommended: true });
+    }
+  }
+  return issues;
+}
+
+/** Result of a routing template (rules + recommended proxy-groups). */
+export type TemplateResult = {
+  rules: RuleRow[];
+  /** When non-empty, fully replace panel groups (template switch = overwrite). */
+  groups?: Array<{
+    name: string;
+    type: string;
+    proxies: string[];
+    url?: string;
+    interval?: number;
+  }>;
+  /** @deprecated Templates always replace groups when `groups` is set. Kept for type compat. */
+  mergeGroups?: boolean;
+};
+
+/**
+ * Community rule templates adapted for 3m-ui server visual-config.
+ * Inspired by public Mihomo rule projects — include matching proxy-groups, not only rules.
+ * Prefer GEOSITE/GEOIP so MetaCubeX geodata works without extra rule-providers.
+ */
+export function applyTemplate(
+  id: string,
+  opts: { groupName?: string; existingProxies?: string[] } = {},
+): TemplateResult {
+  const g = (opts.groupName || 'PROXY').trim() || 'PROXY';
+  const leaves = (opts.existingProxies || []).filter(Boolean);
+  // Default leaf list for select groups when no outbound proxies exist yet
+  const leafOrDirect = leaves.length ? leaves : ['DIRECT'];
+
+  const select = (name: string, proxies: string[]) => ({
+    name,
+    type: 'select',
+    proxies: proxies.length ? proxies : ['DIRECT'],
+  });
+
+  switch (id) {
+    case 'direct_only':
+      return { rules: [emptyRule({ type: 'MATCH', target: 'DIRECT' })] };
+
+    case 'cn_direct':
+      // Domestic (CN) direct via GEOSITE + GEOIP; everything else → policy group.
+      return {
+        rules: [
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOIP', payload: 'private', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'MATCH', target: g }),
+        ],
+        groups: [select(g, leafOrDirect)],
+      };
+
+    case 'reject_ads':
+      return {
+        rules: [
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googlesyndication.com', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
+          emptyRule({ type: 'MATCH', target: 'DIRECT' }),
+        ],
+      };
+
+    case 'via_group':
+      return {
+        rules: [emptyRule({ type: 'MATCH', target: g })],
+        groups: [select(g, leafOrDirect)],
+      };
+
+    // —— YiXuanZX/rules: region selects + 代理 / AI / TG ——
+    case 'community-yixuan': {
+      const regions = ['香港', '新加坡', '日本', '美国', '其他'];
+      const groups = [
+        ...regions.map((n) => select(n, leafOrDirect)),
+        select('代理', [...regions, 'DIRECT']),
+        select('AI', ['美国', '新加坡', '香港', '日本', '其他', 'DIRECT']),
+        select('TG', ['香港', '新加坡', '日本', '美国', '其他', 'DIRECT']),
+      ];
+      return {
+        groups,
+        rules: [
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'GEOSITE', payload: 'openai', target: 'AI' }),
+          emptyRule({ type: 'GEOSITE', payload: 'telegram', target: 'TG' }),
+          emptyRule({ type: 'GEOSITE', payload: 'gfw', target: '代理' }),
+          emptyRule({ type: 'MATCH', target: '代理' }),
+        ],
+      };
+    }
+
+    // —— echs-top/proxy: ads + CN + policy groups ——
+    case 'community-echs': {
+      const groups = [
+        select('代理连接', leafOrDirect),
+        select('TELEGRAM', leafOrDirect),
+        select('国外AI', leafOrDirect),
+        select('GOOGLE', leafOrDirect),
+        select('海外媒体', leafOrDirect),
+        select('下载相关', leafOrDirect),
+        select('风控安全', leafOrDirect),
+      ];
+      return {
+        groups,
+        rules: [
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'googleadservices.com', target: 'REJECT' }),
+          emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'REJECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: 'DIRECT' }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: 'DIRECT', noResolve: true }),
+          emptyRule({ type: 'GEOSITE', payload: 'telegram', target: 'TELEGRAM' }),
+          emptyRule({ type: 'GEOSITE', payload: 'openai', target: '国外AI' }),
+          emptyRule({ type: 'GEOSITE', payload: 'google', target: 'GOOGLE' }),
+          emptyRule({ type: 'GEOSITE', payload: 'youtube', target: '海外媒体' }),
+          emptyRule({ type: 'GEOSITE', payload: 'netflix', target: '海外媒体' }),
+          emptyRule({ type: 'GEOSITE', payload: 'gfw', target: '代理连接' }),
+          emptyRule({ type: 'MATCH', target: '代理连接' }),
+        ],
+      };
+    }
+
+    // —— AIsouler/MyClash lite: 直连 / AdBlock / Google / AI / Telegram / Steam / 默认代理 / 漏网之鱼 ——
+    case 'community-aisouler': {
+      const groups = [
+        select('直连', ['DIRECT']),
+        select('AdBlock', ['REJECT', 'DIRECT']),
+        select('Google', leafOrDirect),
+        select('AI', leafOrDirect),
+        select('Telegram', leafOrDirect),
+        select('Steam', leafOrDirect),
+        select('默认代理', leafOrDirect),
+        select('漏网之鱼', ['默认代理', 'DIRECT', 'REJECT']),
+      ];
+      return {
+        groups,
+        rules: [
+          emptyRule({ type: 'GEOSITE', payload: 'private', target: '直连' }),
+          emptyRule({ type: 'GEOSITE', payload: 'cn', target: '直连' }),
+          emptyRule({ type: 'GEOIP', payload: 'CN', target: '直连', noResolve: true }),
+          emptyRule({ type: 'DOMAIN-SUFFIX', payload: 'doubleclick.net', target: 'AdBlock' }),
+          emptyRule({ type: 'DOMAIN-KEYWORD', payload: 'adservice', target: 'AdBlock' }),
+          emptyRule({ type: 'GEOSITE', payload: 'google', target: 'Google' }),
+          emptyRule({ type: 'GEOSITE', payload: 'openai', target: 'AI' }),
+          emptyRule({ type: 'GEOSITE', payload: 'telegram', target: 'Telegram' }),
+          emptyRule({ type: 'GEOSITE', payload: 'steam', target: 'Steam' }),
+          emptyRule({ type: 'GEOSITE', payload: 'gfw', target: '默认代理' }),
+          emptyRule({ type: 'MATCH', target: '漏网之鱼' }),
+        ],
+      };
+    }
+
+    default:
+      return { rules: [emptyRule({ type: 'MATCH', target: 'DIRECT' })] };
+  }
+}
+
+/** Expand WARP domain list lines to Mihomo rule strings (target WARP). */
+export function expandWarpDomainLines(text: string): string[] {
+  const lines = String(text || '')
+    .split(/[\n,，]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (const value of lines) {
+    const upper = value.toUpperCase();
+    if (value.split(',').length >= 3) {
+      out.push(value);
+      continue;
+    }
+    if (
+      upper.startsWith('DOMAIN,') ||
+      upper.startsWith('DOMAIN-SUFFIX,') ||
+      upper.startsWith('DOMAIN-KEYWORD,') ||
+      upper.startsWith('GEOSITE,')
+    ) {
+      out.push(value.includes(',WARP') || value.toUpperCase().includes(',WARP') ? value : `${value},WARP`);
+      continue;
+    }
+    const colon = value.indexOf(':');
+    if (colon > 0) {
+      const prefix = value.slice(0, colon).toLowerCase();
+      const payload = value.slice(colon + 1).trim().replace(/^\./, '');
+      if (prefix === 'domain') {
+        out.push(`DOMAIN-SUFFIX,${payload},WARP`);
+        continue;
+      }
+      if (prefix === 'full') {
+        out.push(`DOMAIN,${payload},WARP`);
+        continue;
+      }
+      if (prefix === 'keyword') {
+        out.push(`DOMAIN-KEYWORD,${payload},WARP`);
+        continue;
+      }
+      if (prefix === 'geosite') {
+        out.push(`GEOSITE,${payload},WARP`);
+        continue;
+      }
+    }
+    out.push(`DOMAIN-SUFFIX,${value.replace(/^\./, '')},WARP`);
+  }
+  return out;
+}
+
+export function isManagedWarpDomainRule(line: string): boolean {
+  const parts = String(line || '')
+    .split(',')
+    .map((s) => s.trim());
+  if (parts.length < 3) return false;
+  const typ = parts[0].toUpperCase();
+  if (!['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'GEOSITE'].includes(typ)) return false;
+  return parts.slice(2).some((p) => p.toUpperCase() === 'WARP');
+}
+
+/** Replace managed WARP domain rules at the front of a rule list. */
+export function mergeWarpDomainRules(existing: string[], domainText: string): string[] {
+  const managed = expandWarpDomainLines(domainText);
+  const rest = existing.filter((r) => !isManagedWarpDomainRule(r));
+  return [...managed, ...rest];
+}

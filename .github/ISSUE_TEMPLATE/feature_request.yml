@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an enhancement for 3m-ui
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What is hard or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work (UI, API, scripts)?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Listeners / protocols
+        - Users / traffic / subscription
+        - Dashboard / UI
+        - Core / Mihomo
+        - SSL / ACME
+        - Telegram / ops
+        - Docs / i18n
+        - Install / Docker
+        - Other

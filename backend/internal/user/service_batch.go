@@ -1,0 +1,197 @@
+package user
+
+import (
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"gorm.io/gorm"
+)
+
+// ListFilter supports search across proxy users.
+type ListFilter struct {
+	Query   string // username / remark / tags substring
+	Group   string // exact group match when non-empty
+	Enabled *bool
+	Online  *bool
+	Blocked *bool // computed from IsCredentialActive
+}
+
+func (s *Service) ListFiltered(f ListFilter) ([]models.ProxyUser, error) {
+	q := s.db.Model(&models.ProxyUser{}).Order("id desc")
+	if term := strings.TrimSpace(f.Query); term != "" {
+		like := "%" + term + "%"
+		q = q.Where("username LIKE ? OR remark LIKE ? OR tags LIKE ? OR `group` LIKE ?", like, like, like, like)
+	}
+	if g := strings.TrimSpace(f.Group); g != "" {
+		q = q.Where("`group` = ?", g)
+	}
+	if f.Enabled != nil {
+		q = q.Where("enabled = ?", *f.Enabled)
+	}
+	if f.Online != nil {
+		q = q.Where("online = ?", *f.Online)
+	}
+	var users []models.ProxyUser
+	if err := q.Find(&users).Error; err != nil {
+		return nil, err
+	}
+	if f.Blocked == nil {
+		return users, nil
+	}
+	out := make([]models.ProxyUser, 0, len(users))
+	for _, u := range users {
+		blocked := !IsCredentialActive(u)
+		if blocked == *f.Blocked {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+// BatchAction is a bulk operation over proxy user IDs.
+type BatchAction string
+
+const (
+	BatchEnable       BatchAction = "enable"
+	BatchDisable      BatchAction = "disable"
+	BatchResetTraffic BatchAction = "reset-traffic"
+	BatchDelete       BatchAction = "delete"
+	BatchExtendDays   BatchAction = "extend-days"
+	BatchAddTraffic   BatchAction = "add-traffic"
+)
+
+// BatchOpts optional parameters for extend-days / add-traffic.
+type BatchOpts struct {
+	Days      int   // extend expiry by N days
+	TrafficGB int64 // add N GiB to traffic_limit (0 means unlimited stays unlimited)
+}
+
+func (s *Service) Batch(action BatchAction, ids []uint, opts BatchOpts) (int, error) {
+	if len(ids) == 0 {
+		return 0, errors.New("ids is required")
+	}
+	// de-dupe
+	seen := map[uint]struct{}{}
+	clean := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		clean = append(clean, id)
+	}
+	if len(clean) == 0 {
+		return 0, errors.New("ids is required")
+	}
+
+	switch action {
+	case BatchEnable:
+		res := s.db.Model(&models.ProxyUser{}).Where("id IN ?", clean).Update("enabled", true)
+		if res.Error != nil {
+			return 0, res.Error
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return int(res.RowsAffected), nil
+	case BatchDisable:
+		res := s.db.Model(&models.ProxyUser{}).Where("id IN ?", clean).Update("enabled", false)
+		if res.Error != nil {
+			return 0, res.Error
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return int(res.RowsAffected), nil
+	case BatchResetTraffic:
+		_ = s.db.Unscoped().Where("proxy_user_id IN ?", clean).Delete(&models.UserNodeTraffic{})
+		// fallthrough traffic zero
+		res := s.db.Model(&models.ProxyUser{}).Where("id IN ?", clean).Updates(map[string]interface{}{
+			"traffic_used":   0,
+			"upload_bytes":   0,
+			"download_bytes": 0,
+		})
+		if res.Error != nil {
+			return 0, res.Error
+		}
+		// Resetting traffic may unblock previously over-quota users. Trigger a
+		// config regeneration so blocked users regain access immediately
+		// instead of waiting for the next enforcer tick (up to 10s latency).
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return int(res.RowsAffected), nil
+	case BatchDelete:
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Unscoped().Where("proxy_user_id IN ?", clean).Delete(&models.ListenerUser{}).Error; err != nil {
+				return err
+			}
+			return tx.Unscoped().Where("id IN ?", clean).Delete(&models.ProxyUser{}).Error
+		}); err != nil {
+			return 0, err
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return len(clean), nil
+	case BatchExtendDays:
+		if opts.Days <= 0 {
+			return 0, errors.New("days must be > 0")
+		}
+		var users []models.ProxyUser
+		if err := s.db.Where("id IN ?", clean).Find(&users).Error; err != nil {
+			return 0, err
+		}
+		n := 0
+		base := time.Now().UTC()
+		for _, u := range users {
+			start := base
+			if !u.ExpireTime.IsZero() && u.ExpireTime.After(base) {
+				start = u.ExpireTime
+			}
+			u.ExpireTime = start.Add(time.Duration(opts.Days) * 24 * time.Hour)
+			if err := s.db.Model(&u).Update("expire_time", u.ExpireTime).Error; err != nil {
+				return n, err
+			}
+			n++
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return n, nil
+	case BatchAddTraffic:
+		if opts.TrafficGB <= 0 {
+			return 0, errors.New("traffic_gb must be > 0")
+		}
+		add := opts.TrafficGB * 1024 * 1024 * 1024
+		var users []models.ProxyUser
+		if err := s.db.Where("id IN ?", clean).Find(&users).Error; err != nil {
+			return 0, err
+		}
+		n := 0
+		for _, u := range users {
+			// 0 = unlimited; leave unlimited alone
+			if u.TrafficLimit <= 0 {
+				continue
+			}
+			newLim := u.TrafficLimit + add
+			if err := s.db.Model(&u).Update("traffic_limit", newLim).Error; err != nil {
+				return n, err
+			}
+			n++
+		}
+		if err := s.notifyCredentialsChanged(); err != nil {
+			log.Printf("warning: credentials changed notification failed: %v", err)
+		}
+		return n, nil
+	default:
+		return 0, fmt.Errorf("unknown batch action %q (enable|disable|reset-traffic|delete|extend-days|add-traffic)", action)
+	}
+}

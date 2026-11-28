@@ -1,0 +1,435 @@
+package protocol
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// UserCred is a protocol-agnostic credential injected at compile time.
+type UserCred struct {
+	Username string
+	Password string
+	UUID     string
+	Flow     string
+}
+
+// CompileInput is the normalized node state passed to protocol modules.
+type CompileInput struct {
+	Name               string
+	Protocol           string
+	Listen             string
+	Port               interface{} // int or official ports string
+	UDP                bool
+	TLS                bool
+	Proxy              string
+	Rule               string
+	RoutingMark        int
+	Config             map[string]interface{}
+	Users              []UserCred
+	HasCredentialState bool // true when creds map has this listener key (even if empty)
+}
+
+// Module is a protocol compiler .
+type Module interface {
+	Kind() string
+	Compile(in CompileInput) (map[string]interface{}, error)
+	Capability() ProtocolCapability
+}
+
+// Registry maps protocol kind → Module.
+type Registry struct {
+	modules map[string]Module
+}
+
+func NewRegistry(mods ...Module) Registry {
+	r := Registry{modules: make(map[string]Module, len(mods))}
+	for _, m := range mods {
+		if m == nil {
+			continue
+		}
+		r.modules[strings.ToLower(m.Kind())] = m
+	}
+	return r
+}
+
+func DefaultCompileRegistry() Registry {
+	return NewRegistry(
+		VLESSCompiler{},
+		VMessCompiler{},
+		TrojanCompiler{},
+		ShadowsocksCompiler{},
+		Hysteria2Compiler{},
+		TUICCompiler{kind: "tuic"},
+		TUICCompiler{kind: "tuic-v4"},
+		TUICCompiler{kind: "tuic-v5"},
+		ShadowQUICCompiler{},
+		GenericCompiler{kind: "snell"},
+		AnyTLSCompiler{},
+		MieruCompiler{},
+		GenericCompiler{kind: "sudoku"},
+		TrustTunnelCompiler{},
+		HTTPCompiler{},
+		SocksCompiler{},
+	)
+}
+
+func (r Registry) Compile(in CompileInput) (map[string]interface{}, error) {
+	kind := strings.ToLower(strings.TrimSpace(in.Protocol))
+	m, ok := r.modules[kind]
+	if !ok {
+		return nil, fmt.Errorf("unsupported protocol %q", kind)
+	}
+	out, err := m.Compile(in)
+	if err != nil {
+		return nil, err
+	}
+	// Mihomo validates `alpn` as a string list on every listener; the panel
+	// schema once stored scalars there. Normalizing here means one legacy
+	// value can no longer take the whole listeners array offline (P1-4) —
+	// including configs saved before the import-side normalization.
+	if v, ok := out["alpn"]; ok {
+		out["alpn"] = normalizeAlpnValue(v)
+	}
+	return out, nil
+}
+
+// normalizeAlpnValue converts a scalar alpn into the []string form Mihomo
+// requires. Lists pass through unchanged; blank entries are dropped.
+func normalizeAlpnValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case string:
+		if s := strings.TrimSpace(val); s != "" {
+			return []string{s}
+		}
+		return []string{}
+	case []interface{}:
+		out := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	case []string:
+		return val
+	default:
+		return v
+	}
+}
+
+func (r Registry) Has(kind string) bool {
+	_, ok := r.modules[strings.ToLower(strings.TrimSpace(kind))]
+	return ok
+}
+
+// ParseConfigJSON decodes listener config JSON into a map.
+func ParseConfigJSON(raw string) (map[string]interface{}, error) {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]interface{}{}, nil
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return nil, fmt.Errorf("invalid config json: %w", err)
+	}
+	if m == nil {
+		m = map[string]interface{}{}
+	}
+	return m, nil
+}
+
+func baseMap(in CompileInput) map[string]interface{} {
+	m := map[string]interface{}{
+		"name":   in.Name,
+		"type":   strings.ToLower(in.Protocol),
+		"port":   in.Port,
+		"listen": in.Listen,
+	}
+	if in.Proxy != "" {
+		m["proxy"] = in.Proxy
+	}
+	if in.Rule != "" {
+		m["rule"] = in.Rule
+	}
+	if in.RoutingMark > 0 {
+		m["routing-mark"] = in.RoutingMark
+	}
+	return m
+}
+
+func copyConfigPassthrough(dst, cfg map[string]interface{}, skip map[string]struct{}) {
+	for k, v := range cfg {
+		if _, ok := skip[k]; ok {
+			continue
+		}
+		// strip panel-only / client-export-only keys.
+		// NOTE: "encryption" is a CLIENT-side field per proxies-vless wiki.
+		// It is preserved in the panel Config map for client YAML emission
+		// (converter/client.go reads p["encryption"]) but stripped from
+		// the listener config.yaml via clientOnlyListenerKey. The server-side
+		// counterpart is "decryption" only per inbound-vless wiki.
+		if strings.HasPrefix(k, "_") || k == "access_profile" ||
+			k == "transport_layer" || k == "security_layer" {
+			continue
+		}
+		// Client-side TLS/hostname fields must not appear on listeners
+		// (wiki inbound docs use certificate/reality/wrappers, not sni/skip-cert-verify).
+		if clientOnlyListenerKey(k) {
+			continue
+		}
+		dst[k] = v
+	}
+}
+
+func clientOnlyListenerKey(k string) bool {
+	switch k {
+	case "sni", "servername", "skip-cert-verify", "name-cert-verify",
+		"fingerprint", "client-fingerprint", "reality-opts",
+		"shadow-tls-opts", "restls-opts", "jls-opts", "ss-opts",
+		"plugin", "plugin-opts", "encryption",
+		// Client grpc-opts extras (proxies transport); listener only has grpc-service-name.
+		"grpc-user-agent", "ping-interval", "max-connections", "min-streams", "max-streams",
+		// Client-only TUIC/Hy2 hints sometimes stored in panel JSON.
+		"udp-relay-mode", "reduce-rtt", "request-timeout", "heartbeat-interval",
+		"fast-open", "max-open-streams", "disable-sni", "ip",
+		// Listener WS is only ws-path (wiki inbound VLESS/VMess). Headers belong on
+		// the client as ws-opts.headers / share URI — not on the serving listener.
+		"ws-headers", "ws-opts", "headers", "network":
+		return true
+	default:
+		return false
+	}
+}
+
+func managedKeys() map[string]struct{} {
+	return map[string]struct{}{
+		"name": {}, "type": {}, "port": {}, "listen": {}, "proxy": {}, "rule": {},
+		"routing-mark": {}, "udp": {}, "tls": {}, "users": {}, "flow": {},
+		"alterId": {},
+	}
+}
+
+func asUsersArray(cfg map[string]interface{}, fromCreds []UserCred, field string, hasCredState bool) []map[string]interface{} {
+	var out []map[string]interface{}
+	if len(fromCreds) > 0 {
+		out = make([]map[string]interface{}, 0, len(fromCreds))
+		for _, c := range fromCreds {
+			u := map[string]interface{}{}
+			switch field {
+			case "uuid":
+				// Official MetaCubeX VLESS/VMess user object uses:
+				//   username (display / inboundUser) + uuid (+ optional flow)
+				// NOT "name". Wrong key is ignored by mihomo → inboundUser empty.
+				// Wiki: users: [{username, uuid, flow}]
+				if c.UUID != "" {
+					u["uuid"] = c.UUID
+				}
+				uname := strings.TrimSpace(c.Username)
+				if uname == "" {
+					uname = strings.TrimSpace(c.UUID) // still better than blank for tracking
+				}
+				if uname != "" {
+					u["username"] = uname
+				}
+				if c.Flow != "" {
+					u["flow"] = c.Flow
+				}
+			case "password":
+				// Trojan / ShadowQUIC / TrustTunnel: username + password.
+				// username is reported as inboundUser when present.
+				if c.Username != "" {
+					u["username"] = c.Username
+					u["password"] = c.Password
+				} else {
+					u["password"] = c.Password
+					if c.UUID != "" {
+						u["uuid"] = c.UUID
+					}
+				}
+			}
+			if len(u) > 0 {
+				out = append(out, u)
+			}
+		}
+	} else {
+		// Fall back to config users when panel credentials are empty.
+		// Previously, hasCredState=true with empty fromCreds returned nil,
+		// which caused Mihomo validation failure ("unset fields: users").
+		// Now we fall back to config users so the listener is at least valid.
+		// Panel-managed users take precedence when available; config users
+		// are a safety net for decrypt failures, inactive users, etc.
+		if raw, ok := cfg["users"]; ok {
+			out = normalizeUsersValue(raw)
+		}
+	}
+	applyListenerFlow(cfg, out)
+	// Propagate top-level alterId to each user object. The official Mihomo
+	// schema for VMess expects alterId inside users[].alterId; without it,
+	// per-user alterId is silently dropped when panel credentials are bound.
+	// Preserve per-user VMess alterId from the listener config when panel
+	// credentials are injected. The official Listener schema stores alterId
+	// inside each users[] entry; replacing users from the credential store must
+	// not erase those per-user values.
+	if field == "uuid" {
+		if raw, ok := cfg["users"].([]interface{}); ok {
+			byUUID := make(map[string]map[string]interface{}, len(raw))
+			for _, item := range raw {
+				if row, ok := item.(map[string]interface{}); ok {
+					if uuid := strings.TrimSpace(fmt.Sprint(row["uuid"])); uuid != "" {
+						byUUID[uuid] = row
+					}
+				}
+			}
+			for _, user := range out {
+				uuid := strings.TrimSpace(fmt.Sprint(user["uuid"]))
+				if row, ok := byUUID[uuid]; ok {
+					for _, key := range []string{"alterId", "flow"} {
+						if value, exists := row[key]; exists && value != nil {
+							user[key] = value
+						}
+					}
+				}
+			}
+		}
+	}
+	// Backward-compatible panel-level alterId fallback.
+	if alterId, ok := cfg["alterId"]; ok && alterId != nil {
+		for _, user := range out {
+			if _, exists := user["alterId"]; !exists {
+				user["alterId"] = alterId
+			}
+		}
+	}
+	return out
+}
+
+// asUsersMap returns users as a map{username: password} for protocols whose
+// Mihomo listener schema expects that shape (hysteria2, anytls, mieru).
+func asUsersMap(cfg map[string]interface{}, fromCreds []UserCred, hasCredState bool) map[string]interface{} {
+	if len(fromCreds) > 0 {
+		out := make(map[string]interface{}, len(fromCreds))
+		for _, c := range fromCreds {
+			name := c.Username
+			if name == "" {
+				name = "default"
+			}
+			out[name] = c.Password
+		}
+		return out
+	}
+	// Fall back to config users when panel credentials are empty.
+	// See asUsersArray for rationale.
+	if raw, ok := cfg["users"]; ok {
+		switch users := raw.(type) {
+		case map[string]interface{}:
+			return users
+		case map[interface{}]interface{}:
+			out := make(map[string]interface{}, len(users))
+			for k, v := range users {
+				out[fmt.Sprint(k)] = fmt.Sprint(v)
+			}
+			return out
+		}
+	}
+	return nil
+}
+
+// asUsersMapUUID returns users as a map{uuid: password} for protocols whose
+// Mihomo listener schema expects that shape (TUIC v5: users is a map keyed by UUID).
+// Falls back to Username when UUID is empty (legacy panel users without UUID).
+func asUsersMapUUID(cfg map[string]interface{}, fromCreds []UserCred, hasCredState bool) map[string]interface{} {
+	// Union: Config autofill UUID(s) + every bound panel user.
+	// Subscription exports panel UUID/password; inbound must accept the same
+	// keys or TUIC v5 auth fails (config-only random UUID ≠ panel UUID).
+	out := map[string]interface{}{}
+	if raw, ok := cfg["users"]; ok {
+		switch users := raw.(type) {
+		case map[string]interface{}:
+			for k, v := range users {
+				if s := strings.TrimSpace(fmt.Sprint(v)); s != "" {
+					out[k] = s
+				}
+			}
+		case map[interface{}]interface{}:
+			for k, v := range users {
+				if s := strings.TrimSpace(fmt.Sprint(v)); s != "" {
+					out[fmt.Sprint(k)] = s
+				}
+			}
+		}
+	}
+	for _, c := range fromCreds {
+		key := strings.TrimSpace(c.UUID)
+		if key == "" {
+			key = strings.TrimSpace(c.Username)
+		}
+		if key == "" {
+			continue
+		}
+		pass := strings.TrimSpace(c.Password)
+		if pass == "" {
+			continue
+		}
+		out[key] = pass
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// applyListenerFlow copies a listener-level VLESS flow onto every user that does
+// not carry one.
+//
+// Vision flow is TCP-only, so a stale flow must not be pushed onto users of a
+// listener that has since been switched to ws/grpc/xhttp: Mihomo rejects that
+// combination outright, which takes the whole listener down rather than one user.
+func applyListenerFlow(cfg map[string]interface{}, users []map[string]interface{}) {
+	flow, ok := cfg["flow"].(string)
+	if !ok || strings.TrimSpace(flow) == "" || !TransportCarriesFlow(cfg) {
+		return
+	}
+	for _, user := range users {
+		if _, exists := user["flow"]; !exists {
+			user["flow"] = flow
+		}
+	}
+}
+
+func normalizeUsersValue(value interface{}) []map[string]interface{} {
+	switch users := value.(type) {
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for _, item := range users {
+			if m, ok := item.(map[string]interface{}); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	case []map[string]interface{}:
+		return users
+	case map[string]interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for username, password := range users {
+			out = append(out, map[string]interface{}{"username": username, "password": fmt.Sprint(password)})
+		}
+		return out
+	case map[interface{}]interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for rawUsername, rawPassword := range users {
+			out = append(out, map[string]interface{}{"username": fmt.Sprint(rawUsername), "password": fmt.Sprint(rawPassword)})
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func portValue(port string) interface{} {
+	s := strings.TrimSpace(port)
+	if p, err := strconv.Atoi(s); err == nil {
+		return p
+	}
+	return s
+}

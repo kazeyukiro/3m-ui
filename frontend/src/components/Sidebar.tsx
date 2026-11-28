@@ -1,0 +1,107 @@
+import React from 'react';
+import { Layout, Menu } from 'antd';
+import {
+  IconNavDashboard,
+  IconNavListeners,
+  IconNavOutbounds,
+  IconNavUsers,
+  IconNavShare,
+  IconNavTraffic,
+  IconNavCluster,
+  IconNavRouting,
+  IconNavCore,
+  IconNavLogs,
+  IconNavConfig,
+  IconNavSettings,
+  IconNavLogout,
+} from '../icons';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore';
+import { useI18n } from '../i18n';
+import { useThemeStore } from '../stores/themeStore';
+import { webPath } from '../utils/webPath';
+import { SidebarFeatureSearch } from './FeatureSearch';
+
+const { Sider } = Layout;
+
+export function useSidebarMenuItems(onNavigate?: () => void) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const logout = useAuthStore((s) => s.logout);
+  const { t } = useI18n();
+
+  const items = [
+    { key: '/', icon: <IconNavDashboard />, label: t('nav.dashboard') },
+    { key: '/listeners', icon: <IconNavListeners />, label: t('nav.listeners') },
+    { key: '/outbounds', icon: <IconNavOutbounds />, label: t('nav.outbounds') },
+    { key: '/users', icon: <IconNavUsers />, label: t('nav.users') },
+    { key: '/share', icon: <IconNavShare />, label: t('nav.share') },
+    { key: '/traffic', icon: <IconNavTraffic />, label: t('nav.traffic') },
+    { key: '/cluster', icon: <IconNavCluster />, label: t('nav.cluster') },
+    { key: '/routing', icon: <IconNavRouting />, label: t('nav.routing') },
+    { key: '/core', icon: <IconNavCore />, label: t('nav.core') },
+    { key: '/logs', icon: <IconNavLogs />, label: t('nav.logs') },
+    { key: '/config', icon: <IconNavConfig />, label: t('nav.config') },
+    { key: '/settings', icon: <IconNavSettings />, label: t('nav.settings') },
+  ];
+
+  const onMenuClick = ({ key }: { key: string }) => {
+    navigate(key);
+    onNavigate?.();
+  };
+
+  const onLogout = () => {
+    logout();
+    navigate('/login');
+    onNavigate?.();
+  };
+
+  return { items, selectedKeys: [location.pathname], onMenuClick, onLogout, t };
+}
+
+export const SidebarMenu: React.FC<{ onNavigate?: () => void; style?: React.CSSProperties; collapsed?: boolean }> = ({
+  onNavigate,
+  style,
+  collapsed,
+}) => {
+  const { items, selectedKeys, onMenuClick, onLogout, t } = useSidebarMenuItems(onNavigate);
+
+  // The Sider follows the global theme (light/dark); the logout divider
+  // uses antd's CSS variable so it adapts automatically.
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', ...style }}>
+      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: 18, flexShrink: 0, padding: '0 12px' }}>
+        <img src={`${webPath()}/logo.png`} alt="" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} />
+        {!collapsed && <span>3M-UI</span>}
+      </div>
+      <SidebarFeatureSearch collapsed={collapsed} />
+      <Menu
+        mode="inline"
+        inlineCollapsed={!!collapsed}
+        selectedKeys={selectedKeys}
+        items={items}
+        onClick={onMenuClick}
+        style={{ flex: 1, borderInlineEnd: 'none', overflowY: 'auto' }}
+      />
+      <Menu
+        mode="inline"
+        inlineCollapsed={!!collapsed}
+        selectable={false}
+        items={[{ key: 'logout', icon: <IconNavLogout />, label: t('nav.logout'), onClick: onLogout }]}
+        style={{ borderInlineEnd: 'none', borderTop: '1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06))', flexShrink: 0 }}
+      />
+    </div>
+  );
+};
+
+const Sidebar: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
+  const isDark = useThemeStore((s) => s.isDark);
+  return (
+    <Sider trigger={null} collapsible collapsed={collapsed} theme={isDark ? 'dark' : 'light'} breakpoint="md" collapsedWidth={64} width={220}
+      style={{ overflow: 'auto', height: '100vh', position: 'sticky', insetInlineStart: 0, top: 0, bottom: 0 }}>
+      <SidebarMenu collapsed={collapsed} />
+    </Sider>
+  );
+};
+
+export default Sidebar;

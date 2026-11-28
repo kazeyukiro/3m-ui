@@ -1,0 +1,77 @@
+import client from './client';
+import type { Listener } from './nodes';
+
+export {
+  fetchListeners,
+  createListener,
+  updateListener,
+  deleteListener,
+  reloadListener,
+  exportNodeURI,
+  quickCreateListener,
+} from './nodes';
+export type { Listener } from './nodes';
+
+export interface ListenerTemplate {
+  id: number;
+  name: string;
+  protocol: string;
+  config: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ListenerVersion {
+  id: number;
+  listener_id: number;
+  version: number;
+  created_at: string;
+  reason?: string;
+  snapshot: string;
+}
+
+export const listListenerTemplates = () => client.get<ListenerTemplate[]>('/nodes/templates').then(r => r.data);
+export const createListenerTemplate = (payload: Partial<ListenerTemplate>) => client.post<ListenerTemplate>('/nodes/templates', payload).then(r => r.data);
+export const deleteListenerTemplate = (id: number) => client.delete(`/nodes/templates/${id}`).then(r => r.data);
+export const instantiateListenerTemplate = (id: number, payload: { name: string; port: string }) => client.post(`/nodes/templates/${id}/instantiate`, payload).then(r => r.data);
+export const cloneListener = (id: number, payload: { name: string; port: string }) => client.post(`/nodes/${id}/clone`, payload).then(r => r.data);
+export const batchSetListenersEnabled = (ids: number[], enabled: boolean) => client.post('/nodes/batch/enabled', { ids, enabled }).then(r => r.data);
+export const listListenerVersions = (id: number) => client.get<ListenerVersion[]>(`/nodes/${id}/versions`).then(r => r.data);
+export const diffListenerVersion = (id: number, version: number) => client.get<string>(`/nodes/${id}/versions/${version}/diff`, { responseType: 'text' }).then(r => r.data);
+export const rollbackListenerVersion = (id: number, version: number) => client.post(`/nodes/${id}/versions/${version}/rollback`).then(r => r.data);
+
+export const generateMaterial = (payload: { kind: string; cipher?: string }) =>
+  client.post('/listeners/generate', payload).then((r) => r.data as Record<string, string>);
+
+export interface RealityTarget {
+  target: string;
+  server_name: string;
+  latency_ms: number;
+  eligible: boolean;
+  reason?: string;
+}
+
+export interface RealityScanResponse {
+  selected: RealityTarget | null;
+  candidates: RealityTarget[];
+  scanned: number;
+  checked_at: string;
+}
+
+export const scanRealityTargets = (signal: AbortSignal) =>
+  client.post<RealityScanResponse>('/listeners/reality/scan', {}, { signal, timeout: 40000 }).then(r => r.data);
+
+export interface ApplyCertificateResult {
+  updated: number[];
+  failed: { id: number; name?: string; error: string }[];
+}
+
+/** Apply TLS certificate/private-key to multiple listeners in one request. */
+export const batchApplyCertificate = (payload: {
+  ids: number[];
+  certificate?: string;
+  private_key?: string;
+  cert_file?: string;
+  key_file?: string;
+  from_panel_ssl?: boolean;
+}) => client.post<ApplyCertificateResult>('/nodes/batch/certificate', payload).then((r) => r.data);

@@ -1,0 +1,1025 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Card, Table, Button, Space, Modal, Form, Input, Switch, message, Popconfirm, Select, Tag,
+  InputNumber, DatePicker, Progress, Tooltip, Dropdown, Checkbox, Spin, Typography,
+} from 'antd';
+import { IconAddUser, IconDelete, IconEdit, IconLink, IconClear, IconExternal, IconCopy, IconMore, IconChart, IconQuickCreate } from '../icons';
+import dayjs from 'dayjs';
+import {
+  fetchUsers, createUser, quickCreateUser, updateUser, deleteUser, resetUserTraffic, deleteDepletedUsers, batchUsers,
+  fetchUserNodes, bindUserNodes, fetchUserRemoteNodes, bindUserRemoteNodes, ProxyUser,
+  fetchUserNodeTraffic, type UserNodeTrafficItem,
+} from '../api/users';
+import { fetchListeners, Listener } from '../api/nodes';
+import { fetchMirroredNodes, RemoteNodeMirror } from '../api/cluster';
+import { useI18n, fieldTip } from '../i18n';
+import PageHeader from '../components/PageHeader';
+import useIsMobile from '../hooks/useIsMobile';
+import { useNavigate } from 'react-router-dom';
+import { copyText } from '../utils/clipboard';
+import { formatBytes } from '../utils/format';
+
+const Users: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const [data, setData] = useState<ProxyUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [quickModal, setQuickModal] = useState(false);
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
+  const [quickForm] = Form.useForm();
+  const [credModal, setCredModal] = useState(false);
+  const [credInfo, setCredInfo] = useState<{ username: string; password: string; uuid: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const [nodeTrafficOpen, setNodeTrafficOpen] = useState(false);
+  const [nodeTrafficUser, setNodeTrafficUser] = useState<ProxyUser | null>(null);
+  const [nodeTrafficRows, setNodeTrafficRows] = useState<UserNodeTrafficItem[]>([]);
+  const [nodeTrafficLoading, setNodeTrafficLoading] = useState(false);
+  const [editing, setEditing] = useState<ProxyUser | null>(null);
+  const [form] = Form.useForm();
+  const [keyword, setKeyword] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const [bindOpen, setBindOpen] = useState(false);
+  const [bindUser, setBindUser] = useState<ProxyUser | null>(null);
+  const [allNodes, setAllNodes] = useState<Listener[]>([]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<number[]>([]);
+  const [remoteMirrors, setRemoteMirrors] = useState<RemoteNodeMirror[]>([]);
+  const [selectedRemoteIds, setSelectedRemoteIds] = useState<number[]>([]);
+  const [bindLoading, setBindLoading] = useState(false);
+
+  const isUserOnline = (r: ProxyUser) => {
+    if (r.online) return true;
+    const ls = (r as any).last_seen || (r as any).last_seen_at;
+    if (!ls) return false;
+    const t0 = new Date(ls).getTime();
+    if (!Number.isFinite(t0)) return false;
+    return Date.now() - t0 < 5 * 60_000;
+  };
+
+    const load = async () => {
+    setLoading(true);
+    try {
+      setData(await fetchUsers());
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = keyword.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((u) =>
+      (u.username || '').toLowerCase().includes(q) ||
+      (u.remark || '').toLowerCase().includes(q) ||
+      (u.group || '').toLowerCase().includes(q) ||
+      (u.tags || '').toLowerCase().includes(q)
+    );
+  }, [data, keyword]);
+
+
+  const openQuick = () => {
+    quickForm.resetFields();
+    quickForm.setFieldsValue({ bind_all_listeners: true, username: '' });
+    setQuickModal(true);
+  };
+
+  const doQuickCreate = async () => {
+    setQuickSubmitting(true);
+    try {
+      const values = await quickForm.validateFields();
+      const res = await quickCreateUser({
+        username: (values.username || '').trim() || undefined,
+        bind_all_listeners: !!values.bind_all_listeners,
+        remark: (values.remark || '').trim() || undefined,
+      });
+      setQuickModal(false);
+      setCredInfo({
+        username: res.user?.username || values.username || '',
+        password: res.password,
+        uuid: res.uuid,
+      });
+      setCredModal(true);
+      message.success(t('users.quickCreated', 'User created'));
+      await load();
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      message.error(e?.response?.data?.error || e.message || t('common.error'));
+    } finally {
+      setQuickSubmitting(false);
+    }
+  };
+
+  const onSubmit = async (values: any) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const trafficGB = values.traffic_limit_gb;
+      const payload: Record<string, unknown> = {
+        username: values.username,
+        enabled: !!values.enabled,
+        traffic_limit: trafficGB && trafficGB > 0 ? Math.round(Number(trafficGB) * 1024 * 1024 * 1024) : 0,
+        ip_limit: values.ip_limit != null ? Number(values.ip_limit) : 0,
+                sub_pull_limit: values.sub_pull_limit != null ? Number(values.sub_pull_limit) : 0,
+        remark: values.remark || '',
+        group: values.group || '',
+        tags: values.tags || '',
+        traffic_reset_days: values.traffic_reset_days != null ? Number(values.traffic_reset_days) : 0,
+        expire_renew_days: values.expire_renew_days != null ? Number(values.expire_renew_days) : 0,
+        start_on_first_use: !!values.start_on_first_use,
+        expire_days_after_first: values.expire_days_after_first != null ? Number(values.expire_days_after_first) : 0,
+        external_links: String(values.external_links || '').trim(),
+      };
+      if (values.password) payload.password = values.password;
+      if (values.expire_time) {
+        payload.expire_time = values.expire_time.toISOString();
+      } else if (editing) {
+        payload.expire_time = '0001-01-01T00:00:00Z';
+      }
+      if (editing) {
+        await updateUser(editing.id, payload);
+        message.success(t('users.updated'));
+      } else {
+        await createUser(payload);
+        message.success(t('users.created'));
+      }
+      setModalOpen(false);
+      setEditing(null);
+      form.resetFields();
+      await load();
+    } catch (e: any) {
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
+      message.error(e?.message || t('common.error'));
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  const onDelete = async (id: number) => {
+    try {
+      await deleteUser(id);
+      message.success(t('users.deleted'));
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
+  const onResetTraffic = async (id: number) => {
+    try {
+      await resetUserTraffic(id);
+      message.success(t('users.trafficReset'));
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
+
+  const openNodeTraffic = async (record: ProxyUser) => {
+    setNodeTrafficUser(record);
+    setNodeTrafficOpen(true);
+    setNodeTrafficLoading(true);
+    try {
+      const data = await fetchUserNodeTraffic(record.id);
+      setNodeTrafficRows(data.items || []);
+    } catch (e: any) {
+      message.error(e?.message || t('common.error'));
+      setNodeTrafficRows([]);
+    } finally {
+      setNodeTrafficLoading(false);
+    }
+  };
+
+  const openEdit = (record: ProxyUser) => {
+    setEditing(record);
+    const limitGB =
+      record.traffic_limit && record.traffic_limit > 0
+        ? Number((record.traffic_limit / (1024 * 1024 * 1024)).toFixed(3))
+        : undefined;
+    const exp =
+      record.expire_time && !record.expire_time.startsWith('0001')
+        ? dayjs(record.expire_time)
+        : undefined;
+    form.setFieldsValue({
+      username: record.username,
+      enabled: record.enabled,
+      traffic_limit_gb: limitGB,
+      expire_time: exp,
+      password: undefined,
+      ip_limit: record.ip_limit || 0,
+                                  sub_pull_limit: record.sub_pull_limit || 0,
+      remark: record.remark || '',
+      group: record.group || '',
+      tags: record.tags || '',
+      traffic_reset_days: record.traffic_reset_days || 0,
+      expire_renew_days: record.expire_renew_days || 0,
+      start_on_first_use: !!record.start_on_first_use,
+      expire_days_after_first: record.expire_days_after_first || 0,
+      external_links: record.external_links || '',
+    });
+    setModalOpen(true);
+  };
+
+  const openBind = async (record: ProxyUser) => {
+    setBindUser(record);
+    setBindOpen(true);
+    setBindLoading(true);
+    try {
+      const [nodes, bound, mirrors, remoteBound] = await Promise.all([
+        fetchListeners(),
+        fetchUserNodes(record.id),
+        fetchMirroredNodes().catch(() => [] as RemoteNodeMirror[]),
+        fetchUserRemoteNodes(record.id).catch(() => ({ mirror_ids: [] as number[] })),
+      ]);
+      setAllNodes(nodes || []);
+      setSelectedNodeIds((bound || []).map((n) => n.id));
+      setRemoteMirrors(mirrors || []);
+      setSelectedRemoteIds(remoteBound?.mirror_ids || []);
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+      setBindOpen(false);
+      setBindUser(null);
+    } finally {
+      setBindLoading(false);
+    }
+  };
+
+  const onBindSave = async () => {
+    if (!bindUser) return;
+    setBindLoading(true);
+    try {
+      await bindUserNodes(bindUser.id, selectedNodeIds);
+      await bindUserRemoteNodes(bindUser.id, selectedRemoteIds);
+      message.success(t('users.bindSuccess'));
+      setBindOpen(false);
+      setBindUser(null);
+      setSelectedNodeIds([]);
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setBindLoading(false);
+    }
+  };
+
+  const openShare = async (record: ProxyUser) => {
+    navigate(`/share?user=${record.id}`);
+  };
+
+  const onDeleteDepleted = async () => {
+    try {
+      const res = await deleteDepletedUsers();
+      message.success((t('users.depletedDeleted') || 'Deleted depleted users') + `: ${res.deleted}`);
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
+  const onBatch = async (action: string, extra?: { days?: number; traffic_gb?: number }) => {
+    const ids = selectedRowKeys.map((k) => Number(k)).filter((n) => n > 0);
+    if (!ids.length) {
+      message.warning(t('users.batchNeedSelect') || 'Select users first');
+      return;
+    }
+    try {
+      const res = await batchUsers(action, ids, extra);
+      message.success((t('users.batchDone') || 'Batch done') + `: ${res.affected}`);
+      setSelectedRowKeys([]);
+      load();
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    }
+  };
+
+
+  const columns = [
+    { title: t('users.username'), dataIndex: 'username', key: 'username', width: 120, ellipsis: true },
+    {
+      title: t('users.remark') || 'Remark',
+      dataIndex: 'remark',
+      key: 'remark',
+      width: 120,
+      ellipsis: true,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: t('users.traffic'),
+      key: 'traffic',
+      width: 180,
+      render: (_: any, r: ProxyUser) => {
+        const used = r.traffic_used || 0;
+        const limit = r.traffic_limit || 0;
+        const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+        return (
+          <div>
+            <div style={{ fontSize: 12 }}>
+              {formatBytes(used)}
+              {limit > 0 ? ` / ${formatBytes(limit)}` : ` / ${t('users.unlimited')}`}
+            </div>
+            {limit > 0 && <Progress percent={pct} size="small" status={pct >= 100 ? 'exception' : 'active'} />}
+          </div>
+        );
+      },
+    },
+    {
+      title: t('users.ipLimit') || 'IP limit',
+      dataIndex: 'ip_limit',
+      key: 'ip_limit',
+      width: 90,
+      render: (v: number) => (v && v > 0 ? v : t('users.unlimited')),
+    },
+    {
+      title: t('users.expire'),
+      dataIndex: 'expire_time',
+      key: 'expire',
+      width: 120,
+      render: (v: string) => {
+        if (!v || v.startsWith('0001')) return t('users.neverExpire');
+        return dayjs(v).format('YYYY-MM-DD');
+      },
+    },
+    {
+      title: t('common.status'),
+      key: 'status',
+      width: 140,
+      filters: [
+        { text: t('users.online'), value: 'online' },
+        { text: t('users.offline'), value: 'offline' },
+        { text: t('users.enabled') || 'Enabled', value: 'enabled' },
+        { text: t('users.disabled') || 'Disabled', value: 'disabled' },
+      ],
+      onFilter: (value: any, r: ProxyUser) => {
+        if (value === 'online') return isUserOnline(r);
+        if (value === 'offline') return !isUserOnline(r);
+        if (value === 'enabled') return !!r.enabled;
+        if (value === 'disabled') return !r.enabled;
+        return true;
+      },
+      render: (_: any, r: ProxyUser) => (
+        <Space size={4} wrap>
+          {isUserOnline(r) ? <Tag color="success">{t('users.online')}</Tag> : <Tag>{t('users.offline')}</Tag>}
+          {r.blocked ? <Tag color="error">{t('users.blocked')}</Tag> : null}
+          {!r.enabled ? <Tag color="default">{t('common.disabled')}</Tag> : null}
+        </Space>
+      ),
+    },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      width: 260,
+      fixed: 'right' as const,
+      render: (_: any, record: ProxyUser) => (
+        <Space wrap size={4}>
+          <Button size="small" icon={<IconLink />} onClick={() => openBind(record)}>
+            {t('users.bind')}
+          </Button>
+          <Tooltip title={t('users.shareTitle') || 'Subscription'}>
+            <Button size="small" icon={<IconExternal />} onClick={() => openShare(record)} />
+          </Tooltip>
+          <Tooltip title={t('users.resetTraffic')}>
+            <Popconfirm title={t('users.resetTrafficConfirm')} onConfirm={() => onResetTraffic(record.id)}>
+              <Button size="small" icon={<IconClear />} />
+            </Popconfirm>
+          </Tooltip>
+          <Button size="small" icon={<IconChart />} onClick={() => openNodeTraffic(record)} title={t('users.nodeTraffic', 'Node traffic')} aria-label={t('users.nodeTraffic', 'Node traffic')} />
+          <Button size="small" icon={<IconEdit />} onClick={() => openEdit(record)} />
+          <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => onDelete(record.id)}>
+            <Button size="small" icon={<IconDelete />} danger />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <PageHeader title={t('users.title')} subtitle={t('users.subtitle', 'Manage accounts, traffic limits, node bindings and subscriptions.')} />
+      <Card
+        styles={{ body: { padding: isMobile ? 10 : undefined } }}
+        extra={
+          <Space className="page-toolbar" wrap style={{ width: isMobile ? '100%' : undefined }}>
+            <Input.Search
+              allowClear
+              placeholder={t('common.search')}
+              onSearch={setKeyword}
+              onChange={(e) => { if (!e.target.value) setKeyword(''); }}
+              style={{ width: isMobile ? '100%' : 200 }}
+            />
+            {isMobile ? (
+              <>
+                <Button type="primary" icon={<IconQuickCreate />} block onClick={openQuick}>
+                  {t('users.quickCreate', 'Quick create')}
+                </Button>
+                <Button
+                  icon={<IconAddUser />}
+                  block
+                  onClick={() => {
+                    setEditing(null);
+                    form.resetFields();
+                    form.setFieldsValue({ enabled: true, ip_limit: 0, sub_pull_limit: 0 });
+                    submittingRef.current = false;
+                    setSubmitting(false);
+                    setModalOpen(true);
+                  }}
+                >
+                  {t('users.create')}
+                </Button>
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'enable',
+                        label: t('users.batchEnable') || 'Enable',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => onBatch('enable'),
+                      },
+                      {
+                        key: 'disable',
+                        label: t('users.batchDisable') || 'Disable',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => onBatch('disable'),
+                      },
+                      {
+                        key: 'reset',
+                        label: t('users.batchResetTraffic') || 'Reset traffic',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => onBatch('reset-traffic'),
+                      },
+                      {
+                        key: 'extend',
+                        label: t('users.batchExtend') || 'Extend days',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => {
+                          const days = Number(window.prompt(t('users.batchExtendPrompt') || 'Extend by how many days?', '30') || 0);
+                          if (days > 0) onBatch('extend-days', { days });
+                        },
+                      },
+                      {
+                        key: 'addtf',
+                        label: t('users.batchAddTraffic') || 'Add traffic',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => {
+                          const gb = Number(window.prompt(t('users.batchAddTrafficPrompt') || 'Add how many GiB to limit?', '10') || 0);
+                          if (gb > 0) onBatch('add-traffic', { traffic_gb: gb });
+                        },
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'del',
+                        danger: true,
+                        label: t('users.batchDelete') || 'Delete selected',
+                        disabled: !selectedRowKeys.length,
+                        onClick: () => {
+                          Modal.confirm({
+                            title: t('users.batchDeleteConfirm') || 'Delete selected users?',
+                            onOk: () => onBatch('delete'),
+                          });
+                        },
+                      },
+                      {
+                        key: 'depleted',
+                        danger: true,
+                        label: t('users.deleteDepleted') || 'Delete depleted',
+                        onClick: () => {
+                          Modal.confirm({
+                            title: t('users.deleteDepletedConfirm') || 'Delete all expired / over-quota users?',
+                            onOk: onDeleteDepleted,
+                          });
+                        },
+                      },
+                    ],
+                  }}
+                >
+                  <Button block>{t('users.batch') || 'Batch'} ({selectedRowKeys.length})</Button>
+                </Dropdown>
+              </>
+            ) : (
+              <>
+            <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('enable')}>
+              {t('users.batchEnable') || 'Enable'}
+            </Button>
+            <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('disable')}>
+              {t('users.batchDisable') || 'Disable'}
+            </Button>
+            <Button disabled={!selectedRowKeys.length} onClick={() => onBatch('reset-traffic')}>
+              {t('users.batchResetTraffic') || 'Reset traffic'}
+            </Button>
+            <Button
+              disabled={!selectedRowKeys.length}
+              onClick={() => {
+                const days = Number(window.prompt(t('users.batchExtendPrompt') || 'Extend by how many days?', '30') || 0);
+                if (days > 0) onBatch('extend-days', { days });
+              }}
+            >
+              {t('users.batchExtend') || 'Extend days'}
+            </Button>
+            <Button
+              disabled={!selectedRowKeys.length}
+              onClick={() => {
+                const gb = Number(window.prompt(t('users.batchAddTrafficPrompt') || 'Add how many GiB to limit?', '10') || 0);
+                if (gb > 0) onBatch('add-traffic', { traffic_gb: gb });
+              }}
+            >
+              {t('users.batchAddTraffic') || 'Add traffic'}
+            </Button>
+            <Popconfirm
+              title={t('users.batchDeleteConfirm') || 'Delete selected users?'}
+              onConfirm={() => onBatch('delete')}
+              disabled={!selectedRowKeys.length}
+            >
+              <Button danger disabled={!selectedRowKeys.length} icon={<IconDelete />}>
+                {t('users.batchDelete') || 'Delete selected'}
+              </Button>
+            </Popconfirm>
+            <Popconfirm
+              title={t('users.deleteDepletedConfirm') || 'Delete all expired / over-quota users?'}
+              onConfirm={onDeleteDepleted}
+            >
+              <Button danger icon={<IconDelete />}>
+                {t('users.deleteDepleted') || 'Delete depleted'}
+              </Button>
+            </Popconfirm>
+            <Button type="primary" icon={<IconQuickCreate />} onClick={openQuick}>
+              {t('users.quickCreate', 'Quick create')}
+            </Button>
+            <Button
+              icon={<IconAddUser />}
+              onClick={() => {
+                setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({ enabled: true, ip_limit: 0, sub_pull_limit: 0 });
+                submittingRef.current = false;
+                setSubmitting(false);
+                setModalOpen(true);
+              }}
+            >
+              {t('users.create')}
+            </Button>
+              </>
+            )}
+          </Space>
+        }
+      >
+        {isMobile ? (
+          <Spin spinning={loading}>
+            <div className="mobile-entity-list">
+              {filtered.length === 0 && !loading ? (
+                <div className="mobile-empty">{t('common.empty')}</div>
+              ) : filtered.map((record) => {
+                const id = record.id;
+                const checked = selectedRowKeys.includes(id);
+                const used = Number(record.traffic_used || 0);
+                const limit = Number(record.traffic_limit || 0);
+                return (
+                  <div className="mobile-entity-card" key={id}>
+                    <div className="mobile-entity-card-main">
+                      <Checkbox
+                        checked={checked}
+                        onChange={(e) => {
+                          setSelectedRowKeys((keys) =>
+                            e.target.checked ? [...keys, id] : keys.filter((k) => k !== id),
+                          );
+                        }}
+                      />
+                      <div
+                        className="mobile-entity-card-body"
+                        onClick={() => {
+                          submittingRef.current = false;
+    setSubmitting(false);
+    setEditing(record);
+                          form.setFieldsValue({
+                            username: record.username,
+                            password: undefined,
+                            enabled: record.enabled,
+                            traffic_limit: record.traffic_limit
+                              ? Number((record.traffic_limit / (1024 ** 3)).toFixed(2))
+                              : 0,
+                            expire_time:
+                              record.expire_time && !String(record.expire_time).startsWith('0001')
+                                ? dayjs(record.expire_time)
+                                : undefined,
+                            ip_limit: record.ip_limit || 0,
+                                                        sub_pull_limit: record.sub_pull_limit || 0,
+                            remark: record.remark,
+                            group: record.group || '',
+                            tags: record.tags || '',
+                            traffic_reset_days: record.traffic_reset_days || 0,
+                            expire_renew_days: record.expire_renew_days || 0,
+                          });
+                          setModalOpen(true);
+                        }}
+                      >
+                        <div className="mobile-entity-title">
+                          {record.username}
+                          {record.remark ? (
+                            <span className="mobile-entity-sub"> · {record.remark}</span>
+                          ) : null}
+                        </div>
+                        <div className="mobile-entity-meta">
+                          <Tag color={isUserOnline(record) ? 'success' : 'default'}>
+                            {isUserOnline(record) ? t('users.online') : t('users.offline')}
+                          </Tag>
+                          <Tag color={record.enabled ? 'processing' : 'default'}>
+                            {record.enabled ? t('common.enabled') : t('common.disabled')}
+                          </Tag>
+                          {record.group ? <Tag>{record.group}</Tag> : null}
+                        </div>
+                        <div className="mobile-entity-rows">
+                          <div className="mobile-entity-row">
+                            <span className="label">{t('users.traffic')}</span>
+                            <span className="value">
+                              {formatBytes(used)}
+                              {limit > 0 ? ` / ${formatBytes(limit)}` : ` / ${t('users.unlimited')}`}
+                            </span>
+                          </div>
+                          <div className="mobile-entity-row">
+                            <span className="label">{t('users.expire')}</span>
+                            <span className="value">
+                              {!record.expire_time || String(record.expire_time).startsWith('0001')
+                                ? t('users.neverExpire')
+                                : dayjs(record.expire_time).format('YYYY-MM-DD')}
+                            </span>
+                          </div>
+                          {(record.tags || record.remark) && (
+                            <div className="mobile-entity-row">
+                              <span className="label">{t('users.remark') || 'Remark'}</span>
+                              <span className="value">{[record.remark, record.tags].filter(Boolean).join(' · ')}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                                            <Dropdown
+                        menu={{
+                          items: [
+                            {
+                              key: 'edit',
+                              icon: <IconEdit />,
+                              label: t('common.edit'),
+                              onClick: () => {
+                                setEditing(record);
+                                form.setFieldsValue({
+                                  username: record.username,
+                                  password: undefined,
+                                  enabled: record.enabled,
+                                  traffic_limit: record.traffic_limit
+                                    ? Number((record.traffic_limit / (1024 ** 3)).toFixed(2))
+                                    : 0,
+                                  expire_time:
+                                    record.expire_time && !String(record.expire_time).startsWith('0001')
+                                      ? dayjs(record.expire_time)
+                                      : undefined,
+                                  ip_limit: record.ip_limit || 0,
+                                  sub_pull_limit: record.sub_pull_limit || 0,
+                                  remark: record.remark,
+                                  group: record.group || '',
+                                  tags: record.tags || '',
+                                  traffic_reset_days: record.traffic_reset_days || 0,
+                                  expire_renew_days: record.expire_renew_days || 0,
+                                });
+                                setModalOpen(true);
+                              },
+                            },
+                            {
+                              key: 'nodeTraffic',
+                              icon: <IconChart />,
+                              label: t('users.nodeTraffic', 'Node traffic'),
+                              onClick: () => openNodeTraffic(record),
+                            },
+                            {
+                              key: 'nodes',
+                              icon: <IconLink />,
+                              label: t('users.bindNodes') || 'Bind nodes',
+                              onClick: () => openBind(record),
+                            },
+                            {
+                              key: 'reset',
+                              icon: <IconClear />,
+                              label: t('users.resetTraffic') || 'Reset traffic',
+                              onClick: () => onResetTraffic(record.id),
+                            },
+                            { type: 'divider' as const },
+                            {
+                              key: 'del',
+                              icon: <IconDelete />,
+                              danger: true,
+                              label: t('common.delete'),
+                              onClick: () => {
+                                Modal.confirm({
+                                  title: t('users.deleteConfirm') || t('common.confirmDelete'),
+                                  onOk: () => onDelete(record.id),
+                                });
+                              },
+                            },
+                          ],
+                        }}
+                        trigger={['click']}
+                      >
+                        <Button type="text" icon={<IconMore />} aria-label={t('common.actions')} />
+                      </Dropdown>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Spin>
+        ) : (
+          <Table
+            scroll={{ x: 960 }}
+            size="small"
+            dataSource={filtered}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          />
+        )}
+      </Card>
+
+      <Modal
+        open={modalOpen}
+        title={editing ? t('users.edit') : t('users.create')}
+        onCancel={() => {
+          if (submitting) return;
+          setModalOpen(false);
+          setEditing(null);
+          form.resetFields();
+        }}
+        onOk={() => form.submit()}
+        confirmLoading={submitting}
+        okButtonProps={{ disabled: submitting }}
+        cancelButtonProps={{ disabled: submitting }}
+        maskClosable={!submitting}
+        keyboard={!submitting}
+        destroyOnClose
+        width={isMobile ? '100%' : 520}
+        style={isMobile ? { top: 8, maxWidth: '100vw' } : undefined}
+        className={isMobile ? 'mobile-full-modal' : undefined}
+      >
+        <Form form={form} layout="vertical" onFinish={onSubmit} disabled={submitting}>
+          <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]} tooltip={fieldTip(t, 'users.usernameHint')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="password" label={t('users.password')} rules={[{ required: !editing }]} tooltip={fieldTip(t, 'users.passwordHint')}>
+            <Input.Password placeholder={editing ? t('users.passwordKeep') : ''} />
+          </Form.Item>
+          <Form.Item
+            name="traffic_limit_gb"
+            label={t('users.trafficLimitGB') || 'Traffic limit (GB)'}
+            tooltip={t('users.trafficLimitHint') || '0 = unlimited. Counts billed traffic (raw × node multiplier).'}
+          >
+            <InputNumber min={0} step={0.1} style={{ width: '100%' }} placeholder={t('users.zeroUnlimited')} />
+          </Form.Item>
+          <Form.Item
+            name="ip_limit"
+            label={t('users.ipLimit') || 'IP limit'}
+            tooltip={t('users.ipLimitHint') || '0 = unlimited concurrent client IPs'}
+          >
+            <InputNumber min={0} step={1} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="sub_pull_limit"
+            label={t('users.subPullLimit') || 'Subscription pull limit'}
+            tooltip={t('users.subPullLimitHint') || '0 = unlimited. Max successful subscription fetches per rolling 24 hours.'}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+<Form.Item name="start_on_first_use" label={t('users.startOnFirstUse', 'Start on first use')} valuePropName="checked" tooltip={fieldTip(t, 'users.start_on_first_useHint')}>
+          <Switch />
+        </Form.Item>
+        <Form.Item name="expire_days_after_first" label={t('users.expireDaysAfterFirst', 'Days after first use')} tooltip={fieldTip(t, 'users.expire_days_after_firstHint')}>
+          <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+        </Form.Item>
+        <Form.Item name="external_links" label={t('users.externalLinks', 'External subscription URLs')} extra={t('users.externalLinksHint', 'One URL per line')} tooltip={fieldTip(t, 'users.external_linksHint')}>
+          <Input.TextArea rows={3} placeholder={"https://example.com/sub1\nhttps://example.com/sub2"} />
+        </Form.Item>
+          <Form.Item name="group" label={t('users.group', 'Group')} tooltip={fieldTip(t, 'users.groupHint')}>
+            <Input placeholder="vip" allowClear />
+          </Form.Item>
+          <Form.Item name="tags" label={t('users.tags', 'Tags')} tooltip={fieldTip(t, 'users.tagsHint')}>
+            <Input placeholder="tag1,tag2" allowClear />
+          </Form.Item>
+          <Form.Item name="traffic_reset_days" label={t('users.trafficResetDays', 'Traffic reset cycle (days)')} extra={t('users.trafficResetDaysHint', '0 = off')} tooltip={fieldTip(t, 'users.traffic_reset_daysHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder={t('users.zeroOff')} />
+          </Form.Item>
+          <Form.Item name="expire_renew_days" label={t('users.expireRenewDays', 'Expire renew cycle (days)')} extra={t('users.expireRenewDaysHint', '0 = off')} tooltip={fieldTip(t, 'users.expire_renew_daysHint')}>
+            <InputNumber min={0} style={{ width: '100%' }} placeholder={t('users.zeroOff')} />
+          </Form.Item>
+          <Form.Item name="remark" label={t('users.remark') || 'Remark'} tooltip={fieldTip(t, 'users.remarkHint')}>
+            <Input maxLength={255} />
+          </Form.Item>
+          <Form.Item name="expire_time" label={t('users.expire')} tooltip={fieldTip(t, 'users.expireHint')}>
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="enabled" label={t('users.enabled')} valuePropName="checked" initialValue={true} tooltip={fieldTip(t, 'users.enabledHint')}>
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={bindOpen}
+        title={bindUser ? `${t('users.bindNodes')} — ${bindUser.username}` : t('users.bindNodes')}
+        onCancel={() => {
+          setBindOpen(false);
+          setBindUser(null);
+          setSelectedNodeIds([]);
+          setSelectedRemoteIds([]);
+        }}
+        onOk={onBindSave}
+        confirmLoading={bindLoading}
+        destroyOnClose
+        width={560}
+      >
+        <p style={{ marginBottom: 12, opacity: 0.65 }}>{t('users.bindHint')}</p>
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          placeholder={t('users.selectNodes')}
+          loading={bindLoading}
+          value={selectedNodeIds}
+          onChange={(ids: number[]) => setSelectedNodeIds(ids)}
+          optionFilterProp="label"
+          options={allNodes.map((n) => ({
+            value: n.id,
+            label: `${n.name} (${n.protocol}:${n.port})`,
+          }))}
+        />
+        <p style={{ marginTop: 16, marginBottom: 8, opacity: 0.65 }}>
+          {t('users.bindRemoteHint') || 'Remote cluster nodes (synced mirrors)'}
+        </p>
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          placeholder={t('users.selectRemoteNodes') || 'Select remote nodes'}
+          optionFilterProp="label"
+          value={selectedRemoteIds}
+          onChange={(ids: number[]) => setSelectedRemoteIds(ids)}
+          options={(remoteMirrors || [])
+            .filter((m) => m.enabled)
+            .map((m) => ({
+              value: m.id,
+              // A mirror whose parent remote is disabled keeps its binding
+              // but stops feeding subscriptions — surface that instead of
+              // silently offering a node that will never appear.
+              label:
+                m.remote_server_enabled === false
+                  ? `${m.remote_server_name || m.remote_server_id} / ${m.name} (${m.protocol || '?'}) — ${t('users.remoteOff') || 'remote off'}`
+                  : `${m.remote_server_name || m.remote_server_id} / ${m.name} (${m.protocol || '?'})`,
+              disabled: m.remote_server_enabled === false,
+            }))}
+        />
+      </Modal>
+      <Modal
+        open={nodeTrafficOpen}
+        title={nodeTrafficUser ? `${t('users.nodeTraffic', 'Node traffic')} — ${nodeTrafficUser.username}` : t('users.nodeTraffic', 'Node traffic')}
+        onCancel={() => setNodeTrafficOpen(false)}
+        footer={<Button onClick={() => setNodeTrafficOpen(false)}>{t('common.close') || 'Close'}</Button>}
+        width={720}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
+          {t('users.nodeTrafficHint') || 'Raw bytes per node; billed = raw × node traffic multiplier (counts toward user quota).'}
+        </p>
+        <Table
+          size="small"
+          loading={nodeTrafficLoading}
+          rowKey="listener_id"
+          dataSource={nodeTrafficRows}
+          pagination={false}
+          scroll={{ x: 560 }}
+          locale={{ emptyText: t('common.empty') || 'No data' }}
+          columns={[
+            { title: t('listeners.name') || 'Node', dataIndex: 'listener_name', ellipsis: true },
+            { title: t('users.multiplier') || '×', dataIndex: 'multiplier', width: 56, render: (v: number) => (v != null ? v : 1) },
+            { title: t('users.rawUsed') || 'Raw', dataIndex: 'traffic_used', width: 100, render: (v: number) => formatBytes(v || 0) },
+            { title: t('users.billedUsed') || 'Billed', dataIndex: 'billed_used', width: 100, render: (v: number) => formatBytes(v || 0) },
+            { title: t('users.upload') || '↑', dataIndex: 'upload_bytes', width: 90, render: (v: number) => formatBytes(v || 0) },
+            { title: t('users.download') || '↓', dataIndex: 'download_bytes', width: 90, render: (v: number) => formatBytes(v || 0) },
+          ]}
+        />
+      </Modal>
+
+      <Modal
+        open={quickModal}
+        title={t('users.quickCreate', 'Quick create')}
+        onCancel={() => setQuickModal(false)}
+        onOk={doQuickCreate}
+        confirmLoading={quickSubmitting}
+        okText={t('common.create', 'Create')}
+        destroyOnClose
+        width={isMobile ? '100%' : 480}
+        style={isMobile ? { top: 12 } : undefined}
+      >
+        <p style={{ marginBottom: 12, opacity: 0.75, fontSize: 13 }}>
+          {t(
+            'users.quickCreateHint',
+            'Leave username empty to auto-generate. Password and UUID are generated; copy them from the next dialog (shown only once).',
+          )}
+        </p>
+        <Form form={quickForm} layout="vertical" requiredMark={false}>
+          <Form.Item name="username" label={t('users.username')} tooltip={fieldTip(t, 'users.usernameHint')}>
+            <Input placeholder={t('users.quickNamePlaceholder', 'Auto if empty')} allowClear />
+          </Form.Item>
+          <Form.Item name="remark" label={t('users.remark')} tooltip={fieldTip(t, 'users.remarkHint')}>
+            <Input allowClear />
+          </Form.Item>
+          <Form.Item name="bind_all_listeners" label={t('users.bindAllNodes', 'Bind all nodes')} valuePropName="checked" tooltip={fieldTip(t, 'users.bind_all_listenersHint')}>
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        open={credModal}
+        title={t('users.quickCredTitle', 'Credentials (save now)')}
+        onCancel={() => setCredModal(false)}
+        onOk={() => setCredModal(false)}
+        okText={t('common.close', 'Close')}
+        cancelButtonProps={{ style: { display: 'none' } }}
+        destroyOnClose
+        width={isMobile ? '100%' : 520}
+      >
+        {credInfo && (
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            <div>
+              <Typography.Text type="secondary">{t('users.username')}</Typography.Text>
+              <Input
+                readOnly
+                value={credInfo.username}
+                addonAfter={
+                  <IconCopy
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(credInfo.username);
+                        message.success(t('common.copied', 'Copied'));
+                      } catch {
+                        message.error(t('common.error'));
+                      }
+                    }}
+                  />
+                }
+              />
+            </div>
+            <div>
+              <Typography.Text type="secondary">{t('users.password')}</Typography.Text>
+              <Input.Password
+                readOnly
+                value={credInfo.password}
+                addonAfter={
+                  <IconCopy
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(credInfo.password);
+                        message.success(t('common.copied', 'Copied'));
+                      } catch {
+                        message.error(t('common.error'));
+                      }
+                    }}
+                  />
+                }
+              />
+            </div>
+            <div>
+              <Typography.Text type="secondary">UUID</Typography.Text>
+              <Input
+                readOnly
+                value={credInfo.uuid}
+                addonAfter={
+                  <IconCopy
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(credInfo.uuid);
+                        message.success(t('common.copied', 'Copied'));
+                      } catch {
+                        message.error(t('common.error'));
+                      }
+                    }}
+                  />
+                }
+              />
+            </div>
+            <Typography.Text type="warning">
+              {t('users.quickCredWarn', 'Password is not shown again in the list. Copy it now.')}
+            </Typography.Text>
+          </Space>
+        )}
+      </Modal>
+
+    </div>
+  );
+
+
+};
+
+export default Users;

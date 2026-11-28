@@ -1,0 +1,81 @@
+import client, { withNetworkRetry } from './client';
+
+export interface ProxyEntry {
+  name: string;
+  type: string;
+  server: string;
+  port: string;
+  password?: string;
+  uuid?: string;
+  // Mihomo proxy-level TCP options (wiki.metacubex.one/config/proxies): only
+  // take effect on TCP transports.
+  tfo?: boolean;
+  mptcp?: boolean;
+  [key: string]: any;
+}
+
+export interface VisualDNS {
+  enable: boolean;
+  listen?: string;
+  enhancedMode?: 'fake-ip' | 'redir-host';
+  ipv6?: boolean;
+  cacheAlgorithm?: 'lru' | 'arc';
+  preferH3?: boolean;
+  useHosts?: boolean;
+  useSystemHosts?: boolean;
+  respectRules?: boolean;
+  defaultNameserver?: string[];
+  nameserver?: string[];
+  fallback?: string[];
+  proxyServerNameserver?: string[];
+  directNameserver?: string[];
+  directNameserverFollowPolicy?: boolean;
+  nameserverPolicy?: Record<string, string | string[]>;
+  proxyServerNameserverPolicy?: Record<string, string | string[]>;
+  fakeIPRange?: string;
+  fakeIPRange6?: string;
+  fakeIPFilterMode?: 'blacklist' | 'whitelist' | 'rule';
+  fakeIPFilter?: string[];
+  fakeIPTTL?: number;
+  fallbackFilter?: { geoip?: boolean; geoipCode?: string; geosite?: string[]; ipcidr?: string[]; domain?: string[] };
+  fallbackLazyQuery?: boolean;
+}
+
+export interface VisualConfig {
+  mode?: string;
+  logLevel?: string;
+  allowLan?: boolean;
+  ipv6?: boolean;
+  inboundTfo?: boolean;
+  inboundMptcp?: boolean;
+  clientTfo?: boolean;
+  clientMptcp?: boolean;
+  dns?: VisualDNS;
+  proxies: ProxyEntry[];
+  proxyGroups?: any[];
+  rules?: any[];
+  [key: string]: any;
+}
+
+export const fetchProxies = () => client.get<ProxyEntry[]>('/config/proxies').then((r) => r.data);
+export const createProxy = (payload: ProxyEntry) =>
+  client.post<ProxyEntry>('/config/proxies', payload).then((r) => r.data);
+export const updateProxy = (index: number, payload: ProxyEntry) =>
+  client.put<ProxyEntry>(`/config/proxies/${index}`, payload).then((r) => r.data);
+export const deleteProxy = (index: number) => client.delete(`/config/proxies/${index}`);
+export const fetchVisualConfig = () =>
+  client.get<VisualConfig>('/config/visual').then((r) => r.data);
+export const saveVisualConfig = (payload: VisualConfig) =>
+  client.post('/config/visual', payload).then((r) => r.data);
+export const fetchConfigYAML = () => client.get<{ config: string }>('/config').then((r) => r.data);
+export const generateConfig = () =>
+  withNetworkRetry(() =>
+    client.post<{ status: string; config?: string; message?: string }>('/config/generate').then((r) => r.data),
+  );
+export const applyConfigYAML = (config?: string) =>
+  withNetworkRetry(() =>
+    client.post('/config/apply', config != null ? { config } : {}).then((r) => r.data),
+  );
+export const rollbackConfig = () => client.post('/config/rollback').then((r) => r.data);
+export const validateConfigYAML = (config: string) =>
+  client.post<{ valid: boolean; error?: string }>('/config/validate', { config }).then((r) => r.data);

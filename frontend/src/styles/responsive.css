@@ -1,0 +1,1375 @@
+/* 3m-ui global layout polish — mobile + desktop + long i18n labels */
+
+html, body, #root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  /* Safe-area handled by header/bottom-nav — avoid full-body padding blank strips */
+  padding: 0;
+  margin: 0;
+}
+
+/* Prevent long translated strings from breaking layout */
+.ant-btn > span,
+.ant-menu-title-content,
+.ant-select-selection-item,
+.ant-form-item-label > label,
+.ant-table-cell,
+.ant-tag {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ant-form-item-label > label {
+  white-space: normal !important;
+  height: auto !important;
+  line-height: 1.4 !important;
+}
+
+/* Expanded: allow long i18n labels to wrap */
+.ant-menu-item,
+.ant-menu-submenu-title {
+  white-space: normal !important;
+  height: auto !important;
+  line-height: 1.35 !important;
+  padding-block: 10px !important;
+}
+
+.ant-menu-item .ant-menu-title-content,
+.ant-menu-submenu-title .ant-menu-title-content {
+  white-space: normal;
+}
+
+/* Collapsed sider: icon-only rows — keep compact fixed height
+   (height:auto + padding-block above would leave huge gaps between icons) */
+.ant-layout-sider-collapsed .ant-menu-item,
+.ant-layout-sider-collapsed .ant-menu-submenu-title,
+.ant-menu-inline-collapsed > .ant-menu-item,
+.ant-menu-inline-collapsed > .ant-menu-item-group > .ant-menu-item-group-list > .ant-menu-item,
+.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+  height: 40px !important;
+  line-height: 40px !important;
+  padding-block: 0 !important;
+  margin-block: 2px !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.ant-layout-sider-collapsed .ant-menu-item .ant-menu-item-icon,
+.ant-layout-sider-collapsed .ant-menu-item .anticon,
+.ant-menu-inline-collapsed .ant-menu-item .ant-menu-item-icon,
+.ant-menu-inline-collapsed .ant-menu-item .anticon {
+  margin-inline: 0 !important;
+  line-height: 1 !important;
+}
+
+/* Desktop readability */
+@media (min-width: 768px) {
+  .app-page-content {
+    max-width: 1400px;
+    width: 100%;
+    margin-inline: auto !important;
+  }
+
+  .page-header {
+    margin-bottom: 20px;
+  }
+  .page-header h3.ant-typography {
+    letter-spacing: -0.01em;
+  }
+  .page-header .page-header-subtitle {
+    max-width: 720px;
+    line-height: 1.5;
+  }
+
+  .ant-card {
+    border-radius: 10px;
+  }
+  .ant-table-wrapper {
+    border-radius: 8px;
+  }
+  .ant-table-thead > tr > th {
+    font-weight: 600;
+  }
+  .ant-card + .ant-card {
+    margin-top: 16px;
+  }
+
+  /* Desktop action rows stay usable with long labels */
+  .page-toolbar,
+  .ant-card-extra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+}
+
+@media (max-width: 767px) {
+  /* iOS zoom prevention on focus */
+  input.ant-input,
+  .ant-input,
+  .ant-input-number-input,
+  .ant-select-selection-search-input,
+  textarea.ant-input,
+  select {
+    font-size: 16px !important;
+  }
+
+  .app-header-bar {
+    position: sticky !important;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--ant-color-bg-container, #fff) 88%, transparent) !important;
+    border-bottom: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06));
+    height: 52px !important;
+    line-height: 52px !important;
+    padding-inline: 8px !important;
+  }
+  .app-header-bar .ant-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .app-header-bar .ant-space {
+    flex-wrap: nowrap;
+    gap: 4px !important;
+  }
+  .app-header-bar .ant-tag {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-page-content {
+    margin: 8px !important;
+    padding: 12px !important;
+    border-radius: 12px !important;
+  }
+
+  .page-header {
+    margin-bottom: 12px !important;
+  }
+  .page-header .page-header-title-row {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px;
+  }
+  .page-header .page-header-actions {
+    width: 100%;
+  }
+  .page-header .page-header-actions .ant-space {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .page-header .page-header-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+  .page-header .page-header-subtitle {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ant-table {
+    font-size: 13px;
+  }
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 8px 10px !important;
+  }
+  .ant-table-pagination {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .ant-modal {
+    max-width: calc(100vw - 12px) !important;
+    margin: 6px auto !important;
+    top: 8px !important;
+  }
+  .ant-modal-body {
+    max-height: calc(100dvh - 120px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ant-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .ant-modal-footer .ant-btn {
+    margin: 0 !important;
+    min-height: 40px;
+  }
+
+  .ant-card {
+    border-radius: 12px;
+  }
+  .ant-card-head {
+    flex-wrap: wrap;
+    min-height: auto;
+    padding: 10px 12px !important;
+  }
+  .ant-card-head-title {
+    white-space: normal !important;
+    padding: 4px 0 !important;
+    line-height: 1.35;
+  }
+  .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ant-card-extra {
+    margin: 0 !important;
+    width: 100%;
+  }
+  .ant-card-extra .ant-space {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .ant-tabs-nav {
+    margin-bottom: 12px !important;
+  }
+  .ant-tabs-tab {
+    padding: 8px 10px !important;
+  }
+  .ant-tabs-tab-btn {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .ant-form-item {
+    margin-bottom: 12px !important;
+  }
+  .ant-form-item-control-input-content > .ant-input,
+  .ant-form-item-control-input-content > .ant-input-password,
+  .ant-form-item-control-input-content > .ant-input-number,
+  .ant-form-item-control-input-content > .ant-select,
+  .ant-form-item-control-input-content > .ant-picker {
+    width: 100% !important;
+  }
+
+  .ant-statistic-content {
+    font-size: 20px !important;
+  }
+  .ant-statistic-title {
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .settings-section-select .ant-select-selector {
+    min-height: 44px !important;
+    align-items: center;
+  }
+
+  .mobile-full-modal.ant-modal {
+    max-width: 100vw !important;
+    margin: 0 !important;
+    top: 0 !important;
+  }
+  .mobile-full-modal .ant-modal-content {
+    border-radius: 0 0 12px 12px;
+  }
+  .mobile-full-modal .ant-modal-body {
+    max-height: calc(100dvh - 110px) !important;
+  }
+
+  .ant-dropdown-menu-item {
+    padding: 10px 14px !important;
+    white-space: normal;
+  }
+
+  .login-page {
+    padding: 24px 12px !important;
+    align-items: flex-start !important;
+    padding-top: max(48px, 12vh) !important;
+  }
+  .login-page .ant-card {
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .ant-btn {
+    min-height: 36px;
+  }
+  .ant-btn-primary {
+    min-height: 40px;
+  }
+
+  /* Entity lists (users / listeners mobile cards) */
+  .mobile-entity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .mobile-entity-card {
+    border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+    border-radius: 12px;
+    background: var(--ant-color-bg-container, #fff);
+    padding: 12px;
+  }
+  .mobile-entity-card-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .mobile-entity-card-body {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-entity-title {
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .mobile-entity-sub {
+    font-weight: 400;
+    opacity: 0.7;
+    font-size: 13px;
+  }
+  .mobile-entity-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  .mobile-entity-rows {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    opacity: 0.85;
+  }
+  .mobile-entity-row {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    min-width: 0;
+  }
+  .mobile-entity-row .label {
+    opacity: 0.65;
+    flex-shrink: 0;
+  }
+  .mobile-entity-row .value {
+    text-align: end;
+    word-break: break-word;
+    min-width: 0;
+  }
+  .mobile-empty {
+    text-align: center;
+    padding: 32px 12px;
+    opacity: 0.55;
+  }
+
+  /* Drawer nav: comfortable touch targets + wrapping labels */
+  .app-mobile-drawer .ant-menu-item {
+    margin-block: 2px !important;
+    width: calc(100% - 8px) !important;
+  }
+
+  /* Stats grids */
+  .ant-row {
+    row-gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
+  }
+  .ant-card-body {
+    padding: 10px !important;
+  }
+}
+
+/* Dark mode soft adjustments */
+html.dark .mobile-entity-card,
+[data-theme='dark'] .mobile-entity-card {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Dark mode: subtle lift for sticky surfaces whose hardcoded light shadow
+   (rgba(0,0,0,0.04)) is invisible on a dark background. */
+html.dark .app-bottom-nav,
+[data-theme='dark'] .app-bottom-nav {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* Dark mode: lift the sticky header bar's blur scrim slightly so light text
+   stays readable over scrolling content. The var() fallback (rgba(0,0,0,0.06))
+   is too faint on dark surfaces. */
+html.dark .app-header-bar,
+[data-theme='dark'] .app-header-bar {
+  border-bottom-color: var(--ant-color-border-secondary, rgba(255, 255, 255, 0.08)) !important;
+}
+
+
+/* —— Mobile bottom navigation —— */
+.app-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 110;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 2px;
+  min-height: 56px;
+  padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--ant-color-bg-container, #fff) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.app-bottom-nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 96px;
+  margin: 0;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.55));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 10px;
+}
+
+.app-bottom-nav-item:active {
+  background: var(--ant-color-fill-tertiary, rgba(0, 0, 0, 0.04));
+}
+
+.app-bottom-nav-item.is-active {
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.app-bottom-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-bottom-nav-label {
+  font-size: 10px;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-weight: 500;
+}
+
+.app-bottom-more-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-bottom-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 10px 6px;
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container, #fff);
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-bottom-more-item.is-active {
+  border-color: var(--ant-color-primary, #1677ff);
+  color: var(--ant-color-primary, #1677ff);
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 8%, transparent);
+}
+
+.app-bottom-more-item.is-danger {
+  color: var(--ant-color-error, #ff4d4f);
+}
+
+.app-bottom-more-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.app-bottom-more-label {
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (min-width: 768px) {
+  .app-bottom-nav {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* content already padded via layout; ensure modals above bar */
+  .ant-modal-wrap {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}
+
+
+/* —— Mobile density: compact info on every page —— */
+@media (max-width: 767px) {
+  .app-page-content {
+    margin: 6px !important;
+    padding: 8px 10px !important;
+    border-radius: 10px !important;
+  }
+
+  .page-header {
+    margin-bottom: 8px !important;
+  }
+  .page-header h3.ant-typography,
+  .page-header h4.ant-typography {
+    font-size: 17px !important;
+    margin-bottom: 0 !important;
+  }
+  .page-header .page-header-subtitle {
+    font-size: 12px !important;
+    margin-top: 2px !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .ant-card {
+    border-radius: 10px;
+  }
+  .ant-card-head {
+    padding: 8px 10px !important;
+    min-height: 40px !important;
+  }
+  .ant-card-head-title {
+    font-size: 14px !important;
+    padding: 2px 0 !important;
+  }
+  .ant-card-body {
+    padding: 8px 10px !important;
+  }
+  .ant-card + .ant-card {
+    margin-top: 8px !important;
+  }
+
+  .ant-statistic {
+    line-height: 1.2;
+  }
+  .ant-statistic-title {
+    font-size: 12px !important;
+    margin-bottom: 2px !important;
+  }
+  .ant-statistic-content {
+    font-size: 18px !important;
+  }
+
+  .ant-table {
+    font-size: 12px !important;
+  }
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 6px 8px !important;
+  }
+  .ant-table-pagination.ant-pagination {
+    margin: 8px 0 0 !important;
+  }
+
+  .ant-space-vertical > .ant-space-item {
+    margin-bottom: 0 !important;
+  }
+
+  .ant-form-item {
+    margin-bottom: 10px !important;
+  }
+  .ant-form-item-label {
+    padding-bottom: 2px !important;
+  }
+  .ant-form-item-label > label {
+    font-size: 13px !important;
+  }
+
+  .ant-tabs-nav {
+    margin-bottom: 8px !important;
+  }
+  .ant-tabs-tab {
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+  }
+
+  .ant-alert {
+    padding: 6px 10px !important;
+    font-size: 12.5px;
+  }
+  .ant-alert-description {
+    font-size: 12px !important;
+  }
+
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    font-size: 12.5px !important;
+    padding: 4px 8px !important;
+  }
+
+  .ant-collapse-header {
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+  }
+  .ant-collapse-content-box {
+    padding: 8px 10px !important;
+  }
+
+  .mobile-entity-list {
+    gap: 8px;
+  }
+  .mobile-entity-card {
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+  .mobile-entity-title {
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .mobile-entity-meta {
+    margin-top: 4px;
+    gap: 4px;
+  }
+  .mobile-entity-meta .ant-tag {
+    margin: 0;
+    padding: 0 6px;
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .mobile-entity-rows {
+    margin-top: 6px;
+    gap: 2px;
+    font-size: 12px;
+  }
+  .mobile-entity-sub {
+    font-size: 12px;
+  }
+
+  .app-bottom-nav {
+    min-height: 52px;
+    padding: 2px 2px calc(2px + env(safe-area-inset-bottom));
+  }
+  .app-bottom-nav-icon {
+    font-size: 18px;
+  }
+  .app-bottom-nav-label {
+    font-size: 9px;
+  }
+
+  .app-bottom-more-item {
+    min-height: 64px;
+    padding: 8px 4px;
+    gap: 4px;
+  }
+  .app-bottom-more-icon {
+    font-size: 20px;
+  }
+  .app-bottom-more-label {
+    font-size: 11px;
+  }
+
+  /* Settings section select + sider */
+  .settings-section-select {
+    margin-bottom: 8px !important;
+  }
+  .settings-section-select .ant-select-selector {
+    min-height: 40px !important;
+  }
+
+  /* Progress bars in lists */
+  .ant-progress {
+    margin: 2px 0 0 !important;
+  }
+  .ant-progress-text {
+    font-size: 11px !important;
+  }
+
+  /* Modal denser */
+  .ant-modal-header {
+    padding: 10px 12px !important;
+  }
+  .ant-modal-body {
+    padding: 10px 12px !important;
+  }
+  .ant-modal-footer {
+    padding: 8px 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-page-content {
+    margin: 4px !important;
+    padding: 8px !important;
+  }
+  .ant-col {
+    /* stats stack tighter */
+  }
+}
+
+
+/* Mobile: never stretch content into a tall empty white panel */
+.app-shell-mobile.ant-layout,
+.app-shell-mobile > .app-main.ant-layout {
+  background: var(--ant-color-bg-layout, #f5f5f5) !important;
+}
+.app-shell-mobile > .app-main.ant-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+.app-shell-mobile .app-page-content.ant-layout-content,
+.app-shell-mobile .app-page-content-mobile.ant-layout-content {
+  flex: 0 0 auto !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  display: block !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 8px 10px 12px !important;
+}
+.app-shell-mobile .app-page-content > *,
+.app-shell-mobile .app-page-content-mobile > * {
+  /* page root wrappers must not grow */
+  min-height: 0 !important;
+}
+.app-shell-mobile .page-header {
+  flex: none !important;
+  margin-bottom: 10px !important;
+}
+.app-shell-mobile .app-header-bar.ant-layout-header {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 48px;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  line-height: 48px !important;
+  display: flex !important;
+  align-items: center !important;
+  background: var(--ant-color-bg-container, #fff) !important;
+}
+/* Cards sit on layout gray; tighten gaps */
+.app-shell-mobile .ant-card {
+  margin-bottom: 0;
+}
+.app-shell-mobile .ant-row {
+  align-content: flex-start !important;
+}
+
+/* ========== UX polish v1.3.4+ (mobile + desktop) ========== */
+
+/* Shared: comfortable touch targets */
+.ant-btn {
+  min-height: 32px;
+}
+.ant-btn-lg {
+  min-height: 40px;
+}
+
+/* Desktop: denser but readable workspace */
+@media (min-width: 768px) {
+  .app-page-content {
+    padding: 20px 24px !important;
+  }
+
+  .ant-form-vertical .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  /* Action buttons in tables stay on one line when possible */
+  .ant-table-cell .ant-space {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .ant-card-extra .ant-btn,
+  .page-toolbar .ant-btn {
+    min-height: 32px;
+  }
+
+  /* Modal forms: avoid ultra-wide fields */
+  .ant-modal-body .ant-form {
+    max-width: 100%;
+  }
+
+  /* Statistic / dashboard cards equal height feel */
+  .ant-row > .ant-col .ant-card {
+    height: 100%;
+  }
+}
+
+/* Mobile: reduce friction */
+@media (max-width: 767px) {
+  /* Content: tighter, less empty chrome */
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Full-width primary actions in toolbars */
+  .ant-card-extra {
+    width: 100%;
+    margin-top: 8px !important;
+  }
+  .ant-card-extra .ant-space {
+    width: 100%;
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  .ant-card-extra .ant-btn {
+    flex: 1 1 calc(50% - 8px);
+    min-height: 40px;
+    justify-content: center;
+  }
+  .ant-card-extra .ant-input-search {
+    flex: 1 1 100%;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Form: labels above, full width controls */
+  .ant-form-item {
+    margin-bottom: 12px !important;
+  }
+  .ant-form-item-label {
+    padding-bottom: 2px !important;
+  }
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select,
+  .ant-picker,
+  .ant-input-number {
+    width: 100% !important;
+  }
+  .ant-btn.ant-btn-primary {
+    min-height: 44px;
+  }
+
+  /* Descriptions / detail blocks denser */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 6px 8px !important;
+  }
+
+  /* Tabs: scrollable labels on small screens */
+  .ant-tabs-nav-list {
+    flex-wrap: nowrap;
+  }
+  .ant-tabs-tab {
+    padding: 10px 12px !important;
+  }
+
+  /* Drawer full-height usable area */
+  .ant-drawer-body {
+    padding: 12px !important;
+  }
+
+  /* Alert compact */
+  .ant-alert {
+    padding: 8px 12px !important;
+  }
+
+  /* Space between stacked mobile cards */
+  .ant-card + .ant-card {
+    margin-top: 10px;
+  }
+
+  /* Login / simple pages: avoid double safe-area gap */
+  .login-page,
+  .ant-layout-content > .ant-result {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Bottom nav: clearer active state + safe area */
+.app-bottom-nav {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+[data-theme='dark'] .app-bottom-nav {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+.app-bottom-nav-item {
+  min-height: 48px;
+  padding: 4px 2px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+.app-bottom-nav-item.is-active {
+  background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 12%, transparent);
+  font-weight: 600;
+}
+.app-bottom-nav-label {
+  font-size: 11px;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Desktop sidebar: slightly roomier hit area */
+@media (min-width: 768px) {
+  .ant-layout-sider .ant-menu-item {
+    margin-block: 2px !important;
+  }
+}
+
+
+/* Settings local backups — mobile */
+@media (max-width: 767px) {
+  .settings-local-backups .ant-input-number-group-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .settings-local-backups .ant-space {
+    width: 100%;
+  }
+  .settings-local-backups .ant-btn-dangerous {
+    width: 100%;
+  }
+}
+
+
+/* ——— Density & simplicity pass (2026-09) ——— */
+
+/* Shared: quieter surfaces */
+.page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.page-toolbar .ant-input-search,
+.page-toolbar .ant-input-affix-wrapper {
+  max-width: 280px;
+}
+.ant-card-head {
+  min-height: 44px;
+  padding-inline: 16px !important;
+}
+.ant-card-head-title {
+  padding-block: 10px !important;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ant-card-body {
+  padding: 14px 16px !important;
+}
+.ant-statistic-content {
+  font-size: 22px !important;
+}
+
+@media (min-width: 768px) {
+  .app-page-content {
+    padding: 20px 24px !important;
+  }
+  .page-header {
+    margin-bottom: 16px !important;
+  }
+  .page-header h3.ant-typography {
+    font-size: 20px !important;
+    margin-bottom: 2px !important;
+  }
+  .page-header .page-header-subtitle {
+    font-size: 13px;
+    opacity: 0.75;
+  }
+  /* Desktop tables: denser but readable */
+  .ant-table-thead > tr > th {
+    padding: 10px 12px !important;
+    font-size: 13px;
+  }
+  .ant-table-tbody > tr > td {
+    padding: 10px 12px !important;
+    font-size: 13px;
+  }
+  .ant-table-tbody > tr > td .ant-btn-sm {
+    padding-inline: 8px;
+  }
+  /* Action columns stay one line when possible */
+  .ant-table-cell .ant-space {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  /* Dashboard / metric cards equal height */
+  .dashboard-metrics .ant-card {
+    height: 100%;
+  }
+  .dashboard-metrics .ant-card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 88px;
+  }
+  /* Forms: consistent field spacing */
+  .ant-form-vertical .ant-form-item {
+    margin-bottom: 14px;
+  }
+  .ant-modal-body .ant-form-item:last-child {
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  .page-header {
+    margin-bottom: 10px !important;
+  }
+  .page-header h3.ant-typography {
+    font-size: 17px !important;
+    margin-bottom: 0 !important;
+  }
+  .page-header .page-header-subtitle {
+    display: none; /* less noise on small screens */
+  }
+  .page-header .page-header-actions .ant-btn {
+    min-height: 40px;
+  }
+  .page-toolbar {
+    margin-bottom: 10px;
+    gap: 6px;
+  }
+  .page-toolbar .ant-input-search,
+  .page-toolbar .ant-input-affix-wrapper {
+    max-width: none;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .page-toolbar .ant-btn {
+    min-height: 40px;
+  }
+  .ant-card {
+    border-radius: 10px;
+  }
+  .ant-card-head {
+    min-height: 40px;
+    padding-inline: 12px !important;
+  }
+  .ant-card-head-title {
+    padding-block: 8px !important;
+    font-size: 14px;
+  }
+  .ant-card-body {
+    padding: 10px 12px !important;
+  }
+  .ant-card + .ant-card {
+    margin-top: 10px;
+  }
+  /* Entity list: tighter cards */
+  .mobile-entity-list {
+    gap: 8px !important;
+  }
+  .mobile-entity-card {
+    padding: 10px 12px !important;
+    border-radius: 10px;
+    gap: 8px;
+  }
+  .mobile-entity-title {
+    font-size: 15px !important;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .mobile-entity-meta {
+    gap: 6px !important;
+    font-size: 12px !important;
+    margin-top: 4px !important;
+  }
+  .mobile-entity-meta .ant-tag {
+    margin-inline-end: 0;
+    line-height: 18px;
+    padding-inline: 6px;
+  }
+  .mobile-entity-rows {
+    margin-top: 8px !important;
+    gap: 4px !important;
+  }
+  .mobile-entity-row {
+    font-size: 12px;
+    padding-block: 2px;
+  }
+  .mobile-entity-row .label {
+    opacity: 0.65;
+    min-width: 4.5em;
+  }
+  /* Primary touch targets */
+  .mobile-entity-card .ant-btn,
+  .ant-list-item .ant-btn {
+    min-height: 36px;
+  }
+  /* Modals: more room for form, less chrome */
+  .ant-modal {
+    max-width: calc(100vw - 8px) !important;
+    margin: 4px auto !important;
+    top: 4px !important;
+    padding-bottom: 0 !important;
+  }
+  .ant-modal-header {
+    padding: 12px 14px !important;
+  }
+  .ant-modal-title {
+    font-size: 16px !important;
+  }
+  .ant-modal-body {
+    padding: 12px 14px !important;
+    max-height: calc(100dvh - 140px - env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .ant-modal-footer {
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .ant-modal-footer .ant-btn {
+    min-height: 40px;
+    flex: 1;
+  }
+  .ant-form-vertical .ant-form-item {
+    margin-bottom: 12px;
+  }
+  .ant-form-item-label {
+    padding-bottom: 2px !important;
+  }
+  .ant-form-item-label > label {
+    font-size: 13px !important;
+  }
+  /* Segmented / tabs full width */
+  .ant-segmented {
+    width: 100%;
+  }
+  .ant-tabs-nav {
+    margin-bottom: 10px !important;
+  }
+  /* Stats on dashboard */
+  .ant-statistic-title {
+    font-size: 12px !important;
+  }
+  .ant-statistic-content {
+    font-size: 18px !important;
+  }
+  /* Bottom nav: slightly tighter labels */
+  .app-bottom-nav-label {
+    font-size: 10px;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-bottom-nav-icon {
+    font-size: 18px;
+  }
+  /* Safe content above bottom nav */
+  .app-layout-with-bottom-nav .app-page-content {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+
+
+/* Header: left brand, right actions flush-end, vertically centered */
+.app-header-bar.ant-layout-header {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  line-height: normal !important;
+}
+.app-header-bar .app-header-right {
+  margin-left: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+}
+.app-header-bar .app-header-action.ant-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.app-header-bar .app-header-action.ant-btn .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* —— Density / usability pass (mobile + desktop) —— */
+@media (max-width: 767px) {
+  .app-page-content.app-page-content-mobile,
+  .app-page-content {
+    margin: 6px !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  .page-header {
+    margin-bottom: 8px !important;
+  }
+  .ant-card-head {
+    padding: 8px 10px !important;
+    min-height: 40px !important;
+  }
+  .ant-card-body {
+    padding: 10px !important;
+  }
+  .ant-card + .ant-card {
+    margin-top: 10px !important;
+  }
+  .mobile-entity-list {
+    gap: 8px !important;
+  }
+  .mobile-entity-card {
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  .mobile-entity-title {
+    font-size: 14px !important;
+  }
+  .mobile-entity-meta {
+    margin-top: 6px !important;
+    gap: 4px !important;
+  }
+  .mobile-entity-rows {
+    margin-top: 6px !important;
+    gap: 2px !important;
+    font-size: 12px !important;
+  }
+  .mobile-entity-card .ant-btn {
+    min-height: 36px !important;
+  }
+  /* Toolbar: search + primary full width; secondary 2-col */
+  .page-toolbar {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .page-toolbar .ant-input-search,
+  .page-toolbar > span.ant-input-affix-wrapper,
+  .page-toolbar .ant-input-group-wrapper {
+    grid-column: 1 / -1;
+    width: 100% !important;
+  }
+  .page-toolbar > .ant-btn-primary {
+    grid-column: 1 / -1;
+  }
+  .page-toolbar .ant-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 6px 8px !important;
+  }
+  .ant-form-item {
+    margin-bottom: 10px !important;
+  }
+  .ant-modal-body {
+    padding: 12px !important;
+  }
+  .ant-space-vertical {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-page-content {
+    padding-block: 4px;
+  }
+  .ant-table-thead > tr > th {
+    padding: 10px 12px !important;
+  }
+  .ant-table-tbody > tr > td {
+    padding: 9px 12px !important;
+  }
+  .page-toolbar {
+    gap: 8px;
+  }
+  .page-toolbar .ant-btn {
+    height: 32px;
+    padding-inline: 12px;
+  }
+  .ant-card-extra .ant-btn {
+    height: 32px;
+  }
+  .ant-card-head {
+    min-height: 48px;
+  }
+  .ant-card-body {
+    padding: 16px 20px;
+  }
+  /* Prefer denser tables on wide screens without feeling cramped */
+  .ant-table.ant-table-small .ant-table-thead > tr > th,
+  .ant-table.ant-table-small .ant-table-tbody > tr > td {
+    padding: 8px 10px !important;
+  }
+}
+
+
+/* Desktop: page content is transparent; cards float on layout gray (3X-UI-like) */
+@media (min-width: 768px) {
+  .app-shell.ant-layout,
+  .app-shell > .app-main.ant-layout {
+    background: var(--ant-color-bg-layout, #f5f5f5) !important;
+  }
+  .app-page-content.ant-layout-content {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .app-page-content .ant-card {
+    border-radius: 12px;
+  }
+}

@@ -1,0 +1,447 @@
+package protocol
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"strings"
+)
+
+// GenericCompiler passes config through with optional users injection.
+type GenericCompiler struct{ kind string }
+
+func (g GenericCompiler) Kind() string { return g.kind }
+func (g GenericCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: g.kind, Label: g.kind}
+}
+func (g GenericCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	if in.TLS {
+		m["tls"] = true
+	}
+	// Single-secret protocols follow the Shadowsocks rule (P1-1): the listener
+	// config secret (psk / key) is the source of truth and the running inbound
+	// keeps it; only when the config carries none does the first bound user's
+	// password stand in. The URI and client-YAML exporters resolve the same
+	// way (they see the same config map), so exports never disagree with the
+	// running listener, and a multi-user bind never takes the listener offline.
+	switch g.kind {
+	case "snell", "sudoku":
+		field := "psk"
+		if g.kind == "sudoku" {
+			field = "key"
+		}
+		if secret, ok := resolveSingleSecret(m, in.Users, field); ok {
+			m[field] = secret
+		}
+	}
+	return m, nil
+}
+
+// resolveSingleSecret implements the shared single-secret resolution rule for
+// Shadowsocks / Snell / Sudoku listeners and exports:
+//
+//	config secret present → keep it (the live inbound authenticates with it)
+//	config secret absent  → first bound user's password is the fallback
+//
+// It returns the resolved secret and whether it should override the value
+// already present in the listener/export map.
+func resolveSingleSecret(m map[string]interface{}, users []UserCred, field string) (string, bool) {
+	if cur, _ := m[field].(string); strings.TrimSpace(cur) != "" {
+		return "", false
+	}
+	if len(users) > 0 && strings.TrimSpace(users[0].Password) != "" {
+		return strings.TrimSpace(users[0].Password), true
+	}
+	return "", false
+}
+
+type VLESSCompiler struct{}
+
+func (VLESSCompiler) Kind() string                   { return "vless" }
+func (VLESSCompiler) Capability() ProtocolCapability { return vlessCapability() }
+func (VLESSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	skip := managedKeys()
+	copyConfigPassthrough(m, in.Config, skip)
+	// Per official MetaCubeX wiki (inbound-vless), the listener YAML does NOT
+	// carry a top-level `udp` field — mihomo allows UDP by default when absent.
+	delete(m, "udp")
+	// Official VLESS listener has no top-level "tls" field; TLS is implied by
+	// certificate/private-key, reality-config, or wrappers — never emit tls: true.
+	delete(m, "tls")
+	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type VMessCompiler struct{}
+
+func (VMessCompiler) Kind() string                   { return "vmess" }
+func (VMessCompiler) Capability() ProtocolCapability { return vmessCapability() }
+func (VMessCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	// Per official MetaCubeX wiki (inbound-vmess), the listener YAML does NOT
+	// carry a top-level `udp` field — mihomo allows UDP by default when absent.
+	delete(m, "udp")
+	// Official VMess listener: no top-level tls boolean.
+	delete(m, "tls")
+	users := asUsersArray(in.Config, in.Users, "uuid", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type TrojanCompiler struct{}
+
+func (TrojanCompiler) Kind() string                   { return "trojan" }
+func (TrojanCompiler) Capability() ProtocolCapability { return trojanCapability() }
+func (TrojanCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	// Per official MetaCubeX wiki (inbound-trojan), the listener YAML does NOT
+	// carry a top-level `udp` field — mihomo allows UDP by default when absent.
+	delete(m, "udp")
+	// Official Trojan listener: no top-level tls boolean.
+	delete(m, "tls")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type ShadowsocksCompiler struct{}
+
+func (ShadowsocksCompiler) Kind() string                   { return "shadowsocks" }
+func (ShadowsocksCompiler) Capability() ProtocolCapability { return shadowsocksCapability() }
+func (ShadowsocksCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	// Mihomo defaults the common listener udp field to true. Emit both values
+	// so disabling UDP in the panel is preserved instead of silently falling
+	// back to the core default after each config regeneration.
+	m["udp"] = in.UDP
+	// Explicit multi-user opt-in (mihomo v1.19.34). A listener without a
+	// `users` map keeps the historical single-password behaviour unchanged.
+	if users, mode, err := ValidateSSMultiUser(in.Config); err != nil {
+		return nil, err
+	} else if len(users) > 0 {
+		m["users"] = users
+		if mode == "aead" {
+			// AEAD multi-user requires an empty top-level password.
+			delete(m, "password")
+		}
+		return m, nil
+	}
+	// Single-password listeners: panels routinely bind several users to a
+	// listener. Resolve deterministically instead of skipping the whole
+	// listener ("supports one password" used to take every credential on the
+	// node offline):
+	//   config password present → keep it (matches URI/client exports)
+	//   config password absent  → fall back to the first bound user
+	if pw, _ := m["password"].(string); strings.TrimSpace(pw) == "" {
+		if len(in.Users) > 0 && strings.TrimSpace(in.Users[0].Password) != "" {
+			m["password"] = strings.TrimSpace(in.Users[0].Password)
+		}
+	}
+	return m, nil
+}
+
+type Hysteria2Compiler struct{}
+
+func (Hysteria2Compiler) Kind() string                   { return "hysteria2" }
+func (Hysteria2Compiler) Capability() ProtocolCapability { return hysteria2Capability() }
+func (Hysteria2Compiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersMap(in.Config, in.Users, in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type TUICCompiler struct{ kind string }
+
+func (t TUICCompiler) Kind() string {
+	if t.kind != "" {
+		return t.kind
+	}
+	return "tuic"
+}
+func (TUICCompiler) Capability() ProtocolCapability { return tuicCapability() }
+func (t TUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	// Mihomo's listener type is always "tuic" regardless of v4/v5.
+	m["type"] = "tuic"
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	// Mihomo expects token as a slice. Legacy configs may store a single string.
+	if tok, ok := m["token"].(string); ok {
+		m["token"] = []string{tok}
+	}
+	// Official Mihomo: always type "tuic". Auth mode is token (v4) vs users (v5).
+	// Panel protocol names: tuic-v4 / tuic-v5. Legacy "tuic" auto-detects.
+	kind := t.Kind()
+	toks := allStringTokens(m["token"])
+	hasUsers := false
+	if um, ok := m["users"].(map[string]interface{}); ok && len(um) > 0 {
+		hasUsers = true
+	}
+	isV4 := kind == "tuic-v4"
+	if kind == "tuic-v5" {
+		isV4 = false
+	} else if kind == "tuic" {
+		// Wiki: exactly one of token or users. Prefer explicit token-only as v4.
+		isV4 = len(toks) > 0 && !hasUsers
+	}
+	if isV4 {
+		if len(toks) == 0 {
+			toks = []string{randomToken()}
+		}
+		m["token"] = toks
+		delete(m, "users")
+	} else {
+		delete(m, "token")
+		users := asUsersMapUUID(in.Config, in.Users, in.HasCredentialState)
+		if len(users) > 0 {
+			m["users"] = users
+		}
+	}
+	// Sensible defaults when operator left advanced QUIC fields empty.
+	if _, ok := m["alpn"]; !ok {
+		m["alpn"] = []string{"h3"}
+	}
+	if _, ok := m["congestion-controller"]; !ok {
+		m["congestion-controller"] = "bbr"
+	}
+	return m, nil
+}
+
+type ShadowQUICCompiler struct{}
+
+func (ShadowQUICCompiler) Kind() string                   { return "shadowquic" }
+func (ShadowQUICCompiler) Capability() ProtocolCapability { return shadowquicCapability() }
+func (ShadowQUICCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	if _, ok := m["congestion-controller"]; !ok {
+		m["congestion-controller"] = "cubic"
+	}
+	return m, nil
+}
+
+type TrustTunnelCompiler struct{}
+
+func (TrustTunnelCompiler) Kind() string { return "trusttunnel" }
+func (TrustTunnelCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: "trusttunnel", Label: "trusttunnel"}
+}
+func (TrustTunnelCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	// TrustTunnel uses users: [{username, password}] (array form, verified against Mihomo wiki).
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	// Mihomo expects network as a slice (e.g. ["tcp", "udp"]).
+	// Legacy configs may store it as a string; convert to slice.
+	if net, ok := m["network"].(string); ok {
+		m["network"] = []string{net}
+	}
+	return m, nil
+}
+
+type AnyTLSCompiler struct{}
+
+func (AnyTLSCompiler) Kind() string { return "anytls" }
+func (AnyTLSCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: "anytls", Label: "anytls"}
+}
+func (AnyTLSCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	if in.UDP {
+		m["udp"] = true
+	}
+	users := asUsersMap(in.Config, in.Users, in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+type MieruCompiler struct{}
+
+func (MieruCompiler) Kind() string { return "mieru" }
+func (MieruCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{Kind: "mieru", Label: "mieru"}
+}
+func (MieruCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	copyConfigPassthrough(m, in.Config, managedKeys())
+	users := asUsersMap(in.Config, in.Users, in.HasCredentialState)
+	if len(users) > 0 {
+		m["users"] = users
+	}
+	return m, nil
+}
+
+func randomToken() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func firstStringToken(tok interface{}) string {
+	switch v := tok.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// allStringTokens returns every non-empty trimmed string token from a
+// listener Config `token` field. Mihomo's TUIC v4 spec accepts multiple
+// tokens (`token: [T1, T2, …]`); any one authenticates the client.
+// Used by TUIC v4 compiler to preserve the full array instead of dropping
+// all but the first.
+func allStringTokens(tok interface{}) []string {
+	switch v := tok.(type) {
+	case string:
+		if s := strings.TrimSpace(v); s != "" {
+			return []string{s}
+		}
+	case []string:
+		out := make([]string, 0, len(v))
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					out = append(out, s)
+				}
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// HTTPCompiler emits a Mihomo HTTP inbound listener.
+// Wiki: https://wiki.metacubex.one/config/inbound/listeners/http/
+// users: [{username, password}]; empty users: [] skips auth for this inbound.
+type HTTPCompiler struct{}
+
+func (HTTPCompiler) Kind() string { return "http" }
+func (HTTPCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{
+		Kind:  "http",
+		Label: "HTTP",
+		Fields: []FieldCapability{
+			{Path: "certificate", Label: "Certificate", Type: FieldText, Advanced: true, Description: "TLS cert PEM or path (with private-key enables TLS)."},
+			{Path: "private-key", Label: "Private Key", Type: FieldSecret, Advanced: true, Description: "TLS private key PEM or path."},
+			{Path: "client-auth-type", Label: "Client Auth Type", Type: FieldString, Advanced: true, Options: []string{"", "request", "require-any", "verify-if-given", "require-and-verify"}},
+			{Path: "client-auth-cert", Label: "Client Auth Cert", Type: FieldText, Advanced: true},
+			{Path: "ech-key", Label: "ECH Key", Type: FieldText, Advanced: true},
+		},
+		UserFields: []FieldCapability{
+			{Path: "username", Label: "Username", Type: FieldString, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+		},
+		Features: []string{"tcp"},
+	}
+}
+func (HTTPCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	skip := managedKeys()
+	copyConfigPassthrough(m, in.Config, skip)
+	delete(m, "udp") // HTTP listener has no udp field
+	delete(m, "tls")
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if in.HasCredentialState || len(in.Users) > 0 {
+		if users == nil {
+			users = []map[string]interface{}{}
+		}
+		m["users"] = users
+	} else if raw, ok := in.Config["users"]; ok {
+		m["users"] = raw
+	}
+	return m, nil
+}
+
+// SocksCompiler emits a Mihomo SOCKS inbound listener.
+// Wiki: https://wiki.metacubex.one/config/inbound/listeners/socks/
+type SocksCompiler struct{}
+
+func (SocksCompiler) Kind() string { return "socks" }
+func (SocksCompiler) Capability() ProtocolCapability {
+	return ProtocolCapability{
+		Kind:  "socks",
+		Label: "SOCKS",
+		Fields: []FieldCapability{
+			{Path: "udp", Label: "UDP", Type: FieldBoolean, Description: "Listen for UDP (wiki: udp)."},
+			{Path: "certificate", Label: "Certificate", Type: FieldText, Advanced: true},
+			{Path: "private-key", Label: "Private Key", Type: FieldSecret, Advanced: true},
+			{Path: "client-auth-type", Label: "Client Auth Type", Type: FieldString, Advanced: true, Options: []string{"", "request", "require-any", "verify-if-given", "require-and-verify"}},
+			{Path: "client-auth-cert", Label: "Client Auth Cert", Type: FieldText, Advanced: true},
+			{Path: "ech-key", Label: "ECH Key", Type: FieldText, Advanced: true},
+		},
+		UserFields: []FieldCapability{
+			{Path: "username", Label: "Username", Type: FieldString, Required: true},
+			{Path: "password", Label: "Password", Type: FieldSecret, Required: true},
+		},
+		Features: []string{"tcp", "udp"},
+	}
+}
+func (SocksCompiler) Compile(in CompileInput) (map[string]interface{}, error) {
+	m := baseMap(in)
+	skip := managedKeys()
+	copyConfigPassthrough(m, in.Config, skip)
+	delete(m, "tls")
+	if in.UDP {
+		m["udp"] = true
+	}
+	users := asUsersArray(in.Config, in.Users, "password", in.HasCredentialState)
+	if in.HasCredentialState || len(in.Users) > 0 {
+		if users == nil {
+			users = []map[string]interface{}{}
+		}
+		m["users"] = users
+	} else if raw, ok := in.Config["users"]; ok {
+		m["users"] = raw
+	}
+	return m, nil
+}

@@ -1,0 +1,455 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Table, Button, Space, Tag, Modal, Form, Input,
+  InputNumber, Select, Switch, message, Popconfirm, Tooltip, Card, Tabs, Descriptions, Divider, Dropdown, Checkbox, Spin, Alert } from 'antd';
+import { IconAddNode,
+  IconQuickCreate, IconRefreshList, IconQr, IconDelete, IconEdit, IconCopy, IconBranch, IconHistory, IconSave, IconPower,
+  IconBan, IconDiff, IconMore, IconCert } from '../icons';
+import {
+  fetchListeners, createListener, quickCreateListener, updateListener, deleteListener, reloadListener, exportNodeURI, normalizeId, Listener,
+} from '../api/nodes';
+import {
+  listListenerTemplates, createListenerTemplate, deleteListenerTemplate, instantiateListenerTemplate,
+  cloneListener, batchSetListenersEnabled, batchApplyCertificate, listListenerVersions, diffListenerVersion, rollbackListenerVersion,
+  ListenerTemplate, ListenerVersion,
+} from '../api/listeners';
+import { useI18n } from '../i18n';
+import PageHeader from '../components/PageHeader';
+import useIsMobile from '../hooks/useIsMobile';
+import { copyText } from '../utils/clipboard';
+import { randomListenerPort } from '../utils/listenerPort';
+import { suggestListenerName, nextListenerNameAfterConflict } from '../utils/listenerName';
+import ListenerConfigFields, { configToFormValues, formValuesToConfig, protocolSupportsUDP } from '../components/ListenerConfigFields';
+import CapabilityFormFields, { capabilityFormToConfig } from '../components/CapabilityFormFields';
+import { fetchCapabilities, protocolCapability, CapabilityManifest } from '../api/capabilities';
+import QRCode from '../components/QRCode';
+import { useListenerRuntime } from '../hooks/useListenerRuntime';
+import { useListenerRuntimeMessages } from '../i18n/listenerRuntime';
+import { listenerAvailability } from '../utils/listenerAvailability';
+import { ListenerRuntimeTag, ListenerRuntimeDrawer } from '../components/ListenerRuntime';
+
+const PROTOCOLS = ['shadowsocks', 'snell', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic-v4', 'tuic-v5', 'shadowquic', 'anytls', 'mieru', 'sudoku', 'trusttunnel', 'http', 'socks'];
+const REALITY_PROTOCOLS = new Set(['vmess', 'vless', 'trojan']);
+const parseConfig = (raw?: string) => { try { return raw ? JSON.parse(raw) : {}; } catch { return {}; } };
+const firstNonEmpty = (...values: any[]) => values.find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+
+const Listeners: React.FC = () => {
+  const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const [data, setData] = useState<Listener[]>([]);
+  const runtimeText = useListenerRuntimeMessages();
+  const [runtimeListener, setRuntimeListener] = useState<Listener | null>(null);
+  const { statuses, details, testing, test } = useListenerRuntime(data, runtimeListener?.id);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const [submitError, setSubmitError] = useState('');
+  const showRuntime = (record: Listener, reuse = true) => { setRuntimeListener(record); if (record.enabled) void test(record.id, reuse).catch(() => {}); };
+  const [templates, setTemplates] = useState<ListenerTemplate[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [quickModal, setQuickModal] = useState(false);
+  const [quickForm] = Form.useForm();
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
+  const quickSubmittingRef = useRef(false);
+  const [editing, setEditing] = useState<Listener | null>(null);
+  const [form] = Form.useForm();
+  const [templateForm] = Form.useForm();
+  const [cloneForm] = Form.useForm();
+  const [instantiateForm] = Form.useForm();
+  const [uris, setUris] = useState<string[]>([]);
+  const [uriModal, setUriModal] = useState(false);
+  const [cloneModal, setCloneModal] = useState(false);
+  const [cloneSource, setCloneSource] = useState<Listener | null>(null);
+  const [templateModal, setTemplateModal] = useState(false);
+  const [templateSource, setTemplateSource] = useState<Listener | null>(null);
+  const [instantiateModal, setInstantiateModal] = useState(false);
+  const [instantiateSource, setInstantiateSource] = useState<ListenerTemplate | null>(null);
+  const [versionsModal, setVersionsModal] = useState(false);
+  const [versions, setVersions] = useState<ListenerVersion[]>([]);
+  const [versionListener, setVersionListener] = useState<Listener | null>(null);
+  const [diffModal, setDiffModal] = useState(false);
+  const [diffText, setDiffText] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certForm] = Form.useForm();
+  const [certApplying, setCertApplying] = useState(false);
+  const protocol = Form.useWatch('protocol', form);
+  const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
+  const [useCapabilityForm] = useState(false); // full ListenerConfigFields; capability form is a reduced schema view
+
+  const load = async (showError = true) => {
+    setLoading(true);
+    try { setData(await fetchListeners()); return true; }
+    catch (e: any) { if (showError) message.error(e.message); return false; }
+    finally { setLoading(false); }
+  };
+  const loadTemplates = async () => { setTemplateLoading(true); try { setTemplates(await listListenerTemplates()); } catch (e: any) { message.error(e.message); } finally { setTemplateLoading(false); } };
+  useEffect(() => { load(); loadTemplates(); fetchCapabilities().then(setCapabilities).catch(() => setCapabilities(null)); }, []);
+
+  const suggestPort = (current = '') => {
+    const port = randomListenerPort([...data.map((listener) => String(listener.port)), current]);
+    if (!port) message.warning(t('listeners.noAvailablePort'));
+    return port;
+  };
+  const regeneratePort = () => {
+    const port = suggestPort(String(form.getFieldValue('port') || ''));
+    if (port) form.setFieldsValue({ port });
+  };
+
+  const openCreate = () => { setSubmitError(''); setEditing(null); form.resetFields(); form.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), port: suggestPort(), bind_address: '0.0.0.0', enabled: true, traffic_multiplier: 1, udp: false, protocol: 'vless', transport_layer: 'raw', security_layer: 'reality', reality_enabled: true, client_fingerprint: 'chrome', flow: 'xtls-rprx-vision', reality_dest: 'www.microsoft.com:443', 'reality-config.dest': 'www.microsoft.com:443' }); setModalOpen(true); };
+  const openQuick = () => {
+    quickForm.resetFields();
+    quickForm.setFieldsValue({ name: suggestListenerName(data.map((listener) => listener.name)), protocol: 'vless' });
+    setQuickModal(true);
+  };
+  const doQuickCreate = async () => {
+    // Ref lock: state updates are async; double-tap can fire two creates.
+    if (quickSubmittingRef.current) return;
+    quickSubmittingRef.current = true;
+    setQuickSubmitting(true);
+    try {
+      const values = await quickForm.validateFields();
+      const created = await quickCreateListener({ name: String(values.name).trim(), protocol: String(values.protocol).trim() });
+      message.success(`${t('listeners.quickCreated', 'Created')}: ${created.name} :${created.port}`);
+      setQuickModal(false);
+      // List refresh may fail briefly while Mihomo reloads — create already succeeded.
+      if (!(await load(false))) message.info(t('listeners.reloadListHint', 'Created. Refresh the list if it does not appear yet.'));
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      message.error(e?.message || t('common.error'));
+    } finally {
+      quickSubmittingRef.current = false;
+      setQuickSubmitting(false);
+    }
+  };
+
+  const openEdit = (record: Listener) => { setSubmitError(''); setEditing(record); form.resetFields(); form.setFieldsValue({ name: record.name, protocol: record.protocol, port: record.port, bind_address: record.bind_address || '0.0.0.0', enabled: record.enabled, udp: record.udp, public_host: (record as any).public_host || '', public_port: (record as any).public_port || '', access_sni: (record as any).access_sni || '', client_fingerprint: (record as any).client_fingerprint || 'chrome', access_alpn: (record as any).access_alpn || '', traffic_multiplier: (record as any).traffic_multiplier != null ? Number((record as any).traffic_multiplier) : 1, ...configToFormValues(record.config) }); setModalOpen(true); };
+  const onSubmit = async (rawValues?: any) => {
+    // useRef lock: React state updates are async, so double-click / double onOk
+    // used to fire two creates — first succeeds, second returns "already exists"
+    // and the modal never closes.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const values = { ...(form.getFieldsValue(true) || {}), ...(rawValues || {}) };
+      const proto = String(values.protocol || '').trim();
+      if (!proto) { message.error(t('listeners.selectProtocolFirst')); return; }
+      if (!values.name || !String(values.port || '').trim()) { message.error(t('listeners.portHint')); return; }
+      if (REALITY_PROTOCOLS.has(proto) && firstNonEmpty(values.security_layer) === 'reality') {
+        values.reality_enabled = true;
+        const dest = firstNonEmpty(values.reality_dest, values['reality-config']?.dest, values['reality-config.dest']);
+        if (!dest) { message.error(t('realityScan.required')); return; }
+        values.reality_dest = dest;
+      }
+      const previous = editing ? parseConfig(editing.config) : null;
+      const cap = capabilities ? protocolCapability(capabilities, proto) : undefined;
+      const config = useCapabilityForm && cap ? { ...formValuesToConfig(proto, values, previous), ...capabilityFormToConfig(proto, values, cap) } : formValuesToConfig(proto, values, previous);
+      const payload: Partial<Listener> = { name: String(values.name).trim(), protocol: proto, port: String(values.port).trim(), bind_address: values.bind_address || '0.0.0.0', enabled: values.enabled !== false, udp: protocolSupportsUDP(proto) ? !!values.udp : false, config: JSON.stringify(config), public_host: values.public_host || '', public_port: values.public_port || '', access_sni: (proto === 'http' || proto === 'socks') ? '' : (values.access_sni || ''), client_fingerprint: (proto === 'http' || proto === 'socks') ? '' : (values.client_fingerprint || ''), access_alpn: (proto === 'http' || proto === 'socks') ? '' : (values.access_alpn || ''), traffic_multiplier: values.traffic_multiplier != null && values.traffic_multiplier !== '' ? Number(values.traffic_multiplier) : 1 };
+      let saved: Listener;
+      if (editing) {
+        saved = await updateListener(normalizeId(editing), payload);
+      } else {
+        try {
+          saved = await createListener(payload);
+        } catch (createErr: any) {
+          const cmsg = String(createErr?.message || '');
+          if (/already exists/i.test(cmsg)) {
+            const nextName = nextListenerNameAfterConflict(String(payload.name || ''), data.map((l) => l.name));
+            payload.name = nextName;
+            form.setFieldsValue({ name: nextName });
+            saved = await createListener(payload);
+            message.info(t('listeners.nameRenamed', 'Name was taken; created as {{name}}').replace('{{name}}', nextName));
+          } else {
+            throw createErr;
+          }
+        }
+      }
+      message.success(saved.enabled ? runtimeText.saved : runtimeText.savedDisabled);
+      setModalOpen(false);
+      setEditing(null);
+      form.resetFields();
+      void load(false);
+    } catch (e: any) {
+      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') return;
+      const msg = e?.message || t('common.error');
+      setSubmitError(msg);
+      message.error(msg);
+      void load(false);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  };
+  const onDelete = async (id: number) => {
+    if (!id) { void load(false); return; }
+    // Optimistic: drop from list so a second click cannot hit a stale id.
+    setData((rows) => rows.filter((r) => normalizeId(r) !== id));
+    try {
+      await deleteListener(id);
+      message.success(t('listeners.deleted'));
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (/not found|already deleted/i.test(msg)) {
+        message.success(t('listeners.deleted'));
+      } else {
+        message.error(msg || t('common.error'));
+      }
+    } finally {
+      try {
+        if (!(await load(false))) message.warning(t('common.error'));
+      } catch {
+        /* load already swallows errors; never cascade into a forced logout path */
+      }
+    }
+  };
+  const onReload = async (id: number) => { try { await reloadListener(id); message.success(t('listeners.reloaded')); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const showURIs = async (id: number) => { try { const res = await exportNodeURI(id); setUris(res.uris); setUriModal(true); } catch (e: any) { message.error(e.message); } };
+  const openClone = (record: Listener) => { setCloneSource(record); cloneForm.setFieldsValue({ name: `${record.name}-copy`, port: '' }); setCloneModal(true); };
+  const doClone = async (values: { name: string; port: string }) => { if (!cloneSource) return; try { await cloneListener(normalizeId(cloneSource), { name: values.name, port: values.port }); message.success(t('listeners.cloned')); setCloneModal(false); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const openSaveTemplate = (record: Listener) => { setTemplateSource(record); templateForm.setFieldsValue({ name: `${record.name} template` }); setTemplateModal(true); };
+  const saveTemplate = async (values: { name: string }) => { if (!templateSource) return; try { await createListenerTemplate({ name: values.name, protocol: templateSource.protocol, config: templateSource.config }); message.success(t('listeners.templateCreated')); setTemplateModal(false); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
+  const openInstantiate = (template: ListenerTemplate) => { setInstantiateSource(template); instantiateForm.setFieldsValue({ name: template.name.replace(/\s+template$/i, ''), port: '' }); setInstantiateModal(true); };
+  const doInstantiate = async (values: { name: string; port: string }) => { if (!instantiateSource) return; try { await instantiateListenerTemplate(instantiateSource.id, values); message.success(t('listeners.instantiated')); setInstantiateModal(false); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const applyCertToSelected = async () => {
+    const ids = selectedRowKeys.map(Number).filter((n) => n > 0);
+    if (!ids.length) return;
+    try {
+      const v = await certForm.validateFields();
+      setCertApplying(true);
+      const payload: Record<string, unknown> = { ids };
+      if (v.from_panel_ssl) {
+        payload.from_panel_ssl = true;
+      } else if (v.cert_file || v.key_file) {
+        payload.cert_file = v.cert_file;
+        payload.key_file = v.key_file;
+      } else {
+        payload.certificate = v.certificate;
+        payload.private_key = v.private_key;
+      }
+      const res = await batchApplyCertificate(payload as any);
+      const ok = (res.updated || []).length;
+      const fail = (res.failed || []).length;
+      if (fail === 0) {
+        message.success((t('listeners.certApplyOk', 'Certificate applied to {count} node(s)') || '').replace('{count}', String(ok)) || `Applied certificate to ${ok} node(s)`);
+      } else {
+        const first = res.failed?.[0];
+        message.warning(
+          `${t('listeners.certApplyPartial') || 'Partial success'}: ${ok} ok, ${fail} failed` +
+            (first ? ` — ${first.name || first.id}: ${first.error}` : ''),
+        );
+      }
+      setCertModalOpen(false);
+      certForm.resetFields();
+      setSelectedRowKeys([]);
+      await load(false);
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      message.error(e.message || t('common.error'));
+    } finally {
+      setCertApplying(false);
+    }
+  };
+
+  const batchEnabled = async (enabled: boolean) => { const ids = selectedRowKeys.map(Number); if (!ids.length) return; try { await batchSetListenersEnabled(ids, enabled); message.success(t('listeners.batchDone')); setSelectedRowKeys([]); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const openVersions = async (record: Listener) => { try { setVersionListener(record); setVersions(await listListenerVersions(normalizeId(record))); setVersionsModal(true); } catch (e: any) { message.error(e.message); } };
+  const showDiff = async (version: number) => { if (!versionListener) return; try { setDiffText(await diffListenerVersion(normalizeId(versionListener), version)); setDiffModal(true); } catch (e: any) { message.error(e.message); } };
+  const doRollback = async (version: number) => { if (!versionListener) return; try { await rollbackListenerVersion(normalizeId(versionListener), version); message.success(t('listeners.rollbackDone')); setVersions(await listListenerVersions(normalizeId(versionListener))); if (!(await load(false))) message.warning(t('common.error')); } catch (e: any) { message.error(e.message); } };
+  const deleteTemplate = async (id: number) => { try { await deleteListenerTemplate(id); message.success(t('listeners.templateDeleted')); await loadTemplates(); } catch (e: any) { message.error(e.message); } };
+
+    const filteredListeners = useMemo(() => {
+    const q = keyword.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((l) =>
+      [l.name, l.protocol, l.port, l.bind_address, l.public_host].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+  }, [data, keyword]);
+
+const columns = [
+    { title: t('listeners.name'), dataIndex: 'name', key: 'name', ellipsis: true, width: 150 },
+    { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', width: 100, render: (p: string) => <Tag>{p}</Tag> },
+    { title: t('listeners.trafficMultiplier') || '×', dataIndex: 'traffic_multiplier', width: 72, render: (v: number) => (v != null && v > 0 ? v : 1) },
+      { title: t('listeners.port'), dataIndex: 'port', key: 'port', width: 90 },
+    { title: runtimeText.enabledSetting, dataIndex: 'enabled', key: 'enabled', width: 90, render: (v: boolean) => <Tag color={v ? 'blue' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
+    { title: runtimeText.title, key: 'runtime', width: 170, render: (_: unknown, record: Listener) => <div>
+      <ListenerRuntimeTag enabled={record.enabled} status={statuses[record.id]} checking={testing.includes(record.id)} onClick={() => showRuntime(record)} />
+    </div> },
+    { title: t('common.actions'), key: 'actions', fixed: 'right' as const, width: 220, render: (_: any, record: Listener) => <Space size={4} wrap><Tooltip title={t('listeners.copyURI')}><Button size="small" icon={<IconQr />} onClick={() => showURIs(normalizeId(record))} /></Tooltip><Tooltip title={t('listeners.clone')}><Button size="small" icon={<IconBranch />} onClick={() => openClone(record)} /></Tooltip><Tooltip title={t('listeners.saveTemplate')}><Button size="small" icon={<IconSave />} onClick={() => openSaveTemplate(record)} /></Tooltip><Tooltip title={t('listeners.versions')}><Button size="small" icon={<IconHistory />} onClick={() => openVersions(record)} /></Tooltip><Tooltip title={t('common.refresh')}><Button size="small" icon={<IconRefreshList />} onClick={() => onReload(normalizeId(record))} /></Tooltip><Button size="small" icon={<IconEdit />} onClick={() => openEdit(record)} /><Popconfirm title={t('listeners.deleteConfirm')} onConfirm={() => onDelete(normalizeId(record))}><Button size="small" icon={<IconDelete />} danger /></Popconfirm></Space> },
+  ];
+  const templateColumns = [
+    { title: t('listeners.templateName'), dataIndex: 'name', key: 'name' },
+    { title: t('listeners.protocol'), dataIndex: 'protocol', key: 'protocol', render: (p: string) => <Tag>{p}</Tag> },
+    { title: t('listeners.createdAt'), dataIndex: 'created_at', key: 'created_at', render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
+    { title: t('common.actions'), key: 'actions', width: 210, render: (_: any, record: ListenerTemplate) => <Space><Button size="small" type="primary" onClick={() => openInstantiate(record)}>{t('listeners.instantiate')}</Button><Popconfirm title={t('listeners.deleteTemplateConfirm')} onConfirm={() => deleteTemplate(record.id)}><Button size="small" danger icon={<IconDelete />} /></Popconfirm></Space> },
+  ];
+  return <div>
+    <PageHeader title={t('listeners.title')} subtitle={t('listeners.subtitle')} />
+    <Alert type="info" showIcon style={{ marginBottom: 12 }} message={t('listeners.formHelpBanner')} />
+    {data.some(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable') && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={runtimeText.anomalies}
+      description={<Space className="page-toolbar" wrap>{data.filter(l => l.enabled && listenerAvailability(statuses[l.id], true) === 'unavailable').map(l => <Button type="link" key={l.id} onClick={() => showRuntime(l)}>{l.name}</Button>)}</Space>} />}
+    <Tabs defaultActiveKey="listeners" items={[{ key: 'listeners', label: t('listeners.title'), children: <Card title={t('listeners.title')} extra={<Space>{selectedRowKeys.length > 0 && <><Button icon={<IconCert />} onClick={() => { certForm.resetFields(); setCertModalOpen(true); }}>{t('listeners.applyCert') || 'Apply cert'}</Button><Button icon={<IconPower />} onClick={() => batchEnabled(true)}>{t('listeners.enableSelected')}</Button><Button icon={<IconBan />} onClick={() => batchEnabled(false)}>{t('listeners.disableSelected')}</Button></>}<Input.Search allowClear placeholder={t('common.search')} onSearch={setKeyword} onChange={(e) => { if (!e.target.value) setKeyword(''); }} style={{ width: isMobile ? "100%" : 180 }} /><Button onClick={() => { load(); }} icon={<IconRefreshList />}>{t('common.refresh')}</Button><Button type="primary" icon={<IconQuickCreate />} onClick={openQuick}>{t('listeners.quickCreate', 'Quick create')}</Button><Button icon={<IconAddNode />} onClick={openCreate}>{t('listeners.create')}</Button></Space>}>{isMobile ? (
+            <Spin spinning={loading}>
+              <div className="mobile-entity-list">
+                {filteredListeners.length === 0 && !loading ? (
+                  <div className="mobile-empty">{t('common.empty')}</div>
+                ) : filteredListeners.map((record) => {
+                  const id = normalizeId(record);
+                  const checked = selectedRowKeys.includes(id);
+                  return (
+                    <div className="mobile-entity-card" key={id}>
+                      <div className="mobile-entity-card-main">
+                        <Checkbox
+                          checked={checked}
+                          onChange={(e) => {
+                            setSelectedRowKeys((keys) =>
+                              e.target.checked ? [...keys, id] : keys.filter((k) => k !== id),
+                            );
+                          }}
+                        />
+                        <div className="mobile-entity-card-body" onClick={() => openEdit(record)}>
+                          <div className="mobile-entity-title">{record.name}</div>
+                          <div className="mobile-entity-meta">
+                            <Tag>{record.protocol}</Tag>
+                            <span>:{record.port}</span>
+                            <span>×{(record as any).traffic_multiplier != null && Number((record as any).traffic_multiplier) > 0 ? Number((record as any).traffic_multiplier) : 1}</span>
+                            <Tag color={record.enabled ? 'blue' : 'default'}>
+                              {record.enabled ? t('common.enabled') : t('common.disabled')}
+                            </Tag>
+                          </div>
+                        </div>
+                        <ListenerRuntimeTag enabled={record.enabled} status={statuses[id]} checking={testing.includes(id)} onClick={() => showRuntime(record)} />
+                        <Dropdown
+                          menu={{
+                            items: [
+                              { key: 'runtime', icon: <IconRefreshList />, label: runtimeText.check, onClick: () => showRuntime(record, false) },
+                              { key: 'uri', icon: <IconQr />, label: t('listeners.copyURI'), onClick: () => showURIs(id) },
+                              { key: 'clone', icon: <IconBranch />, label: t('listeners.clone'), onClick: () => openClone(record) },
+                              { key: 'tpl', icon: <IconSave />, label: t('listeners.saveTemplate'), onClick: () => openSaveTemplate(record) },
+                              { key: 'ver', icon: <IconHistory />, label: t('listeners.versions'), onClick: () => openVersions(record) },
+                              { key: 'reload', icon: <IconRefreshList />, label: t('common.refresh'), onClick: () => onReload(id) },
+                              { key: 'edit', icon: <IconEdit />, label: t('common.edit'), onClick: () => openEdit(record) },
+                              { type: 'divider' },
+                              { key: 'del', icon: <IconDelete />, label: t('common.delete'), danger: true, onClick: () => {
+                                Modal.confirm({
+                                  title: t('listeners.deleteConfirm'),
+                                  onOk: () => onDelete(id),
+                                });
+                              }},
+                            ],
+                          }}
+                          trigger={['click']}
+                        >
+                          <Button type="text" icon={<IconMore />} aria-label={t('common.actions')} />
+                        </Dropdown>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Spin>
+          ) : (
+            <Table rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} dataSource={filteredListeners} columns={columns} rowKey="id" loading={loading} scroll={{ x: isMobile ? 720 : 880 }} size={isMobile ? "small" : "middle"} />
+          )}</Card> }, { key: 'templates', label: t('listeners.templates'), children: <Card title={t('listeners.templates')} extra={<Button icon={<IconRefreshList />} onClick={loadTemplates}>{t('common.refresh')}</Button>}><Table dataSource={templates} columns={templateColumns} rowKey="id" loading={templateLoading} pagination={{ pageSize: 10 }} size={isMobile ? "small" : "middle"} /></Card> }]} />
+    <ListenerRuntimeDrawer listener={runtimeListener ? data.find(l => l.id === runtimeListener.id) || runtimeListener : null} status={runtimeListener ? details[runtimeListener.id] || statuses[runtimeListener.id] : undefined} checking={!!runtimeListener && testing.includes(runtimeListener.id)} onClose={() => setRuntimeListener(null)} onCheck={() => { if (runtimeListener) void test(runtimeListener.id).catch(() => {}); }} />
+    <Modal open={quickModal} title={t('listeners.quickCreate', 'Quick create')} onCancel={() => setQuickModal(false)} onOk={doQuickCreate} confirmLoading={quickSubmitting} okText={t('common.create', 'Create')} destroyOnClose width={isMobile ? '100%' : 480} style={isMobile ? { top: 12 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
+      <p style={{ marginBottom: 12, opacity: 0.75, fontSize: 13 }}>{t('listeners.quickCreateHint', 'Select protocol and name only. Port, credentials and REALITY/TLS are generated automatically.')}</p>
+      <Form form={quickForm} layout="vertical" requiredMark={false}>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]} tooltip={t('listeners.protocolHint')}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} size={isMobile ? 'large' : 'middle'} showSearch optionFilterProp="label" /></Form.Item>
+        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input size={isMobile ? 'large' : 'middle'} maxLength={64} placeholder="my-node" /></Form.Item>
+      </Form>
+    </Modal>
+    <Modal confirmLoading={submitting} closable={!submitting} maskClosable={!submitting} keyboard={!submitting} cancelButtonProps={{ disabled: submitting }} okText={submitting ? runtimeText.saving : t('common.save')} open={modalOpen} title={editing ? t('listeners.edit') : t('listeners.create')} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={() => form.validateFields().then((vals) => onSubmit(vals))} width={isMobile ? '100%' : 720} style={isMobile ? { top: 8, maxWidth: '100vw', margin: 0, padding: 0 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined} destroyOnClose styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}>
+      {submitError && <Alert type="error" showIcon title={runtimeText.failed} description={<><div>{submitError}</div><div>{runtimeText.failedHint}</div></>} style={{ marginBottom: 16 }} />}
+      <Form disabled={submitting} form={form} layout="vertical" onFinish={onSubmit} scrollToFirstError={{ block: 'center', focus: true }} preserve>
+        <Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input placeholder="my-vless" /></Form.Item>
+        <Form.Item name="protocol" label={t('listeners.protocol')} rules={[{ required: true }]} tooltip={t('listeners.protocolHint')}><Select options={PROTOCOLS.map(p => ({ value: p, label: p }))} onChange={(nextProto: string) => { const keep = form.getFieldsValue(['name', 'port', 'bind_address', 'enabled', 'udp', 'traffic_multiplier']); form.resetFields(); const layerDefaults: Record<string, string> = { transport_layer: 'raw', security_layer: 'none' }; if (nextProto === 'vless') layerDefaults.security_layer = 'reality'; form.setFieldsValue({ ...keep, protocol: nextProto, ...layerDefaults }); }} /></Form.Item>
+        {/* `required` owns the empty case; the validator must NOT also reject on empty,
+            otherwise both rules fire and AntD renders the same "required" message twice.
+            `whitespace` makes a spaces-only value count as empty too. */}
+        <Form.Item name="port" label={t('listeners.port')} tooltip={t('listeners.portHint')} rules={[{ required: true, whitespace: true, message: t('listeners.portRequired') }, { validator: async (_, v) => { const s = String(v || '').trim(); if (!s) return Promise.resolve(); if (!/^\d{1,5}([,-]\d{1,5})*$/.test(s.replace(/\s/g, ''))) return Promise.reject(new Error(t('listeners.portFormat'))); return Promise.resolve(); } }]}><Input placeholder="443" addonAfter={!editing ? <Button type="link" size="small" onClick={regeneratePort}>{t('listeners.randomPort')}</Button> : undefined} /></Form.Item>
+        <Form.Item name="bind_address" label={t('listeners.bindAddress')} initialValue="0.0.0.0" tooltip={t('listeners.bindAddressTip')}><Input placeholder="0.0.0.0 or ::" /></Form.Item>
+        <Form.Item name="enabled" label={runtimeText.enabledSetting} valuePropName="checked" initialValue={true}><Switch /></Form.Item>
+        <Form.Item
+          name="traffic_multiplier"
+          label={t('listeners.trafficMultiplier') || '流量倍率'}
+          tooltip={t('listeners.trafficMultiplierHint') || '实际流量 × 倍率计入用户配额。默认 1，例如 1.5 表示多计 50%。'}
+          initialValue={1}
+          rules={[{ type: 'number', min: 0.01, max: 100, message: '0.01 – 100' }]}
+        >
+          <InputNumber min={0.01} max={100} step={0.1} style={{ width: '100%' }} placeholder="1" size={isMobile ? 'large' : 'middle'} />
+        </Form.Item>
+        {protocolSupportsUDP(protocol) && <Form.Item name="udp" label={t('listeners.udp')} valuePropName="checked" initialValue={false} tooltip={t('listeners.udpHint')}><Switch /></Form.Item>}
+        <Divider titlePlacement="start" plain>{t('settings.accessProfile')}</Divider>
+        <Form.Item name="public_host" label={t('settings.publicHost')} tooltip={t('settings.accessProfileHint') || 'Domain or IP (IPv6 without brackets)'}><Input placeholder="example.com or 2001:db8::1" /></Form.Item>
+        <Form.Item name="public_port" label={t('settings.publicPort')} tooltip={t('listeners.public_portHint')}><Input placeholder="443" /></Form.Item>
+        {/* HTTP/SOCKS inbound: no SNI / client-fingerprint / ALPN in MetaCubeX wiki; share URIs are plain http:// or socks5:// */}
+        {protocol !== 'http' && protocol !== 'socks' && (
+          <>
+            <Form.Item name="access_sni" label={t('listeners.sni')} tooltip={t('listeners.access_sniHint')}><Input /></Form.Item>
+            <Form.Item name="client_fingerprint" label={t('settings.clientFingerprint')} initialValue="chrome" tooltip={t('listeners.client_fingerprintHint')}><Select options={['chrome','firefox','safari','ios','android','edge','random'].map(v => ({ value: v, label: v }))} /></Form.Item>
+            <Form.Item name="access_alpn" label={t('listeners.alpn')} tooltip={t('listeners.access_alpnHint')}><Input placeholder="h2,http/1.1" /></Form.Item>
+          </>
+        )}
+        {useCapabilityForm && capabilities && protocolCapability(capabilities, protocol || '') ? <CapabilityFormFields protocol={protocol} capability={protocolCapability(capabilities, protocol || '')} /> : <ListenerConfigFields protocol={protocol} autoSelectReality={modalOpen && !editing} />}
+      </Form>
+    </Modal>
+    <Modal open={cloneModal} title={t('listeners.clone')} onCancel={() => setCloneModal(false)} onOk={() => cloneForm.submit()}><Form form={cloneForm} layout="vertical" onFinish={doClone}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item></Form></Modal>
+    <Modal open={templateModal} title={t('listeners.saveTemplate')} onCancel={() => setTemplateModal(false)} onOk={() => templateForm.submit()}><Form form={templateForm} layout="vertical" onFinish={saveTemplate}><Form.Item name="name" label={t('listeners.templateName')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input /></Form.Item><Descriptions column={1} size="small"><Descriptions.Item label={t('listeners.protocol')}>{templateSource?.protocol}</Descriptions.Item></Descriptions></Form></Modal>
+    <Modal open={instantiateModal} title={t('listeners.instantiate')} onCancel={() => setInstantiateModal(false)} onOk={() => instantiateForm.submit()}><Form form={instantiateForm} layout="vertical" onFinish={doInstantiate}><Form.Item name="name" label={t('listeners.name')} rules={[{ required: true }]} tooltip={t('listeners.nameHint')}><Input /></Form.Item><Form.Item name="port" label={t('listeners.newPort')} rules={[{ required: true }]} tooltip={t('listeners.portHint')}><Input placeholder="443" /></Form.Item></Form></Modal>
+    <Modal open={versionsModal} title={`${t('listeners.versions')} — ${versionListener?.name || ''}`} onCancel={() => setVersionsModal(false)} footer={null} width={800}><Table dataSource={versions} rowKey="id" pagination={false} size={isMobile ? "small" : "middle"} columns={[{ title: t('listeners.version'), dataIndex: 'version', width: 100 }, { title: t('listeners.reason'), dataIndex: 'reason', render: (v: string) => v || '-' }, { title: t('listeners.createdAt'), dataIndex: 'created_at', render: (v: string) => new Date(v).toLocaleString() }, { title: t('common.actions'), render: (_: any, v: ListenerVersion) => <Space><Button size="small" icon={<IconDiff />} onClick={() => showDiff(v.version)}>{t('listeners.diff')}</Button><Popconfirm title={t('listeners.rollbackConfirm')} onConfirm={() => doRollback(v.version)}><Button size="small" type="primary">{t('listeners.rollback')}</Button></Popconfirm></Space> }]} /></Modal>
+    <Modal open={diffModal} title={t('listeners.diff')} onCancel={() => setDiffModal(false)} footer={null} width={900}><pre style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{diffText || t('common.empty')}</pre></Modal>
+    <Modal open={uriModal} title={t('listeners.urisTitle')} onCancel={() => setUriModal(false)} footer={null} width={isMobile ? '100%' : 560} style={isMobile ? { top: 8 } : undefined} className={isMobile ? 'mobile-full-modal' : undefined}>
+      <Space direction="vertical" style={{ width: '100%' }}>
+        {uris.map((uri, i) => (
+          <Card key={i} size="small">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Space style={{ width: '100%' }}>
+                <Input value={uri} readOnly />
+                <Button icon={<IconCopy />} onClick={async () => { const ok = await copyText(uri); if (ok) message.success(t('common.copied') || t('common.copy')); else message.error(t('common.copyFailed') || 'Copy failed'); }} />
+              </Space>
+              <div style={{ textAlign: 'center' }}>
+                <QRCode value={uri} size={160} />
+              </div>
+            </Space>
+          </Card>
+        ))}
+      </Space>
+    </Modal>
+
+      <Modal
+        open={certModalOpen}
+        title={t('listeners.applyCertTitle') || 'Apply certificate to selected nodes'}
+        onCancel={() => setCertModalOpen(false)}
+        onOk={applyCertToSelected}
+        confirmLoading={certApplying}
+        width={640}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 12, opacity: 0.75 }}>
+          {t('listeners.applyCertHint') ||
+            'Writes certificate + private-key into each selected node config. Use panel SSL files or paths under /etc/letsencrypt.'}
+        </p>
+        <Form form={certForm} layout="vertical" initialValues={{ from_panel_ssl: false }}>
+          <Form.Item name="from_panel_ssl" label={t('listeners.certFromPanel') || 'Use panel SSL files'} valuePropName="checked" tooltip={t('listeners.from_panel_sslHint')}>
+            <Switch />
+          </Form.Item>
+          <Form.Item name="certificate" label={t('listeners.certPem') || 'Certificate PEM'} tooltip={t('listeners.certificateHint')}>
+            <Input.TextArea rows={5} placeholder="-----BEGIN CERTIFICATE-----" />
+          </Form.Item>
+          <Form.Item name="private_key" label={t('listeners.certKeyPem') || 'Private key PEM'}>
+            <Input.TextArea rows={4} placeholder="-----BEGIN PRIVATE KEY-----" />
+          </Form.Item>
+          <Form.Item name="cert_file" label={t('listeners.certFile') || 'Or cert file path'} extra="/etc/letsencrypt/live/example.com/fullchain.pem">
+            <Input placeholder="/etc/letsencrypt/live/.../fullchain.pem" />
+          </Form.Item>
+          <Form.Item name="key_file" label={t('listeners.keyFile') || 'Or key file path'} tooltip={t('listeners.key_fileHint')}>
+            <Input placeholder="/etc/letsencrypt/live/.../privkey.pem" />
+          </Form.Item>
+        </Form>
+      </Modal>
+  </div>;
+};
+
+export default Listeners;

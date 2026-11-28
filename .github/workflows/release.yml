@@ -1,0 +1,248 @@
+name: Release stable or release candidate
+
+# Ways to release:
+# 1) Push a SemVer tag:  git tag v1.3.5 && git push origin v1.3.5
+# 2) GitHub web UI → Actions → "Release stable or release candidate" → Run workflow
+#      Version: 1.3.5 or v1.3.5 (required)
+#      Ref:     branch or SHA to tag (default main)
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (1.3.5 or v1.3.5; RC e.g. 1.4.0-rc.1)"
+        required: true
+        type: string
+      ref:
+        description: "Git ref to tag (branch name or commit SHA). Default: main"
+        required: false
+        type: string
+        default: main
+permissions:
+  contents: read
+concurrency:
+  group: release-formal-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      latest: ${{ steps.meta.outputs.latest }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - name: Normalize version to SemVer tag
+        id: tagname
+        env:
+          RAW: ${{ inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          RAW="${RAW#refs/tags/}"
+          case "$RAW" in
+            v*) TAG="$RAW" ;;
+            *)  TAG="v$RAW" ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Normalized release tag: $TAG"
+
+      - name: Checkout source (web UI uses ref; tag push uses the tag)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+          fetch-depth: 0
+
+      - name: Checkout tag (tag-push path)
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tagname.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Create annotated tag when releasing from the web UI
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.tagname.outputs.tag }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          echo "Source ref resolves to $SHA"
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            # Peel annotated tags to the underlying commit.
+            EXISTING="$(git rev-parse "refs/tags/$TAG^{commit}" 2>/dev/null || git rev-parse "refs/tags/$TAG")"
+            if [ "$EXISTING" != "$SHA" ]; then
+              echo "Tag $TAG already points at $EXISTING, not $SHA. Refusing to move an immutable release tag." >&2
+              exit 1
+            fi
+            echo "Tag $TAG already exists on $SHA"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG" "$SHA"
+            git push origin "refs/tags/$TAG"
+            echo "Created and pushed tag $TAG → $SHA"
+          fi
+
+      - name: Resolve exact tag and channel
+        id: meta
+        env:
+          TAG: ${{ steps.tagname.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release-metadata.py "$TAG"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>release-error; then
+            echo "Release $TAG already exists. Published versions cannot be replaced." >&2
+            exit 1
+          fi
+          if ! grep -qiE 'release not found|HTTP 404' release-error; then
+            cat release-error >&2
+            exit 1
+          fi
+
+  build:
+    needs: metadata
+    uses: ./.github/workflows/release-build.yml
+    with:
+      source_sha: ${{ needs.metadata.outputs.sha }}
+      version: ${{ needs.metadata.outputs.tag }}
+
+  release:
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.metadata.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: Collect scripts and checksum every public asset
+        env:
+          VERSION: ${{ needs.metadata.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          cp scripts/{install.sh,update.sh,uninstall.sh,3m-ui.sh,3m-ui} release-files/
+          cp docker-compose*.yml release-files/
+          cp distribution/mihomo.env release-files/
+          sed -i "s#ghcr.io/kazeyukiro/3m-ui#ghcr.io/${REPOSITORY,,}#g" release-files/docker-compose*.yml
+          sed -i "s#kazeyukiro/3m-ui#${REPOSITORY}#g" release-files/install.sh
+          printf '%s\n' "$VERSION" > release-files/VERSION
+          printf '%s\n' "$REPOSITORY" > release-files/REPOSITORY
+          cd release-files
+          sha256sum * > SHA256SUMS
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign checksums using this workflow identity
+        working-directory: release-files
+        run: |
+          cosign sign-blob --yes --output-certificate SHA256SUMS.pem \
+            --output-signature SHA256SUMS.sig SHA256SUMS
+      - name: Publish once without overwriting assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+          LATEST: ${{ needs.metadata.outputs.latest }}
+          SHA: ${{ needs.metadata.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Previous *stable* SemVer only (vMAJOR.MINOR.PATCH). Ignore RC tags and
+          # the tag we are publishing. version:refname can otherwise pair a new
+          # release with a divergent or pre-release tip and dump the whole history.
+          PREV="$(git tag -l 'v*' --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -vxF "$TAG" \
+            | head -n1 || true)"
+          {
+            if [ -n "${PREV}" ] && git rev-parse "${PREV}^{commit}" >/dev/null 2>&1; then
+              echo "## Changes since ${PREV}"
+              echo
+              # Use merge-base so rewritten / non-linear history does not list
+              # every commit reachable from SHA but not from the tag tip alone.
+              MB="$(git merge-base "${PREV}^{commit}" "$SHA" 2>/dev/null || true)"
+              if [ -n "$MB" ]; then
+                RANGE="${MB}..${SHA}"
+              else
+                RANGE="${PREV}..${SHA}"
+              fi
+            else
+              echo "## Changes"
+              echo
+              RANGE="${SHA}"
+            fi
+            # Conventional commits on the first-parent path only; drop pure
+            # formatting / CI noise that bloats notes (as seen on v1.3.9).
+            log_lines() {
+              git log "$RANGE" --first-parent --pretty=format:'- %s (%h)' --no-merges \
+                | grep -Ev '^- (style:|style\(|chore: gofmt|ci: |test: format|test: provide|test: cover|test: preserve)' \
+                || true
+            }
+            ALL="$(log_lines)"
+            # Cap each section so a large range stays readable in the GitHub UI.
+            section() {
+              local title="$1" pattern="$2"
+              local body
+              body="$(printf '%s\n' "$ALL" | grep -E "$pattern" | head -n 40 || true)"
+              if [ -n "$body" ]; then
+                echo "### ${title}"
+                echo "$body"
+                echo
+              fi
+            }
+            section "Features" '^- feat'
+            section "Fixes" '^- fix'
+            section "Performance" '^- perf'
+            section "Docs" '^- docs'
+            section "Chore / CI" '^- (chore|ci|build|refactor|test)'
+            other="$(printf '%s\n' "$ALL" | grep -Ev '^- (feat|fix|perf|docs|chore|ci|build|refactor|style|test)' | head -n 20 || true)"
+            if [ -n "$other" ]; then echo "### Other"; echo "$other"; echo; fi
+            if [ -z "$(printf '%s' "$ALL" | tr -d '[:space:]')" ]; then
+              echo "_No conventional commits in range._"
+              echo
+            fi
+            echo "---"
+            echo
+            echo "Complete Linux installation bundles are provided for amd64 and arm64."
+            echo "Each bundle includes the panel, its pinned Mihomo core and lifecycle scripts."
+            echo "Other architectures are standalone panel builds for advanced installations."
+            echo "Verify downloads against SHA256SUMS. SHA256SUMS.pem and SHA256SUMS.sig"
+            echo "provide Sigstore keyless verification for this release workflow."
+            echo "SHA256SUMS.pem is base64-encoded; cosign reads it as-is. For PEM-only"
+            echo "tools (e.g. openssl), decode first: base64 -d SHA256SUMS.pem > SHA256SUMS.cert.pem"
+            echo "Docker images are published to ghcr.io/<owner>/<repository>:<tag>."
+            echo "The latest image and default installer follow stable releases only."
+          } > release-notes.md
+          cat release-notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create "$TAG" --verify-tag --draft --title "$TAG" \
+            --notes-file release-notes.md
+          gh release upload "$TAG" release-files/*
+          gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST"
+
+  image:
+    needs: [metadata, release]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      source_sha: ${{ needs.metadata.outputs.sha }}
+      version: ${{ needs.metadata.outputs.tag }}
+      image_tag: ${{ needs.metadata.outputs.image_tag }}
+      latest: ${{ needs.metadata.outputs.latest == 'true' }}

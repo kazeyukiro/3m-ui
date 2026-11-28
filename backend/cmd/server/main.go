@@ -1,0 +1,177 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/app"
+	"github.com/kazeyukiro/3m-ui/backend/internal/auth"
+	"github.com/kazeyukiro/3m-ui/backend/internal/bootstrap"
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database"
+	"github.com/kazeyukiro/3m-ui/backend/internal/panellog"
+	"github.com/kazeyukiro/3m-ui/backend/internal/system"
+)
+
+// cmdsWithOwnFlags lists subcommands that parse their own flags after the
+// subcommand name (e.g. `3m-ui reset-config --panel --yes`). The global
+// scanner must let those flags through instead of rejecting them as unknown
+// arguments — otherwise the subcommand never gets a chance to see them.
+var cmdsWithOwnFlags = map[string]bool{
+	"reset-config": true,
+}
+
+// main accepts both the installer-provided THREE_M_UI_CONFIG environment
+// variable and the documented --config/-c command-line option.
+func main() {
+	// Capture stdlib log into the panel UI log ring (also keep stderr/journald).
+	log.SetOutput(io.MultiWriter(os.Stderr, panellog.Writer{}))
+
+	args := os.Args[1:]
+	configPath := os.Getenv("THREE_M_UI_CONFIG")
+	var cmd string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--version", "version":
+			println(versionString())
+			return
+		case "--config", "-c":
+			if i+1 >= len(args) || args[i+1] == "" {
+				log.Fatal("--config requires a path")
+			}
+			configPath = args[i+1]
+			if err := os.Setenv("THREE_M_UI_CONFIG", configPath); err != nil {
+				log.Fatalf("set config path: %v", err)
+			}
+			i++
+		case "reset-admin", "init", "healthcheck", "storage-paths", "reset-config":
+			cmd = args[i]
+		default:
+			if cmd == "" && !hasPrefixDash(args[i]) {
+				cmd = args[i]
+			} else if hasPrefixDash(args[i]) && !cmdsWithOwnFlags[cmd] {
+				log.Fatalf("unknown argument: %s", args[i])
+			}
+		}
+	}
+	if configPath == "" {
+		configPath = config.ConfigPath()
+	}
+	// Bound this process' heap before any real work. Small NAT/VPS boxes have
+	// 128-512MB, no swap and often a tmpfs /tmp, so an unbounded heap takes the
+	// whole box down rather than just the panel. This acts in-process only: the
+	// Mihomo core inherits nothing, because its working set is nothing like the
+	// panel's. An explicit GOMEMLIMIT/GOGC is always respected.
+	if budget := system.ApplyRuntimeMemoryLimit(); budget.Applied {
+		log.Printf("Small-memory mode: Go heap soft limit %d bytes, GOGC %d", budget.Heap, budget.GC)
+	}
+	if cmd == "init" {
+		initialized, err := bootstrap.Initialize(configPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if sqlDB, err := initialized.DB.DB(); err == nil {
+			defer sqlDB.Close()
+		}
+		initialized.PrintCredentials(os.Stdout)
+		fmt.Printf("Configuration: %s\nPanel port: %d\n", configPath, initialized.Config.Server.Port)
+		// The panel hides behind a random base path, so the one doing the install
+		// has to be told where it ended up — otherwise the first visit to their
+		// own domain is a 404. Print it even when no admin was created (an
+		// existing install re-running init may not print credentials).
+		if webPath := config.NormalizeWebPath(initialized.Config.Server.WebPath); webPath != "" {
+			fmt.Printf("Panel path: %s/ (panel UI/API live under this prefix; the bare domain returns 404)\n", webPath)
+		}
+		return
+	}
+	if cmd == "healthcheck" {
+		if err := runHealthcheck(configPath); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if cmd == "storage-paths" {
+		if err := printStoragePaths(configPath, os.Stdout); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	if cmd == "reset-admin" {
+		if err := runResetAdmin(configPath); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if cmd == "reset-config" {
+		// reset-config accepts its own flags (--panel / --access / --public
+		// / --all / --yes). Pass every arg AFTER the subcommand name so the
+		// handler can parse them itself.
+		var rest []string
+		skip := false
+		for _, a := range args {
+			if skip {
+				skip = false
+				continue
+			}
+			if a == "reset-config" {
+				skip = false
+				continue // drop the subcommand name itself
+			}
+			if a == "--config" || a == "-c" {
+				skip = true // skip the path value (already captured above)
+				continue
+			}
+			rest = append(rest, a)
+		}
+		if err := runResetConfig(configPath, rest); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if cmd != "" {
+		log.Fatalf("unknown command: %s", cmd)
+	}
+
+	if err := app.Run(frontendFiles); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func hasPrefixDash(s string) bool {
+	return len(s) > 0 && s[0] == '-'
+}
+
+func runResetAdmin(configPath string) error {
+	if configPath == "" {
+		configPath = "/etc/3m-ui/config.yaml"
+	}
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	dbPath := cfg.Database.Path
+	if dbPath == "" {
+		dbPath = filepath.Join("/var/lib/3m-ui", "3m-ui.db")
+	}
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		defer sqlDB.Close()
+	}
+	password, err := auth.GeneratePassword()
+	if err != nil {
+		return err
+	}
+	if err := auth.ResetAdminPassword(db, password); err != nil {
+		return err
+	}
+	fmt.Printf("Administrator password reset to: %s\n", password)
+	fmt.Println("You must change the password on next login.")
+	return nil
+}

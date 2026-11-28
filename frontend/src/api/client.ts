@@ -1,0 +1,170 @@
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { useAuthStore } from '../stores/authStore';
+import { webPath } from '../utils/webPath';
+
+const client = axios.create({
+  // Base URL is built from the panel mount path injected by the backend so the
+  // API works whether the panel is at the domain root or behind /<web_path>/.
+  baseURL: `${webPath()}/api/v1`,
+  // Resolve the default after Axios merges request options. A null sentinel
+  // preserves explicit timeouts, including 0 (no timeout).
+  timeout: null,
+  headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+});
+
+client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = useAuthStore.getState().token;
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  const method = (config.method || 'get').toLowerCase();
+  if (config.timeout == null) {
+    config.timeout = method === 'get' || method === 'head' ? 45000 : 120000;
+  }
+  // FormData uploads (e.g. restoreDatabase) MUST let the browser set the
+  // multipart Content-Type with its boundary. The client-level default
+  // 'application/json' header would otherwise clobber it, and gin returns
+  // 'request Content-Type isn't multipart/form-data'.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (config.headers) {
+      delete config.headers['Content-Type'];
+      delete (config.headers as Record<string, unknown>).contentType;
+    }
+  }
+  return config;
+});
+
+/** True when the browser/axios aborted the request (navigation, polling, explicit cancel). */
+export function isCanceledError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; name?: string; message?: string };
+  if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError' || e.name === 'AbortError') return true;
+  if (typeof e.message === 'string' && /cancel|aborted/i.test(e.message)) return true;
+  if (axios.isCancel?.(err)) return true;
+  return false;
+}
+
+function apiErrorMessage(err: AxiosError<{ error?: string; code?: string; message?: string }>): string {
+  const data = err.response?.data;
+  if (data && typeof data === 'object') {
+    if (typeof data.error === 'string' && data.error.trim()) return data.error;
+    if (typeof data.message === 'string' && data.message.trim()) return data.message;
+  }
+  if (err.message) return err.message;
+  return 'Request failed';
+}
+
+client.interceptors.response.use(
+  (res) => res,
+  (err: AxiosError<{ error?: string; code?: string; message?: string }>) => {
+    // Aborted polls / navigation must not surface as "backend unreachable".
+    if (isCanceledError(err) || err.code === 'ERR_CANCELED') {
+      const cancelErr = new Error('Request canceled');
+      cancelErr.name = 'CanceledError';
+      (cancelErr as Error & { code?: string }).code = 'ERR_CANCELED';
+      return Promise.reject(cancelErr);
+    }
+
+    if (!err.response) {
+      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+        return Promise.reject(
+          new Error(
+            'Backend request timed out; the operation may still be in progress. Check the current status before retrying.',
+          ),
+        );
+      }
+      if (err.request) {
+        // Network Error, connection reset, offline, or proxy dropped the response.
+        const detail =
+          typeof err.message === 'string' && err.message && err.message !== 'Network Error'
+            ? ` (${err.message})`
+            : '';
+        return Promise.reject(
+          new Error(
+            `Cannot reach the panel API at /api/v1${detail}. If this appeared while creating/deleting nodes or users, or while generating/applying routing/config, wait a few seconds and refresh — the change may already be saved while Mihomo was reloading. Confirm: systemctl status 3m-ui, and that the panel port/HTTPS is reachable.`,
+          ),
+        );
+      }
+      return Promise.reject(new Error(err.message || 'Backend request failed'));
+    }
+    const { status, data } = err.response;
+
+    if (status === 401) {
+      const msg = apiErrorMessage(err) || 'Session expired';
+      // Only force logout on real auth failures — not transient upstream noise
+      // that some proxies surface as 401 when the panel is briefly busy.
+      const target = webPath() + '/login';
+      const path = window.location.pathname;
+      if (path !== target && /session|expired|invalid|authentication required|log in again|user not found/i.test(msg)) {
+        useAuthStore.getState().logout();
+        window.location.href = target;
+      }
+      return Promise.reject(new Error(msg));
+    }
+    if (status === 503) {
+      return Promise.reject(
+        new Error(apiErrorMessage(err) || 'Service temporarily unavailable; retry in a moment.'),
+      );
+    }
+    if (status === 403 && data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+      useAuthStore.getState().setMustChangePassword(true);
+      if (window.location.pathname !== webPath() + '/change-password') {
+        window.location.href = webPath() + '/change-password';
+      }
+      return Promise.reject(new Error('Password change required'));
+    }
+    if (status === 408 || status === 504) {
+      return Promise.reject(
+        new Error('Backend request timed out; the operation may still be in progress. Check the current status before retrying.'),
+      );
+    }
+    if (status === 429) {
+      const retryAfter = err.response.headers?.['retry-after'];
+      return Promise.reject(
+        new Error(retryAfter ? `Too many requests; retry after ${retryAfter} seconds` : 'Too many requests; please try again later'),
+      );
+    }
+    if (status >= 500) {
+      return Promise.reject(new Error(data?.error || `Backend error (${status})`));
+    }
+    if (status === 410) {
+      return Promise.reject(new Error(data?.error || 'Resource gone'));
+    }
+    return Promise.reject(new Error(apiErrorMessage(err)));
+  },
+);
+
+export default client;
+
+
+/** Transient network / empty-response errors (not HTTP 4xx/5xx bodies). */
+export function isTransientNetworkError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  if (isCanceledError(err)) return false;
+  const e = err as { code?: string; message?: string; response?: unknown };
+  if (e.response) return false;
+  if (e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT' || e.code === 'ERR_NETWORK') return true;
+  const msg = String(e.message || '');
+  return /Cannot reach the panel API|Network Error|ERR_EMPTY_RESPONSE|Failed to fetch|ECONNRESET|socket hang up|timed out|timeout/i.test(
+    msg,
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Retry GET/POST once or twice when the browser sees a dropped connection (e.g. during Mihomo reload). */
+export async function withNetworkRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 800): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+      if (!isTransientNetworkError(err) || i === attempts - 1) throw err;
+      await sleep(baseDelayMs * (i + 1));
+    }
+  }
+  throw last;
+}

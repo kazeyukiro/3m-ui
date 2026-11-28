@@ -1,0 +1,128 @@
+package config
+
+import (
+	"net/http/httptest"
+	"testing"
+)
+
+func TestIsMihomoListenerProtocol(t *testing.T) {
+	supported := []string{
+		"shadowsocks", "snell", "vmess", "vless", "trojan", "hysteria2", "hysteria2-realm",
+		"tuic", "shadowquic", "anytls", "mieru", "sudoku", "trusttunnel",
+	}
+	for _, protocol := range supported {
+		if !IsMihomoListenerProtocol(protocol) {
+			t.Errorf("expected %q to be supported", protocol)
+		}
+	}
+}
+
+func TestIsMihomoListenerProtocolRejectsInboundOnlyTypes(t *testing.T) {
+	rejected := []string{"socks", "http", "tproxy", "redir", "mixed", "tunnel", "tun", "wireguard", ""}
+	for _, protocol := range rejected {
+		if IsMihomoListenerProtocol(protocol) {
+			t.Errorf("expected %q to be rejected", protocol)
+		}
+	}
+}
+
+func TestValidateRejectsDefaultSecrets(t *testing.T) {
+	cfg := &Config{
+		Server:   ServerConfig{Port: 8080},
+		Database: DatabaseConfig{Path: "test.db"},
+		JWT:      JWTConfig{Secret: DefaultJWTSecret},
+		Security: SecurityConfig{CredentialKey: "a-unique-credential-key-that-is-long-enough"},
+	}
+	if err := Validate(cfg); err == nil {
+		t.Fatal("expected default JWT secret to be rejected")
+	}
+
+	cfg.JWT.Secret = "a-unique-jwt-secret-that-is-long-enough"
+	cfg.Security.CredentialKey = DefaultCredentialKey
+	if err := Validate(cfg); err == nil {
+		t.Fatal("expected default credential key to be rejected")
+	}
+}
+
+func TestValidateAcceptsSecureConfig(t *testing.T) {
+	cfg := &Config{
+		Server:   ServerConfig{Port: 8080},
+		Database: DatabaseConfig{Path: "test.db"},
+		JWT:      JWTConfig{Secret: "a-unique-jwt-secret-that-is-long-enough"},
+		Security: SecurityConfig{CredentialKey: "a-unique-credential-key-that-is-long-enough"},
+	}
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("expected secure config to pass validation: %v", err)
+	}
+}
+
+func TestControllerOverrideRemainsLocal(t *testing.T) {
+	cfg := &Config{
+		Server: ServerConfig{Port: 8080}, Database: DatabaseConfig{Path: "test.db"},
+		JWT:      JWTConfig{Secret: "a-unique-jwt-secret-that-is-long-enough"},
+		Security: SecurityConfig{CredentialKey: "a-unique-credential-key-that-is-long-enough"},
+	}
+	for _, address := range []string{"0.0.0.0:9090", "198.51.100.1:9090", "127.0.0.1:0", "127.0.0.1:65536", "localhost:9090"} {
+		t.Setenv("THREE_M_UI_MIHOMO_CONTROLLER", address)
+		if err := Validate(cfg); err == nil {
+			t.Errorf("accepted invalid controller %s", address)
+		}
+	}
+	for _, address := range []string{"127.0.0.1:9099", "[::1]:9099"} {
+		t.Setenv("THREE_M_UI_MIHOMO_CONTROLLER", address)
+		if err := Validate(cfg); err != nil {
+			t.Errorf("rejected loopback controller: %v", err)
+		}
+	}
+}
+
+func TestGetSubscriptionURLUsesSharedConfiguration(t *testing.T) {
+	t.Setenv("PUBLIC_URL", "")
+	cfg := &Config{Server: ServerConfig{PublicURL: "https://panel.example", SubPath: "/custom/sub"}}
+	req := httptest.NewRequest("GET", "http://internal.example/", nil)
+	if got := GetSubscriptionURL(cfg, req, "token/a", " Clash "); got != "https://panel.example/custom/sub/token%2Fa?target=clash" {
+		t.Fatal(got)
+	}
+	t.Setenv("PUBLIC_URL", "https://public.example/")
+	if got := GetSubscriptionURL(cfg, req, "abc", ""); got != "https://public.example/custom/sub/abc" {
+		t.Fatal(got)
+	}
+	t.Setenv("PUBLIC_URL", "")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	if got := GetSubscriptionURL(nil, req, "abc", ""); got != "https://internal.example/api/v1/client/sub/abc" {
+		t.Fatal(got)
+	}
+}
+
+func TestNormalizeWebPath(t *testing.T) {
+	cases := map[string]string{
+		"": "", "/": "", "/secret": "/secret", "secret": "/secret", "/secret/": "/secret",
+	}
+	for in, want := range cases {
+		if got := NormalizeWebPath(in); got != want {
+			t.Fatalf("NormalizeWebPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestRandomPanelPathIsRandomAndWellFormed(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		p := randomPanelPath()
+		if len(p) != 33 { // "/" + 32 lowercase hex chars
+			t.Fatalf("randomPanelPath() = %q, unexpected length", p)
+		}
+		if p[0] != '/' {
+			t.Fatalf("randomPanelPath() = %q, must start with /", p)
+		}
+		for _, c := range p[1:] {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				t.Fatalf("randomPanelPath() = %q, non-hex char %q", p, c)
+			}
+		}
+		if seen[p] {
+			t.Fatalf("collision, randomPanelPath() is not random: %q", p)
+		}
+		seen[p] = true
+	}
+}

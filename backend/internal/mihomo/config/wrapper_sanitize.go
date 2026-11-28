@@ -1,0 +1,204 @@
+package config
+
+import "strings"
+
+// sanitizeIncompleteTLSWrappers drops TLS-wrapper blocks that Mihomo would
+// reject for missing required nested fields (e.g. jls-config without dest/users).
+// Incomplete blocks often come from panel toggles that were saved without filling
+// the required sub-fields.
+func sanitizeIncompleteTLSWrappers(cfg map[string]interface{}) {
+	if cfg == nil {
+		return
+	}
+	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok {
+		if !wrapperEnabled(jls) || !hasNonEmptyString(jls, "dest") || !hasJLSUsers(jls) {
+			delete(cfg, "jls-config")
+		}
+	}
+	if st, ok := cfg["shadow-tls"].(map[string]interface{}); ok {
+		if !completeShadowTLSBlock(st) {
+			delete(cfg, "shadow-tls")
+		}
+	}
+	if rt, ok := cfg["res-tls"].(map[string]interface{}); ok {
+		if !wrapperEnabled(rt) || !hasNonEmptyString(rt, "dest") {
+			delete(cfg, "res-tls")
+		}
+	}
+	// ShadowQUIC jls-upstream requires addr; empty block fails mihomo -t.
+	if ju, ok := cfg["jls-upstream"].(map[string]interface{}); ok {
+		if !hasNonEmptyString(ju, "addr") {
+			delete(cfg, "jls-upstream")
+		}
+	}
+	// VMess tlsmirror-config requires dest + primary-key.
+	if tm, ok := cfg["tlsmirror-config"].(map[string]interface{}); ok {
+		if !hasNonEmptyString(tm, "dest") || !hasNonEmptyString(tm, "primary-key") {
+			delete(cfg, "tlsmirror-config")
+		}
+	}
+	// Snell obfs-opts requires mode + host (Mihomo reports unset field "Host").
+	sanitizeObfsOpts(cfg)
+}
+
+// sanitizeObfsOpts drops incomplete Snell/simple obfs-opts blocks.
+func sanitizeObfsOpts(cfg map[string]interface{}) {
+	if cfg == nil {
+		return
+	}
+	oo, ok := cfg["obfs-opts"].(map[string]interface{})
+	if !ok || oo == nil {
+		// Also handle JSON objects decoded into map[interface{}]interface{} via re-decode paths.
+		return
+	}
+	host := firstHost(oo)
+	mode := ""
+	if s, _ := oo["mode"].(string); strings.TrimSpace(s) != "" {
+		mode = strings.TrimSpace(s)
+	}
+	if host == "" || mode == "" {
+		delete(cfg, "obfs-opts")
+		return
+	}
+	// Normalize to lowercase keys Mihomo accepts.
+	cfg["obfs-opts"] = map[string]interface{}{"mode": mode, "host": host}
+}
+
+func firstHost(m map[string]interface{}) string {
+	for _, k := range []string{"host", "Host", "HOST"} {
+		if s, ok := m[k].(string); ok && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+func completeShadowTLSBlock(st map[string]interface{}) bool {
+	if !wrapperEnabled(st) {
+		return false
+	}
+	// handshake.dest required for useful shadow-tls
+	dest := ""
+	if hs, ok := st["handshake"].(map[string]interface{}); ok {
+		dest, _ = hs["dest"].(string)
+	}
+	if strings.TrimSpace(dest) == "" {
+		return false
+	}
+	// v2 password or v3 users
+	if p, _ := st["password"].(string); strings.TrimSpace(p) != "" {
+		return true
+	}
+	if users, ok := st["users"]; ok && users != nil {
+		switch u := users.(type) {
+		case []interface{}:
+			if len(u) > 0 {
+				return true
+			}
+		case []map[string]interface{}:
+			if len(u) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func wrapperEnabled(m map[string]interface{}) bool {
+	if m == nil || len(m) == 0 {
+		return false
+	}
+	if en, ok := m["enable"].(bool); ok {
+		return en
+	}
+	if en, ok := m["enabled"].(bool); ok {
+		return en
+	}
+	// Present without enable flag: treat as enabled only if it has meaningful keys.
+	for k := range m {
+		if k == "enable" || k == "enabled" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func hasNonEmptyString(m map[string]interface{}, key string) bool {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return false
+	}
+	s, ok := v.(string)
+	return ok && strings.TrimSpace(s) != ""
+}
+
+func hasJLSUsers(m map[string]interface{}) bool {
+	raw, ok := m["users"]
+	if !ok || raw == nil {
+		return false
+	}
+	switch users := raw.(type) {
+	case map[string]interface{}:
+		// username -> password map form
+		for user, pass := range users {
+			if strings.TrimSpace(user) == "" {
+				continue
+			}
+			switch p := pass.(type) {
+			case string:
+				if strings.TrimSpace(p) != "" {
+					return true
+				}
+			}
+		}
+	case []interface{}:
+		for _, item := range users {
+			u, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			user, _ := u["username"].(string)
+			pass, _ := u["password"].(string)
+			if strings.TrimSpace(user) != "" && strings.TrimSpace(pass) != "" {
+				return true
+			}
+		}
+	case []map[string]interface{}:
+		for _, u := range users {
+			user, _ := u["username"].(string)
+			pass, _ := u["password"].(string)
+			if strings.TrimSpace(user) != "" && strings.TrimSpace(pass) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ensureShadowQUICJLSUpstream fills Mihomo-required jls-upstream.addr for shadowquic.
+// Without it, `mihomo -t` fails with: has unset fields: jls-upstream — the whole
+// config is rejected and new listeners stay "config_not_applied".
+func ensureShadowQUICJLSUpstream(cfg map[string]interface{}, protocol string) {
+	if cfg == nil {
+		return
+	}
+	proto := strings.ToLower(strings.TrimSpace(protocol))
+	if typ, _ := cfg["type"].(string); proto == "" {
+		proto = strings.ToLower(strings.TrimSpace(typ))
+	}
+	if proto != "shadowquic" {
+		return
+	}
+	ju, _ := cfg["jls-upstream"].(map[string]interface{})
+	if ju == nil {
+		ju = map[string]interface{}{}
+	}
+	if addr, _ := ju["addr"].(string); strings.TrimSpace(addr) == "" {
+		ju["addr"] = "www.microsoft.com:443"
+	}
+	if sni, _ := ju["sni"].(string); strings.TrimSpace(sni) == "" {
+		ju["sni"] = "www.microsoft.com"
+	}
+	cfg["jls-upstream"] = ju
+}

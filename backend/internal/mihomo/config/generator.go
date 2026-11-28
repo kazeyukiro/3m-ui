@@ -1,0 +1,578 @@
+package config
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net"
+	"strconv"
+	"strings"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"github.com/kazeyukiro/3m-ui/backend/internal/protocol"
+	"github.com/kazeyukiro/3m-ui/backend/internal/system"
+	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
+)
+
+type Credential struct{ Username, Password, UUID string }
+
+var CredentialProvider func() (map[uint][]Credential, error)
+
+type ConfigEngine struct{ db *gorm.DB }
+
+func NewConfigEngine(db *gorm.DB) *ConfigEngine { return &ConfigEngine{db: db} }
+
+func (ce *ConfigEngine) GenerateFinalConfig() (string, error) {
+	if ce == nil || ce.db == nil {
+		return "", fmt.Errorf("config engine database is not initialized")
+	}
+	baseBytes, err := yaml.Marshal(GetDefaultTemplate())
+	if err != nil {
+		return "", err
+	}
+	var merged map[string]interface{}
+	if err := yaml.Unmarshal(baseBytes, &merged); err != nil {
+		return "", err
+	}
+	var customFragments []models.Config
+	if err := ce.db.Where("enabled = ?", true).Find(&customFragments).Error; err != nil {
+		return "", fmt.Errorf("load custom config fragments: %w", err)
+	}
+	var panelDNS interface{}
+	for _, fragment := range customFragments {
+		if fragment.Name == serverRoutingName {
+			continue
+		}
+		var fragMap map[string]interface{}
+		if err := yaml.Unmarshal([]byte(fragment.Content), &fragMap); err != nil {
+			return "", fmt.Errorf("invalid custom config %q: %w", fragment.Name, err)
+		}
+		// Listeners are owned by the panel DB; fragments must not inject them
+		// or Mihomo will report duplicate listener names after merge.
+		delete(fragMap, "listeners")
+		// Visual routing is client-subscription only; never merge
+		// rules / proxy-groups / proxies into the serving Mihomo process.
+		if fragment.Name == visualConfigName || fragment.Type == "visual" {
+			if fragment.Name == visualConfigName {
+				panelDNS = fragMap["dns"]
+			}
+			delete(fragMap, "rules")
+			delete(fragMap, "proxy-groups")
+			delete(fragMap, "proxies")
+			// Panel-only subscription dial flags — not Mihomo general keys.
+			delete(fragMap, "client-tfo")
+			delete(fragMap, "client-mptcp")
+		}
+		if proxies, ok := fragMap["proxies"].([]interface{}); ok && len(proxies) > 0 {
+			return "", fmt.Errorf("custom config %q defines proxies — move these entries to 出站管理 and remove the fragment's proxies before applying", fragment.Name)
+		}
+		for k, v := range fragMap {
+			merged[k] = v
+		}
+	}
+	// Saved panel DNS wins over custom fragments regardless of insertion order.
+	// WARP routing below retains its existing requirement to enable DNS.
+	if panelDNS != nil {
+		merged["dns"] = panelDNS
+	}
+	// Config fragments are operator-authored YAML and can carry
+	// geodata-loader: standard. On a small box that single line undoes the
+	// low-memory tuning, so pin it after the merge when low-memory mode is active.
+	if CoreLowMemory() {
+		merged["geodata-loader"] = geodataLoaderMemConservative
+	}
+	// Server-side egress routing (): proxies / groups / rules for the
+	// serving Mihomo process. Visual proxies / groups / rules are client-only.
+	sr, srErr := GetServerRouting(ce.db)
+	if srErr != nil {
+		return "", fmt.Errorf("load server-routing: %w", srErr)
+	}
+	var warpProxy map[string]interface{}
+	if acc, err := system.GetWARPAccount(ce.db); err != nil {
+		return "", fmt.Errorf("load WARP account: %w", err)
+	} else if acc != nil {
+		pm, err := acc.ProxyMap()
+		if err != nil {
+			return "", fmt.Errorf("build WARP outbound: %w", err)
+		}
+		warpProxy = pm
+	}
+	if warpProxy == nil && (len(sr.WarpDomains) > 0 || sr.WarpGlobal) {
+		return "", fmt.Errorf("WARP routing is enabled (domains or global) but no WARP account is saved — open Settings → Cloudflare WARP → Register, then Apply again")
+	}
+	applyServerRouting(merged, sr, warpProxy)
+	var listeners []models.Listener
+	if err := ce.db.Where("enabled = ?", true).Find(&listeners).Error; err != nil {
+		return "", fmt.Errorf("load enabled listeners: %w", err)
+	}
+	if err := validateListenerEndpoints(listeners); err != nil {
+		return "", err
+	}
+	credentials := make(map[uint][]Credential)
+	if CredentialProvider != nil {
+		credentials, err = CredentialProvider()
+		if err != nil {
+			return "", fmt.Errorf("load listener credentials: %w", err)
+		}
+	}
+	generated, err := generateListeners(ce.db, listeners, credentials)
+	if err != nil {
+		return "", err
+	}
+	merged["listeners"] = generated
+	finalBytes, err := yaml.Marshal(merged)
+	if err != nil {
+		return "", fmt.Errorf("serialize final configuration: %w", err)
+	}
+	return string(finalBytes), nil
+}
+
+func validateListenerEndpoints(listeners []models.Listener) error {
+	seenNames := make(map[string]struct{}, len(listeners))
+	for i := range listeners {
+		if err := validateListenerEndpoint(&listeners[i]); err != nil {
+			return err
+		}
+		name := strings.TrimSpace(listeners[i].Name)
+		if name == "" {
+			return fmt.Errorf("listener id=%d has empty name", listeners[i].ID)
+		}
+		if _, ok := seenNames[name]; ok {
+			return fmt.Errorf("duplicate listener name %q — rename or delete the extra entry in 入站管理", name)
+		}
+		seenNames[name] = struct{}{}
+		for j := i + 1; j < len(listeners); j++ {
+			if !portsOverlap(listeners[i].Port, listeners[j].Port) {
+				continue
+			}
+			a := firstListenerAddress(listeners[i])
+			b := firstListenerAddress(listeners[j])
+			if listenerAddressesConflict(a, b) && listenersShareTransport(listeners[i], listeners[j]) {
+				return fmt.Errorf("listeners %q and %q have conflicting bind address/port ranges (%s:%s and %s:%s)", listeners[i].Name, listeners[j].Name, a, listeners[i].Port, b, listeners[j].Port)
+			}
+		}
+	}
+	return nil
+}
+
+// listenersShareTransport reports whether two listeners bind the same L4
+// transport (TCP vs UDP). A TCP listener and a UDP listener on the same
+// address:port are independent sockets at the OS level and must not be treated
+// as a conflict — Mihomo serves both fine. This mirrors the creation-time guard
+// in internal/listener so the two layers agree on what coexistence is allowed.
+func listenersShareTransport(a, b models.Listener) bool {
+	for _, ta := range protocol.ListenerTransports(a.Protocol) {
+		for _, tb := range protocol.ListenerTransports(b.Protocol) {
+			if ta == tb {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validateListenerEndpoint(l *models.Listener) error {
+	address := firstListenerAddress(*l)
+	if net.ParseIP(address) == nil {
+		return fmt.Errorf("listener %q has invalid bind address %q", l.Name, address)
+	}
+	if !isValidPortString(l.Port) {
+		return fmt.Errorf("listener %q has invalid port %q", l.Name, l.Port)
+	}
+	return nil
+}
+
+func firstListenerAddress(l models.Listener) string {
+	if v := strings.Trim(strings.TrimSpace(l.BindAddress), "[]"); v != "" {
+		return v
+	}
+	if v := strings.Trim(strings.TrimSpace(l.Listen), "[]"); v != "" {
+		return v
+	}
+	return "0.0.0.0"
+}
+
+func portsOverlap(a, b string) bool {
+	for _, ar := range parsePortRanges(a) {
+		for _, br := range parsePortRanges(b) {
+			if ar[0] <= br[1] && br[0] <= ar[1] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func parsePortRanges(raw string) [][2]int {
+	var out [][2]int
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if strings.Contains(part, "-") {
+			p := strings.SplitN(part, "-", 2)
+			a, ea := strconv.Atoi(strings.TrimSpace(p[0]))
+			b, eb := strconv.Atoi(strings.TrimSpace(p[1]))
+			if ea == nil && eb == nil {
+				out = append(out, [2]int{a, b})
+			}
+			continue
+		}
+		if p, err := strconv.Atoi(part); err == nil {
+			out = append(out, [2]int{p, p})
+		}
+	}
+	return out
+}
+
+func listenerAddressesConflict(a, b string) bool {
+	ia, ib := net.ParseIP(a), net.ParseIP(b)
+	if ia == nil || ib == nil {
+		return false
+	}
+	if ia.Equal(ib) {
+		return true
+	}
+	if ia.To4() != nil && ib.To4() != nil {
+		return ia.IsUnspecified() || ib.IsUnspecified()
+	}
+	if ia.To4() == nil && ib.To4() == nil {
+		return ia.IsUnspecified() || ib.IsUnspecified()
+	}
+	return false
+}
+
+func generateListeners(db *gorm.DB, listeners []models.Listener, creds map[uint][]Credential) ([]map[string]interface{}, error) {
+	reg := protocol.DefaultCompileRegistry()
+	result := make([]map[string]interface{}, 0, len(listeners))
+	var skipped []string
+	for _, l := range listeners {
+		if !l.Enabled {
+			continue
+		}
+		protocolName := strings.ToLower(strings.TrimSpace(l.Protocol))
+		if protocolName == "" {
+			protocolName = strings.ToLower(strings.TrimSpace(l.Type))
+		}
+		if !IsMihomoListenerProtocol(protocolName) {
+			skipped = append(skipped, fmt.Sprintf("%s: unsupported protocol %q", l.Name, protocolName))
+			continue
+		}
+		if !isValidPortString(l.Port) {
+			skipped = append(skipped, fmt.Sprintf("%s: invalid port %q", l.Name, l.Port))
+			continue
+		}
+		listen := firstListenerAddress(l)
+		var portVal interface{} = strings.TrimSpace(l.Port)
+		if p, err := strconv.Atoi(strings.TrimSpace(l.Port)); err == nil {
+			portVal = p
+		}
+		configMap, err := decodeListenerConfig(l.Config)
+		if err != nil {
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
+		}
+		// Drop half-filled wrappers first so TLS cert ensure is not skipped.
+		sanitizeIncompleteTLSWrappers(configMap)
+		ensureShadowQUICJLSUpstream(configMap, protocolName)
+
+		// Protocols without top-level certificate/private-key (shadowsocks,
+		// snell, shadowquic, mieru, sudoku) must never carry those fields —
+		// their schema validator hard-rejects them. Stale PEMs can reach the
+		// config via certstore hydration or a protocol switch on a reused
+		// listener ID; strip them before any TLS-material logic runs.
+		supportsCert := listenerProtocolSupportsCertField(protocolName)
+		if !supportsCert {
+			delete(configMap, "certificate")
+			delete(configMap, "private-key")
+			delete(configMap, "private_key")
+			delete(configMap, "allow-insecure")
+		}
+		// Prefer durable on-disk certs when DB config has no pair (survives panel updates
+		// that used to mint a new self-signed identity every apply).
+		cert0, _ := configMap["certificate"].(string)
+		key0, _ := configMap["private-key"].(string)
+		if key0 == "" {
+			key0, _ = configMap["private_key"].(string)
+		}
+		if supportsCert && (strings.TrimSpace(cert0) == "" || strings.TrimSpace(key0) == "") {
+			if c, k, ok := certstore.Load(l.ID); ok {
+				configMap["certificate"] = c
+				configMap["private-key"] = k
+				delete(configMap, "private_key")
+			}
+		}
+		// Prefer existing disk pair; only mint when still incomplete after Load.
+		// Older generators persisted the access SNI as an inbound field and
+		// then rejected that same field. Repair only an exact generated value.
+		if sni, ok := configMap["sni"].(string); ok && sni != "" &&
+			(sni == strings.TrimSpace(l.AccessSNI) || sni == strings.TrimSpace(l.PublicHost)) {
+			delete(configMap, "sni")
+		}
+		// Certificate hints belong in a temporary copy, not in the persisted
+		// or validated inbound configuration. REALITY also needs no TLS cert.
+		tlsConfig := make(map[string]interface{}, len(configMap)+1)
+		for key, value := range configMap {
+			tlsConfig[key] = value
+		}
+		if strings.TrimSpace(l.AccessSNI) != "" {
+			if s, _ := tlsConfig["sni"].(string); strings.TrimSpace(s) == "" {
+				tlsConfig["sni"] = strings.TrimSpace(l.AccessSNI)
+			}
+		}
+		if strings.TrimSpace(l.PublicHost) != "" {
+			if s, _ := tlsConfig["sni"].(string); strings.TrimSpace(s) == "" {
+				tlsConfig["sni"] = strings.TrimSpace(l.PublicHost)
+			}
+		}
+		if supportsCert {
+			if err := ensureListenerTLSMaterial(protocolName, tlsConfig); err != nil {
+				skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+				continue
+			}
+			for _, key := range []string{"certificate", "private-key", "private_key", "allow-insecure"} {
+				if value, ok := tlsConfig[key]; ok {
+					configMap[key] = value
+				} else {
+					delete(configMap, key)
+				}
+			}
+		}
+		if patched, mErr := json.Marshal(configMap); mErr == nil {
+			prev := strings.TrimSpace(l.Config)
+			l.Config = string(patched)
+			// Persist only when sanitization/autofill changed the stored JSON.
+			if db != nil && l.ID != 0 && strings.TrimSpace(string(patched)) != prev {
+				_ = db.Model(&models.Listener{}).Where("id = ?", l.ID).Update("config", string(patched)).Error
+			}
+		}
+		// Always mirror a complete pair to disk so the next binary update can
+		// restore the same identity even if the DB row lacked PEMs historically.
+		if supportsCert && l.ID != 0 {
+			c, _ := configMap["certificate"].(string)
+			k, _ := configMap["private-key"].(string)
+			if k == "" {
+				k, _ = configMap["private_key"].(string)
+			}
+			if strings.TrimSpace(c) != "" && strings.TrimSpace(k) != "" {
+				_ = certstore.Save(l.ID, c, k)
+			}
+		}
+		// TUIC v4 must never reach Mihomo with an empty token slice.
+		if protocolName == "tuic-v4" || protocolName == "tuic" {
+			tok := configMap["token"]
+			empty := true
+			switch v := tok.(type) {
+			case string:
+				empty = strings.TrimSpace(v) == ""
+			case []string:
+				for _, s := range v {
+					if strings.TrimSpace(s) != "" {
+						empty = false
+						break
+					}
+				}
+			case []interface{}:
+				for _, item := range v {
+					if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+						empty = false
+						break
+					}
+				}
+			default:
+				empty = tok == nil
+			}
+			if protocolName == "tuic-v4" && empty {
+				b := make([]byte, 16)
+				_, _ = rand.Read(b)
+				configMap["token"] = []string{hex.EncodeToString(b)}
+				delete(configMap, "users")
+			}
+		}
+		if patched, mErr := json.Marshal(configMap); mErr == nil {
+			l.Config = string(patched)
+		}
+		if err := ValidateListenerConfig(protocolName, l.Config); err != nil {
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
+		}
+
+		listenerCreds, hasCredState := creds[l.ID]
+		users := make([]protocol.UserCred, 0, len(listenerCreds))
+		for _, c := range listenerCreds {
+			users = append(users, protocol.UserCred{
+				Username: c.Username,
+				Password: c.Password,
+				UUID:     c.UUID,
+			})
+		}
+
+		in := protocol.CompileInput{
+			Name:               l.Name,
+			Protocol:           protocolName,
+			Listen:             listen,
+			Port:               portVal,
+			UDP:                l.UDP,
+			TLS:                l.TLS,
+			Proxy:              l.Proxy,
+			Rule:               l.Rule,
+			RoutingMark:        l.RoutingMark,
+			Config:             configMap,
+			Users:              users,
+			HasCredentialState: hasCredState,
+		}
+		compiled, err := reg.Compile(in)
+		if err != nil {
+			skipped = append(skipped, fmt.Sprintf("%s: %v", l.Name, err))
+			continue
+		}
+		sanitizeIncompleteTLSWrappers(compiled)
+		ensureShadowQUICJLSUpstream(compiled, protocolName)
+		result = append(result, compiled)
+	}
+	if len(skipped) > 0 {
+		log.Printf("3m-ui: skipped %d listener(s) during config generation: %s", len(skipped), strings.Join(skipped, "; "))
+	}
+	if len(result) == 0 && len(skipped) > 0 {
+		return nil, fmt.Errorf("no valid listeners to generate; skipped: %s", strings.Join(skipped, "; "))
+	}
+	return result, nil
+}
+
+func isValidPortString(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	if strings.Contains(s, ",") {
+		for _, p := range strings.Split(s, ",") {
+			if !isValidPortString(strings.TrimSpace(p)) {
+				return false
+			}
+		}
+		return true
+	}
+	if strings.Contains(s, "-") {
+		parts := strings.SplitN(s, "-", 2)
+		if len(parts) != 2 {
+			return false
+		}
+		start, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+		end, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+		return err1 == nil && err2 == nil && start >= 1 && end <= 65535 && start <= end
+	}
+	port, err := strconv.Atoi(s)
+	return err == nil && port >= 1 && port <= 65535
+}
+
+func normalizeListenerUserList(value interface{}) ([]map[string]interface{}, error) {
+	switch users := value.(type) {
+	case []interface{}:
+		result := make([]map[string]interface{}, 0, len(users))
+		for i, item := range users {
+			user, ok := item.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("users[%d] must be an object", i)
+			}
+			result = append(result, user)
+		}
+		return result, nil
+	case map[string]interface{}:
+		result := make([]map[string]interface{}, 0, len(users))
+		for username, password := range users {
+			result = append(result, map[string]interface{}{"username": username, "password": fmt.Sprint(password)})
+		}
+		return result, nil
+	case map[interface{}]interface{}:
+		result := make([]map[string]interface{}, 0, len(users))
+		for rawUsername, rawPassword := range users {
+			result = append(result, map[string]interface{}{"username": fmt.Sprint(rawUsername), "password": fmt.Sprint(rawPassword)})
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("users must be a list of username/password objects")
+	}
+}
+
+func decodeListenerConfig(raw string) (map[string]interface{}, error) {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]interface{}{}, nil
+	}
+	var configMap map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &configMap); err != nil {
+		return nil, fmt.Errorf("invalid listener configuration (must be valid JSON): %w", err)
+	}
+	if configMap == nil {
+		configMap = map[string]interface{}{}
+	}
+	return configMap, nil
+}
+
+func listenerFieldIsManaged(key string) bool {
+	switch key {
+	case "users", "username", "password", "uuid", "flow", "alterId", "tls", "servername", "sni", "skip-cert-verify", "name-cert-verify", "fingerprint", "client-fingerprint", "reality-opts", "shadow-tls-opts", "restls-opts", "jls-opts", "ws-opts", "grpc-opts", "h2-opts", "http-opts", "mkcp-opts", "certificate", "private-key", "private_key":
+		return true
+	default:
+		return false
+	}
+}
+
+func copyServerTLSFields(dst, src map[string]interface{}) {
+	if value, ok := src["certificate"]; ok {
+		dst["certificate"] = value
+	}
+	if value, ok := src["private-key"]; ok {
+		dst["private-key"] = value
+	} else if value, ok := src["private_key"]; ok {
+		dst["private-key"] = value
+	}
+}
+func copyOption(dst, src map[string]interface{}, key string) {
+	if value, ok := src[key]; ok {
+		dst[key] = value
+	}
+}
+func listenerHasUDPOption(protocol string) bool {
+	switch protocol {
+	case "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "trusttunnel":
+		return true
+	default:
+		return false
+	}
+}
+func listenerSupportsTLS(protocol string) bool {
+	switch protocol {
+	case "vmess", "vless", "trojan", "anytls", "mieru", "trusttunnel":
+		return true
+	default:
+		return false
+	}
+}
+
+// listenerProtocolSupportsCertField reports whether the protocol's listener
+// schema allows top-level certificate/private-key fields. Protocols that
+// front TLS via wrappers (shadow-tls / res-tls / jls-config) or are
+// plaintext (shadowsocks, snell, shadowquic, mieru, sudoku) do NOT carry
+// top-level certificate/private-key — verified against the official
+// MetaCubeX inbound listener schemas (dongchengjie/meta-json-schema).
+//
+// This guard prevents stale PEMs (left on disk by a former cert-capable
+// protocol on the same listener ID, or injected by certstore hydration)
+// from leaking into a protocol whose schema validator would reject them,
+// which previously skipped the listener during config generation.
+func listenerProtocolSupportsCertField(protocol string) bool {
+	schema, ok := MihomoListenerSchemas[protocol]
+	if !ok {
+		return false
+	}
+	_, supports := schema.Fields["certificate"]
+	return supports
+}
+func ListenerSupportsTLS(protocol string) bool {
+	return listenerSupportsTLS(strings.ToLower(strings.TrimSpace(protocol)))
+}

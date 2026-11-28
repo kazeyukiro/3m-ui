@@ -1,0 +1,753 @@
+package listener
+
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certstore"
+	"github.com/kazeyukiro/3m-ui/backend/internal/certutil"
+	"github.com/kazeyukiro/3m-ui/backend/internal/credentials"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"golang.org/x/crypto/curve25519"
+)
+
+// AutofillListenerDefaults fills empty credential / REALITY fields on create
+// so operators need not use the removed one-click wizard.
+func AutofillListenerDefaults(l *models.Listener) error {
+	if l == nil {
+		return nil
+	}
+	proto := strings.ToLower(strings.TrimSpace(l.Protocol))
+	if proto == "" {
+		proto = strings.ToLower(strings.TrimSpace(l.Type))
+	}
+	cfg := map[string]interface{}{}
+	if strings.TrimSpace(l.Config) != "" {
+		if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
+			return fmt.Errorf("invalid config json: %w", err)
+		}
+	}
+
+	switch proto {
+	case "vless", "vmess":
+		if err := autofillUUIDUsers(cfg); err != nil {
+			return err
+		}
+	case "hysteria2", "anytls", "mieru":
+		// map form users (username -> password)
+		autofillUsersMap(cfg)
+	case "trojan", "trusttunnel":
+		// array form users [{username, password}]
+		autofillUsersArray(cfg)
+	case "tuic", "tuic-v4", "tuic-v5":
+		// Wiki: v4 uses token[]; v5 uses users map UUID→password. type is always "tuic".
+		autofillTUICUsers(cfg, proto)
+	case "shadowsocks":
+		cipher, _ := cfg["cipher"].(string)
+		if cipher == "" {
+			cipher = "aes-128-gcm"
+			cfg["cipher"] = cipher
+		}
+		// mihomo v1.19.34: with an explicit users map, AEAD methods must keep
+		// the top-level password empty (the client password comes from users),
+		// while 2022-blake3-aes-* methods need it as the server PSK.
+		if hasExplicitSSUsers(cfg) && !strings.HasPrefix(cipher, "2022-blake3-") {
+			delete(cfg, "password")
+		} else if pass, _ := cfg["password"].(string); strings.TrimSpace(pass) == "" {
+			cfg["password"] = ssPasswordForCipher(cipher)
+		}
+	case "shadowquic":
+		// Mihomo requires jls-upstream.addr; empty/missing fails `mihomo -t`.
+		autofillUsersArray(cfg)
+		ju, _ := cfg["jls-upstream"].(map[string]interface{})
+		if ju == nil {
+			ju = map[string]interface{}{}
+		}
+		if addr, _ := ju["addr"].(string); strings.TrimSpace(addr) == "" {
+			ju["addr"] = "www.microsoft.com:443"
+		}
+		if sni, _ := ju["sni"].(string); strings.TrimSpace(sni) == "" {
+			ju["sni"] = "www.microsoft.com"
+		}
+		cfg["jls-upstream"] = ju
+		if _, ok := cfg["alpn"]; !ok {
+			cfg["alpn"] = []string{"h3"}
+		}
+	case "snell":
+		if psk, _ := cfg["psk"].(string); strings.TrimSpace(psk) == "" {
+			cfg["psk"] = randomPassword(16)
+		}
+		// Mihomo requires a valid snell version (1-6 since v1.19.34). Default to 4 when unset
+		// so listeners created from the panel are not rejected by mihomo.
+		// Stored as a JSON number (int) so it round-trips to YAML `version: 4`
+		// and passes the numeric() validator in node.ValidateListenerConfig.
+		if !versionIsSet(cfg["version"]) {
+			cfg["version"] = 4
+		}
+	case "sudoku":
+		// Sudoku uses top-level `key` for authentication (no `users`).
+		if k, _ := cfg["key"].(string); strings.TrimSpace(k) == "" {
+			b := make([]byte, 32)
+			_, _ = rand.Read(b)
+			cfg["key"] = base64.StdEncoding.EncodeToString(b)
+		}
+		if m, _ := cfg["aead-method"].(string); strings.TrimSpace(m) == "" {
+			cfg["aead-method"] = "chacha20-poly1305"
+		}
+	}
+
+	if strings.TrimSpace(l.AccessSNI) != "" {
+		if s, _ := cfg["sni"].(string); strings.TrimSpace(s) == "" {
+			cfg["sni"] = strings.TrimSpace(l.AccessSNI)
+		}
+	}
+	if strings.TrimSpace(l.PublicHost) != "" {
+		if s, _ := cfg["sni"].(string); strings.TrimSpace(s) == "" {
+			cfg["sni"] = strings.TrimSpace(l.PublicHost)
+		}
+	}
+
+	// REALITY material when security uses reality-config or panel layer is reality.
+	if needsReality(cfg) {
+		if err := autofillReality(cfg); err != nil {
+			return err
+		}
+	}
+
+	// Protocols that speak TLS at the listener layer need certificate + private-key
+	// unless an alternate security wrapper (REALITY / shadow-tls / …) is configured.
+	// Empty strings are treated as unset (Mihomo rejects present-but-empty fields).
+	// Restore durable certs before autofill so we never rotate on save/update.
+	cert0, _ := cfg["certificate"].(string)
+	key0, _ := cfg["private-key"].(string)
+	if key0 == "" {
+		key0, _ = cfg["private_key"].(string)
+	}
+	if (strings.TrimSpace(cert0) == "" || strings.TrimSpace(key0) == "") && l.ID != 0 {
+		if c, k, ok := certstore.Load(l.ID); ok {
+			cfg["certificate"] = c
+			cfg["private-key"] = k
+			delete(cfg, "private_key")
+		}
+	}
+	if err := ensureServerTLSCertificate(cfg, proto); err != nil {
+		return err
+	}
+
+	sanitizeServerConfig(cfg)
+
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	l.Config = string(raw)
+	if err := credentials.EnsureListenerCredentials(l); err != nil {
+		return fmt.Errorf("ensure listener credentials: %w", err)
+	}
+	if err := json.Unmarshal([]byte(l.Config), &cfg); err != nil {
+		return fmt.Errorf("reload config after credentials: %w", err)
+	}
+	raw, err = json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	l.Config = string(raw)
+	if l.ID != 0 {
+		c, _ := cfg["certificate"].(string)
+		k, _ := cfg["private-key"].(string)
+		if k == "" {
+			k, _ = cfg["private_key"].(string)
+		}
+		if strings.TrimSpace(c) != "" && strings.TrimSpace(k) != "" {
+			_ = certstore.Save(l.ID, c, k)
+		}
+	}
+	return nil
+}
+
+// sanitizeServerConfig drops panel-only and client-only keys that must not
+// reach Mihomo listener validation / config generation.
+func sanitizeServerConfig(cfg map[string]interface{}) {
+	// Identity / transport owned by the Listener model — must not appear in Config JSON
+	// (ValidateListenerConfig rejects them as "managed by 3m-ui").
+	for _, k := range []string{
+		"name", "type", "port", "listen", "bind_address", "proxy", "rule",
+		"enabled", "status", "tls", "udp", "routing-mark",
+	} {
+		delete(cfg, k)
+	}
+	delete(cfg, "security_layer")
+	delete(cfg, "transport_layer")
+	delete(cfg, "access_profile")
+	delete(cfg, "sni") // client/export hint; server uses reality dest / cert SNI separately
+	if raw, ok := cfg["reality-config"].(map[string]interface{}); ok && raw != nil {
+		delete(raw, "public-key")
+		delete(raw, "public_key")
+		cfg["reality-config"] = raw
+		// MetaCubeX: reality-config must NOT coexist with certificate/private-key.
+		delete(cfg, "certificate")
+		delete(cfg, "private-key")
+		delete(cfg, "private_key")
+		// Prefer Reality over alternate TLS wrappers when both were left on by the panel.
+		delete(cfg, "shadow-tls")
+		delete(cfg, "res-tls")
+		delete(cfg, "jls-config")
+		delete(cfg, "tlsmirror-config")
+		delete(cfg, "allow-insecure")
+	}
+	// Incomplete JLS blocks make Mihomo reject the whole config:
+	// "jls-config has unset fields: dest, users".
+	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok {
+		dest, _ := jls["dest"].(string)
+		if strings.TrimSpace(dest) == "" || !jlsHasUsers(jls) {
+			delete(cfg, "jls-config")
+		}
+	}
+	if ju, ok := cfg["jls-upstream"].(map[string]interface{}); ok {
+		addr, _ := ju["addr"].(string)
+		if strings.TrimSpace(addr) == "" {
+			delete(cfg, "jls-upstream")
+		}
+	}
+	if st, ok := cfg["shadow-tls"].(map[string]interface{}); ok {
+		// Drop enable-only / missing handshake.dest
+		dest := ""
+		if hs, ok := st["handshake"].(map[string]interface{}); ok {
+			dest, _ = hs["dest"].(string)
+		}
+		pass, _ := st["password"].(string)
+		if strings.TrimSpace(dest) == "" || (strings.TrimSpace(pass) == "" && st["users"] == nil) {
+			delete(cfg, "shadow-tls")
+		}
+	}
+	if rt, ok := cfg["res-tls"].(map[string]interface{}); ok {
+		if dest, _ := rt["dest"].(string); strings.TrimSpace(dest) == "" {
+			delete(cfg, "res-tls")
+		}
+	}
+	if tm, ok := cfg["tlsmirror-config"].(map[string]interface{}); ok {
+		dest, _ := tm["dest"].(string)
+		pk, _ := tm["primary-key"].(string)
+		if strings.TrimSpace(dest) == "" || strings.TrimSpace(pk) == "" {
+			delete(cfg, "tlsmirror-config")
+		}
+	}
+	if oo, ok := cfg["obfs-opts"].(map[string]interface{}); ok {
+		host, _ := oo["host"].(string)
+		if strings.TrimSpace(host) == "" {
+			if h, ok := oo["Host"].(string); ok {
+				host = h
+			}
+		}
+		mode, _ := oo["mode"].(string)
+		if strings.TrimSpace(host) == "" || strings.TrimSpace(mode) == "" {
+			delete(cfg, "obfs-opts")
+		}
+	}
+	// If a cert pair is present, clear allow-insecure (mutually exclusive modes).
+	cert, _ := cfg["certificate"].(string)
+	key, _ := cfg["private-key"].(string)
+	if key == "" {
+		key, _ = cfg["private_key"].(string)
+	}
+	if strings.TrimSpace(cert) != "" && strings.TrimSpace(key) != "" {
+		delete(cfg, "allow-insecure")
+	}
+}
+
+func jlsHasUsers(m map[string]interface{}) bool {
+	raw, ok := m["users"]
+	if !ok || raw == nil {
+		return false
+	}
+	switch users := raw.(type) {
+	case []interface{}:
+		for _, item := range users {
+			u, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			user, _ := u["username"].(string)
+			pass, _ := u["password"].(string)
+			if strings.TrimSpace(user) != "" && strings.TrimSpace(pass) != "" {
+				return true
+			}
+		}
+	case []map[string]interface{}:
+		for _, u := range users {
+			user, _ := u["username"].(string)
+			pass, _ := u["password"].(string)
+			if strings.TrimSpace(user) != "" && strings.TrimSpace(pass) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func needsReality(cfg map[string]interface{}) bool {
+	if _, ok := cfg["reality-config"]; ok {
+		return true
+	}
+	if s, ok := cfg["security_layer"].(string); ok && strings.EqualFold(s, "reality") {
+		return true
+	}
+	return false
+}
+
+func autofillReality(cfg map[string]interface{}) error {
+	raw, _ := cfg["reality-config"].(map[string]interface{})
+	if raw == nil {
+		raw = map[string]interface{}{}
+	}
+	dest, _ := raw["dest"].(string)
+	dest = strings.TrimSpace(dest)
+	if dest == "" {
+		return fmt.Errorf("REALITY destination is required: scan for a target or enter one explicitly")
+	}
+	raw["dest"] = dest
+	priv, _ := raw["private-key"].(string)
+	// public-key may be present from older clients; only use it to skip re-derive, never persist.
+	pubHint, _ := raw["public-key"].(string)
+	priv, _, err := resolveRealityKeys(priv, pubHint)
+	if err != nil {
+		return err
+	}
+	raw["private-key"] = priv
+	// Server listener schema (MetaCubeX): private-key, short-id, server-names, dest, limit-fallback-*.
+	// public-key is client-only and rejected by ValidateListenerConfig.
+	delete(raw, "public-key")
+	delete(raw, "public_key")
+	if names := asStringSlice(raw["server-names"]); len(names) == 0 {
+		host, _, err := net.SplitHostPort(dest)
+		if err != nil {
+			host = dest
+		}
+		raw["server-names"] = []string{host}
+	}
+	if ids := asStringSlice(raw["short-id"]); len(ids) == 0 {
+		raw["short-id"] = []string{randomHex(8)}
+	}
+	cfg["reality-config"] = raw
+	return nil
+}
+
+func autofillUUIDUsers(cfg map[string]interface{}) error {
+	users := normalizeUsersSlice(cfg["users"])
+	if len(users) == 0 {
+		users = []map[string]interface{}{{"uuid": uuid.NewString(), "username": "user"}}
+	} else {
+		for _, u := range users {
+			if uid, _ := u["uuid"].(string); strings.TrimSpace(uid) == "" {
+				u["uuid"] = uuid.NewString()
+			}
+			// Optional bookkeeping name; core only requires uuid.
+			if un, _ := u["username"].(string); strings.TrimSpace(un) == "" {
+				u["username"] = "user"
+			}
+		}
+	}
+	cfg["users"] = users
+	return nil
+}
+
+// autofillUsersMap fills credentials for protocols whose users field is a
+// map of username -> password (hysteria2, anytls, mieru).
+func autofillUsersMap(cfg map[string]interface{}) {
+	users, ok := cfg["users"].(map[string]interface{})
+	if !ok || len(users) == 0 {
+		cfg["users"] = map[string]interface{}{"default": randomPassword(16)}
+		return
+	}
+	for k, v := range users {
+		if s, ok := v.(string); !ok || strings.TrimSpace(s) == "" {
+			users[k] = randomPassword(16)
+		}
+	}
+	cfg["users"] = users
+}
+
+// autofillUsersArray fills credentials for protocols whose users field is an
+// array of {username, password} objects (trojan, shadowquic, trusttunnel).
+func autofillUsersArray(cfg map[string]interface{}) {
+	users := normalizeUsersSlice(cfg["users"])
+	if len(users) == 0 {
+		cfg["users"] = []map[string]interface{}{{"username": "default", "password": randomPassword(16)}}
+		return
+	}
+	for _, u := range users {
+		if pass, _ := u["password"].(string); strings.TrimSpace(pass) == "" {
+			u["password"] = randomPassword(16)
+		}
+	}
+	cfg["users"] = users
+}
+
+// autofillTUICUsers fills credentials per MetaCubeX listener docs:
+//
+//	tuic-v4 → token: [TOKEN]  (users must not be used)
+//	tuic-v5 / tuic → users: {UUID: PASSWORD}  (token must not be used for pure v5)
+//
+// https://wiki.metacubex.one/config/inbound/listeners/tuic-v4/
+// https://wiki.metacubex.one/config/inbound/listeners/tuic-v5/
+func autofillTUICUsers(cfg map[string]interface{}, proto string) {
+	proto = strings.ToLower(strings.TrimSpace(proto))
+	if proto == "tuic-v4" {
+		delete(cfg, "users")
+		if tok := firstNonEmptyToken(cfg["token"]); tok != "" {
+			cfg["token"] = []string{tok}
+			return
+		}
+		cfg["token"] = []string{randomPassword(24)}
+		return
+	}
+
+	// v5 / generic tuic: UUID → password map; strip token so compile does not prefer v4 mode.
+	delete(cfg, "token")
+	if users, ok := cfg["users"].(map[string]interface{}); ok && len(users) > 0 {
+		for k, v := range users {
+			if s, ok := v.(string); !ok || strings.TrimSpace(s) == "" {
+				users[k] = randomPassword(16)
+			}
+		}
+		cfg["users"] = users
+		return
+	}
+	if users, ok := cfg["users"].(map[interface{}]interface{}); ok && len(users) > 0 {
+		out := make(map[string]interface{}, len(users))
+		for k, v := range users {
+			key := fmt.Sprint(k)
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				out[key] = s
+			} else {
+				out[key] = randomPassword(16)
+			}
+		}
+		cfg["users"] = out
+		return
+	}
+	cfg["users"] = map[string]interface{}{uuid.New().String(): randomPassword(16)}
+}
+
+func normalizeUsersSlice(v interface{}) []map[string]interface{} {
+	switch users := v.(type) {
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(users))
+		for _, item := range users {
+			if m, ok := item.(map[string]interface{}); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	case []map[string]interface{}:
+		return users
+	default:
+		return nil
+	}
+}
+
+// versionIsSet reports whether the snell `version` field is meaningfully set.
+// It accepts both string ("4") and numeric (int/float64) representations
+// produced by the panel or by json.Unmarshal. An empty string or absent key
+// counts as unset so the autofill can apply a safe default.
+func versionIsSet(v interface{}) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(t) != ""
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	case float64:
+		return true
+	default:
+		return false
+	}
+}
+
+func asStringSlice(v interface{}) []string {
+	switch t := v.(type) {
+	case string:
+		if strings.TrimSpace(t) == "" {
+			return nil
+		}
+		return []string{t}
+	case []string:
+		return t
+	case []interface{}:
+		out := make([]string, 0, len(t))
+		for _, x := range t {
+			if s, ok := x.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// GenerateMaterial returns auto-generated secrets for the create-node form.
+func GenerateMaterial(kind, cipher string) (map[string]string, error) {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "uuid":
+		return map[string]string{"uuid": uuid.NewString()}, nil
+	case "password":
+		return map[string]string{"password": randomPassword(16)}, nil
+	case "ss-password":
+		return map[string]string{"password": ssPasswordForCipher(cipher)}, nil
+	case "short-id":
+		return map[string]string{"short_id": randomHex(8)}, nil
+	case "reality":
+		priv, pub, err := resolveRealityKeys("", "")
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{
+			"private_key": priv,
+			"public_key":  pub,
+			"short_id":    randomHex(8),
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown generate kind %q", kind)
+	}
+}
+
+func resolveRealityKeys(privateKey, publicKey string) (priv, pub string, err error) {
+	priv = strings.TrimSpace(privateKey)
+	pub = strings.TrimSpace(publicKey)
+	if priv != "" {
+		if pub == "" {
+			pub, err = derivePublicKey(priv)
+			if err != nil {
+				return "", "", err
+			}
+		}
+		return priv, pub, nil
+	}
+	var seed [32]byte
+	if _, err := rand.Read(seed[:]); err != nil {
+		return "", "", err
+	}
+	seed[0] &= 248
+	seed[31] &= 127
+	seed[31] |= 64
+	pubBytes, err := curve25519.X25519(seed[:], curve25519.Basepoint)
+	if err != nil {
+		return "", "", err
+	}
+	priv = base64.RawURLEncoding.EncodeToString(seed[:])
+	pub = base64.RawURLEncoding.EncodeToString(pubBytes)
+	return priv, pub, nil
+}
+
+func derivePublicKey(private string) (string, error) {
+	var raw []byte
+	var err error
+	for _, decode := range []func(string) ([]byte, error){
+		base64.RawURLEncoding.DecodeString,
+		base64.URLEncoding.DecodeString,
+		base64.RawStdEncoding.DecodeString,
+		base64.StdEncoding.DecodeString,
+	} {
+		raw, err = decode(strings.TrimSpace(private))
+		if err == nil && len(raw) == 32 {
+			break
+		}
+	}
+	if len(raw) != 32 {
+		return "", fmt.Errorf("invalid private key: need 32 bytes")
+	}
+	pub, err := curve25519.X25519(raw, curve25519.Basepoint)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(pub), nil
+}
+
+func randomHex(nBytes int) string {
+	b := make([]byte, nBytes)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func randomPassword(n int) string {
+	const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = alphabet[int(b[i])%len(alphabet)]
+	}
+	return string(out)
+}
+
+func ssPasswordForCipher(method string) string {
+	n := 0
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "2022-blake3-aes-128-gcm":
+		n = 16
+	case "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305":
+		n = 32
+	default:
+		return randomPassword(16)
+	}
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// ensureServerTLSCertificate fills certificate/private-key with a self-signed
+// pair when the protocol requires server TLS material and neither field is set.
+// REALITY / shadow-tls / res-tls / jls / tlsmirror listeners are skipped.
+func ensureServerTLSCertificate(cfg map[string]interface{}, proto string) error {
+	if cfg == nil {
+		return nil
+	}
+	if s, ok := cfg["certificate"].(string); ok && strings.TrimSpace(s) == "" {
+		delete(cfg, "certificate")
+	}
+	if s, ok := cfg["private-key"].(string); ok && strings.TrimSpace(s) == "" {
+		delete(cfg, "private-key")
+	}
+	if s, ok := cfg["private_key"].(string); ok && strings.TrimSpace(s) == "" {
+		delete(cfg, "private_key")
+	}
+
+	cert, _ := cfg["certificate"].(string)
+	key, _ := cfg["private-key"].(string)
+	if key == "" {
+		key, _ = cfg["private_key"].(string)
+	}
+	if strings.TrimSpace(cert) != "" && strings.TrimSpace(key) != "" {
+		return nil
+	}
+	if strings.TrimSpace(cert) != "" || strings.TrimSpace(key) != "" {
+		delete(cfg, "certificate")
+		delete(cfg, "private-key")
+		delete(cfg, "private_key")
+	}
+	if !protocolNeedsServerCertificate(proto, cfg) {
+		return nil
+	}
+
+	host := "localhost"
+	hints := certutil.HostHintsFromConfig(cfg)
+	if len(hints) > 0 {
+		host = hints[0]
+	}
+	certPEM, keyPEM, err := certutil.GenerateSelfSigned(host, hints...)
+	if err != nil {
+		return fmt.Errorf("generate self-signed certificate for %s: %w", proto, err)
+	}
+	cfg["certificate"] = certPEM
+	cfg["private-key"] = keyPEM
+	// Normal TLS with cert — not the nginx/caddy "allow-insecure" mode.
+	delete(cfg, "allow-insecure")
+	return nil
+}
+
+func protocolNeedsServerCertificate(proto string, cfg map[string]interface{}) bool {
+	if _, ok := cfg["reality-config"]; ok {
+		return false
+	}
+	// Panel security_layer is still present before sanitizeServerConfig runs.
+	if layer, _ := cfg["security_layer"].(string); strings.EqualFold(strings.TrimSpace(layer), "none") {
+		switch strings.ToLower(strings.TrimSpace(proto)) {
+		case "vless", "vmess", "trojan":
+			return false
+		}
+	}
+	if layer, _ := cfg["security_layer"].(string); strings.EqualFold(strings.TrimSpace(layer), "reality") {
+		return false
+	}
+	if b, ok := cfg["allow-insecure"].(bool); ok && b {
+		switch strings.ToLower(strings.TrimSpace(proto)) {
+		case "anytls", "trojan", "vmess", "vless":
+			return false
+		}
+	}
+	// Incomplete wrapper toggles must not suppress cert generation.
+	if jls, ok := cfg["jls-config"].(map[string]interface{}); ok {
+		dest, _ := jls["dest"].(string)
+		if strings.TrimSpace(dest) != "" && jlsHasUsers(jls) {
+			return false
+		}
+	}
+	if enabledMap(cfg, "shadow-tls") {
+		return false
+	}
+	if rt, ok := cfg["res-tls"].(map[string]interface{}); ok {
+		if dest, _ := rt["dest"].(string); strings.TrimSpace(dest) != "" {
+			return false
+		}
+	}
+	if _, ok := cfg["tlsmirror-config"]; ok {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(proto)) {
+	case "hysteria2", "anytls", "tuic", "tuic-v4", "tuic-v5", "trusttunnel", "trojan", "vless", "vmess":
+		// VLESS/VMess need cert when using plain TLS (security_layer=tls, no Reality/wrappers).
+		return true
+	default:
+		return false
+	}
+}
+
+func enabledMap(cfg map[string]interface{}, key string) bool {
+	raw, ok := cfg[key]
+	if !ok || raw == nil {
+		return false
+	}
+	if m, ok := raw.(map[string]interface{}); ok {
+		if en, ok := m["enable"].(bool); ok {
+			return en
+		}
+		if en, ok := m["enabled"].(bool); ok {
+			return en
+		}
+		return len(m) > 0
+	}
+	return true
+}
+
+func firstNonEmptyToken(tok interface{}) string {
+	switch v := tok.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		for _, s := range v {
+			if s = strings.TrimSpace(s); s != "" {
+				return s
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// hasExplicitSSUsers reports whether the config carries a non-empty
+// multi-user map (the explicit opt-in introduced by mihomo v1.19.34).
+func hasExplicitSSUsers(cfg map[string]interface{}) bool {
+	switch m := cfg["users"].(type) {
+	case map[string]interface{}:
+		return len(m) > 0
+	case map[string]string:
+		return len(m) > 0
+	default:
+		return false
+	}
+}

@@ -1,0 +1,181 @@
+package protocol
+
+import "testing"
+
+func TestVLESSCompilerMovesTopLevelFlowIntoUsers(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless-reality",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Config: map[string]interface{}{
+			"flow": "xtls-rprx-vision",
+			"reality-config": map[string]interface{}{
+				"dest": "example:443",
+			},
+		},
+		Users: []UserCred{{UUID: "11111111-1111-4111-8111-111111111111"}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	if _, ok := result["flow"]; ok {
+		t.Fatal("top-level VLESS flow must not be emitted")
+	}
+	users, ok := result["users"].([]map[string]interface{})
+	if !ok || len(users) != 1 {
+		t.Fatalf("unexpected users: %#v", result["users"])
+	}
+	if users[0]["flow"] != "xtls-rprx-vision" {
+		t.Fatalf("expected user flow, got %#v", users[0]["flow"])
+	}
+}
+
+func TestVLESSCompilerPreservesPerUserFlow(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Config: map[string]interface{}{
+			"flow": "xtls-rprx-vision",
+		},
+		Users: []UserCred{{UUID: "11111111-1111-4111-8111-111111111111", Flow: ""}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users := result["users"].([]map[string]interface{})
+	if users[0]["flow"] != "xtls-rprx-vision" {
+		t.Fatalf("expected fallback flow, got %#v", users[0]["flow"])
+	}
+}
+
+func TestVLESSCompilerDoesNotOverrideExplicitUserFlow(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Config: map[string]interface{}{
+			"flow": "xtls-rprx-vision",
+		},
+		Users: []UserCred{{UUID: "11111111-1111-4111-8111-111111111111", Flow: "custom-flow"}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users := result["users"].([]map[string]interface{})
+	if users[0]["flow"] != "custom-flow" {
+		t.Fatalf("explicit user flow was overwritten: %#v", users[0]["flow"])
+	}
+}
+
+func TestVLESSCompilerNeverUsesPasswordAsUUID(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Users:    []UserCred{{Password: "not-a-uuid"}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	if _, ok := result["users"]; ok {
+		t.Fatalf("VLESS credential without UUID must not be emitted as a UUID: %#v", result["users"])
+	}
+}
+
+func TestShadowsocksCompilerPreservesDisabledUDP(t *testing.T) {
+	result, err := (ShadowsocksCompiler{}).Compile(CompileInput{
+		Name:     "ss-tcp-only",
+		Protocol: "shadowsocks",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		UDP:      false,
+		Config: map[string]interface{}{
+			"cipher":   "aes-256-gcm",
+			"password": "secret",
+		},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	udp, ok := result["udp"].(bool)
+	if !ok || udp {
+		t.Fatalf("TCP-only Shadowsocks listener must emit udp: false, got %#v", result["udp"])
+	}
+}
+
+func TestVLESSCompilerSetsUserNameForTracking(t *testing.T) {
+	result, err := (VLESSCompiler{}).Compile(CompileInput{
+		Name:     "vless",
+		Protocol: "vless",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Users: []UserCred{{
+			Username: "alice",
+			UUID:     "11111111-1111-4111-8111-111111111111",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users, ok := result["users"].([]map[string]interface{})
+	if !ok || len(users) != 1 {
+		t.Fatalf("unexpected users: %#v", result["users"])
+	}
+	if users[0]["username"] != "alice" {
+		t.Fatalf("expected username=alice for inboundUser tracking, got %#v", users[0]["name"])
+	}
+	if users[0]["uuid"] != "11111111-1111-4111-8111-111111111111" {
+		t.Fatalf("expected uuid preserved, got %#v", users[0]["uuid"])
+	}
+}
+
+func TestVMessCompilerSetsUserNameForTracking(t *testing.T) {
+	result, err := (VMessCompiler{}).Compile(CompileInput{
+		Name:     "vmess",
+		Protocol: "vmess",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Users: []UserCred{{
+			Username: "bob",
+			UUID:     "22222222-2222-4222-8222-222222222222",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users := result["users"].([]map[string]interface{})
+	if users[0]["username"] != "bob" {
+		t.Fatalf("expected username=bob, got %#v", users[0]["name"])
+	}
+}
+
+func TestVMessCompilerPreservesConfiguredPerUserAlterID(t *testing.T) {
+	result, err := (VMessCompiler{}).Compile(CompileInput{
+		Name:     "vmess",
+		Protocol: "vmess",
+		Listen:   "0.0.0.0",
+		Port:     443,
+		Config: map[string]interface{}{
+			"users": []interface{}{
+				map[string]interface{}{"username": "bob", "uuid": "22222222-2222-4222-8222-222222222222", "alterId": 32},
+			},
+			"alterId": 0,
+		},
+		Users: []UserCred{{
+			Username: "bob",
+			UUID:     "22222222-2222-4222-8222-222222222222",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+	users := result["users"].([]map[string]interface{})
+	if users[0]["alterId"] != float64(32) && users[0]["alterId"] != 32 {
+		t.Fatalf("configured per-user alterId was lost: %#v", users[0]["alterId"])
+	}
+}

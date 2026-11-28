@@ -1,0 +1,200 @@
+package config
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
+)
+
+const visualConfigName = "visual-config"
+
+type VisualConfig struct {
+	Mode     string `json:"mode" yaml:"mode"`
+	LogLevel string `json:"logLevel" yaml:"log-level"`
+	AllowLAN bool   `json:"allowLan" yaml:"allow-lan"`
+	IPv6     bool   `json:"ipv6" yaml:"ipv6"`
+	// InboundTfo / InboundMPTCP map to Mihomo's top-level `inbound-tfo` /
+	// `inbound-mptcp` general keys: a GLOBAL switch applied to every inbound
+	// listener's listening socket (TCP Fast Open / Multipath TCP). They are NOT
+	// per-listener fields — Mihomo only honours them at the general level, so
+	// they live on the VisualConfig (which feeds the serving config fragment)
+	// and must never be copied into client subscription documents.
+	InboundTfo   bool `json:"inboundTfo" yaml:"inbound-tfo"`
+	InboundMPTCP bool `json:"inboundMptcp" yaml:"inbound-mptcp"`
+	// ClientTfo / ClientMPTCP are written onto every *client subscription*
+	// proxy as Mihomo outbound keys `tfo` / `mptcp` (wiki proxies#tfo).
+	// They are independent of inbound-tfo / inbound-mptcp (server listen sockets).
+	// Stored in visual-config YAML as client-tfo / client-mptcp (panel-only keys).
+	// Stripped when merging visual fragment into the serving Mihomo process.
+	ClientTfo   bool         `json:"clientTfo" yaml:"client-tfo"`
+	ClientMPTCP bool         `json:"clientMptcp" yaml:"client-mptcp"`
+	DNS         VisualDNS    `json:"dns" yaml:"dns"`
+	Proxies     []ProxyEntry `json:"proxies" yaml:"proxies"`
+	Groups      []GroupEntry `json:"proxyGroups" yaml:"proxy-groups"`
+	Rules       []string     `json:"rules" yaml:"rules"`
+}
+
+type ProxyEntry struct {
+	Name    string                 `json:"name" yaml:"name"`
+	Type    string                 `json:"type" yaml:"type"`
+	Server  string                 `json:"server" yaml:"server"`
+	Port    interface{}            `json:"port" yaml:"port"`
+	Options map[string]interface{} `json:"options,omitempty" yaml:",inline"`
+}
+
+// UnmarshalJSON captures unknown top-level JSON fields (cipher, password, uuid,
+// etc.) into Options. Go's encoding/json does not honour yaml's `,inline`
+// directive, so without this the frontend's flat JSON shape loses protocol
+// fields when round-tripping through the visual config API.
+func (p *ProxyEntry) UnmarshalJSON(data []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	p.Name, _ = raw["name"].(string)
+	p.Type, _ = raw["type"].(string)
+	p.Server, _ = raw["server"].(string)
+	p.Port = raw["port"]
+	delete(raw, "name")
+	delete(raw, "type")
+	delete(raw, "server")
+	delete(raw, "port")
+	if len(raw) > 0 {
+		p.Options = raw
+	}
+	return nil
+}
+
+// MarshalJSON emits the per-protocol fields stored in Options at the top level
+// so the JSON shape matches what the frontend sends (flat object) and what
+// mihomo YAML expects after yaml.Marshal (inline keys).
+func (p ProxyEntry) MarshalJSON() ([]byte, error) {
+	out := map[string]interface{}{
+		"name":   p.Name,
+		"type":   p.Type,
+		"server": p.Server,
+		"port":   p.Port,
+	}
+	for k, v := range p.Options {
+		out[k] = v
+	}
+	return json.Marshal(out)
+}
+
+// MarshalYAML flattens Options so Mihomo sees private-key / public-key at the
+// proxy root (yaml:",inline" on map is unreliable across round-trips).
+func (p ProxyEntry) MarshalYAML() (interface{}, error) {
+	out := map[string]interface{}{
+		"name":   p.Name,
+		"type":   p.Type,
+		"server": p.Server,
+		"port":   p.Port,
+	}
+	for k, v := range p.Options {
+		out[k] = v
+	}
+	return out, nil
+}
+
+// UnmarshalYAML loads a flat proxy map into Name/Type/Server/Port + Options.
+func (p *ProxyEntry) UnmarshalYAML(value *yaml.Node) error {
+	var raw map[string]interface{}
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	p.Name, _ = raw["name"].(string)
+	p.Type, _ = raw["type"].(string)
+	p.Server, _ = raw["server"].(string)
+	p.Port = raw["port"]
+	delete(raw, "name")
+	delete(raw, "type")
+	delete(raw, "server")
+	delete(raw, "port")
+	if len(raw) > 0 {
+		p.Options = raw
+	} else {
+		p.Options = nil
+	}
+	return nil
+}
+
+type GroupEntry struct {
+	Name     string   `json:"name" yaml:"name"`
+	Type     string   `json:"type" yaml:"type"`
+	Proxies  []string `json:"proxies" yaml:"proxies"`
+	URL      string   `json:"url,omitempty" yaml:"url,omitempty"`
+	Interval int      `json:"interval,omitempty" yaml:"interval,omitempty"`
+}
+
+func DefaultVisualConfig() VisualConfig {
+	return VisualConfig{
+		Mode: "rule", LogLevel: "info", AllowLAN: true,
+		DNS: VisualDNS{
+			Enable: false, EnhancedMode: "fake-ip", Listen: "0.0.0.0:1053",
+			Nameserver: []string{"119.29.29.29", "223.5.5.5"},
+		},
+		Proxies: []ProxyEntry{}, Groups: []GroupEntry{},
+		Rules: []string{"MATCH,DIRECT"},
+	}
+}
+
+func GetVisualConfig(db *gorm.DB) (VisualConfig, error) {
+	cfg := DefaultVisualConfig()
+	if db == nil {
+		return cfg, fmt.Errorf("database is not initialized")
+	}
+	var fragment models.Config
+	err := db.Where("name = ?", visualConfigName).First(&fragment).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return cfg, nil
+		}
+		return cfg, err
+	}
+	// Saved DNS omissions use core defaults, rather than the new-config preset.
+	cfg.DNS = VisualDNS{}
+	if err := yaml.Unmarshal([]byte(fragment.Content), &cfg); err != nil {
+		return cfg, fmt.Errorf("invalid visual config: %w", err)
+	}
+	return cfg, nil
+}
+
+func SaveVisualConfig(db *gorm.DB, cfg VisualConfig) error {
+	if db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	cfg.Mode = strings.ToLower(strings.TrimSpace(cfg.Mode))
+	switch cfg.Mode {
+	case "rule", "global", "direct", "script":
+	default:
+		return fmt.Errorf("invalid mode %q", cfg.Mode)
+	}
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "info"
+	}
+	if err := cfg.DNS.validate(); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	fragment := models.Config{Name: visualConfigName, Type: "visual", Content: string(data), Enabled: true}
+	var existing models.Config
+	// Include soft-deleted rows: UNIQUE(name) still applies to them.
+	result := db.Unscoped().Where("name = ?", visualConfigName).First(&existing)
+	if result.Error == nil {
+		existing.Type, existing.Content, existing.Enabled = fragment.Type, fragment.Content, true
+		existing.DeletedAt = gorm.DeletedAt{}
+		return db.Unscoped().Save(&existing).Error
+	}
+	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return result.Error
+	}
+	return db.Create(&fragment).Error
+}

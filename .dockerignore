@@ -1,0 +1,14 @@
+.git
+.github
+**/node_modules
+frontend/dist
+**/*.db
+**/*.db-*
+**/*.log
+**/coverage*
+.env
+.env.*
+release-files
+artifacts
+3m-ui-linux-*
+3m-ui-bundle-*

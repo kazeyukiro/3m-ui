@@ -1,0 +1,339 @@
+#!/bin/sh
+# 3m-ui unified management logic
+# The command entrypoint is /usr/local/bin/3m-ui.
+# The actual Go application is /usr/local/lib/3m-ui/3m-ui-bin.
+
+set -eu
+
+APP_NAME="3m-ui"
+ROOT="${THREE_M_UI_ROOT:-}"
+BASE="$ROOT/usr/local/lib/3m-ui"
+APP_BIN="$BASE/3m-ui-bin"
+VERSION_FILE="$BASE/VERSION"
+DATA_DIR="${THREE_M_UI_DATA_DIR:-}"
+if [ -z "$DATA_DIR" ] && [ -s "$BASE/DATA_DIRECTORY" ]; then DATA_DIR="$(cat "$BASE/DATA_DIRECTORY")"; fi
+DATA_DIR="${DATA_DIR:-$ROOT/var/lib/3m-ui}"
+CONFIG_DIR="$ROOT/etc/3m-ui"
+CONFIG_FILE="$CONFIG_DIR/config.yaml"
+SERVICE="3m-ui"
+
+say() { printf '%s\n' "$*"; }
+err() { say "Error: $*" >&2; exit 1; }
+
+need_root() {
+  [ "$(id -u)" = 0 ] || err "Please run as root."
+}
+
+init_system() {
+  if command -v systemctl >/dev/null 2>&1 && [ -d "$ROOT/run/systemd/system" ]; then
+    printf '%s' systemd
+  elif command -v rc-service >/dev/null 2>&1; then
+    printf '%s' openrc
+  else
+    printf '%s' unsupported
+  fi
+}
+
+service_action() {
+  action="$1"
+  case "$(init_system)" in
+    systemd) systemctl "$action" "$SERVICE" ;;
+    openrc) rc-service "$SERVICE" "$action" ;;
+    *) err "No supported init system found." ;;
+  esac
+}
+
+# Primary IPv4 address of this host; empty when it cannot be determined.
+# Only the local routing table is consulted — this never needs outbound
+# connectivity, so it also works on hosts behind NAT or with no internet.
+server_ip() {
+  ip -4 route get 1.1.1.1 2>/dev/null |
+    awk '{ for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }'
+}
+
+# Read a key from the server: block of the config file, scoped the same way
+# `config port` does it so a key of the same name elsewhere is never picked up.
+panel_setting() { # <key> <fallback>
+  [ -f "$CONFIG_FILE" ] || { printf '%s' "$2"; return 0; }
+  _v=$(awk -v key="$1:" '
+    /^[^[:space:]#]/ { inblk = (/^server:/) }
+    inblk && $1 == key { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+  ' "$CONFIG_FILE" 2>/dev/null)
+  printf '%s' "${_v:-$2}"
+}
+
+# The panel base path as a URL prefix: "/" for the domain root, otherwise
+# "/<path>/". The random path hides the panel, so it has to be shown here —
+# otherwise the first visit to one's own domain is a 404.
+panel_web_path() {
+  _wp=$(panel_setting web_path '' | tr -d '" ')
+  _wp=${_wp%/}
+  case "$_wp" in
+    '' | /) _wp='/' ;;
+    /*) _wp="$_wp/" ;;
+    *) _wp="/$_wp/" ;;
+  esac
+  printf '%s' "$_wp"
+}
+
+# Build the URL an operator should open. server.public_url (a bound domain,
+# NAT or reverse proxy) wins; only when unset do we fall back to the probed
+# primary IPv4. Port 443 terminates TLS locally, so it implies https.
+panel_display_url() {
+  _p=$(panel_setting port 8080)
+  _wp=$(panel_web_path)
+  _pub=$(panel_setting public_url '' | tr -d '"' | tr -d '[:space:]')
+  case "$_pub" in '' | null | '~') _pub= ;; esac
+  if [ -n "$_pub" ]; then
+    _u=${_pub%/}
+    case "$_u" in
+      *://*) ;;
+      *) if [ "$_p" = 443 ]; then _u="https://$_u"; else _u="http://$_u"; fi ;;
+    esac
+  else
+    _h=$(server_ip)
+    [ -n "$_h" ] || _h='<server-ip>'
+    if [ "$_p" = 443 ]; then _u="https://$_h"; else _u="http://$_h:$_p"; fi
+  fi
+  case "$_wp" in
+    '/') printf '%s/' "$_u" ;;
+    *)   printf '%s%s' "$_u" "$_wp" ;;
+  esac
+}
+
+status() {
+  case "$(init_system)" in
+    systemd) systemctl --no-pager --full status "$SERVICE" || true ;;
+    openrc) rc-service "$SERVICE" status || true ;;
+    *) say "init: unsupported" ;;
+  esac
+  say ""
+  if [ -x "$APP_BIN" ]; then
+    say "Application: $APP_BIN"
+    if ! "$APP_BIN" --version 2>/dev/null; then
+      if [ -s "$VERSION_FILE" ]; then
+        say "Version: $(cat "$VERSION_FILE")"
+      else
+        say "Version: unavailable (installed binary does not expose --version)"
+      fi
+    fi
+  else
+    say "Application binary not found: $APP_BIN"
+  fi
+  say "Panel URL: $(panel_display_url)"
+}
+
+logs() {
+  case "$(init_system)" in
+    systemd) journalctl -u "$SERVICE" -n 100 --no-pager ;;
+    openrc) tail -n 100 "$DATA_DIR/logs/3m-ui.log" 2>/dev/null || tail -n 100 "/var/log/3m-ui/3m-ui.log" 2>/dev/null || say "No log file found." ;;
+    *) say "No supported log backend found." ;;
+  esac
+}
+
+version() {
+  [ -x "$APP_BIN" ] || err "3m-ui application is not installed."
+  if "$APP_BIN" --version 2>/dev/null; then
+    return 0
+  fi
+  if [ -s "$VERSION_FILE" ]; then
+    say "3m-ui $(cat "$VERSION_FILE")"
+    return 0
+  fi
+  err "Unable to determine installed version."
+}
+
+uninstall() {
+  "$BASE/uninstall.sh" "$@"
+}
+
+config() {
+  action="${1:-show}"
+  case "$action" in
+    show)
+      if [ -f "$CONFIG_FILE" ]; then
+        say "Config file: $CONFIG_FILE"
+        say "---"
+        cat "$CONFIG_FILE"
+      else
+        err "Config file not found: $CONFIG_FILE"
+      fi
+      ;;
+    port)
+      # ${2:-} — under `set -u` a bare "$2" aborts with "parameter not set"
+      # before the usage message below can ever be printed.
+      new_port="${2:-}"
+      case "$new_port" in
+        ''|*[!0-9]*) err "Usage: 3m-ui config port <1-65535>" ;;
+      esac
+      [ "$new_port" -ge 1 ] 2>/dev/null && [ "$new_port" -le 65535 ] 2>/dev/null || err "Port must be 1-65535."
+      [ -f "$CONFIG_FILE" ] || err "Config file not found: $CONFIG_FILE"
+      # Read current port, scoped to the server: block and indentation-agnostic
+      old_port=$(awk '
+        /^[^[:space:]#]/ { inblk = (/^server:/) }
+        inblk && $1 == "port:" { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
+      ' "$CONFIG_FILE" 2>/dev/null)
+      old_port="${old_port:-8080}"
+      if [ "$old_port" = "$new_port" ]; then
+        say "Port is already $new_port — no change needed."
+        return 0
+      fi
+      # Rewrite only the server: block's port, preserving its indentation.
+      #   sed -i "s/^  port: .*/  port: N/"
+      # rewrites EVERY indented "port:" line, silently clobbering unrelated
+      # listener ports that happen to share the same indentation.
+      #
+      # A hardcoded two-space indent is just as fatal: the Go binary rewrites
+      # config.yaml through a YAML marshaller that uses four spaces, so
+      # emitting "  port:" next to "    mode:" yields mixed indentation and
+      # the panel then refuses to boot with
+      #   "failed to decode config YAML: did not find expected key".
+      tmp=$(mktemp "${CONFIG_FILE}.tmp.XXXXXX") || return 1
+      awk -v p="$new_port" '
+        /^[^[:space:]#]/ { inblk = (/^server:/) }
+        inblk && $1 == "port:" && !done {
+          match($0, /^[[:space:]]*/)
+          print substr($0, 1, RLENGTH) "port: " p
+          done = 1
+          next
+        }
+        { print }
+        END { if (!done) exit 3 }
+      ' "$CONFIG_FILE" > "$tmp" || {
+        rm -f "$tmp"
+        err "Could not locate the server port in $CONFIG_FILE (no change made)."
+      }
+      # Write back through the original inode so owner and mode (0600 — the
+      # config holds JWT and credential secrets) are preserved.
+      cat "$tmp" > "$CONFIG_FILE" || { rm -f "$tmp"; return 1; }
+      rm -f "$tmp"
+      say "Port changed: $old_port → $new_port"
+      say "Restarting 3m-ui to apply..."
+      service_action restart
+      sleep 1
+      if service_is_active; then
+        say "✓ 3m-ui restarted. Configured port: $new_port (a separate HTTPS listener follows the panel TLS settings)."
+      else
+        say "✗ 3m-ui failed to start. Check logs: 3m-ui logs"
+      fi
+      ;;
+    *)
+      err "Unknown config action: $action. Use 'show' or 'port <number>'."
+      ;;
+  esac
+}
+
+service_is_active() {
+  case "$(init_system)" in
+    systemd) systemctl is-active --quiet "$SERVICE" ;;
+    openrc) rc-service "$SERVICE" status >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+
+reset_config() {
+  # --help / -h should NOT stop/restart the panel — it's a read-only help
+  # invocation. Detect it and pass through directly.
+  for a in "$@"; do
+    case "$a" in
+      --help|-h)
+        (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" reset-config "$@")
+        return $?
+        ;;
+    esac
+  done
+
+  # reset-config modifies config.yaml + DB rows the running panel may have
+  # cached. The Go binary refuses to run reset-config while the panel is up
+  # (it might race writes), so stop the service first, run reset, then restart.
+  say "Stopping 3m-ui service (reset-config requires the panel to be stopped)..."
+  service_action stop >/dev/null 2>&1 || true
+  # Pass through all flags (--panel / --access / --public / --all / --yes / -y)
+  # to the Go binary's reset-config subcommand.
+  (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" reset-config "$@")
+  rc=$?
+  say ""
+  say "Restarting 3m-ui service..."
+  service_action start || true
+  if [ $rc -ne 0 ]; then
+    err "reset-config failed (exit $rc). Check the message above; the panel was restarted with the old config."
+  fi
+}
+
+usage() {
+  cat <<EOF
+Usage: 3m-ui <command>
+
+Commands:
+  status       Show service and application status
+  start        Start 3m-ui
+  restart      Restart 3m-ui
+  stop         Stop 3m-ui
+  logs         Show recent service logs
+  version      Show installed 3m-ui version
+  config       Show or edit config (see below)
+  uninstall    Remove 3m-ui but preserve data/config (use --purge to delete)
+  backup       Stop service, snapshot data/config/binaries, resume service
+  restore      Restore a complete snapshot: restore /path/snapshot.tar.gz
+  reset-admin  Generate and display a new random administrator password
+  reset-config Reset panel config via SSH rescue (see below)
+  healthcheck  Probe the actual configured HTTP/HTTPS panel
+  help         Show this help
+
+Config sub-commands:
+  3m-ui config show              Display current config.yaml
+  3m-ui config port <1-65535>    Change panel port and restart
+
+Reset-config sub-commands (SSH rescue when web UI is unreachable):
+  3m-ui reset-config                              Reset panel listen/SSL (default scope)
+  3m-ui reset-config --panel                      Clear server.listen + disable SSL
+  3m-ui reset-config --access                     Clear listener public_host/SNI/ALPN
+  3m-ui reset-config --public                     Clear server.public_url
+  3m-ui reset-config --all                        Apply all three scopes
+  3m-ui reset-config --panel --yes                Skip y/N prompt (scripted rescue)
+  3m-ui reset-config --help                       Show full reset-config help
+
+Run '3m-ui' without arguments to open the interactive management menu.
+EOF
+}
+
+main() {
+  need_root
+  cmd=${1:-}
+  case "$cmd" in
+    status) status ;;
+    start) service_action start ;;
+    restart) service_action restart ;;
+    stop) service_action stop ;;
+    logs) logs ;;
+    version) version ;;
+    config) shift; config "$@" ;;
+    uninstall) shift; uninstall "$@" ;;
+    backup) shift; "$BASE/install.sh" --backup "$@" ;;
+    restore) shift; "$BASE/install.sh" --restore "$@" ;;
+    init|reset-admin|healthcheck) (cd "$DATA_DIR" && THREE_M_UI_CONFIG="$CONFIG_FILE" THREE_M_UI_DATA_DIR="$DATA_DIR" "$APP_BIN" "$cmd") ;;
+    reset-config) shift; reset_config "$@" ;;
+    help|-h|--help) usage ;;
+    '')
+      entry=/usr/local/bin/3m-ui
+      resolved=$(readlink -f "$entry" 2>/dev/null || true)
+      self=$(readlink -f "$0" 2>/dev/null || true)
+      if [ -x "$entry" ] && [ "$resolved" = "$APP_BIN" ]; then
+        err "Invalid installation: management entrypoint points to the application binary. Re-run the latest installer to migrate it."
+      fi
+      # Direct self-reference: exec would restart this exact script with no
+      # args, land here again, and fork forever.
+      if [ -n "$resolved" ] && [ "$resolved" = "$self" ]; then
+        err "Invalid installation: $entry resolves to this script ($self). Re-run the latest installer to repair the entrypoint."
+      fi
+      # Indirect self-reference (A -> B -> A ...): the marker survives exec.
+      if [ -n "${THREE_M_UI_MENU_REEXEC:-}" ]; then
+        err "Detected a re-exec loop through $entry. Re-run the latest installer to repair the entrypoint."
+      fi
+      THREE_M_UI_MENU_REEXEC=1 exec "$entry"
+      ;;
+    *) err "Unknown command: $cmd" ;;
+  esac
+}
+
+main "$@"

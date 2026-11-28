@@ -1,0 +1,103 @@
+name: Development release (rolling pre)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-pre-rolling
+  cancel-in-progress: false
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Identify the explicit development build
+        id: meta
+        run: echo "version=pre-${GITHUB_SHA:0:12}" >> "$GITHUB_OUTPUT"
+  build:
+    needs: metadata
+    uses: ./.github/workflows/release-build.yml
+    with:
+      source_sha: ${{ github.sha }}
+      version: ${{ needs.metadata.outputs.version }}
+  release:
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: Collect and checksum all assets
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          cp scripts/{install.sh,update.sh,uninstall.sh,3m-ui.sh,3m-ui} release-files/
+          cp docker-compose*.yml release-files/
+          cp distribution/mihomo.env release-files/
+          sed -i "s#ghcr.io/kazeyukiro/3m-ui#ghcr.io/${REPOSITORY,,}#g" release-files/docker-compose*.yml
+          sed -i "s#kazeyukiro/3m-ui#${REPOSITORY}#g" release-files/install.sh
+          printf '%s\n' "$VERSION" > release-files/VERSION
+          printf '%s\n' "$REPOSITORY" > release-files/REPOSITORY
+          cd release-files
+          sha256sum * > SHA256SUMS
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign checksums using this development workflow identity
+        working-directory: release-files
+        run: |
+          cosign sign-blob --yes --output-certificate SHA256SUMS.pem \
+            --output-signature SHA256SUMS.sig SHA256SUMS
+      - name: Move the explicitly mutable development tag
+        run: |
+          git tag -f pre "$GITHUB_SHA"
+          git push -f origin refs/tags/pre
+      - name: Publish explicit development channel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          NOTES="$(mktemp)"
+          cat > "$NOTES" <<EOF
+          Rolling development build, selected explicitly with THREE_M_UI_CHANNEL=pre.
+
+          This tag and its assets may change; ordinary installs use stable releases.
+
+          Panel version: ${VERSION}
+          Commit: ${SHA}
+
+          Complete amd64/arm64 bundles include the pinned Mihomo core.
+          Docker image: \`ghcr.io/${{ github.repository }}:pre\`.
+          EOF
+          # Rolling pre: replace the previous release entirely (softprops update hits
+          # "Resource not accessible by integration" on some GitHub token policies).
+          if gh release view pre >/dev/null 2>&1; then
+            gh release delete pre --yes
+          fi
+          gh release create pre \
+            --target "$SHA" \
+            --title "Development build ${VERSION}" \
+            --prerelease \
+            --notes-file "$NOTES" \
+            release-files/*
+  image:
+    needs: [metadata, release]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-image.yml
+    with:
+      source_sha: ${{ github.sha }}
+      version: ${{ needs.metadata.outputs.version }}
+      image_tag: pre
+      latest: false

@@ -1,0 +1,477 @@
+package user
+
+import (
+	"errors"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/kazeyukiro/3m-ui/backend/internal/config"
+	"github.com/kazeyukiro/3m-ui/backend/internal/database/models"
+	"gorm.io/gorm"
+)
+
+type Handler struct {
+	svc *Service
+}
+
+func NewHandler(svc *Service) *Handler {
+	return &Handler{svc: svc}
+}
+
+func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	rg.GET("", h.List)
+	rg.POST("", h.Create)
+	rg.POST("/quick", h.QuickCreate)
+	// Static path must be registered before /:id to avoid being captured as id.
+	rg.POST("/del-depleted", h.DeleteDepleted)
+	rg.POST("/batch", h.Batch)
+	rg.GET("/export-links", h.ExportLinks)
+	// Telegram binding routes registered before /:id so the static segment is not captured.
+	rg.GET("/by-telegram/:tgid", h.GetByTelegram)
+	rg.PUT("/:id/telegram", h.BindTelegram)
+	rg.DELETE("/:id/telegram", h.UnbindTelegram)
+	rg.GET("/:id", h.Get)
+	rg.PUT("/:id", h.Update)
+	rg.DELETE("/:id", h.Delete)
+	rg.POST("/:id/listeners", h.BindListeners)
+	rg.GET("/:id/listeners", h.GetListeners)
+	rg.POST("/:id/nodes", h.BindListeners)
+	rg.POST("/:id/remote-nodes", h.BindRemoteNodes)
+	rg.GET("/:id/remote-nodes", h.ListRemoteNodes)
+	rg.GET("/:id/nodes", h.GetListeners)
+	rg.POST("/:id/reset-traffic", h.ResetTraffic)
+	rg.GET("/:id/node-traffic", h.ListNodeTraffic)
+	rg.GET("/:id/subscription", h.GetSubscription)
+	rg.POST("/:id/subscription/rotate", h.RotateSubscription)
+}
+
+func parseID(c *gin.Context) (uint, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return 0, false
+	}
+	return uint(id), true
+}
+
+func (h *Handler) List(c *gin.Context) {
+	f := ListFilter{Query: strings.TrimSpace(c.Query("q"))}
+	if v := c.Query("enabled"); v == "true" || v == "1" {
+		b := true
+		f.Enabled = &b
+	} else if v == "false" || v == "0" {
+		b := false
+		f.Enabled = &b
+	}
+	if v := c.Query("online"); v == "true" || v == "1" {
+		b := true
+		f.Online = &b
+	} else if v == "false" || v == "0" {
+		b := false
+		f.Online = &b
+	}
+	if v := c.Query("blocked"); v == "true" || v == "1" {
+		b := true
+		f.Blocked = &b
+	} else if v == "false" || v == "0" {
+		b := false
+		f.Blocked = &b
+	}
+	users, err := h.svc.ListFiltered(f)
+	if err != nil {
+		log.Printf("user list failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	out := make([]SafeUser, 0, len(users))
+	for i := range users {
+		out = append(out, ToSafeUser(&users[i]))
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// Batch runs enable|disable|reset-traffic|delete|extend-days|add-traffic on multiple users.
+func (h *Handler) Batch(c *gin.Context) {
+	var req struct {
+		Action    string `json:"action" binding:"required"`
+		IDs       []uint `json:"ids" binding:"required"`
+		Days      int    `json:"days"`
+		TrafficGB int64  `json:"traffic_gb"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	n, err := h.svc.Batch(BatchAction(strings.ToLower(strings.TrimSpace(req.Action))), req.IDs, BatchOpts{
+		Days: req.Days, TrafficGB: req.TrafficGB,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"affected": n, "action": req.Action})
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	var in CreateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	u, err := h.svc.Create(in)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, ToSafeUser(u))
+}
+
+func (h *Handler) QuickCreate(c *gin.Context) {
+	var in QuickCreateInput
+	_ = c.ShouldBindJSON(&in)
+	res, err := h.svc.QuickCreate(in)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, res)
+}
+
+func (h *Handler) Get(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	u, err := h.svc.GetByID(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		} else {
+			log.Printf("user get failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+func (h *Handler) Update(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var in UpdateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	u, err := h.svc.Update(id, in)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+func (h *Handler) Delete(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *Handler) BindListeners(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		ListenerIDs []uint `json:"listener_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.BindListeners(id, req.ListenerIDs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "listener_ids": req.ListenerIDs})
+}
+
+func (h *Handler) GetListeners(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	list, err := h.svc.GetListeners(id)
+	if err != nil {
+		log.Printf("user get-listeners failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	type nodeDTO struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		Protocol    string `json:"protocol"`
+		Port        string `json:"port"`
+		BindAddress string `json:"bind_address"`
+		Enabled     bool   `json:"enabled"`
+		TLS         bool   `json:"tls"`
+		UDP         bool   `json:"udp"`
+		Status      string `json:"status"`
+	}
+	out := make([]nodeDTO, 0, len(list))
+	for _, n := range list {
+		out = append(out, nodeDTO{n.ID, n.Name, n.Protocol, n.Port, n.BindAddress, n.Enabled, n.TLS, n.UDP, n.Status})
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) ResetTraffic(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	u, err := h.svc.ResetTraffic(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+var _ = models.Listener{}
+
+// subscriptionURL builds the public subscription link shown to operators.
+//
+// It goes through config.GetSubscriptionURL so the Share page, the
+// /users/export-links output and the per-format links (subscription_singbox, …)
+// all agree: PUBLIC_URL and a custom sub_path win over the host the admin
+// happens to be using. Building it from c.Request.Host alone produced links
+// pointing at an internal/admin host for proxied deployments, which clients
+// then failed to fetch.
+func subscriptionURL(c *gin.Context, token string) string {
+	return config.GetSubscriptionURL(config.GlobalConfig, c.Request, token, "")
+}
+
+func (h *Handler) GetSubscription(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	token, err := h.svc.EnsureSubToken(id)
+	if err != nil {
+		log.Printf("user ensure-sub-token failed: %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": subscriptionURL(c, token)})
+}
+
+func (h *Handler) RotateSubscription(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	token, err := h.svc.RotateSubToken(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": token, "url": subscriptionURL(c, token)})
+}
+
+// DeleteDepleted removes expired / over-quota proxy users (remove expired or over-quota users).
+func (h *Handler) DeleteDepleted(c *gin.Context) {
+	n, err := h.svc.DeleteDepleted()
+	if err != nil {
+		log.Printf("user delete-depleted failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": n})
+}
+
+// GetByTelegram looks up a proxy user by their linked Telegram chat/user ID.
+func (h *Handler) GetByTelegram(c *gin.Context) {
+	tgid, err := strconv.ParseInt(c.Param("tgid"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid telegram id"})
+		return
+	}
+	u, err := h.svc.GetByTelegramID(tgid)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		} else {
+			log.Printf("user get-by-telegram failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+// BindTelegram links a Telegram account to an existing proxy user.
+func (h *Handler) BindTelegram(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		TelegramID   int64  `json:"telegram_id" binding:"required"`
+		TelegramName string `json:"telegram_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.BindTelegram(id, req.TelegramID, req.TelegramName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	u, err := h.svc.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+// UnbindTelegram removes the Telegram account link from a proxy user.
+func (h *Handler) UnbindTelegram(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.UnbindTelegram(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	u, err := h.svc.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+	c.JSON(http.StatusOK, ToSafeUser(u))
+}
+
+func (h *Handler) BindRemoteNodes(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		MirrorIDs     []uint `json:"mirror_ids"`
+		RemoteNodeIDs []uint `json:"remote_node_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	ids := req.MirrorIDs
+	if len(ids) == 0 {
+		ids = req.RemoteNodeIDs
+	}
+	if err := h.svc.BindRemoteNodes(id, ids); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "mirror_ids": ids})
+}
+
+func (h *Handler) ListRemoteNodes(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	ids, err := h.svc.ListRemoteNodeIDs(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"mirror_ids": ids})
+}
+
+func (h *Handler) ListNodeTraffic(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if h.svc == nil || h.svc.DB() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "service unavailable"})
+		return
+	}
+	db := h.svc.DB()
+	var rows []models.UserNodeTraffic
+	if err := db.Where("proxy_user_id = ?", id).Order("traffic_used desc").Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	type item struct {
+		ListenerID     uint    `json:"listener_id"`
+		ListenerName   string  `json:"listener_name"`
+		UploadBytes    int64   `json:"upload_bytes"`
+		DownloadBytes  int64   `json:"download_bytes"`
+		TrafficUsed    int64   `json:"traffic_used"`
+		Multiplier     float64 `json:"multiplier"`
+		BilledUpload   int64   `json:"billed_upload"`
+		BilledDownload int64   `json:"billed_download"`
+		BilledUsed     int64   `json:"billed_used"`
+	}
+	seen := make(map[uint]struct{}, len(rows))
+	out := make([]item, 0, len(rows)+4)
+	for _, r := range rows {
+		seen[r.ListenerID] = struct{}{}
+		name := ""
+		mult := 1.0
+		var lis models.Listener
+		if err := db.Select("id", "name", "traffic_multiplier").First(&lis, r.ListenerID).Error; err == nil {
+			name = lis.Name
+			if lis.TrafficMultiplier > 0 {
+				mult = lis.TrafficMultiplier
+			}
+		}
+		bu := int64(float64(r.UploadBytes)*mult + 0.5)
+		bd := int64(float64(r.DownloadBytes)*mult + 0.5)
+		out = append(out, item{
+			ListenerID: r.ListenerID, ListenerName: name,
+			UploadBytes: r.UploadBytes, DownloadBytes: r.DownloadBytes, TrafficUsed: r.TrafficUsed,
+			Multiplier: mult, BilledUpload: bu, BilledDownload: bd, BilledUsed: bu + bd,
+		})
+	}
+	// Include bound listeners with zero traffic so the UI lists expected nodes.
+	var binds []models.ListenerUser
+	if err := db.Where("proxy_user_id = ?", id).Find(&binds).Error; err == nil {
+		for _, b := range binds {
+			if _, ok := seen[b.ListenerID]; ok {
+				continue
+			}
+			name := ""
+			mult := 1.0
+			var lis models.Listener
+			if err := db.Select("id", "name", "traffic_multiplier").First(&lis, b.ListenerID).Error; err == nil {
+				name = lis.Name
+				if lis.TrafficMultiplier > 0 {
+					mult = lis.TrafficMultiplier
+				}
+			} else {
+				continue
+			}
+			out = append(out, item{
+				ListenerID: b.ListenerID, ListenerName: name,
+				Multiplier: mult,
+			})
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"items": out})
+}

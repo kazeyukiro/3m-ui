@@ -1,0 +1,297 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert, Button, Card, Collapse, Empty, Input, Select, Space, Spin, Tabs, Tag, Typography, message,
+} from 'antd';
+import { IconCopyAlt, IconQr, IconRotateToken, IconExternal, IconRefreshList } from '../icons';
+import { useSearchParams } from 'react-router-dom';
+import { useI18n } from '../i18n';
+import useIsMobile from '../hooks/useIsMobile';
+import PageHeader from '../components/PageHeader';
+import { copyText } from '../utils/clipboard';
+import {
+  fetchUsers, fetchUserSubscription, rotateUserSubscription, fetchUserNodes,
+  exportUserLinks,
+  ProxyUser, BoundNode,
+} from '../api/users';
+import { exportNodeURI } from '../api/nodes';
+import QRCode from '../components/QRCode';
+
+const { Title, Paragraph } = Typography;
+
+function withTarget(base: string, target: string) {
+  if (!base) return '';
+  const join = base.includes('?') ? '&' : '?';
+  return `${base}${join}target=${target}`;
+}
+
+const CopyField: React.FC<{ label: string; value: string; qr?: boolean }> = ({ label, value, qr }) => {
+  const { t } = useI18n();
+  const isMobile = useIsMobile();
+  if (!value) return null;
+  return (
+    <div style={{ marginBottom: isMobile ? 10 : 16 }}>
+      <div style={{ marginBottom: 4, fontWeight: 500 }}>{label}</div>
+      <Input
+        value={value}
+        readOnly
+        addonAfter={
+          <Button
+            type="text"
+            size="small"
+            icon={<IconCopyAlt />}
+            onClick={async () => {
+              const ok = await copyText(value);
+              if (ok) message.success(t('common.copied') || 'Copied');
+              else message.error(t('common.copyFailed') || 'Copy failed');
+            }}
+          />
+        }
+      />
+      {qr && (
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <QRCode value={value} size={160} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SharePage: React.FC = () => {
+  const isMobile = useIsMobile();
+  const { t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [users, setUsers] = useState<ProxyUser[]>([]);
+  const [userId, setUserId] = useState<number | undefined>();
+  const [shareUrl, setShareUrl] = useState('');
+  const [nodes, setNodes] = useState<BoundNode[]>([]);
+  const [uriMap, setUriMap] = useState<Record<number, { uris: string[]; hint?: string; loading?: boolean; error?: string }>>({});
+  const [loading, setLoading] = useState(false);
+  const [subLoading, setSubLoading] = useState(false);
+  const [shareTab, setShareTab] = useState(searchParams.get('tab') === 'uri' ? 'uri' : 'sub');
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'uri' || tab === 'sub') setShareTab(tab);
+  }, [searchParams]);
+
+  const selected = useMemo(() => users.find((u) => u.id === userId), [users, userId]);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await fetchUsers();
+      setUsers(list || []);
+      const q = Number(searchParams.get('user') || 0);
+      if (q > 0 && (list || []).some((u) => u.id === q)) {
+        setUserId(q);
+      } else if (!userId && list?.length) {
+        setUserId(list[0].id);
+      }
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
+  }, [searchParams, t]); // eslint-disable-line
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const loadShare = useCallback(async (id: number) => {
+    setSubLoading(true);
+    setShareUrl('');
+    setNodes([]);
+    setUriMap({});
+    try {
+      const [sub, bound] = await Promise.all([
+        fetchUserSubscription(id),
+        fetchUserNodes(id),
+      ]);
+      setShareUrl(sub.url || '');
+      setNodes(bound || []);
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setSubLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (userId) {
+      loadShare(userId);
+      setSearchParams({ user: String(userId) }, { replace: true });
+    }
+  }, [userId]); // eslint-disable-line
+
+  const loadNodeURIs = async (nodeId: number) => {
+    setUriMap((m) => ({ ...m, [nodeId]: { ...(m[nodeId] || { uris: [] }), loading: true } }));
+    try {
+      const data = await exportNodeURI(nodeId);
+      const uris = (data.uris && data.uris.length ? data.uris : ((data as any).uri ? [(data as any).uri] : [])).filter(Boolean);
+      setUriMap((m) => ({
+        ...m,
+        [nodeId]: { uris, hint: (data as any).hint, loading: false },
+      }));
+    } catch (e: any) {
+      setUriMap((m) => ({
+        ...m,
+        [nodeId]: { uris: [], loading: false, error: e.message || t('common.failed') },
+      }));
+    }
+  };
+
+  const onRotate = async () => {
+    if (!userId) return;
+    setSubLoading(true);
+    try {
+      const res = await rotateUserSubscription(userId);
+      setShareUrl(res.url || '');
+      message.success(t('users.subRotated') || 'Subscription rotated');
+    } catch (e: any) {
+      message.error(e.message || t('common.error'));
+    } finally {
+      setSubLoading(false);
+    }
+  };
+
+  const subTab = (
+    <Spin spinning={subLoading}>
+      {!shareUrl && !subLoading ? (
+        <Empty description={t('share.noSub') || 'No subscription URL'} />
+      ) : (
+        <>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: isMobile ? 10 : 16 }}
+            message={t('share.subHint') || 'Copy into the client. Without ?target=, format follows User-Agent (Clash/Mihomo → YAML, v2rayNG → Base64, sing-box → JSON, Loon/Surge/Quantumult X → their native formats). Headers include traffic/expiry (Subscription-Userinfo).'}
+          />
+          <CopyField label={t('users.subMihomo') || 'Mihomo / Clash YAML'} value={shareUrl} qr />
+          <CopyField label={t('users.subV2ray') || 'V2Ray / Base64'} value={withTarget(shareUrl, 'v2ray')} />
+          <CopyField label={t('users.subSingbox') || 'Sing-box JSON'} value={withTarget(shareUrl, 'singbox')} />
+          <CopyField label={t('users.subLoon') || 'Loon'} value={withTarget(shareUrl, 'loon')} />
+          <CopyField label={t('users.subSurge') || 'Surge'} value={withTarget(shareUrl, 'surge')} />
+          <CopyField label={t('users.subQuanx') || 'Quantumult X'} value={withTarget(shareUrl, 'quanx')} />
+          <CopyField label={t('share.subHtml') || 'Subscription info page (HTML)'} value={`${shareUrl}${shareUrl.includes('?') ? '&' : '?'}html=1`} />
+          <Button icon={<IconRotateToken />} onClick={onRotate} loading={subLoading}>
+            {t('users.rotateSub') || 'Rotate subscription token'}
+          </Button>
+        </>
+      )}
+    </Spin>
+  );
+
+  const uriTab = (
+    <Spin spinning={subLoading}>
+      {!nodes.length && !subLoading ? (
+        <Empty description={t('share.noNodes') || 'No nodes bound to this user. Bind listeners in Users first.'} />
+      ) : (
+        <Collapse
+          accordion
+          onChange={(key) => {
+            const id = Number(Array.isArray(key) ? key[0] : key);
+            if (id && !uriMap[id]?.uris?.length && !uriMap[id]?.loading) {
+              loadNodeURIs(id);
+            }
+          }}
+          items={nodes.map((n) => ({
+            key: String(n.id),
+            label: (
+              <Space>
+                <span>{n.name}</span>
+                <Tag>{n.protocol}</Tag>
+                <Tag>{n.port}</Tag>
+                {!n.enabled && <Tag color="default">{t('common.off')}</Tag>}
+              </Space>
+            ),
+            children: (
+              <div>
+                {uriMap[n.id]?.loading && <Spin />}
+                {uriMap[n.id]?.error && <Alert type="error" message={uriMap[n.id].error} />}
+                {uriMap[n.id]?.hint && (
+                  <Alert type="warning" showIcon style={{ marginBottom: 8 }} message={uriMap[n.id].hint} />
+                )}
+                {(uriMap[n.id]?.uris || []).map((uri, i) => (
+                  <CopyField key={i} label={`${t('share.uri') || 'URI'} #${i + 1}`} value={uri} qr={i === 0} />
+                ))}
+                {!uriMap[n.id]?.loading && !uriMap[n.id]?.uris?.length && !uriMap[n.id]?.error && (
+                  <Button size="small" icon={<IconExternal />} onClick={() => loadNodeURIs(n.id)}>
+                    {t('share.loadUri') || 'Load URI'}
+                  </Button>
+                )}
+              </div>
+            ),
+          }))}
+        />
+      )}
+    </Spin>
+  );
+
+  return (
+    <div>
+      <div style={{ marginBottom: 12 }}>
+        <Button
+          onClick={async () => {
+            try {
+              const res = await exportUserLinks();
+              const lines = (res.items || []).map((it: any) =>
+                [it.username, it.group || '', it.subscription || ''].join('\t'),
+              );
+              await copyText(lines.join('\n'));
+              message.success(`${t('share.exported', 'Exported subscription links')} (${res.count})`);
+            } catch (e: any) {
+              message.error(e?.message || t('share.exportFailed'));
+            }
+          }}
+        >
+          {t('share.exportAll', 'Export all subscription links')}
+        </Button>
+      </div>
+      <PageHeader title={t('share.title')} subtitle={t('share.subtitle') || undefined} />
+
+      <Card size="small" style={{ marginBottom: isMobile ? 10 : 16 }}>
+        <Space wrap style={{ width: '100%' }} align="center">
+          <span>{t('share.selectUser') || 'User'}</span>
+          <Select
+            showSearch
+            style={{ minWidth: 220 }}
+            loading={loading}
+            value={userId}
+            placeholder={t('share.selectUser') || 'Select user'}
+            optionFilterProp="label"
+            onChange={(v) => setUserId(v)}
+            options={users.map((u) => ({
+              value: u.id,
+              label: `${u.username}${u.remark ? ` (${u.remark})` : ''}${u.enabled === false ? ` [${t('common.off')}]` : ''}`,
+            }))}
+          />
+          {selected && (
+            <Tag color={selected.enabled ? 'success' : 'default'}>
+              {selected.enabled ? (t('common.enabled') || 'enabled') : (t('common.disabled') || 'disabled')}
+            </Tag>
+          )}
+          <Button icon={<IconRefreshList />} onClick={() => userId && loadShare(userId)}>
+            {t('common.refresh') || 'Refresh'}
+          </Button>
+        </Space>
+      </Card>
+
+      <Tabs
+        activeKey={shareTab}
+        onChange={(k) => {
+          setShareTab(k);
+          const n = new URLSearchParams(searchParams);
+          if (k === 'sub') n.delete('tab');
+          else n.set('tab', k);
+          setSearchParams(n, { replace: true });
+        }}
+        items={[
+          { key: 'sub', label: t('share.tabSub') || 'Subscription links', children: subTab },
+          { key: 'uri', label: t('share.tabUri') || 'Node URIs', children: uriTab },
+        ]}
+      />
+    </div>
+  );
+};
+
+export default SharePage;

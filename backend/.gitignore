@@ -1,0 +1,21 @@
+# Binaries
+/server
+/server.exe
+
+# SQLite database and dynamic config data
+data/
+backend/data/
+3m-ui.db
+
+# Logs
+*.log
+backend_run.log
+
+# Generated embedded frontend: every official target (make frontend-assets,
+# release-build.yml, Dockerfile) rebuilds and replaces this directory. Only a
+# self-contained placeholder index.html is tracked, so a bare `go build` on a
+# fresh clone still compiles (//go:embed needs the directory to be non-empty)
+# and serves an actionable page instead of a blank one. The placeholder must
+# stay dependency-free — never reference built asset hashes from here.
+/cmd/server/web/dist/*
+!/cmd/server/web/dist/index.html

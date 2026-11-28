@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a problem with 3m-ui (panel, core, install, or UI)
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill in as much as you can — logs and version make fixes much faster.
+  - type: input
+    id: version
+    attributes:
+      label: 3m-ui version
+      description: Output of `3m-ui version` or the release tag (e.g. v1.3.0)
+      placeholder: v1.3.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / arch
+      description: e.g. Ubuntu 24.04 x86_64, Debian arm64, Docker
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - install.sh / 3m-ui update
+        - Docker / GHCR
+        - Manual binary
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Expected vs actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Redact tokens/passwords. Useful commands:
+        `journalctl -u 3m-ui -n 80 --no-pager`
+        Panel API error text / browser console if UI-only.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Extra context
+      description: Protocol (e.g. tuic-v5), related settings, screenshots links
