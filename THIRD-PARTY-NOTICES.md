@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-3m-ui is licensed under the GNU General Public License, version 3 (GPL-3.0).
+3m-ui is licensed under the GNU Affero General Public License, version 3 (AGPL-3.0).
 
-3m-ui was relicensed from the Eclipse Public License 2.0 (EPL-2.0) to GPL-3.0: from commit `226c460` onward it is under GPL-3.0, while earlier commits and any already published releases remain under EPL-2.0, which cannot be revoked.
+3m-ui's license history: it was relicensed from the Eclipse Public License 2.0 (EPL-2.0) to GPL-3.0 (from commit `226c460` onward), and subsequently to AGPL-3.0 when the Sub-Store conversion core was introduced. Earlier commits and any already published releases remain under EPL-2.0, which cannot be revoked.
 
 This repository and its release artifacts may include, download, invoke, or distribute third-party software that is subject to its own license terms. A third-party component's license is not changed by the license of 3m-ui.
 
@@ -26,9 +26,26 @@ Mihomo is a separate program rather than a part of 3m-ui: 3m-ui downloads it and
 
 Because acme.sh runs as a standalone executable and interacts with 3m-ui only through process invocation and files on disk, it is not a derivative work of 3m-ui and is not covered by 3m-ui's license. Where a 3m-ui release or installer gathers acme.sh, that component remains subject to GPLv3 and its license and attribution notices should be retained.
 
+## Sub-Store conversion core
+
+The subscription conversion engine (everything except native Clash/Mihomo YAML and sing-box output) is derived from [Sub-Store](https://github.com/sub-store-org/Sub-Store), specifically its `proxy-utils` parse/produce pipeline. Sub-Store is distributed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+- Project: https://github.com/sub-store-org/Sub-Store
+- License: GNU Affero General Public License v3.0
+- License text: https://www.gnu.org/licenses/agpl-3.0.html
+
+The Sub-Store core is compiled into a single self-contained JavaScript bundle (`backend/internal/substore/engine/bundle/substore.js`) and executed at runtime by the pure-Go `goja` JavaScript engine. Because 3m-ui distributes and interacts with this code as part of the same program (not over a network API boundary), 3m-ui is licensed under AGPL-3.0 to comply with the AGPL obligations. The upstream Sub-Store copyright holders and their notices remain unaffected. The exact upstream commit and rebuild instructions are recorded in `scripts/substore/README.md`.
+
+## goja
+
+The embedded JavaScript runtime is [goja](https://github.com/dop251/goja), a pure-Go ECMAScript implementation distributed under the MIT License.
+
+- Project: https://github.com/dop251/goja
+- License: MIT License
+
 ## License compatibility
 
-3m-ui itself is licensed under GPL-3.0, the same license family as the Mihomo Core and acme.sh. Shipping these components together therefore raises no license-compatibility conflict, although each component keeps its own copyright holders and notices. A recipient's obligations under the GPL — including the requirement to make corresponding source available when distributing binaries — apply to each component according to its own license.
+3m-ui itself is licensed under AGPL-3.0. The Sub-Store conversion core is AGPL-3.0 and goja is MIT — all compatible with AGPL-3.0 distribution. The Mihomo Core and acme.sh retain their own GPLv3 terms as separate components described above. Each component keeps its own copyright holders and notices; a recipient's obligations apply to each component according to its own license.
 
 ## Other dependencies
 

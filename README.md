@@ -220,13 +220,13 @@ JWT / 凭据密钥请使用独立随机值（≥ 32 字节），不要使用文�
 
 ## 许可证
 
-[![License: GPL v3](https://www.gnu.org/graphics/gplv3-rounded-red-180x60.jpg)](./LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](./LICENSE)
 
-本项目自 commit `226c460` 之后采用 **GNU General Public License v3.0**。此前的提交与已发布版本仍受 **Eclipse Public License 2.0（EPL-2.0）** 约束，该授权不可撤回。
+本项目现采用 **GNU Affero General Public License v3.0（AGPL-3.0）**。历史沿革：自 commit `226c460` 起先采用 GPL-3.0，更早的提交与已发布版本受 **Eclipse Public License 2.0（EPL-2.0）** 约束（该授权不可撤回）；随 Sub-Store 转换内核的引入，整体升级为 AGPL-3.0。
 
-[GNU General Public License v3.0](./LICENSE)
+[GNU Affero General Public License v3.0](./LICENSE)
 
-第三方组件见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)。
+第三方组件（含以 AGPL-3.0 引入的 Sub-Store 转换内核）见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)。
 
 ---
 

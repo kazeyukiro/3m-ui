@@ -101,10 +101,24 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			// share links. target=v2ray|base64 always returns Base64.
 			// target=uri|raw may return plaintext when encrypt=0.
 			if target == "v2ray" || target == "base64" || target == "raw" || target == "uri" {
-				raw, err = converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				if converter.SubStoreEnabled() {
+					// Sub-Store v2ray producer 直接输出 Base64；uri producer 输出明文。
+					raw, err = converter.GenerateUserViaSubStore(db, pu, c.Request, target, node.ClientURIsWithCredentials)
+				} else {
+					raw, err = converter.GenerateUserBase64Subscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				}
 				if err != nil {
 					log.Printf("subscription error: %v", err)
 					c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+					return
+				}
+				// Sub-Store 已按 producer 语义处理编码：v2ray=Base64，uri=明文。
+				// 原生路径仍走下方的 encrypt/forceBase64 逻辑。
+				if converter.SubStoreEnabled() {
+					writeSubHeaders(c, db, &pu)
+					c.Header("Cache-Control", "no-store")
+					c.Header("Content-Disposition", `attachment; filename="`+sanitizeFilename(pu.Username)+`.txt"`)
+					c.Data(http.StatusOK, "text/plain; charset=utf-8", raw)
 					return
 				}
 				forceBase64 := target == "v2ray" || target == "base64"
@@ -131,6 +145,9 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			}
 			// Native sing-box JSON outbounds (sing-box subscription).
 			if target == "singbox" || target == "sing-box" || target == "sfa" || target == "sfm" {
+				// sing-box 保留原生实现：3m-ui 在这里做了 SFA/SFI 客户端版本适配
+				// （http_clients / route.default_http_client，sing-box 1.14+ 才支持），
+				// Sub-Store 的通用 sing-box producer 不含这些定制字段，切换会破坏兼容。
 				raw, err = converter.GenerateUserSingboxSubscription(db, pu, c.Request)
 				if err != nil {
 					log.Printf("subscription error: %v", err)
@@ -148,11 +165,23 @@ func subscriptionHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			// depending on an external conversion service.
 			switch target {
 			case "loon":
-				raw, err = converter.GenerateUserLoonSubscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				if converter.SubStoreEnabled() {
+					raw, err = converter.GenerateUserViaSubStore(db, pu, c.Request, target, node.ClientURIsWithCredentials)
+				} else {
+					raw, err = converter.GenerateUserLoonSubscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				}
 			case "surge":
-				raw, err = converter.GenerateUserSurgeSubscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				if converter.SubStoreEnabled() {
+					raw, err = converter.GenerateUserViaSubStore(db, pu, c.Request, target, node.ClientURIsWithCredentials)
+				} else {
+					raw, err = converter.GenerateUserSurgeSubscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				}
 			case "quanx", "quantumult", "qx":
-				raw, err = converter.GenerateUserQuanXSubscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				if converter.SubStoreEnabled() {
+					raw, err = converter.GenerateUserViaSubStore(db, pu, c.Request, target, node.ClientURIsWithCredentials)
+				} else {
+					raw, err = converter.GenerateUserQuanXSubscription(db, pu, c.Request, node.ClientURIsWithCredentials)
+				}
 			}
 			if err != nil {
 				log.Printf("subscription error: %v", err)

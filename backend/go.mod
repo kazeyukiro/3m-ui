@@ -8,7 +8,14 @@ require github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 
 require (
 	github.com/dlclark/regexp2 v1.12.0
+	github.com/dop251/goja v0.0.0-20261127213540-516d13cfa287
 	github.com/mholt/acmez/v3 v3.1.6
+)
+
+require (
+	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
+	github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 // indirect
 )
 
 require (
@@ -56,7 +63,7 @@ require (
 	golang.org/x/crypto v0.55.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sys v0.47.0
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
